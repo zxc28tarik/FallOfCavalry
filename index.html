@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fall Of Cavalry - Offline Prototype</title>
+
+    <!-- Tailwind (kullanıyorsun diye bıraktım) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- ✅ yeni klasör yapısı -->
+    <link rel="stylesheet" href="css/styles.css" />
+
+    <!-- ✅ yeni entry point -->
+    <script type="module" defer src="js/main.js"></script>
+</head>
+
+<body class="bg-neutral-900 text-neutral-100 overflow-hidden">
+    <div id="appRoot" class="w-screen h-screen relative">
+        <!-- Canvas -->
+        <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
+
+        <!-- HUD -->
+        <div id="hud" class="hud">
+            <!-- Sol üst: bilgi paneli -->
+            <div class="hud-left frame-dark">
+                <div class="flex items-center justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-lg font-extrabold tracking-wide">FallOfCavalry</div>
+                        <div class="text-xs opacity-70">Grand Strategy</div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="helpBtn" class="action-btn btn-dark text-xs">Yardım</button>
+                        <button id="settingsBtn" class="action-btn btn-dark text-xs">Ayar</button>
+                    </div>
+                </div>
+
+                <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                    <div class="opacity-75">Sancak</div>
+                    <div class="font-bold text-right"><span id="hudFaction">-</span></div>
+
+                    <div class="opacity-75">Altın</div>
+                    <div class="font-bold text-right"><span id="hudGold">0</span></div>
+
+                    <div class="opacity-75">Ordu</div>
+                    <div class="font-bold text-right"><span id="hudArmy">0</span></div>
+
+                    <div class="opacity-75">Şöhret</div>
+                    <div class="font-bold text-right"><span id="hudRenown">0</span></div>
+
+                    <div class="opacity-75">Gün</div>
+                    <div class="font-bold text-right"><span id="hudDay">1</span></div>
+                </div>
+            </div>
+
+            <!-- Sağ üst: ayarlar paneli -->
+            <div id="hudSettings" class="hud-settings frame-dark">
+                <div class="flex items-center justify-between">
+                    <div class="text-xs font-bold">Ayarlar</div>
+                    <div class="text-xs opacity-70">Offline</div>
+                </div>
+
+                <div class="mt-2 flex flex-col gap-2">
+                    <label class="flex items-center justify-between text-xs">
+                        <span class="opacity-85">Minimap</span>
+                        <input id="toggleMinimap" type="checkbox" checked />
+                    </label>
+
+                    <label class="flex items-center justify-between text-xs">
+                        <span class="opacity-85">Moral</span>
+                        <input id="toggleMorale" type="checkbox" checked />
+                    </label>
+
+                    <label class="text-xs">
+                        <div class="opacity-85">Renk Paleti</div>
+                        <select id="paletteSelect" class="select-dark mt-1 w-full text-xs">
+                            <option value="default" selected>Default</option>
+                            <option value="colorblind1">Colorblind 1</option>
+                            <option value="colorblind2">Colorblind 2</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="mt-3 border-t border-white/10 pt-3">
+                    <div class="text-xs font-bold">Tuş Atamaları</div>
+                    <div id="keybindStatus" class="mt-1 text-[11px] opacity-75"></div>
+
+                    <div id="keybindList" class="mt-2 keybind-list"></div>
+
+                    <button id="btnResetKeybinds" class="action-btn btn-dark text-xs mt-2 w-full">
+                        Varsayılanlara Dön
+                    </button>
+                </div>
+
+                <div class="mt-3 border-t border-white/10 pt-3">
+                    <div class="text-xs font-bold">Kontroller</div>
+                    <div id="hudControlLines" class="mt-2 text-[11px] opacity-85 leading-snug"></div>
+                </div>
+
+                <!-- ✅ eksik olan save butonları eklendi -->
+                <div class="mt-3 border-t border-white/10 pt-3">
+                    <div class="text-xs font-bold">Kayıt</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <button id="btnSaveGame" class="action-btn btn-gold text-xs">Kaydet</button>
+                        <button id="btnLoadGame" class="action-btn btn-dark text-xs">Yükle</button>
+                        <button id="btnResetGame" class="action-btn btn-dark text-xs">Sıfırla</button>
+                        <button id="btnOpenSaveTransfer" class="action-btn btn-dark text-xs">Aktar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görev paneli -->
+            <div id="questPanel" class="quest-panel frame-dark">
+                <div class="flex items-center justify-between">
+                    <div class="text-xs font-bold">Görev</div>
+                    <div class="text-[11px] opacity-70">Aktif</div>
+                </div>
+                <div id="questText" class="mt-2 text-sm leading-snug opacity-90">-</div>
+            </div>
+
+            <!-- Minimap -->
+            <div id="hudMinimapPanel" class="hud-minimap frame-dark">
+                <div class="text-xs font-bold opacity-90 mb-2">Harita</div>
+                <canvas id="hudMiniMap" width="170" height="170"></canvas>
+            </div>
+        </div>
+
+        <!-- Tooltip -->
+        <div id="tooltip" class="tooltip hidden"></div>
+
+        <!-- Debug overlay -->
+        <div id="debugOverlay" class="debug-overlay hidden"></div>
+
+        <!-- ✅ eksik overlay’ler eklendi -->
+        <div id="helpOverlay" class="modal-wrap hidden">
+            <div class="modal-card max-w-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-2xl font-extrabold">Yardım</div>
+                        <div class="mt-1 text-sm opacity-85">Kısa kontroller ve ipuçları.</div>
+                    </div>
+                    <button id="helpCloseBtn" class="action-btn btn-dark">Kapat</button>
+                </div>
+                <div class="mt-4 frame-dark p-4 text-sm leading-relaxed opacity-90">
+                    Haritada hareket: sağ tık ile hedef seç • Yakın etkileşim: Enter • Duraklat: P • Geri çekil: G
+                </div>
+            </div>
+        </div>
+
+        <div id="settingsOverlay" class="modal-wrap hidden">
+            <div class="modal-card max-w-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-2xl font-extrabold">Ayarlar</div>
+                        <div class="mt-1 text-sm opacity-85">Oyun ayarlarını HUD panelinden yönetebilirsin.</div>
+                    </div>
+                    <button id="settingsCloseBtn" class="action-btn btn-dark">Kapat</button>
+                </div>
+                <div class="mt-4 frame-dark p-4 text-sm leading-relaxed opacity-90">
+                    Not: Bu overlay sadece uyumluluk için eklendi. Asıl ayar paneli sağ üstteki "Ayarlar" kutusudur.
+                </div>
+            </div>
+        </div>
+
+        <!-- Start Modal -->
+        <div id="startModal" class="modal-wrap">
+            <div class="modal-card max-w-5xl">
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <!-- Sol: faction list -->
+                    <div class="flex-1">
+                        <div class="royal-font text-3xl font-extrabold tracking-wide">Sancak Seç</div>
+                        <div class="text-sm opacity-80 mt-1">Avrupa haritasında 16. yüzyıl esintili bir offline prototip.</div>
+
+                        <div id="factionGrid" class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+                        <div class="mt-4 flex gap-2">
+                            <button id="btnContinue" class="action-btn btn-gold flex-1" disabled>Devam Et</button>
+                            <button id="btnLoadStart" class="action-btn btn-dark flex-1">Kayıt Yükle</button>
+                        </div>
+                    </div>
+
+                    <!-- Sağ: selected info -->
+                    <div class="w-full lg:w-[360px] frame-dark p-4">
+                        <div class="text-xs font-bold opacity-80">Seçilen Sancak</div>
+                        <div id="selectedFactionName" class="royal-font text-2xl font-extrabold mt-1">-</div>
+                        <div id="selectedFactionDesc" class="text-sm opacity-85 mt-2">-</div>
+
+                        <div class="mt-3 text-sm">
+                            <div class="opacity-70">Doktrin</div>
+                            <div id="selectedFactionDoc" class="font-bold">-</div>
+                        </div>
+
+                        <div class="mt-3 text-sm">
+                            <div class="opacity-70">Başlangıç Ordusu</div>
+                            <div id="selectedFactionArmy" class="font-bold">-</div>
+                        </div>
+
+                        <div id="startSaveInfo" class="mt-2 text-xs opacity-75">Kayıt bulunamadı.</div>
+
+                        <!-- ✅ eksik seed alanları eklendi -->
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                            <div>
+                                <div class="text-xs font-bold opacity-90">Seed</div>
+                                <input id="seedInput" type="text" class="select-dark mt-1 text-xs w-full" placeholder="1337" />
+                            </div>
+                            <button id="randomSeedBtn" class="action-btn btn-dark text-xs w-full sm:w-auto">Rastgele</button>
+                        </div>
+
+                        <div class="mt-3">
+                            <div class="text-xs font-bold opacity-80 mb-2">Mini Harita</div>
+                            <canvas id="startMiniMap" width="320" height="180" class="w-full rounded-xl"></canvas>
+                        </div>
+
+                        <button id="btnStart" class="action-btn btn-gold w-full mt-4">Başla</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settlement Modal -->
+        <div id="settlementModal" class="modal-wrap hidden">
+            <div id="settlementBody" class="modal-card max-w-3xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div id="settlementTitle" class="royal-font text-2xl font-extrabold">-</div>
+                        <div id="settlementSubtitle" class="text-sm opacity-85 mt-1">-</div>
+                        <div id="settlementMsg" class="mt-2 text-xs opacity-80"></div>
+                    </div>
+                    <button id="btnCloseSettlement" class="action-btn btn-dark">Kapat</button>
+                </div>
+
+                <div id="settlementStats" class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="frame-dark p-3">
+                        <div class="text-xs opacity-75">Nüfus</div>
+                        <div id="settlementPop" class="font-bold mt-1">-</div>
+                    </div>
+                    <div class="frame-dark p-3">
+                        <div class="text-xs opacity-75">Vergi</div>
+                        <div id="settlementTax" class="font-bold mt-1">-</div>
+                    </div>
+                    <div class="frame-dark p-3">
+                        <div class="text-xs opacity-75">Garnizon</div>
+                        <div id="settlementGarrison" class="font-bold mt-1">-</div>
+                    </div>
+                    <div class="frame-dark p-3">
+                        <div class="text-xs opacity-75">İlişki</div>
+                        <div id="settlementRelation" class="font-bold mt-1">-</div>
+                    </div>
+                </div>
+
+                <div id="settlementContent">
+                    <div class="mt-4 frame-dark p-3">
+                        <div class="text-xs font-bold">Vergi Oranı</div>
+                        <input id="settlementTaxSlider" type="range" min="0" max="30" value="10" class="w-full mt-2" />
+                        <div id="settlementTaxHint" class="text-[11px] opacity-75 mt-1">-</div>
+                    </div>
+
+                    <div class="mt-4 frame-dark p-3">
+                        <div class="text-xs font-bold">Hikâye</div>
+                        <div id="settlementLore" class="text-sm opacity-90 mt-2 leading-relaxed">-</div>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <button id="btnRecruit" class="action-btn btn-gold">Asker Topla</button>
+                        <button id="btnTrade" class="action-btn btn-dark">Ticaret</button>
+                        <button id="btnUpgrade" class="action-btn btn-dark">Geliştir</button>
+                    </div>
+
+                    <div id="upgradePanel" class="mt-4 frame-dark p-3 hidden">
+                        <div class="text-xs font-bold">Geliştirmeler</div>
+                        <div id="upgradeList" class="mt-2 flex flex-col gap-2"></div>
+                    </div>
+
+                    <button id="btnLeaveSettlement" class="action-btn btn-dark mt-4">Şehri Terk Et</button>
+                </div><!-- /#settlementContent -->
+            </div>
+        </div>
+
+        <!-- Encounter Modal -->
+        <div id="encounterModal" class="modal-wrap hidden">
+            <div class="modal-card max-w-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-2xl font-extrabold">Karşılaşma</div>
+                        <div id="encounterDesc" class="text-sm opacity-85 mt-2 leading-relaxed">-</div>
+                    </div>
+                    <button id="btnCloseEncounter" class="action-btn btn-dark">Kapat</button>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button id="btnFight" class="action-btn btn-gold">Savaş</button>
+                    <button id="btnRetreat" class="action-btn btn-dark">Kaç</button>
+                    <button id="btnParley" class="action-btn btn-dark">Konuş</button>
+                    <button id="btnInvestigate" class="action-btn btn-dark">İncele</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle HUD -->
+        <div id="battleHud" class="battle-hud hidden">
+            <div class="battle-card frame-dark">
+                <div class="flex items-center justify-between">
+                    <div class="text-xs font-bold">Savaş</div>
+                    <button id="btnExitBattle" class="action-btn btn-dark text-xs">Çık</button>
+                </div>
+
+                <div id="battleSelInfo" class="mt-2 text-sm opacity-90">-</div>
+
+                <div class="mt-3 grid grid-cols-2 gap-2">
+                    <div>
+                        <div class="text-xs opacity-75">Taktik</div>
+                        <select id="battleTacticSelect" class="select-dark mt-1 w-full text-xs"></select>
+                    </div>
+                    <div class="flex items-end">
+                        <button id="btnApplyTactic" class="action-btn btn-dark w-full text-xs">Uygula</button>
+                    </div>
+
+                    <div>
+                        <div class="text-xs opacity-75">Formasyon</div>
+                        <select id="battleFormationSelect" class="select-dark mt-1 w-full text-xs"></select>
+                    </div>
+                    <div class="flex items-end gap-2">
+                        <button id="btnReform" class="action-btn btn-dark w-full text-xs">Reform</button>
+                        <button id="btnBattlePause" class="action-btn btn-dark w-full text-xs">Duraklat</button>
+                    </div>
+                </div>
+
+                <div class="mt-3 flex gap-2">
+                    <button class="action-btn btn-dark text-xs flex-1" data-battle-speed="0.6">x0.6</button>
+                    <button class="action-btn btn-dark text-xs flex-1" data-battle-speed="1">x1</button>
+                    <button class="action-btn btn-dark text-xs flex-1" data-battle-speed="1.6">x1.6</button>
+                </div>
+
+                <div id="battleDeployPanel" class="mt-3 frame-dark p-3 hidden">
+                    <div class="text-xs font-bold">Konuşlanma</div>
+                    <div class="mt-2 flex gap-2">
+                        <button id="btnAutoDeploy" class="action-btn btn-dark text-xs flex-1">Oto</button>
+                        <button id="btnStartBattle" class="action-btn btn-gold text-xs flex-1">Başlat</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle Result Modal -->
+        <div id="battleResultModal" class="modal-wrap hidden">
+            <div class="modal-card max-w-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div id="battleResultTitle" class="royal-font text-2xl font-extrabold">-</div>
+                        <div id="battleResultShort" class="text-sm opacity-85 mt-2">-</div>
+                    </div>
+                    <button id="btnCloseBattleResult" class="action-btn btn-dark">Kapat</button>
+                </div>
+                <div id="battleResultStory" class="mt-4 text-sm leading-relaxed opacity-90">-</div>
+            </div>
+        </div>
+
+        <!-- Save Transfer Modal -->
+        <div id="saveTransferModal" class="modal-wrap hidden">
+            <div class="modal-card max-w-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-2xl font-extrabold">Save Transfer</div>
+                        <div class="text-sm opacity-85 mt-1">Kayıt dışa aktar / içe aktar</div>
+                    </div>
+                    <button id="btnCloseSaveTransfer" class="action-btn btn-dark">Kapat</button>
+                </div>
+
+                <textarea id="saveTransferText" class="textarea-dark mt-4 w-full" rows="10" placeholder="Save JSON burada..."></textarea>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button id="btnExportSave" class="action-btn btn-gold">Dışa Aktar</button>
+                    <button id="btnImportSave" class="action-btn btn-dark">İçe Aktar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
