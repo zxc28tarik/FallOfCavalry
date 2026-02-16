@@ -18,6 +18,9 @@ export class GameLoop {
     this.lastTime = performance.now();
     this.running = false;
     this.rafId = null;
+    this.loopToken = 0;
+    this.boundTick = this.tick.bind(this);
+    this.warnedMissingState = false;
     
     // Update fonksiyonları (game mode'a göre)
     this.updateHandlers = {
@@ -47,10 +50,18 @@ export class GameLoop {
    */
   start() {
     if (this.running) return;
+    if (!this.state) {
+      if (!this.warnedMissingState) {
+        console.warn('[GameLoop] Cannot start: missing state');
+        this.warnedMissingState = true;
+      }
+      return;
+    }
     
     this.running = true;
     this.lastTime = performance.now();
-    this.rafId = requestAnimationFrame(this.tick.bind(this));
+    const token = ++this.loopToken;
+    this.rafId = requestAnimationFrame((now) => this.boundTick(now, token));
     
     console.log('[GameLoop] Started');
   }
@@ -62,6 +73,7 @@ export class GameLoop {
     if (!this.running) return;
     
     this.running = false;
+    this.loopToken++;
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
@@ -73,8 +85,16 @@ export class GameLoop {
   /**
    * Ana tick fonksiyonu
    */
-  tick(now) {
-    if (!this.running) return;
+  tick(now, token = this.loopToken) {
+    if (!this.running || token !== this.loopToken) return;
+    if (!this.state) {
+      this.stop();
+      if (!this.warnedMissingState) {
+        console.warn('[GameLoop] Stopped: missing state');
+        this.warnedMissingState = true;
+      }
+      return;
+    }
     
     // Delta time hesapla (max 50ms cap)
     const rawDt = Math.min(0.05, (now - this.lastTime) / 1000);
@@ -116,7 +136,7 @@ export class GameLoop {
     }
     
     // Next frame
-    this.rafId = requestAnimationFrame(this.tick.bind(this));
+    this.rafId = requestAnimationFrame((nextNow) => this.boundTick(nextNow, token));
   }
   
   // ========================================================================
