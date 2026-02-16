@@ -121,6 +121,7 @@ export class GameState {
     
     // Observer pattern için event listeners
     this.listeners = new Map();
+    this.invalidListenerWarned = false;
     
     // Debug
     this.debug = {
@@ -131,8 +132,11 @@ export class GameState {
     };
     
     // Performans tracking
+    const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? () => performance.now()
+      : () => Date.now();
     this.performance = {
-      lastFrame: performance.now(),
+      lastFrame: now(),
       frameCount: 0,
       fps: 60,
     };
@@ -146,10 +150,23 @@ export class GameState {
    * Event listener ekle
    */
   on(event, callback) {
+    if (typeof callback !== 'function') {
+      if (!this.invalidListenerWarned) {
+        this.invalidListenerWarned = true;
+        console.warn('[Event] Ignoring listener: callback must be a function');
+      }
+      return this;
+    }
+
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
     }
-    this.listeners.get(event).push(callback);
+
+    const callbacks = this.listeners.get(event);
+    if (!callbacks.includes(callback)) {
+      callbacks.push(callback);
+    }
+
     return this; // Chaining için
   }
   
@@ -157,13 +174,30 @@ export class GameState {
    * Event listener kaldır
    */
   off(event, callback) {
-    if (this.listeners.has(event)) {
-      const callbacks = this.listeners.get(event);
-      const index = callbacks.indexOf(callback);
-      if (index > -1) {
-        callbacks.splice(index, 1);
-      }
+    if (!this.listeners.has(event)) {
+      return this;
     }
+
+    const callbacks = this.listeners.get(event);
+    if (!callbacks.length) {
+      return this;
+    }
+
+    if (typeof callback !== 'function') {
+      return this;
+    }
+
+    const filtered = callbacks.filter((cb) => cb !== callback);
+    if (filtered.length === callbacks.length) {
+      return this;
+    }
+
+    if (!filtered.length) {
+      this.listeners.delete(event);
+      return this;
+    }
+
+    this.listeners.set(event, filtered);
     return this;
   }
   
@@ -172,7 +206,8 @@ export class GameState {
    */
   emit(event, data) {
     if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach(cb => {
+      const callbacks = this.listeners.get(event).slice();
+      callbacks.forEach((cb) => {
         try {
           cb(data);
         } catch (err) {
@@ -187,9 +222,13 @@ export class GameState {
    * Bir kez çalışacak listener
    */
   once(event, callback) {
+    if (typeof callback !== 'function') {
+      return this.on(event, callback);
+    }
+
     const wrapper = (data) => {
-      callback(data);
       this.off(event, wrapper);
+      callback(data);
     };
     this.on(event, wrapper);
     return this;

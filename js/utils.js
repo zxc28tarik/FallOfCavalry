@@ -248,6 +248,17 @@ export function drawTextShadow(ctx, text, x, y, color = '#fff', shadowColor = '#
 // DOM UTILITIES
 // =============================================================================
 
+
+const warningState = {
+  emitted: new Set(),
+};
+
+function warnOnce(key, message) {
+  if (warningState.emitted.has(key)) return;
+  warningState.emitted.add(key);
+  console.warn(message);
+}
+
 /**
  * Güvenli element text setter
  */
@@ -261,40 +272,65 @@ export const safeText = (el, value) => {
  * Güvenli class toggle
  */
 export const safeClass = (el, action, className) => {
-  if (el && el.classList) {
-    el.classList[action](className);
-  }
+  if (!el || !el.classList || typeof action !== 'string') return;
+
+  const classAction = el.classList[action];
+  if (typeof classAction !== 'function') return;
+
+  classAction.call(el.classList, className);
 };
 
 /**
  * Güvenli attribute setter
  */
 export const safeAttr = (el, attr, value) => {
-  if (el && el.setAttribute) {
-    el.setAttribute(attr, value);
-  }
+  if (!el || typeof el.setAttribute !== 'function' || typeof attr !== 'string' || !attr) return;
+  el.setAttribute(attr, value);
 };
 
 /**
  * Get element safely
  */
 export const getEl = (id) => {
-  return document.getElementById(id);
+  if (typeof document === 'undefined' || typeof document.getElementById !== 'function') {
+    return null;
+  }
+
+  if (typeof id !== 'string' || !id) {
+    return null;
+  }
+
+  const el = document.getElementById(id);
+  if (!el) {
+    warnOnce(`dom:missing:${id}`, `[DOM] Missing element id: ${id}`);
+  }
+
+  return el;
 };
 
 /**
  * Create element with attributes
  */
 export const createElement = (tag, attrs = {}) => {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return null;
+  }
+
+  if (typeof tag !== 'string' || !tag) {
+    return null;
+  }
+
   const el = document.createElement(tag);
-  Object.entries(attrs).forEach(([key, value]) => {
+  const safeAttrs = attrs && typeof attrs === 'object' ? attrs : {};
+
+  Object.entries(safeAttrs).forEach(([key, value]) => {
     if (key === 'class') {
       el.className = value;
     } else if (key === 'text') {
       el.textContent = value;
     } else if (key === 'html') {
       el.innerHTML = value;
-    } else {
+    } else if (typeof key === 'string' && key) {
       el.setAttribute(key, value);
     }
   });

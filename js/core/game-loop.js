@@ -15,12 +15,13 @@ export class GameLoop {
     this.input = input;
     this.renderer = renderer;
     
-    this.lastTime = performance.now();
+    this.lastTime = this.now();
     this.running = false;
     this.rafId = null;
     this.loopToken = 0;
     this.boundTick = this.tick.bind(this);
     this.warnedMissingState = false;
+    this.warnedMissingRAF = false;
     
     // Update fonksiyonları (game mode'a göre)
     this.updateHandlers = {
@@ -41,6 +42,19 @@ export class GameLoop {
     };
   }
   
+
+  now() {
+    if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+      return performance.now();
+    }
+
+    return Date.now();
+  }
+
+  canScheduleFrame() {
+    return typeof requestAnimationFrame === 'function';
+  }
+  
   // ========================================================================
   // MAIN LOOP
   // ========================================================================
@@ -58,8 +72,16 @@ export class GameLoop {
       return;
     }
     
+    if (!this.canScheduleFrame()) {
+      if (!this.warnedMissingRAF) {
+        console.warn('[GameLoop] Cannot start: requestAnimationFrame unavailable');
+        this.warnedMissingRAF = true;
+      }
+      return;
+    }
+
     this.running = true;
-    this.lastTime = performance.now();
+    this.lastTime = this.now();
     const token = ++this.loopToken;
     this.rafId = requestAnimationFrame((now) => this.boundTick(now, token));
     
@@ -75,7 +97,9 @@ export class GameLoop {
     this.running = false;
     this.loopToken++;
     if (this.rafId) {
-      cancelAnimationFrame(this.rafId);
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(this.rafId);
+      }
       this.rafId = null;
     }
     
@@ -136,6 +160,11 @@ export class GameLoop {
     }
     
     // Next frame
+    if (!this.canScheduleFrame()) {
+      this.stop();
+      return;
+    }
+
     this.rafId = requestAnimationFrame((nextNow) => this.boundTick(nextNow, token));
   }
   

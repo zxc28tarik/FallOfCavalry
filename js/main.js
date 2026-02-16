@@ -12,6 +12,19 @@ import GameLoop from './core/game-loop.js';
 import * as CONST from './constants.js';
 import * as utils from './utils.js';
 
+const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
+const GLOBAL_KEYS = {
+  game: '__fallOfCavalryGameInstance__',
+  bootstrapWarned: '__fallOfCavalryBootstrapWarned__',
+  domReadyBound: '__fallOfCavalryDomReadyBound__',
+};
+
+function warnBootstrapOnce(message) {
+  if (ROOT_SCOPE[GLOBAL_KEYS.bootstrapWarned]) return;
+  ROOT_SCOPE[GLOBAL_KEYS.bootstrapWarned] = true;
+  console.warn(message);
+}
+
 // TODO: Diğer modülleri import et
 // import { WorldGenerator } from './world/world-generator.js';
 // import { SaveSystem } from './systems/save-system.js';
@@ -35,6 +48,8 @@ class FallOfCavalry {
     if (!this.ctx) {
       throw new Error('Canvas 2D context is unavailable!');
     }
+    this.resizeHandler = null;
+    this.keyboardHandler = null;
     this.setupCanvas();
     
     // Core Systems
@@ -57,8 +72,10 @@ class FallOfCavalry {
     this.setupDOMReferences();
     
     // Global olarak erişilebilir kıl (debugging için)
-    window.game = this;
-    window.STATE = this.state;
+    if (typeof window !== 'undefined') {
+      window.game = this;
+      window.STATE = this.state;
+    }
     
     console.log('✅ FallOfCavalry - Ready!');
   }
@@ -67,13 +84,20 @@ class FallOfCavalry {
    * Canvas boyutlandırma
    */
   setupCanvas() {
+    if (this.resizeHandler) return;
+
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return;
+    }
+
     const resize = () => {
-      this.canvas.width = window.innerWidth;
-      this.canvas.height = window.innerHeight;
+      this.canvas.width = typeof window.innerWidth === 'number' ? window.innerWidth : this.canvas.width;
+      this.canvas.height = typeof window.innerHeight === 'number' ? window.innerHeight : this.canvas.height;
       
       console.log(`[Canvas] Resized to ${this.canvas.width}x${this.canvas.height}`);
     };
     
+    this.resizeHandler = resize;
     resize();
     window.addEventListener('resize', resize);
   }
@@ -110,7 +134,10 @@ class FallOfCavalry {
    * Klavye kısayolları
    */
   setupKeyboardShortcuts() {
-    document.addEventListener('keydown', (e) => {
+    if (this.keyboardHandler) return;
+    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+
+    this.keyboardHandler = (e) => {
       // Pause
       if (e.key === ' ' && this.state.mode !== 'start') {
         e.preventDefault();
@@ -134,7 +161,9 @@ class FallOfCavalry {
         e.preventDefault();
         this.quickLoad();
       }
-    });
+    };
+
+    document.addEventListener('keydown', this.keyboardHandler);
   }
   
   /**
@@ -328,9 +357,15 @@ class FallOfCavalry {
 /**
  * Sayfa yüklendiğinde oyunu başlat
  */
-document.addEventListener('DOMContentLoaded', () => {
+export function bootstrapFallOfCavalry() {
+  if (ROOT_SCOPE[GLOBAL_KEYS.game]) {
+    warnBootstrapOnce('[Main] Bootstrap already completed; skipping duplicate init.');
+    return ROOT_SCOPE[GLOBAL_KEYS.game];
+  }
+
   try {
     const game = new FallOfCavalry();
+    ROOT_SCOPE[GLOBAL_KEYS.game] = game;
     
     // Test: Hemen başlat (normalde faction seçimi sonrası)
     setTimeout(() => {
@@ -338,16 +373,27 @@ document.addEventListener('DOMContentLoaded', () => {
       game.start();
     }, 1000);
     
+    return game;
   } catch (err) {
     console.error('Failed to initialize game:', err);
-    document.body.innerHTML = `
-      <div style="color: red; padding: 20px; font-family: monospace;">
-        <h1>Game Failed to Load</h1>
-        <pre>${err.message}\n\n${err.stack}</pre>
-      </div>
-    `;
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.innerHTML = `
+        <div style="color: red; padding: 20px; font-family: monospace;">
+          <h1>Game Failed to Load</h1>
+          <pre>${err.message}\n\n${err.stack}</pre>
+        </div>
+      `;
+    }
+    return null;
   }
-});
+}
+
+if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  if (!ROOT_SCOPE[GLOBAL_KEYS.domReadyBound]) {
+    ROOT_SCOPE[GLOBAL_KEYS.domReadyBound] = true;
+    document.addEventListener('DOMContentLoaded', bootstrapFallOfCavalry);
+  }
+}
 
 // Export for debugging
 export default FallOfCavalry;
