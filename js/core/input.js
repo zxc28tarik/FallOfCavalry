@@ -13,6 +13,8 @@ export class InputManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.handlers = new Map();
+    this.listenersBound = false;
+    this.warnedInvalidCanvas = false;
     
     // Mouse state
     this.mouse = {
@@ -46,14 +48,24 @@ export class InputManager {
   // ========================================================================
   
   setupListeners() {
+    if (this.listenersBound) return;
+
+    const hasCanvas = this.canvas && typeof this.canvas.addEventListener === 'function';
+    if (!hasCanvas && !this.warnedInvalidCanvas) {
+      console.warn('[Input] Canvas is missing/invalid; canvas listeners skipped');
+      this.warnedInvalidCanvas = true;
+    }
+
     // Mouse
-    this.addListener(this.canvas, 'mousemove', this.handleMouseMove.bind(this));
-    this.addListener(this.canvas, 'mousedown', this.handleMouseDown.bind(this));
-    this.addListener(this.canvas, 'mouseup', this.handleMouseUp.bind(this));
-    this.addListener(this.canvas, 'mouseenter', this.handleMouseEnter.bind(this));
-    this.addListener(this.canvas, 'mouseleave', this.handleMouseLeave.bind(this));
-    this.addListener(this.canvas, 'contextmenu', (e) => e.preventDefault());
-    this.addListener(this.canvas, 'wheel', this.handleWheel.bind(this));
+    if (hasCanvas) {
+      this.addListener(this.canvas, 'mousemove', this.handleMouseMove.bind(this));
+      this.addListener(this.canvas, 'mousedown', this.handleMouseDown.bind(this));
+      this.addListener(this.canvas, 'mouseup', this.handleMouseUp.bind(this));
+      this.addListener(this.canvas, 'mouseenter', this.handleMouseEnter.bind(this));
+      this.addListener(this.canvas, 'mouseleave', this.handleMouseLeave.bind(this));
+      this.addListener(this.canvas, 'contextmenu', (e) => e.preventDefault());
+      this.addListener(this.canvas, 'wheel', this.handleWheel.bind(this));
+    }
     
     // Keyboard
     this.addListener(document, 'keydown', this.handleKeyDown.bind(this));
@@ -67,11 +79,14 @@ export class InputManager {
     
     // Window events
     this.addListener(window, 'blur', this.handleBlur.bind(this));
+
+    this.listenersBound = true;
   }
   
   addListener(target, event, handler) {
+    if (!target || typeof target.addEventListener !== 'function') return;
     target.addEventListener(event, handler, { passive: false });
-    const key = `${event}_${target === document ? 'document' : target === window ? 'window' : 'canvas'}`;
+    const key = `${event}_${target === document ? 'document' : target === window ? 'window' : 'canvas'}_${this.handlers.size}`;
     this.handlers.set(key, { target, event, handler });
   }
   
@@ -301,6 +316,11 @@ export class InputManager {
    * World koordinatlarını güncelle (kamera transform'undan sonra)
    */
   updateWorldCoords(camera) {
+    if (!camera) {
+      this.mouse.worldX = this.mouse.x;
+      this.mouse.worldY = this.mouse.y;
+      return;
+    }
     this.mouse.worldX = this.mouse.x + camera.x;
     this.mouse.worldY = this.mouse.y + camera.y;
   }
@@ -333,6 +353,7 @@ export class InputManager {
     });
     this.handlers.clear();
     this.touches.clear();
+    this.listenersBound = false;
     
     console.log('[Input] Destroyed');
   }

@@ -27,17 +27,21 @@ class FallOfCavalry {
     
     // Canvas
     this.canvas = utils.getEl('gameCanvas');
-    if (!this.canvas) {
-      throw new Error('Canvas element not found!');
+    if (!this.canvas || typeof this.canvas.getContext !== 'function') {
+      throw new Error('Canvas element not found or invalid!');
     }
     
     this.ctx = this.canvas.getContext('2d');
+    if (!this.ctx) {
+      throw new Error('Canvas 2D context is unavailable!');
+    }
     this.setupCanvas();
     
     // Core Systems
     this.state = new GameState();
     this.input = new InputManager(this.canvas);
     this.gameLoop = new GameLoop(this.state, this.input, null); // Renderer sonra eklenecek
+    this.started = false;
     
     // TODO: Diğer sistemleri initialize et
     // this.renderer = new CanvasRenderer(this.canvas, this.state);
@@ -161,6 +165,11 @@ class FallOfCavalry {
       hudMiniMap: utils.getEl('hudMiniMap'),
     };
     
+    const missing = Object.entries(this.dom).filter(([, el]) => !el).map(([key]) => key);
+    if (missing.length) {
+      console.warn(`[Game] Missing DOM ids: ${missing.join(', ')}`);
+    }
+
     console.log('[Game] DOM references set up');
   }
   
@@ -182,6 +191,8 @@ class FallOfCavalry {
    * Oyunu başlat
    */
   start() {
+    if (this.started) return;
+
     console.log('[Game] Starting game...');
     
     // TODO: Dünyayı oluştur
@@ -193,7 +204,8 @@ class FallOfCavalry {
     
     // Game loop'u başlat
     this.gameLoop.start();
-    
+    this.started = true;
+
     console.log('[Game] Game started!');
   }
   
