@@ -79,6 +79,17 @@ const UNIT_VISUALS = {
   heavy_cav: { weapon: "lance", armor: "plate", shield: false, plume: true },
 };
 
+
+const spriteWarningState = {
+  emitted: new Set(),
+};
+
+function warnRuntimeOnce(key, message) {
+  if (spriteWarningState.emitted.has(key)) return;
+  spriteWarningState.emitted.add(key);
+  console.warn(message);
+}
+
 const FACTION_UNIT_OVERRIDES = {
   ottoman: {
     musketeer: { headgear: "janissary" },
@@ -115,18 +126,35 @@ export class SpriteGenerator {
     }
     
     const size = 64;
-    const canvas = document.createElement('canvas');
+    const doc = globalThis.document;
+    if (!doc || typeof doc.createElement !== 'function') {
+      warnRuntimeOnce('sprite:missing-document', '[SpriteGenerator] document.createElement unavailable');
+      return null;
+    }
+
+    const canvas = doc.createElement('canvas');
+    if (!canvas || typeof canvas.getContext !== 'function') {
+      warnRuntimeOnce('sprite:missing-canvas-context-api', '[SpriteGenerator] Canvas getContext unavailable');
+      return null;
+    }
+
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
-    
+    if (!ctx) {
+      warnRuntimeOnce('sprite:null-canvas-context', '[SpriteGenerator] Canvas 2D context unavailable');
+      return null;
+    }
+
     this.drawUnitSprite(ctx, factionId, unitType, size, seedKey);
-    
+
     this.cache.set(key, canvas);
     return canvas;
   }
   
   drawUnitSprite(g, factionId, unitType, size, seedKey = "") {
+    if (!g) return;
+
     const rng = mulberry32(hashStr(`${factionId}|${unitType}|${seedKey}`));
     
     const factionBase = FACTION_VISUALS[factionId] || FACTION_VISUALS.ottoman;
