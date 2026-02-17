@@ -20,6 +20,24 @@
         <!-- Canvas -->
         <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
 
+
+
+        <div id="pauseOverlay" class="pause-overlay hidden" aria-live="polite">
+            <div id="pauseOverlayTitle" class="pause-overlay-title">PAUSED</div>
+            <div id="pauseOverlayHint" class="pause-overlay-hint">Press ESC to resume</div>
+            <button id="btnQuitToMenu" class="action-btn btn-dark pause-overlay-btn">Quit to Menu</button>
+        </div>
+
+        <div id="menuOverlay" class="menu-overlay" aria-live="polite">
+            <div class="menu-card frame-dark">
+                <div class="menu-title royal-font">Fall of Cavalry</div>
+                <div class="menu-actions">
+                    <button id="menuBtnStart" class="action-btn btn-gold">Start</button>
+                    <button id="menuBtnContinue" class="action-btn btn-dark" disabled>Continue</button>
+                </div>
+            </div>
+        </div>
+
         <!-- HUD -->
         <div id="hud" class="hud">
             <!-- Sol üst: bilgi paneli -->

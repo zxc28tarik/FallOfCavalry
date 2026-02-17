@@ -9,8 +9,9 @@ import BattleRenderer from './battle-renderer.js';
 
 export class CanvasRenderer {
   constructor(canvas, state) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.warnedKeys = new Set();
+    this.canvas = canvas || null;
+    this.ctx = this.getContext2D(this.canvas);
     this.state = state;
     
     // Sub-renderers
@@ -20,10 +21,46 @@ export class CanvasRenderer {
     
     // Performance
     this.frameCount = 0;
-    this.lastFpsUpdate = performance.now();
+    this.lastFpsUpdate = CanvasRenderer.now();
+  }
+
+  static now() {
+    if (typeof globalThis.performance?.now === 'function') {
+      return globalThis.performance.now();
+    }
+
+    return Date.now();
+  }
+
+  warnOnce(key, message) {
+    if (this.warnedKeys.has(key)) return;
+    this.warnedKeys.add(key);
+    console.warn(message);
+  }
+
+  getContext2D(canvas) {
+    if (!canvas) {
+      this?.warnOnce?.('missing-canvas', '[CanvasRenderer] Missing canvas element');
+      return null;
+    }
+
+    if (typeof canvas.getContext !== 'function') {
+      this?.warnOnce?.('missing-getContext', '[CanvasRenderer] Canvas getContext unavailable');
+      return null;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      this?.warnOnce?.('null-context', '[CanvasRenderer] Canvas 2D context unavailable');
+      return null;
+    }
+
+    return ctx;
   }
   
   render() {
+    if (!this.ctx || !this.canvas) return;
+
     // Clear
     this.ctx.fillStyle = '#0a0a0a';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -76,8 +113,10 @@ export class CanvasRenderer {
   }
   
   updateFPS() {
+    if (!this.state?.debug) return;
+
     this.frameCount++;
-    const now = performance.now();
+    const now = CanvasRenderer.now();
     
     if (now - this.lastFpsUpdate >= 1000) {
       this.state.debug.fps = this.frameCount;
@@ -87,8 +126,18 @@ export class CanvasRenderer {
   }
   
   resize(width, height) {
-    this.canvas.width = width;
-    this.canvas.height = height;
+    if (!this.canvas) return;
+
+    const safeWidth = Number.isFinite(width) ? width : null;
+    const safeHeight = Number.isFinite(height) ? height : null;
+    if (safeWidth === null || safeHeight === null) return;
+
+    const ratio = Number.isFinite(globalThis.window?.devicePixelRatio)
+      ? globalThis.window.devicePixelRatio
+      : 1;
+
+    this.canvas.width = safeWidth * ratio;
+    this.canvas.height = safeHeight * ratio;
   }
 }
 
