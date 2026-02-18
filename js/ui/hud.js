@@ -12,7 +12,14 @@ export class HUDManager {
     this.listenersBound = false;
     this.listenerHandlers = new Map();
     this.uiHandlers = new Map();
-    this.menuActions = { onStart: null, onContinue: null, onQuitToMenu: null };
+    this.menuActions = {
+      onStart: null,
+      onContinue: null,
+      onQuitToMenu: null,
+      onSettings: null,
+      onCloseSettings: null,
+      onVolumeChange: null,
+    };
     this.warnedKeys = new Set();
 
     this.setupElements();
@@ -36,9 +43,13 @@ export class HUDManager {
       pauseOverlay: getEl('pauseOverlay'),
       pauseOverlayTitle: getEl('pauseOverlayTitle'),
       pauseOverlayHint: getEl('pauseOverlayHint'),
-      menuOverlay: getEl('menuOverlay'),
+      mainMenuOverlay: getEl('mainMenuOverlay') || getEl('menuOverlay'),
       menuBtnStart: getEl('menuBtnStart'),
       menuBtnContinue: getEl('menuBtnContinue'),
+      menuBtnSettings: getEl('menuBtnSettings'),
+      mainMenuSettingsPanel: getEl('mainMenuSettingsPanel'),
+      menuMasterVolume: getEl('menuMasterVolume'),
+      menuBtnCloseSettings: getEl('menuBtnCloseSettings'),
       btnQuitToMenu: getEl('btnQuitToMenu'),
     };
   }
@@ -59,36 +70,17 @@ export class HUDManager {
       return;
     }
 
-    // Listen to state changes
-    this.addStateListener('player:gold:changed', ({ new: gold } = {}) => {
-      this.updateGold(gold);
-    });
-
-    this.addStateListener('player:army:changed', ({ new: army } = {}) => {
-      this.updateArmy(army);
-    });
-
-    this.addStateListener('player:renown:changed', ({ new: renown } = {}) => {
-      this.updateRenown(renown);
-    });
-
-    this.addStateListener('day:advanced', (day) => {
-      this.updateDay(day);
-    });
-
-    this.addStateListener('faction:selected', (faction) => {
-      this.updateFaction(faction);
-    });
-
-    this.addStateListener('mode:changed', ({ new: mode } = {}) => {
-      this.updateVisibility(mode);
-    });
+    this.addStateListener('player:gold:changed', ({ new: gold } = {}) => this.updateGold(gold));
+    this.addStateListener('player:army:changed', ({ new: army } = {}) => this.updateArmy(army));
+    this.addStateListener('player:renown:changed', ({ new: renown } = {}) => this.updateRenown(renown));
+    this.addStateListener('day:advanced', (day) => this.updateDay(day));
+    this.addStateListener('faction:selected', (faction) => this.updateFaction(faction));
+    this.addStateListener('mode:changed', ({ new: mode } = {}) => this.updateVisibility(mode));
 
     this.listenersBound = true;
   }
 
   update() {
-    // Update all values
     this.updateGold(this.state?.player?.gold);
     this.updateArmy(this.state?.player?.army);
     this.updateRenown(this.state?.player?.renown);
@@ -99,45 +91,19 @@ export class HUDManager {
     }
   }
 
-  updateGold(gold) {
-    safeText(this.elements.hudGold, Math.floor(gold ?? 0));
-  }
-
-  updateArmy(army) {
-    safeText(this.elements.hudArmy, Math.floor(army ?? 0));
-  }
-
-  updateRenown(renown) {
-    safeText(this.elements.hudRenown, Math.floor(renown ?? 0));
-  }
-
-  updateDay(day) {
-    safeText(this.elements.hudDay, day ?? 0);
-  }
-
-  updateFaction(faction) {
-    safeText(this.elements.hudFaction, faction?.name || '-');
-  }
+  updateGold(gold) { safeText(this.elements.hudGold, Math.floor(gold ?? 0)); }
+  updateArmy(army) { safeText(this.elements.hudArmy, Math.floor(army ?? 0)); }
+  updateRenown(renown) { safeText(this.elements.hudRenown, Math.floor(renown ?? 0)); }
+  updateDay(day) { safeText(this.elements.hudDay, day ?? 0); }
+  updateFaction(faction) { safeText(this.elements.hudFaction, faction?.name || '-'); }
 
   updateVisibility(mode) {
     if (!this.elements.hud) return;
-
-    if (mode === 'start') {
-      safeClass(this.elements.hud, 'add', 'hidden');
-    } else {
-      safeClass(this.elements.hud, 'remove', 'hidden');
-    }
+    safeClass(this.elements.hud, mode === 'start' ? 'add' : 'remove', 'hidden');
   }
 
-  show() {
-    safeClass(this.elements.hud, 'remove', 'hidden');
-  }
-
-  hide() {
-    safeClass(this.elements.hud, 'add', 'hidden');
-  }
-
-
+  show() { safeClass(this.elements.hud, 'remove', 'hidden'); }
+  hide() { safeClass(this.elements.hud, 'add', 'hidden'); }
 
   addUIListener(key, target, event, handler) {
     if (!target || typeof target.addEventListener !== 'function') return;
@@ -147,29 +113,30 @@ export class HUDManager {
     this.uiHandlers.set(key, { target, event, handler });
   }
 
-  setMenuHandlers({ onStart, onContinue, onQuitToMenu } = {}) {
+  setMenuHandlers({ onStart, onContinue, onQuitToMenu, onSettings, onCloseSettings, onVolumeChange } = {}) {
     this.menuActions.onStart = typeof onStart === 'function' ? onStart : null;
     this.menuActions.onContinue = typeof onContinue === 'function' ? onContinue : null;
     this.menuActions.onQuitToMenu = typeof onQuitToMenu === 'function' ? onQuitToMenu : null;
+    this.menuActions.onSettings = typeof onSettings === 'function' ? onSettings : null;
+    this.menuActions.onCloseSettings = typeof onCloseSettings === 'function' ? onCloseSettings : null;
+    this.menuActions.onVolumeChange = typeof onVolumeChange === 'function' ? onVolumeChange : null;
 
-    this.addUIListener('menu:start', this.elements.menuBtnStart, 'click', () => {
-      this.menuActions.onStart?.();
-    });
-    this.addUIListener('menu:continue', this.elements.menuBtnContinue, 'click', () => {
-      this.menuActions.onContinue?.();
-    });
-    this.addUIListener('pause:quit', this.elements.btnQuitToMenu, 'click', () => {
-      this.menuActions.onQuitToMenu?.();
-    });
+    this.addUIListener('menu:start', this.elements.menuBtnStart, 'click', () => this.menuActions.onStart?.());
+    this.addUIListener('menu:continue', this.elements.menuBtnContinue, 'click', () => this.menuActions.onContinue?.());
+    this.addUIListener('menu:settings', this.elements.menuBtnSettings, 'click', () => this.menuActions.onSettings?.());
+    this.addUIListener('menu:settings-close', this.elements.menuBtnCloseSettings, 'click', () => this.menuActions.onCloseSettings?.());
+    this.addUIListener('menu:volume', this.elements.menuMasterVolume, 'input', (event) => this.menuActions.onVolumeChange?.(event?.target?.value));
+    this.addUIListener('pause:quit', this.elements.btnQuitToMenu, 'click', () => this.menuActions.onQuitToMenu?.());
+  }
+
+  setMenuVisible(isVisible) {
+    const visible = Boolean(isVisible);
+    safeClass(this.elements.mainMenuOverlay, visible ? 'remove' : 'add', 'hidden');
+    if (visible) this.setPaused(false);
   }
 
   showMenu(isVisible) {
-    const visible = Boolean(isVisible);
-    safeClass(this.elements.menuOverlay, visible ? 'remove' : 'add', 'hidden');
-
-    if (visible) {
-      this.setPaused(false);
-    }
+    this.setMenuVisible(isVisible);
   }
 
   setContinueEnabled(canContinue) {
@@ -177,9 +144,12 @@ export class HUDManager {
     this.elements.menuBtnContinue.disabled = !canContinue;
   }
 
+  setSettingsVisible(isVisible) {
+    safeClass(this.elements.mainMenuSettingsPanel, isVisible ? 'remove' : 'add', 'hidden');
+  }
+
   setPaused(isPaused) {
     const paused = Boolean(isPaused);
-
     safeClass(this.elements.pauseOverlay, paused ? 'remove' : 'add', 'hidden');
 
     if (paused) {
@@ -190,9 +160,7 @@ export class HUDManager {
 
   destroy() {
     if (this.state && typeof this.state.off === 'function') {
-      this.listenerHandlers.forEach((handler, event) => {
-        this.state.off(event, handler);
-      });
+      this.listenerHandlers.forEach((handler, event) => this.state.off(event, handler));
     }
 
     this.listenerHandlers.clear();

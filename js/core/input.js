@@ -358,8 +358,11 @@ export class InputManager {
       this.mouse.worldY = this.mouse.y;
       return;
     }
-    this.mouse.worldX = this.mouse.x + camera.x;
-    this.mouse.worldY = this.mouse.y + camera.y;
+    const zoom = Number.isFinite(camera.zoom) && camera.zoom > 0 ? camera.zoom : 1;
+    const camX = Number.isFinite(camera.x) ? camera.x : 0;
+    const camY = Number.isFinite(camera.y) ? camera.y : 0;
+    this.mouse.worldX = this.mouse.x / zoom + camX;
+    this.mouse.worldY = this.mouse.y / zoom + camY;
   }
 
   /**
