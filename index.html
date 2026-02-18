@@ -76,6 +76,11 @@
                     <div class="opacity-75">Gün</div>
                     <div class="font-bold text-right"><span id="hudDay">1</span></div>
                 </div>
+
+                <div class="hud-encounter-status mt-3">
+                    <div id="hudStats" class="hud-stats">Gold: 0  XP: 0  Morale: 60  Units: 0/0  Wounded: 0</div>
+                    <div id="hudEvent" class="hud-event hidden"></div>
+                </div>
             </div>
 
             <!-- Sağ üst: ayarlar paneli -->
@@ -155,6 +160,31 @@
 
         <!-- Debug overlay -->
         <div id="debugOverlay" class="debug-overlay hidden"></div>
+
+        <div id="rosterPanel" class="roster-panel frame-dark hidden" aria-live="polite">
+            <div class="roster-title royal-font">Choose Units</div>
+            <div id="rosterEnemy" class="roster-enemy">Enemy: -</div>
+            <div id="rosterSelectedCount" class="roster-meta">Selected: 0/6</div>
+            <div id="rosterPower" class="roster-meta">Power P:0 E:0</div>
+            <div class="roster-columns">
+                <div>
+                    <div class="roster-col-title">Player</div>
+                    <div id="rosterPlayerList" class="roster-list"></div>
+                </div>
+                <div>
+                    <div class="roster-col-title">Enemy (fixed)</div>
+                    <pre id="rosterEnemyList" class="roster-list"></pre>
+                </div>
+            </div>
+            <div id="rosterWarning" class="roster-warning"></div>
+            <div class="roster-help">↑/↓ move cursor, Space toggle, Enter confirm, Esc back</div>
+        </div>
+
+        <div id="uiPanel" class="ui-panel frame-dark hidden" aria-live="polite">
+            <div id="uiPanelTitle" class="ui-panel-title royal-font">Panel</div>
+            <div id="uiPanelBody" class="ui-panel-body"></div>
+            <div id="uiPanelFooter" class="ui-panel-footer"></div>
+        </div>
 
         <!-- ✅ eksik overlay’ler eklendi -->
         <div id="helpOverlay" class="modal-wrap hidden">

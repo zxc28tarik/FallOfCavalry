@@ -250,6 +250,114 @@ body{ font-family: "Crimson Text", serif; }
   letter-spacing: 0.02em;
 }
 
+.hud-encounter-status{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.hud-stats{
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
+}
+
+.hud-event{
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(212,175,55,0.92);
+  transition: opacity 0.25s ease;
+}
+
+.roster-panel{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(900px, calc(100vw - 28px));
+  padding: 16px;
+  z-index: 52;
+  pointer-events: auto;
+}
+
+.roster-title{
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.roster-enemy{
+  margin-top: 4px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.roster-columns{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.roster-col-title{
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.roster-list{
+  margin-top: 6px;
+  min-height: 180px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.35);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.roster-warning{
+  margin-top: 8px;
+  min-height: 18px;
+  color: #f3aa6f;
+  font-size: 12px;
+}
+
+.roster-help{
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.ui-panel{
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(80vh, 680px);
+  overflow: auto;
+  padding: 14px;
+  z-index: 55;
+  pointer-events: auto;
+}
+
+.ui-panel-title{
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.ui-panel-body{
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.ui-panel-footer{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.84;
+}
+
 .tax-slider{
   accent-color: #d4af37;
 }
