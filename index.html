@@ -28,12 +28,19 @@
             <button id="btnQuitToMenu" class="action-btn btn-dark pause-overlay-btn">Quit to Menu</button>
         </div>
 
-        <div id="menuOverlay" class="menu-overlay" aria-live="polite">
+        <div id="mainMenuOverlay" class="menu-overlay" aria-live="polite">
             <div class="menu-card frame-dark">
-                <div class="menu-title royal-font">Fall of Cavalry</div>
+                <div class="menu-title royal-font">Fall Of Cavalry</div>
                 <div class="menu-actions">
-                    <button id="menuBtnStart" class="action-btn btn-gold">Start</button>
+                    <button id="menuBtnStart" class="action-btn btn-gold">Start Game</button>
                     <button id="menuBtnContinue" class="action-btn btn-dark" disabled>Continue</button>
+                    <button id="menuBtnSettings" class="action-btn btn-dark">Settings</button>
+                </div>
+                <div class="menu-hint">Press Enter to Start</div>
+                <div id="mainMenuSettingsPanel" class="menu-settings-panel hidden">
+                    <label class="menu-settings-label" for="menuMasterVolume">Master Volume</label>
+                    <input id="menuMasterVolume" type="range" min="0" max="100" value="100" />
+                    <button id="menuBtnCloseSettings" class="action-btn btn-dark">Close</button>
                 </div>
             </div>
         </div>

@@ -111,7 +111,7 @@ export class CanvasRenderer {
     this.ctx.textAlign = 'center';
     this.ctx.fillText('Encounter!', this.canvas.width / 2, this.canvas.height / 2);
   }
-  
+
   updateFPS() {
     if (!this.state?.debug) return;
 

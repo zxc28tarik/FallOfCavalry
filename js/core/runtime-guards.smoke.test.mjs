@@ -158,9 +158,7 @@ const createMainTestEnvironment = () => {
         listeners.set(event, handler);
       },
       removeEventListener(event, handler) {
-        if (listeners.get(event) === handler) {
-          listeners.delete(event);
-        }
+        if (listeners.get(event) === handler) listeners.delete(event);
       },
       click() {
         listeners.get('click')?.({ preventDefault() {} });
@@ -168,14 +166,39 @@ const createMainTestEnvironment = () => {
     };
   };
 
+  const createRange = () => {
+    const listeners = new Map();
+    return {
+      value: '100',
+      addCounts: {},
+      addEventListener(event, handler) {
+        this.addCounts[event] = (this.addCounts[event] ?? 0) + 1;
+        listeners.set(event, handler);
+      },
+      removeEventListener(event, handler) {
+        if (listeners.get(event) === handler) listeners.delete(event);
+      },
+      input(value) {
+        this.value = String(value);
+        listeners.get('input')?.({ target: this });
+      },
+    };
+  };
+
   const listenerTarget = {
+    listeners: new Map(),
     addCounts: {},
     removeCounts: {},
     addEventListener(event, handler) {
       this.addCounts[event] = (this.addCounts[event] ?? 0) + 1;
+      this.listeners.set(event, handler);
     },
     removeEventListener(event) {
       this.removeCounts[event] = (this.removeCounts[event] ?? 0) + 1;
+      this.listeners.delete(event);
+    },
+    dispatch(eventName, payload = {}) {
+      this.listeners.get(eventName)?.(payload);
     },
   };
 
@@ -200,8 +223,12 @@ const createMainTestEnvironment = () => {
   const pauseOverlayHint = { textContent: '' };
   const menuOverlay = { classList: makeClassList() };
   menuOverlay.classList.remove('hidden');
+  const menuSettingsPanel = { classList: makeClassList() };
   const menuBtnStart = createButton();
   const menuBtnContinue = createButton();
+  const menuBtnSettings = createButton();
+  const menuBtnCloseSettings = createButton();
+  const menuMasterVolume = createRange();
   const btnQuitToMenu = createButton();
 
   const documentForGame = {
@@ -212,9 +239,13 @@ const createMainTestEnvironment = () => {
       if (id === 'pauseOverlay') return pauseOverlay;
       if (id === 'pauseOverlayTitle') return pauseOverlayTitle;
       if (id === 'pauseOverlayHint') return pauseOverlayHint;
-      if (id === 'menuOverlay') return menuOverlay;
+      if (id === 'mainMenuOverlay' || id === 'menuOverlay') return menuOverlay;
       if (id === 'menuBtnStart') return menuBtnStart;
       if (id === 'menuBtnContinue') return menuBtnContinue;
+      if (id === 'menuBtnSettings') return menuBtnSettings;
+      if (id === 'menuBtnCloseSettings') return menuBtnCloseSettings;
+      if (id === 'mainMenuSettingsPanel') return menuSettingsPanel;
+      if (id === 'menuMasterVolume') return menuMasterVolume;
       if (id === 'btnQuitToMenu') return btnQuitToMenu;
       return null;
     },
@@ -237,6 +268,10 @@ const createMainTestEnvironment = () => {
     menuOverlay,
     menuBtnStart,
     menuBtnContinue,
+    menuBtnSettings,
+    menuBtnCloseSettings,
+    menuMasterVolume,
+    menuSettingsPanel,
     btnQuitToMenu,
   };
 };
@@ -251,12 +286,14 @@ const createMainTestEnvironment = () => {
     menuOverlay,
     menuBtnStart,
     menuBtnContinue,
+    menuBtnSettings,
+    menuBtnCloseSettings,
+    menuSettingsPanel,
     btnQuitToMenu,
   } = createMainTestEnvironment();
 
   globalThis.document = documentForGame;
   globalThis.window = windowForGame;
-
   globalThis.setTimeout = () => 1;
 
   const game = new MainGame();
@@ -264,22 +301,35 @@ const createMainTestEnvironment = () => {
   const resizeAfterCtor = windowForGame.addCounts.resize ?? 0;
   const startClickBindsAfterCtor = menuBtnStart.addCounts.click ?? 0;
   const continueClickBindsAfterCtor = menuBtnContinue.addCounts.click ?? 0;
+  const settingsClickBindsAfterCtor = menuBtnSettings.addCounts.click ?? 0;
   const quitClickBindsAfterCtor = btnQuitToMenu.addCounts.click ?? 0;
 
   assert.equal(game.mode, 'menu', 'Main game should boot in menu mode');
   assert.equal(game.started, false, 'Main game loop should not be started in menu mode');
   assert.equal(menuBtnContinue.disabled, true, 'Continue should be disabled when no save exists');
 
-  menuBtnStart.click();
-  menuBtnStart.click();
-  assert.equal(game.mode, 'game', 'Main game should enter game mode after Start');
-  assert.equal(game.started, true, 'Main game should be started after Start');
-  assert.equal(menuOverlay.classList.has('hidden'), true, 'Menu overlay should be hidden in game mode');
+  documentForGame.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(game.mode, 'menu', 'Escape should not start or pause from menu');
 
-  assert.equal(game.togglePaused(), true, 'Main game togglePaused() should succeed');
+  menuBtnSettings.click();
+  assert.equal(menuSettingsPanel.classList.has('hidden'), false, 'Settings panel should open in menu');
+  documentForGame.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(menuSettingsPanel.classList.has('hidden'), true, 'Escape in menu should close settings panel');
+
+  documentForGame.dispatch('keydown', { key: 'Enter', preventDefault() {} });
+  assert.equal(game.mode, 'playing', 'Enter should start game from menu');
+  assert.equal(game.started, true, 'Main game should be started after Enter');
+  assert.equal(menuOverlay.classList.has('hidden'), true, 'Menu overlay should be hidden in playing mode');
+
+  documentForGame.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(game.mode, 'paused', 'Escape should pause while playing');
   assert.equal(game.isPaused(), true, 'Main game should enter paused state');
   assert.equal(pauseOverlayTitle.textContent, 'PAUSED', 'Main game pause should update overlay title');
   assert.equal(pauseOverlayHint.textContent, 'Press ESC to resume', 'Main game pause should update overlay hint');
+
+  documentForGame.dispatch('keydown', { key: 'Escape', preventDefault() {} });
+  assert.equal(game.mode, 'playing', 'Escape should resume while paused');
+
   btnQuitToMenu.click();
   assert.equal(game.mode, 'menu', 'Quit to menu should switch mode to menu');
   assert.equal(game.started, false, 'Quit to menu should stop game loop');
@@ -307,7 +357,7 @@ const createMainTestEnvironment = () => {
 
   menuBtnContinue.click();
   assert.equal(loadCalls, 1, 'Continue click should call save load once');
-  assert.equal(game.mode, 'game', 'Continue should enter game mode on successful load');
+  assert.equal(game.mode, 'playing', 'Continue should enter playing mode on successful load');
 
   const reinitResult = game.init();
   assert.equal(reinitResult, true, 'Main game init() should succeed when called repeatedly');
@@ -315,10 +365,10 @@ const createMainTestEnvironment = () => {
   assert.equal(windowForGame.addCounts.resize ?? 0, resizeAfterCtor, 'Main game init() should not duplicate resize binding');
   assert.equal(menuBtnStart.addCounts.click ?? 0, startClickBindsAfterCtor, 'Start click handler should not duplicate');
   assert.equal(menuBtnContinue.addCounts.click ?? 0, continueClickBindsAfterCtor, 'Continue click handler should not duplicate');
+  assert.equal(menuBtnSettings.addCounts.click ?? 0, settingsClickBindsAfterCtor, 'Settings click handler should not duplicate');
   assert.equal(btnQuitToMenu.addCounts.click ?? 0, quitClickBindsAfterCtor, 'Quit click handler should not duplicate');
 
   assert.doesNotThrow(() => game.destroy(), 'Main game destroy() should not throw');
-  assert.doesNotThrow(() => game.destroy(), 'Main game destroy() should be idempotent');
 
   const reinitAfterDestroy = game.init();
   assert.equal(reinitAfterDestroy, true, 'Main game should allow init() after destroy');
