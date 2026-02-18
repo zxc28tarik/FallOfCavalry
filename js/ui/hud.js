@@ -40,6 +40,17 @@ export class HUDManager {
       hudArmy: getEl('hudArmy'),
       hudRenown: getEl('hudRenown'),
       hudDay: getEl('hudDay'),
+      hudStats: getEl('hudStats'),
+      hudEvent: getEl('hudEvent'),
+      rosterPanel: getEl('rosterPanel'),
+      rosterEnemy: getEl('rosterEnemy'),
+      rosterWarning: getEl('rosterWarning'),
+      rosterPlayerList: getEl('rosterPlayerList'),
+      rosterEnemyList: getEl('rosterEnemyList'),
+      uiPanel: getEl('uiPanel'),
+      uiPanelTitle: getEl('uiPanelTitle'),
+      uiPanelBody: getEl('uiPanelBody'),
+      uiPanelFooter: getEl('uiPanelFooter'),
       pauseOverlay: getEl('pauseOverlay'),
       pauseOverlayTitle: getEl('pauseOverlayTitle'),
       pauseOverlayHint: getEl('pauseOverlayHint'),
@@ -89,6 +100,11 @@ export class HUDManager {
     if (this.state?.selectedFaction) {
       this.updateFaction(this.state.selectedFaction);
     }
+
+    this.updateEncounterStats();
+    this.updateEventLine();
+    this.updateRosterPanel();
+    this.updateUiPanel();
   }
 
   updateGold(gold) { safeText(this.elements.hudGold, Math.floor(gold ?? 0)); }
@@ -97,9 +113,77 @@ export class HUDManager {
   updateDay(day) { safeText(this.elements.hudDay, day ?? 0); }
   updateFaction(faction) { safeText(this.elements.hudFaction, faction?.name || '-'); }
 
+  updateEncounterStats() {
+    if (!this.elements.hudStats) return;
+    const gold = Math.floor(this.state?.playerParty?.gold ?? 0);
+    const xp = Math.floor(this.state?.playerParty?.xp ?? 0);
+    const morale = Math.floor(this.state?.playerParty?.morale ?? 0);
+    const units = this.state?.playerParty?.roster ?? [];
+    const totalUnits = units.reduce((sum, stack) => sum + Math.max(0, Math.floor(stack?.count ?? 0)), 0);
+    const wounded = units.reduce((sum, stack) => sum + Math.max(0, Math.floor(stack?.wounded ?? 0)), 0);
+    safeText(this.elements.hudStats, `Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}`);
+  }
+
+  updateEventLine() {
+    if (!this.elements.hudEvent) return;
+    const message = this.state?.lastEventLog;
+    safeText(this.elements.hudEvent, message || '');
+    safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
+  }
+
   updateVisibility(mode) {
     if (!this.elements.hud) return;
     safeClass(this.elements.hud, mode === 'start' ? 'add' : 'remove', 'hidden');
+    safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
+    const panelMode = mode === 'aftermath' || mode === 'city';
+    safeClass(this.elements.uiPanel, panelMode ? 'remove' : 'add', 'hidden');
+    this.updateRosterPanel();
+    this.updateUiPanel();
+  }
+
+  updateRosterPanel() {
+    if (!this.elements.rosterPanel) return;
+
+    const mode = this.state?.mode;
+    safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
+    if (mode !== 'roster') return;
+
+    const enemyId = this.state?.roster?.enemyId ?? this.state?.encounter?.enemyId ?? 'unknown';
+    safeText(this.elements.rosterEnemy, `Enemy: ${enemyId}`);
+    safeText(this.elements.rosterWarning, this.state?.roster?.warning || '');
+
+    if (this.elements.rosterPlayerList) {
+      const roster = Array.isArray(this.state?.playerRoster) ? this.state.playerRoster : [];
+      const cursorIndex = Number.isFinite(this.state?.rosterCursorIndex) ? this.state.rosterCursorIndex : -1;
+      const playerRows = roster.map((unit, idx) => {
+        const marker = idx === cursorIndex ? '>' : ' ';
+        const selected = unit?.selected ? '[x]' : '[ ]';
+        const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
+        return `${marker} ${selected} ${unit?.name ?? 'Unit'} (${effective}) f${unit?.fatigue ?? 0} i${unit?.injured ?? 0}`;
+      });
+      safeText(this.elements.rosterPlayerList, playerRows.join('\n'));
+    }
+
+    if (this.elements.rosterEnemyList) {
+      const roster = Array.isArray(this.state?.enemyRoster) ? this.state.enemyRoster : [];
+      const enemyRows = roster.map((unit) => {
+        const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
+        return `${unit?.name ?? 'Unit'} (${effective}) f${unit?.fatigue ?? 0} i${unit?.injured ?? 0}`;
+      });
+      safeText(this.elements.rosterEnemyList, enemyRows.join('\n'));
+    }
+  }
+
+  updateUiPanel() {
+    if (!this.elements.uiPanel) return;
+    const mode = this.state?.mode;
+    const panelData = this.state?.uiPanel;
+    const visible = (mode === 'aftermath' || mode === 'city') && panelData;
+    safeClass(this.elements.uiPanel, visible ? 'remove' : 'add', 'hidden');
+    if (!visible) return;
+    safeText(this.elements.uiPanelTitle, panelData.title || 'Panel');
+    safeText(this.elements.uiPanelBody, panelData.body || '');
+    safeText(this.elements.uiPanelFooter, panelData.footer || '');
   }
 
   show() { safeClass(this.elements.hud, 'remove', 'hidden'); }

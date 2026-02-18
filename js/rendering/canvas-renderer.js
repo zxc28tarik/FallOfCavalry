@@ -82,6 +82,9 @@ export class CanvasRenderer {
       case 'encounter':
         this.renderEncounter();
         break;
+      case 'roster':
+        this.renderRoster();
+        break;
     }
     
     // FPS counter
@@ -102,14 +105,29 @@ export class CanvasRenderer {
   }
   
   renderEncounter() {
-    // Simple encounter screen
     this.ctx.fillStyle = '#1a1a1a';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
+
+    const enemyId = this.state?.encounter?.enemyId ?? 'unknown';
     this.ctx.fillStyle = '#fff';
-    this.ctx.font = '32px Arial';
+    this.ctx.font = '40px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('Encounter!', this.canvas.width / 2, this.canvas.height / 2);
+    this.ctx.fillText('Encounter!', this.canvas.width / 2, this.canvas.height / 2 - 20);
+    this.ctx.font = '22px Arial';
+    this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
+    this.ctx.font = '18px Arial';
+    this.ctx.fillText('F = Fight, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
+  }
+
+  renderRoster() {
+    this.ctx.fillStyle = '#121212';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '36px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('Choose Units', this.canvas.width / 2, 72);
+    this.ctx.font = '18px Arial';
+    this.ctx.fillText('Enter = Confirm, Esc = Back', this.canvas.width / 2, 104);
   }
 
   updateFPS() {
