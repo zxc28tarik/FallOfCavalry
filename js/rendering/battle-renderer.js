@@ -72,7 +72,14 @@ export class BattleRenderer {
     
     // Unit sprite (simplified)
     const sprite = this.spriteGen.getUnitSprite(unit.faction, unit.type, unit.id);
-    ctx.drawImage(sprite, x - 32, y - 32, 64, 64);
+    if (sprite) {
+      ctx.drawImage(sprite, x - 32, y - 32, 64, 64);
+    } else {
+      ctx.fillStyle = unit.side === 'player' ? '#4caf50' : '#f44336';
+      ctx.beginPath();
+      ctx.arc(x, y, 14, 0, Math.PI * 2);
+      ctx.fill();
+    }
     
     // HP bar
     this.drawHealthBar(ctx, x, y - 40, unit.hp, unit.maxHp, teamColor);

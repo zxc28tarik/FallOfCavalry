@@ -91,43 +91,32 @@ export class CityRenderer {
     const panelX = w - 300;
     const panelY = 100;
     const panelW = 280;
-    const panelH = 400;
-    
-    // Panel background
+    const panelH = 300;
     ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    roundRect(ctx, panelX, panelY, panelW, panelH, 8);
+    ctx.beginPath();
+    ctx.rect(panelX, panelY, panelW, panelH);
     ctx.fill();
-    
     ctx.strokeStyle = '#d4af37';
     ctx.lineWidth = 2;
     ctx.stroke();
-    
-    // Text
     ctx.fillStyle = '#fff';
     ctx.font = '16px Arial';
     ctx.textAlign = 'left';
-    
     let y = panelY + 40;
-    const lineHeight = 30;
-    
-    ctx.fillText(`Population: ${city.population}`, panelX + 20, y);
-    y += lineHeight;
-    ctx.fillText(`Garrison: ${city.garrison}`, panelX + 20, y);
-    y += lineHeight;
-    ctx.fillText(`Owner: ${city.owner}`, panelX + 20, y);
-    y += lineHeight;
-    ctx.fillText(`Loyalty: ${city.loyalty}%`, panelX + 20, y);
-    y += lineHeight * 2;
-    
-    // Buildings
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText('Buildings:', panelX + 20, y);
-    y += lineHeight;
-    
-    ctx.font = '12px Arial';
-    for (const building of city.buildings) {
-      ctx.fillText(`- ${building.type} (lvl ${building.level})`, panelX + 30, y);
-      y += lineHeight;
+    const lineH = 28;
+    ctx.fillText(`Population: ${city.population ?? '-'}`, panelX + 20, y); y += lineH;
+    ctx.fillText(`Garrison: ${city.garrison ?? '-'}`, panelX + 20, y); y += lineH;
+    ctx.fillText(`Owner: ${city.owner ?? city.faction ?? '-'}`, panelX + 20, y); y += lineH;
+    ctx.fillText(`Loyalty: ${city.loyalty ?? 100}%`, panelX + 20, y); y += lineH;
+    ctx.fillText(`Type: ${city.type ?? 'settlement'}`, panelX + 20, y); y += lineH * 1.5;
+    const buildings = Array.isArray(city.buildings) ? city.buildings : [];
+    if (buildings.length > 0) {
+      ctx.font = 'bold 14px Arial';
+      ctx.fillText('Buildings:', panelX + 20, y); y += lineH;
+      ctx.font = '12px Arial';
+      buildings.slice(0, 4).forEach((b) => {
+        ctx.fillText(`- ${b.type ?? b} (lvl ${b.level ?? 1})`, panelX + 30, y); y += lineH;
+      });
     }
   }
 }

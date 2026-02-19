@@ -22,7 +22,7 @@ export class WorldGenerator {
   generate() {
     console.log('[WorldGen] Generating world with seed:', this.seed);
     
-    const startTime = performance.now();
+    const startTime = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
     
     // Height map oluştur
     const heightMap = this.buildHeightField();
@@ -51,7 +51,7 @@ export class WorldGenerator {
     // Fog of war
     const fog = this.initFogOfWar();
     
-    const elapsed = performance.now() - startTime;
+    const elapsed = ((typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now()) - startTime;
     console.log(`[WorldGen] World generated in ${elapsed.toFixed(0)}ms`);
     console.log(`[WorldGen] ${settlements.length} settlements, ${rivers.length} rivers`);
     

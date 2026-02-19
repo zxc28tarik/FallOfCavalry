@@ -221,6 +221,10 @@ export class HUDManager {
     this.addUIListener('pause:quit', this.elements.btnQuitToMenu, 'click', () => this.menuActions.onQuitToMenu?.());
   }
 
+  setRosterHandlers({ onToggleUnit } = {}) {
+    this._rosterHandlers = { onToggleUnit: typeof onToggleUnit === 'function' ? onToggleUnit : null };
+  }
+
   setMenuVisible(isVisible) {
     const visible = Boolean(isVisible);
     safeClass(this.elements.mainMenuOverlay, visible ? 'remove' : 'add', 'hidden');

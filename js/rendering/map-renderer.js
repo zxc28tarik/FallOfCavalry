@@ -228,7 +228,7 @@ export class MapRenderer {
     ctx.fillStyle = '#fff';
     ctx.font = '10px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(party.strength, px + TILE / 2, py + TILE / 2 + 4);
+    ctx.fillText(party.strength ?? '?', px + TILE / 2, py + TILE / 2 + 4);
   }
   
   drawPlayer(ctx, player, TILE) {

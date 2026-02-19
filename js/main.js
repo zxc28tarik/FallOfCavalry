@@ -1595,12 +1595,13 @@ Up/Down select, Enter heal, Esc back`,
         const rect = this.canvas.getBoundingClientRect();
         const x = (event?.clientX ?? 0) - rect.left;
         const y = (event?.clientY ?? 0) - rect.top;
-        const hit = (this.state?.battle?.units || []).find((u) => !u.dead && u.side === 'player' && Math.hypot(u.x - x, u.y - y) <= ((u.radius ?? 10) + 8));
+        const allUnits = [...(this.state?.battle?.playerUnits || []), ...(this.state?.battle?.enemyUnits || [])];
+        const hit = allUnits.find((u) => !u.dead && u.side === 'player' && Math.hypot(u.x - x, u.y - y) <= ((u.radius ?? 10) + 8));
         if (!hit) return;
         this.state.battle.selection = this.state.battle.selection || {};
-        this.state.battle.selection.unitId = hit.id;
+        this.state.battle.selection.unitId = hit.unitId;
         if (this.state?.battle?.phase === 'deploy' && this.mode !== 'paused') {
-          this.battleDragUnitId = hit.id;
+          this.battleDragUnitId = hit.unitId;
           this.battleDragOffsetX = x - hit.x;
           this.battleDragOffsetY = y - hit.y;
         }
@@ -2921,17 +2922,17 @@ Esc close`,
 
 
   renderDebugInfo() {
-    if (!this.state || !this.input) return;
-
+    if (!this.state) return;
     const lines = [
-      `FPS: ${this.state.debug.fps.toFixed(0)}`,
+      `FPS: ${(this.state.debug?.fps ?? 0).toFixed(0)}`,
       `Mode: ${this.state.mode}`,
       `Day: ${this.state.day}`,
-      `Gold: ${this.state.player.gold}`,
-      `Mouse: (${this.input.mouse.x.toFixed(0)}, ${this.input.mouse.y.toFixed(0)})`,
+      `Gold: ${Math.floor(this.playerParty?.gold ?? 0)}`,
+      `Party: (${(this.playerParty?.x ?? 0).toFixed(0)}, ${(this.playerParty?.y ?? 0).toFixed(0)})`,
+      `Roster: ${(this.playerParty?.roster || []).length}`,
+      `Enemies: ${(this.enemyParties || []).length}`,
     ];
-
-    if (this.dom.debugOverlay) {
+    if (this.dom?.debugOverlay) {
       this.dom.debugOverlay.textContent = lines.join('\n');
     }
   }
