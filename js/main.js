@@ -10,6 +10,7 @@ import HUDManager from './ui/hud.js';
 import SaveSystem from './systems/save-system.js';
 import AudioSystem from './systems/audio-system.js';
 import * as CONST from './constants.js';
+import MinimapSimple from './rendering/minimap-simple.js';
 
 import * as utils from './utils.js';
 
@@ -92,6 +93,7 @@ class FallOfCavalry {
     this.autosaveTimerId = null;
     this.lastAutosaveHudAt = 0;
 
+    this.minimapRenderer = null;
     this.started = false;
     this.initialized = false;
     this.listenersBound = false;
@@ -185,7 +187,27 @@ class FallOfCavalry {
     this.state.on('city:update', () => this.updateTransientUIState());
 
     this.setupKeyboardShortcuts();
+    this.state.on('day:tick', (day) => this.processDailyEconomy(day));
     this.listenersBound = true;
+  }
+
+  processDailyEconomy(day) {
+    if (!this.playerParty) return;
+    const roster = this.playerParty.roster || [];
+    const totalWage = roster.reduce((sum, u) => 
+      sum + Math.max(0, Math.floor(u.wagePerDay ?? 0)), 0);
+
+    if (totalWage === 0) return;
+
+    const canPay = (this.playerParty.gold ?? 0) >= totalWage;
+    if (canPay) {
+      this.playerParty.gold -= totalWage;
+      this.setLastEventLog(`Gün ${day}: Ücret ${totalWage}g ödendi.`);
+    } else {
+      this.playerParty.gold = 0;
+      this.playerParty.morale = Math.max(10, (this.playerParty.morale ?? 50) - 5);
+      this.setLastEventLog(`Gün ${day}: Ödeme yapılamadı! Moral -5.`);
+    }
   }
 
   getCameraSafe() {
@@ -1676,6 +1698,18 @@ Up/Down select, Enter heal, Esc back`,
     this.canvas.addEventListener('mousemove', this.partyPointerMoveHandler, { passive: false });
     this.canvas.addEventListener('mouseup', this.partyPointerUpHandler, { passive: false });
     this.canvas.addEventListener('contextmenu', this.partyContextMenuHandler, { passive: false });
+
+    if (this.canvas && !this._wheelBound) {
+      this._wheelBound = true;
+      this.canvas.addEventListener('wheel', (e) => {
+        if (this.state?.mode !== 'map') return;
+        e.preventDefault();
+        const cam = this.getCameraSafe();
+        const factor = e.deltaY < 0 ? 1.1 : 0.9;
+        cam.zoom = Math.max(0.3, Math.min(3.0, cam.zoom * factor));
+        this.clampCameraToWorld();
+      }, { passive: false });
+    }
   }
 
   setupKeyboardShortcuts() {
@@ -2009,6 +2043,59 @@ Up/Down select, Enter heal, Esc back`,
     const missing = Object.entries(this.dom).filter(([, el]) => !el).map(([key]) => key);
     if (missing.length) {
       this.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
+    }
+
+    const btnSave = document.getElementById('btnSaveGame');
+    const btnLoad = document.getElementById('btnLoadGame');
+    const btnReset = document.getElementById('btnResetGame');
+    const btnTransfer = document.getElementById('btnOpenSaveTransfer');
+    const btnExport = document.getElementById('btnExportSave');
+    const btnImport = document.getElementById('btnImportSave');
+    const btnCloseTransfer = document.getElementById('btnCloseSaveTransfer');
+
+    if (btnSave) btnSave.addEventListener('click', () => this.quickSave());
+    if (btnLoad) btnLoad.addEventListener('click', () => this.openSaveLoadPanel());
+    if (btnReset) btnReset.addEventListener('click', () => {
+      if (confirm('Oyunu sıfırlamak istediğine emin misin?')) {
+        this.saveSystem?.deleteSave?.();
+        this.saveSystem?.deleteAutosave?.();
+        location.reload();
+      }
+    });
+    if (btnTransfer) btnTransfer.addEventListener('click', () => {
+      document.getElementById('saveTransferModal')?.classList.remove('hidden');
+    });
+    if (btnExport) btnExport.addEventListener('click', () => {
+      this.exportSelectedSaveToTextarea('manual1');
+    });
+    if (btnImport) btnImport.addEventListener('click', () => {
+      this.importTextareaToSlotAndLoad('manual1');
+      document.getElementById('saveTransferModal')?.classList.add('hidden');
+    });
+    if (btnCloseTransfer) btnCloseTransfer.addEventListener('click', () => {
+      document.getElementById('saveTransferModal')?.classList.add('hidden');
+    });
+
+    this.minimapRenderer = new MinimapSimple(
+      document.getElementById('hudMiniMap')
+    );
+
+    document.querySelectorAll('[data-battle-speed]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const speed = parseFloat(btn.dataset.battleSpeed);
+        if (!Number.isFinite(speed)) return;
+        if (this.state?.battle) this.state.battleSpeed = speed;
+        document.querySelectorAll('[data-battle-speed]')
+          .forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+      });
+    });
+
+    const btnBattlePause = document.getElementById('btnBattlePause');
+    if (btnBattlePause) {
+      btnBattlePause.addEventListener('click', () => {
+        if (this.state?.mode === 'battle') this.togglePaused();
+      });
     }
   }
 
@@ -2650,6 +2737,7 @@ Esc close`,
     }
 
     this.hudManager?.update?.();
+    this.minimapRenderer?.render(this);
   }
 
   renderWorldOverlays(ctx, camera) {

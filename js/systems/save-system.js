@@ -205,6 +205,28 @@ export class SaveSystem {
     const slot = isAutosave ? 'autosave' : 'manual1';
     return this.loadSlot(slot);
   }
+
+  hasAutosave() {
+    return this.hasSlot('autosave');
+  }
+
+  deleteSave() {
+    const storage = this.getStorage();
+    if (!storage) return false;
+    try { storage.removeItem(this.getSlotKey('manual1')); return true; }
+    catch { return false; }
+  }
+
+  deleteAutosave() {
+    const storage = this.getStorage();
+    if (!storage) return false;
+    try { storage.removeItem(this.getSlotKey('autosave')); return true; }
+    catch { return false; }
+  }
+
+  export(slot = 'manual1') {
+    return this.exportSlot(slot);
+  }
 }
 
 export default SaveSystem;
