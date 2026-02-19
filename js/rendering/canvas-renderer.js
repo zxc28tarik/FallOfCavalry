@@ -116,7 +116,7 @@ export class CanvasRenderer {
     this.ctx.font = '22px Arial';
     this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
     this.ctx.font = '18px Arial';
-    this.ctx.fillText('F = Fight, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
+    this.ctx.fillText('F = Battle Prep, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
   }
 
   renderRoster() {
@@ -125,9 +125,9 @@ export class CanvasRenderer {
     this.ctx.fillStyle = '#fff';
     this.ctx.font = '36px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('Choose Units', this.canvas.width / 2, 72);
+    this.ctx.fillText('Battle Prep', this.canvas.width / 2, 72);
     this.ctx.font = '18px Arial';
-    this.ctx.fillText('Enter = Confirm, Esc = Back', this.canvas.width / 2, 104);
+    this.ctx.fillText('Up/Down Move · Space Toggle · A Select Max · C Clear · Enter Start · Esc Back', this.canvas.width / 2, 104);
   }
 
   updateFPS() {

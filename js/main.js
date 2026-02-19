@@ -61,29 +61,36 @@ class FallOfCavalry {
     this.encounterCooldownMs = 3000;
     this.encounterPushbackDistance = 64;
     this.defeatPushbackDistance = 120;
-    this.maxUnitsToDeploy = 6;
+    this.maxUnitsToDeploy = 8;
     this.playerRoster = [];
     this.enemyRoster = [];
     this.rosterCursorIndex = 0;
     this.enemyUnitsById = {};
     this.itemCatalog = [
-      { id: 'grain', name: 'Grain', basePrice: 6 },
-      { id: 'meat', name: 'Meat', basePrice: 10 },
-      { id: 'ore', name: 'Iron Ore', basePrice: 18 },
-      { id: 'cloth', name: 'Cloth', basePrice: 14 },
-      { id: 'timber', name: 'Timber', basePrice: 9 },
-      { id: 'herbs', name: 'Herbs', basePrice: 11 },
-      { id: 'wine', name: 'Wine', basePrice: 16 },
+      { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4, baseSell: 2 },
+      { id: 'wood', name: 'Wood', unitValue: 5, baseBuy: 5, baseSell: 3 },
+      { id: 'leather', name: 'Leather', unitValue: 7, baseBuy: 7, baseSell: 4 },
+      { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11, baseSell: 7 },
+      { id: 'arrows', name: 'Arrows', unitValue: 5, baseBuy: 5, baseSell: 3 },
+      { id: 'cloth', name: 'Cloth', unitValue: 6, baseBuy: 6, baseSell: 4 },
+      { id: 'tools', name: 'Tools', unitValue: 9, baseBuy: 9, baseSell: 6 },
     ];
-    this.cityTab = 'recruit';
     this.cityOffers = [];
-    this.battleAftermath = null;
+    this.cityCursor = 0;
+    this.cityMarketCursor = 0;
+    this.cityHealerCursor = 0;
     this.battleProjectiles = [];
     this.battleRecoveryTimer = 0;
     this.battleDragUnitId = null;
     this.battleDragOffsetX = 0;
     this.battleDragOffsetY = 0;
     this.followParty = false;
+    this.saveLoadRows = ['autosave', 'manual1', 'manual2'];
+    this.saveLoadCursor = 0;
+    this.saveLoadPreviousMode = 'map';
+    this.autosaveIntervalMs = 60000;
+    this.autosaveTimerId = null;
+    this.lastAutosaveHudAt = 0;
 
     this.started = false;
     this.initialized = false;
@@ -309,15 +316,19 @@ class FallOfCavalry {
     if (!Number.isFinite(this.playerParty.xp)) this.playerParty.xp = 0;
     if (!Number.isFinite(this.playerParty.morale)) this.playerParty.morale = 64;
     if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
-      this.playerParty.roster = [
-        { id: 'militia', name: 'Militia', count: 12, wounded: 2 },
-        { id: 'archers', name: 'Archers', count: 8, wounded: 1 },
-        { id: 'spears', name: 'Spears', count: 10, wounded: 1 },
-      ];
+      const roster = [];
+      for (let i = 0; i < 6; i += 1) {
+        roster.push({ id: `inf-${i + 1}`, name: `Infantry ${i + 1}`, class: 'infantry', hp: 100, maxHp: 100, atk: 14, def: 8, speed: 72, meleeRange: 20, isRanged: false });
+      }
+      for (let i = 0; i < 3; i += 1) {
+        roster.push({ id: `arc-${i + 1}`, name: `Archer ${i + 1}`, class: 'archer', hp: 78, maxHp: 78, atk: 10, def: 4, speed: 68, meleeRange: 14, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.2, isRanged: true });
+      }
+      this.playerParty.roster = roster;
     }
     if (!this.playerParty.inventory || typeof this.playerParty.inventory !== 'object') {
-      this.playerParty.inventory = { grain: 5, timber: 3 };
+      this.playerParty.inventory = { items: [], capacity: null };
     }
+    this.ensureInventoryModel();
     if (this.state) {
       this.state.playerParty = this.playerParty;
       if (typeof this.state.lastEventLog !== 'string') this.state.lastEventLog = '';
@@ -356,27 +367,41 @@ class FallOfCavalry {
   getEnemyUnits(enemyId) {
     if (Array.isArray(this.enemyUnitsById[enemyId])) return this.enemyUnitsById[enemyId];
     const seedBase = enemyId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 17);
-    const count = 4 + (seedBase % 4);
-    const units = Array.from({ length: count }, (_, idx) => {
-      const ranged = ((seedBase + idx) % 3) === 0;
-      return {
-        id: `${enemyId}-u${idx + 1}`,
-        name: ranged ? `Raider Bow ${idx + 1}` : `Raider ${idx + 1}`,
-        type: ranged ? 'ranged' : 'melee',
-        count: 1,
-        hp: ranged ? 80 : 100,
-        atk: ranged ? 12 : 14,
-        morale: 54 + ((seedBase + idx) % 16),
-        fatigue: 8 + ((seedBase + (idx * 3)) % 12),
-        injured: 0,
-      };
-    });
+    const total = 4 + (seedBase % 5);
+    const archers = 1 + (seedBase % 3);
+    const units = [];
+    for (let i = 0; i < total; i += 1) {
+      const isRanged = i < archers;
+      units.push({
+        id: `${enemyId}-u${i + 1}`,
+        name: isRanged ? `Raider Archer ${i + 1}` : `Raider ${i + 1}`,
+        class: isRanged ? 'archer' : 'infantry',
+        hp: isRanged ? 74 : 96,
+        maxHp: isRanged ? 74 : 96,
+        atk: isRanged ? 10 : 13,
+        def: isRanged ? 4 : 7,
+        speed: isRanged ? 66 : 70,
+        meleeRange: isRanged ? 12 : 20,
+        rangedRange: isRanged ? 210 : 0,
+        rangedDamage: isRanged ? 11 : 0,
+        rangedCooldown: isRanged ? 1.3 : 0,
+        isRanged,
+      });
+    }
     this.enemyUnitsById[enemyId] = units;
+    const enemyParty = this.enemyParties.find((party) => party.id === enemyId);
+    if (enemyParty && !Array.isArray(enemyParty.roster)) {
+      enemyParty.roster = units.map((u) => ({ ...u }));
+    }
     return units;
   }
 
+
   getEffectiveCount(entry) {
     if (!entry) return 0;
+    if (Number.isFinite(entry.hp) && Number.isFinite(entry.maxHp)) {
+      return entry.hp > 0 ? 1 : 0;
+    }
     const count = Number.isFinite(entry.count) ? entry.count : 0;
     const injured = Number.isFinite(entry.injured) ? entry.injured : 0;
     return Math.max(0, count - injured);
@@ -414,10 +439,11 @@ class FallOfCavalry {
       this.battleRecoveryTimer += dt;
       if (this.battleRecoveryTimer >= 1) {
         this.battleRecoveryTimer = 0;
-        (this.playerParty?.roster || []).forEach((stack) => {
-          if (!Number.isFinite(stack.wounded) || stack.wounded <= 0) return;
+        (this.playerParty?.roster || []).forEach((unit) => {
+          if (!unit?.wounded) return;
           if (Math.random() < 0.15) {
-            stack.wounded = Math.max(0, stack.wounded - 1);
+            unit.hp = Math.min(unit.maxHp, (unit.hp ?? unit.maxHp) + 2);
+            unit.wounded = (unit.hp / Math.max(1, unit.maxHp)) <= 0.35;
           }
         });
       }
@@ -459,18 +485,139 @@ class FallOfCavalry {
 
   updateBattleSimulation(dt) {
     if (this.state?.mode !== 'battle') return;
-
     if (this.mode === 'paused') {
       this.updateTransientUIState();
       return;
     }
-
-    if (Number.isFinite(dt) && dt > 0 && this.state) {
-      this.state.battleLastDt = dt;
+    const battle = this.state?.battle;
+    if (!battle || !Number.isFinite(dt) || dt <= 0) {
+      this.updateTransientUIState();
+      return;
     }
+
+    const playerUnits = battle.playerUnits || [];
+    const enemyUnits = battle.enemyUnits || [];
+    const allUnits = [...playerUnits, ...enemyUnits];
+
+    const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
+    const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0);
+    if (aliveEnemy.length === 0) { this.resolveBattle('victory'); return; }
+    if (alivePlayer.length === 0) { this.resolveBattle('defeat'); return; }
+
+    for (const unit of allUnits) {
+      if (unit.dead || unit.hp <= 0) continue;
+      const enemies = unit.side === 'player' ? aliveEnemy : alivePlayer;
+      unit.attackTimer = Math.max(0, (unit.attackTimer || 0) - dt);
+      unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
+
+      let target = enemies.find((e) => e.unitId === unit.targetId && !e.dead && e.hp > 0);
+      if (!target) {
+        target = this.findNearestEnemy(unit, enemies);
+        unit.targetId = target?.unitId || null;
+      }
+      if (!target) continue;
+
+      const dx = target.x - unit.x;
+      const dy = target.y - unit.y;
+      const dist = Math.hypot(dx, dy) || 0.001;
+
+      if (unit.isRanged) {
+        if (dist <= unit.rangedRange) {
+          if (unit.rangedTimer <= 0 && (battle.projectiles?.length ?? 0) < 200) {
+            this.spawnProjectile(unit, target, battle.projectiles);
+            unit.rangedTimer = unit.rangedCooldown;
+          }
+        } else {
+          const step = Math.min(dist, unit.speed * dt);
+          unit.x += (dx / dist) * step;
+          unit.y += (dy / dist) * step;
+        }
+      } else if (dist <= unit.meleeRange) {
+        if (unit.attackTimer <= 0) {
+          this.applyUnitDamage(unit, target, unit.atk);
+          unit.attackTimer = 0.9;
+        }
+      } else {
+        const step = Math.min(dist, unit.speed * dt);
+        unit.x += (dx / dist) * step;
+        unit.y += (dy / dist) * step;
+      }
+    }
+
+    const nextProjectiles = [];
+    for (const projectile of (battle.projectiles || [])) {
+      projectile.x += projectile.vx * dt;
+      projectile.y += projectile.vy * dt;
+      projectile.ttl -= dt;
+      if (projectile.ttl <= 0) continue;
+      const targets = projectile.side === 'player' ? enemyUnits : playerUnits;
+      let hit = false;
+      for (const unit of targets) {
+        if (unit.dead || unit.hp <= 0) continue;
+        const hitDist = Math.hypot(unit.x - projectile.x, unit.y - projectile.y);
+        if (hitDist <= (unit.radius || 9)) {
+          this.applyUnitDamage(projectile, unit, projectile.damage);
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) nextProjectiles.push(projectile);
+    }
+    battle.projectiles = nextProjectiles;
 
     this.updateTransientUIState();
   }
+
+  findNearestEnemy(unit, enemies) {
+    let best = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const enemy of enemies || []) {
+      if (!enemy || enemy.dead || enemy.hp <= 0) continue;
+      const d = Math.hypot((enemy.x || 0) - (unit.x || 0), (enemy.y || 0) - (unit.y || 0));
+      if (d < bestDist) {
+        bestDist = d;
+        best = enemy;
+      }
+    }
+    return best;
+  }
+
+  applyUnitDamage(attacker, target, baseDamage) {
+    if (!target || target.dead || target.hp <= 0) return 0;
+    const variance = 0.9 + (Math.random() * 0.2);
+    const raw = Math.max(1, (baseDamage ?? 1) - (target.def ?? 0));
+    const damage = Math.max(1, Math.floor(raw * variance));
+    target.hp -= damage;
+    if (target.hp <= 0) {
+      target.hp = 0;
+      target.dead = true;
+    }
+    return damage;
+  }
+
+  spawnProjectile(shooter, target, list) {
+    if (!list) return;
+    const dx = (target.x || 0) - (shooter.x || 0);
+    const dy = (target.y || 0) - (shooter.y || 0);
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = 340;
+    const spread = (Math.random() - 0.5) * 0.08;
+    const cos = Math.cos(spread);
+    const sin = Math.sin(spread);
+    const nx = (dx / dist) * cos - (dy / dist) * sin;
+    const ny = (dx / dist) * sin + (dy / dist) * cos;
+    list.push({
+      x: shooter.x,
+      y: shooter.y,
+      vx: nx * speed,
+      vy: ny * speed,
+      side: shooter.side,
+      damage: Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8)),
+      ttl: 1.5,
+      radius: 2,
+    });
+  }
+
 
   updatePlayerParty(dt) {
     if (!this.playerParty || !Number.isFinite(dt) || dt <= 0) return;
@@ -605,25 +752,12 @@ class FallOfCavalry {
 
   enterRoster(enemyId) {
     if (!this.state || this.state.mode !== 'encounter') return false;
-    this.initRosters();
-    this.playerRoster = (this.playerParty?.roster || []).map((stack, idx) => ({
-      id: stack.id,
-      name: stack.name,
-      type: stack.id === 'archers' ? 'ranged' : 'melee',
-      count: stack.count,
-      hp: 100,
-      atk: stack.id === 'archers' ? 13 : 15,
-      morale: this.playerParty?.morale ?? 60,
-      fatigue: 8 + idx,
-      injured: stack.wounded ?? 0,
-      dead: (stack.count ?? 0) <= 0,
-      selected: false,
+    this.playerRoster = (this.playerParty?.roster || []).map((unit, idx) => ({
+      ...unit,
+      selected: idx < this.maxUnitsToDeploy,
     }));
     this.enemyRoster = this.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
     this.rosterCursorIndex = 0;
-    this.playerRoster.forEach((unit, idx) => {
-      unit.selected = idx < Math.min(3, this.maxUnitsToDeploy) && this.getEffectiveCount(unit) > 0 && !unit.dead;
-    });
 
     if (!this.state.roster || typeof this.state.roster !== 'object') {
       this.state.roster = {};
@@ -631,10 +765,12 @@ class FallOfCavalry {
 
     this.state.roster.enemyId = enemyId;
     this.state.roster.warning = '';
+    this.state.roster.maxDeploy = this.maxUnitsToDeploy;
     this.state.setMode('roster');
     this.updateTransientUIState();
     return true;
   }
+
 
   finishEncounterToMap(enemy, enemyId) {
     this.applyEncounterPushback(enemy);
@@ -690,24 +826,21 @@ class FallOfCavalry {
     const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
     const playerUnits = this.createBattleUnitsFromRoster(selected, 'player');
     const enemyUnits = this.createBattleUnitsFromRoster(this.enemyRoster, 'enemy');
-    const units = [...playerUnits, ...enemyUnits];
-
-    this.placeBattleUnits(units, 'player');
-    this.placeBattleUnits(units, 'enemy');
+    this.placeBattleUnits(playerUnits, 'player');
+    this.placeBattleUnits(enemyUnits, 'enemy');
 
     this.cancelPlayerDestination();
     this.state.encounter = null;
     this.state.roster.warning = '';
     this.state.battle = {
       enemyId,
-      phase: 'deploy',
       startedAt: Date.now(),
-      units,
-      log: [],
-      ended: false,
       result: null,
-      reward: null,
-      resolvedAt: 0,
+      resolvedAt: null,
+      playerUnits,
+      enemyUnits,
+      projectiles: [],
+      targetRetargetTimer: 0,
     };
 
     this.state.setMode('battle');
@@ -716,27 +849,32 @@ class FallOfCavalry {
   }
 
   createBattleUnitsFromRoster(roster, side) {
-    return (roster || [])
-      .map((entry) => {
-        const effectiveCount = this.getEffectiveCount(entry);
-        if (effectiveCount <= 0) return null;
-        return {
-          id: `${side}-${entry.id}`,
-          side,
-          name: entry.name,
-          type: entry.type,
-          count: effectiveCount,
-          hp: entry.hp,
-          morale: entry.morale,
-          x: 0,
-          y: 0,
-          tx: 0,
-          ty: 0,
-          cooldown: 0,
-          alive: true,
-        };
-      })
-      .filter(Boolean);
+    return (roster || []).map((entry, idx) => ({
+      unitId: `${side}-${entry.id}-${idx}`,
+      sourceId: entry.id,
+      side,
+      name: entry.name,
+      class: entry.class || (entry.isRanged ? 'archer' : 'infantry'),
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      hp: Math.max(1, Math.floor(entry.hp ?? entry.maxHp ?? 100)),
+      maxHp: Math.max(1, Math.floor(entry.maxHp ?? entry.hp ?? 100)),
+      atk: Math.max(1, Math.floor(entry.atk ?? 10)),
+      def: Math.max(0, Math.floor(entry.def ?? 0)),
+      speed: Math.max(20, Math.floor(entry.speed ?? 70)),
+      meleeRange: Math.max(8, Math.floor(entry.meleeRange ?? 18)),
+      isRanged: Boolean(entry.isRanged),
+      rangedRange: Math.max(0, Math.floor(entry.rangedRange ?? 0)),
+      rangedDamage: Math.max(1, Math.floor(entry.rangedDamage ?? entry.atk ?? 8)),
+      rangedCooldown: Math.max(0.3, Number(entry.rangedCooldown ?? 1.2)),
+      rangedTimer: 0,
+      targetId: null,
+      attackTimer: 0,
+      radius: 9,
+      dead: false,
+    }));
   }
 
   placeBattleUnits(units, side) {
@@ -745,23 +883,17 @@ class FallOfCavalry {
 
     const width = Number.isFinite(this.canvas?.width) ? this.canvas.width : 1280;
     const height = Number.isFinite(this.canvas?.height) ? this.canvas.height : 720;
-    const x = side === 'player' ? Math.max(80, width * 0.22) : Math.min(width - 80, width * 0.78);
-    const minY = 120;
-    const maxY = Math.max(minY + 1, height - 120);
+    const xBase = side === 'player' ? Math.max(100, width * 0.2) : Math.min(width - 100, width * 0.8);
+    const minY = 90;
+    const maxY = Math.max(minY + 1, height - 90);
     const spacing = sideUnits.length > 1 ? (maxY - minY) / (sideUnits.length - 1) : 0;
 
     sideUnits.forEach((unit, idx) => {
-      const y = minY + (spacing * idx);
-      unit.x = x;
-      unit.y = Math.max(minY, Math.min(maxY, y));
-      unit.tx = unit.x;
-      unit.ty = unit.y;
+      unit.x = xBase + ((idx % 2) * (side === 'player' ? -22 : 22));
+      unit.y = Math.max(minY, Math.min(maxY, minY + (spacing * idx)));
     });
   }
 
-  getSelectedRosterCount() {
-    return this.playerRoster.reduce((total, unit) => total + (unit.selected ? 1 : 0), 0);
-  }
 
   moveRosterCursor(delta) {
     if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
@@ -796,244 +928,550 @@ class FallOfCavalry {
     return true;
   }
 
+  ensureInventoryModel() {
+    if (!this.playerParty) return;
+    const inv = this.playerParty.inventory;
+    if (!inv || typeof inv !== 'object') {
+      this.playerParty.inventory = { items: [], capacity: null };
+      return;
+    }
+
+    if (!Array.isArray(inv.items)) {
+      const mapped = [];
+      Object.entries(inv).forEach(([id, qty]) => {
+        if (id === 'items' || id === 'capacity' || id === 'gold') return;
+        if (!Number.isFinite(qty) || qty <= 0) return;
+        const cat = this.itemCatalog.find((i) => i.id === id);
+        mapped.push({ id, name: cat?.name || id, qty: Math.floor(qty), unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
+      });
+      this.playerParty.inventory = {
+        items: mapped,
+        capacity: Number.isFinite(inv.capacity) ? inv.capacity : null,
+      };
+    }
+
+    if (!Number.isFinite(this.playerParty.inventory.capacity)) this.playerParty.inventory.capacity = null;
+  }
+
   getItemName(itemId) {
     return this.itemCatalog.find((item) => item.id === itemId)?.name || itemId;
   }
 
-  addInventoryItem(itemId, qty) {
-    if (!itemId || !Number.isFinite(qty) || qty <= 0) return false;
-    const inv = this.playerParty?.inventory;
-    if (!inv) return false;
-    inv[itemId] = (inv[itemId] ?? 0) + qty;
+  getItemQty(itemId) {
+    this.ensureInventoryModel();
+    if (!itemId) return 0;
+    const item = (this.playerParty?.inventory?.items || []).find((entry) => entry.id === itemId);
+    return Math.max(0, Math.floor(item?.qty ?? 0));
+  }
+
+  addItem(itemId, name, qty = 1, unitValue = null) {
+    this.ensureInventoryModel();
+    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !this.playerParty?.inventory?.items) return false;
+    const list = this.playerParty.inventory.items;
+    const existing = list.find((entry) => entry.id === itemId);
+    const amount = Math.floor(qty);
+    if (existing) {
+      existing.qty = Math.max(0, Math.floor(existing.qty ?? 0) + amount);
+      if (!existing.name) existing.name = name || this.getItemName(itemId);
+      if (!Number.isFinite(existing.unitValue)) existing.unitValue = unitValue ?? this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1;
+      return true;
+    }
+
+    list.push({
+      id: itemId,
+      name: name || this.getItemName(itemId),
+      qty: amount,
+      unitValue: Number.isFinite(unitValue) ? unitValue : (this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1),
+    });
     return true;
   }
 
-  removeInventoryItem(itemId, qty) {
-    const inv = this.playerParty?.inventory;
-    if (!inv || !Number.isFinite(qty) || qty <= 0) return false;
-    const current = inv[itemId] ?? 0;
-    if (current < qty) return false;
-    inv[itemId] = current - qty;
-    if (inv[itemId] <= 0) delete inv[itemId];
+  removeItem(itemId, qty) {
+    this.ensureInventoryModel();
+    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !this.playerParty?.inventory?.items) return false;
+    const list = this.playerParty.inventory.items;
+    const idx = list.findIndex((entry) => entry.id === itemId);
+    if (idx < 0) return false;
+    const next = Math.floor(list[idx].qty ?? 0) - Math.floor(qty);
+    if (next < 0) return false;
+    if (next === 0) list.splice(idx, 1);
+    else list[idx].qty = next;
     return true;
+  }
+
+  listInventoryForUI() {
+    this.ensureInventoryModel();
+    return this.itemCatalog.map((item) => {
+      const invItem = (this.playerParty?.inventory?.items || []).find((entry) => entry.id === item.id);
+      return {
+        ...item,
+        qty: Math.max(0, Math.floor(invItem?.qty ?? 0)),
+      };
+    });
   }
 
   buildAftermathPanelData() {
-    const a = this.battleAftermath;
-    if (!a) return { title: 'Aftermath', body: 'No aftermath data', footer: 'Enter to return to map' };
-    const rosterLines = (this.playerParty?.roster || []).map((r) => `- ${r.name}: ${r.count} (wounded ${r.wounded})`).join('\n');
-    const lootLines = (a.loot || []).length
-      ? a.loot.map((l) => `+ ${l.qty} ${this.getItemName(l.itemId)}`).join('\n')
-      : 'No loot';
+    const a = this.state?.aftermath;
+    if (!a) return { title: 'Aftermath', body: 'No aftermath data', footer: 'Enter to continue' };
+    const deadLines = (a.dead || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
+    const woundedLines = (a.wounded || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
+    const lootLines = (a.loot || []).map((l) => `+ ${l.name || this.getItemName(l.id)} x${l.qty}`).join('\n') || 'No loot';
+    const lootValue = (a.loot || []).reduce((sum, l) => sum + ((l.unitValue ?? 0) * (l.qty ?? 0)), 0);
+    const survivors = Math.max(0, (this.playerParty?.roster || []).length);
     return {
-      title: `Aftermath: ${a.result.toUpperCase()}`,
-      body: `Losses\nKilled: ${a.killed} | Wounded: ${a.wounded}\n\nRoster\n${rosterLines}\n\nLoot\n${lootLines}\nGold: +${a.goldReward}`,
-      footer: 'Press Enter (or Esc) to return to map',
+      title: `Aftermath: ${String(a.result || '').toUpperCase()}`,
+      body: `Dead (${a.dead?.length ?? 0})\n${deadLines}\n\nWounded (${a.wounded?.length ?? 0})\n${woundedLines}\n\nSurvivors: ${survivors}\n\nLoot\n${lootLines}\nTotal Loot Value: ${lootValue}\nGold: ${a.goldDelta >= 0 ? '+' : ''}${a.goldDelta}\nXP: ${a.xpDelta >= 0 ? '+' : ''}${a.xpDelta}`,
+      footer: 'T / Enter = Take Loot   |   L / Esc = Leave Loot',
     };
+  }
+
+
+
+  getSettlementTier(settlement) {
+    const type = String(settlement?.type || '').toLowerCase();
+    if (type.includes('city') || type.includes('castle')) return 3;
+    if (type.includes('town')) return 2;
+    return 1;
+  }
+
+  getActiveSettlementForCity() {
+    const settlements = this.state?.map?.settlements || [];
+    const px = this.playerParty?.x ?? 0;
+    const py = this.playerParty?.y ?? 0;
+    let nearest = settlements[0] || null;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const s of settlements) {
+      const dx = (s?.x ?? 0) - px;
+      const dy = (s?.y ?? 0) - py;
+      const dist = Math.hypot(dx, dy);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = s;
+      }
+    }
+    return nearest || { id: 'city-fallback', name: 'Settlement', type: 'town' };
+  }
+
+  generateRecruitOffersForSettlement(settlement) {
+    const tier = this.getSettlementTier(settlement);
+    const day = Math.max(1, Math.floor(this.state?.day ?? 1));
+    const base = `${settlement?.id || 'settlement'}:${day}:${tier}`;
+    let seed = 0;
+    for (const ch of base) seed = (seed * 31 + ch.charCodeAt(0)) % 2147483647;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483647;
+      return (seed % 1000) / 1000;
+    };
+
+    const count = 4 + tier;
+    const offers = [];
+    for (let i = 0; i < count; i += 1) {
+      const ranged = tier > 1 ? rand() < 0.4 : rand() < 0.2;
+      const unitType = ranged ? 'archer' : 'infantry';
+      const quality = Math.min(5, Math.max(1, 1 + Math.floor(rand() * (tier + 2))));
+      const qStat = 1 + ((quality - 1) * 0.05);
+      const qCost = 1 + ((quality - 1) * 0.10);
+      const baseHp = ranged ? 78 : 100;
+      const baseAtk = ranged ? 10 : 14;
+      const baseDef = ranged ? 5 : 8;
+      const baseCost = ranged ? 12 : 10;
+      const baseWage = ranged ? 2 : 1;
+      offers.push({
+        id: `${settlement?.id || 's'}-rec-${day}-${i}`,
+        unitType,
+        unitClassLabel: ranged ? 'Archer' : 'Infantry',
+        quality,
+        count: 1 + Math.floor(rand() * (2 + tier)),
+        hireCost: Math.max(1, Math.round(baseCost * qCost)),
+        wagePerDay: Math.max(1, Math.round(baseWage * qCost)),
+        templateStats: {
+          maxHp: Math.max(1, Math.round(baseHp * qStat)),
+          atk: Math.max(1, Math.round(baseAtk * qStat)),
+          def: Math.max(0, Math.round(baseDef * qStat)),
+          speed: ranged ? 68 : 72,
+          melee: !ranged,
+          ranged,
+        },
+      });
+    }
+    return offers;
+  }
+
+  ensureSettlementRecruitState(settlement, dayNow) {
+    if (!settlement || typeof settlement !== 'object') return;
+    const today = Math.max(1, Math.floor(dayNow ?? this.state?.day ?? 1));
+    if (!settlement.recruit || typeof settlement.recruit !== 'object') {
+      settlement.recruit = { lastRefreshDay: today, refreshEveryDays: 3, offers: this.generateRecruitOffersForSettlement(settlement) };
+      return;
+    }
+    if (!Number.isFinite(settlement.recruit.refreshEveryDays)) settlement.recruit.refreshEveryDays = 3;
+    if (!Array.isArray(settlement.recruit.offers)) settlement.recruit.offers = [];
+    if (!Number.isFinite(settlement.recruit.lastRefreshDay)) settlement.recruit.lastRefreshDay = today;
+    if ((today - settlement.recruit.lastRefreshDay) >= settlement.recruit.refreshEveryDays) {
+      settlement.recruit.offers = this.generateRecruitOffersForSettlement(settlement);
+      settlement.recruit.lastRefreshDay = today;
+    }
+  }
+
+  ensureSettlementMarketState(settlement) {
+    if (!settlement || typeof settlement !== 'object') return;
+    const tier = this.getSettlementTier(settlement);
+    if (!Array.isArray(settlement.marketStock)) {
+      settlement.marketStock = this.itemCatalog.map((item, idx) => ({
+        id: item.id,
+        qty: Math.max(1, 4 + tier + idx % 3),
+      }));
+    }
+    if (typeof settlement.priceMultiplier !== 'object' || !settlement.priceMultiplier) {
+      settlement.priceMultiplier = {};
+      this.itemCatalog.forEach((item, idx) => {
+        const base = 1 + ((tier - 2) * 0.08) + ((idx % 3) * 0.03);
+        settlement.priceMultiplier[item.id] = Math.min(1.3, Math.max(0.8, Number(base.toFixed(2))));
+      });
+    }
+  }
+
+  ensureCityOffers() {
+    if (!this.state) return;
+    if (!this.state.city || typeof this.state.city !== 'object') {
+      this.state.city = this.getActiveSettlementForCity();
+    }
+    this.ensureSettlementRecruitState(this.state.city, this.state.day ?? 1);
+    this.ensureSettlementMarketState(this.state.city);
+    this.cityOffers = this.state.city?.recruit?.offers || [];
+  }
+
+  getWoundedUnits() {
+    return (this.playerParty?.roster || []).filter((u) => Boolean(u?.wounded) || (u?.woundedDays ?? 0) > 0 || ((u?.hp ?? 0) / Math.max(1, u?.maxHp ?? 1)) <= 0.35);
   }
 
   buildCityPanelData() {
-    const tab = this.cityTab;
-    if (!Array.isArray(this.cityOffers) || this.cityOffers.length === 0) {
-      this.cityOffers = [
-        { id: 'militia', name: 'Militia', cost: 18, count: 3 },
-        { id: 'archers', name: 'Archers', cost: 24, count: 2 },
-        { id: 'spears', name: 'Spears', cost: 26, count: 2 },
-      ];
+    this.ensureCityOffers();
+    const submode = this.state?.citySubmode || 'menu';
+    const city = this.state?.city || { name: 'Settlement', type: 'town', recruit: { refreshEveryDays: 3, lastRefreshDay: this.state?.day ?? 1 } };
+    const day = this.state?.day ?? 1;
+
+    if (submode === 'menu') {
+      return {
+        title: `${city.name || 'Settlement'} (${String(city.type || 'town').toUpperCase()})`,
+        body: `Gold: ${Math.floor(this.playerParty?.gold ?? 0)}
+
+1 = Recruit
+2 = Market
+H = Healer
+
+Esc / E = Exit city`,
+        footer: 'Choose a service',
+      };
     }
 
-    if (tab === 'recruit') {
-      const lines = this.cityOffers.map((offer, i) => `${i + 1}) ${offer.name} +${offer.count} (${offer.cost}g)`).join('\n');
-      return { title: 'City - Recruit', body: `${lines}\n\nPress Q/W/E to recruit`, footer: 'Tabs: 1 Recruit, 2 Market, 3 Inn, 4 Craft | Esc exits city' };
+    if (submode === 'recruit') {
+      const recruit = city.recruit || { refreshEveryDays: 3, lastRefreshDay: day };
+      const daysToRefresh = Math.max(0, recruit.refreshEveryDays - (day - (recruit.lastRefreshDay ?? day)));
+      const lines = (this.cityOffers || []).map((offer, i) => {
+        const mark = i === this.cityCursor ? '>' : ' ';
+        return `${mark} ${offer.unitClassLabel} Q${offer.quality}  Av:${offer.count}  Hire:${offer.hireCost}g  Wage:${offer.wagePerDay}/d`;
+      }).join('
+') || 'No recruits available';
+      return {
+        title: 'City - Recruit',
+        body: `${city.name || 'Settlement'}  Tier:${this.getSettlementTier(city)}
+Refresh in ${daysToRefresh} day(s)
+
+Gold: ${Math.floor(this.playerParty?.gold ?? 0)}  Roster: ${(this.playerParty?.roster || []).length}/24
+
+${lines}
+
+Up/Down select, Enter hire 1, Shift+Enter hire max, Esc back`,
+        footer: 'Hiring adds units to battle roster',
+      };
     }
 
-    if (tab === 'market') {
-      const buyLines = this.itemCatalog.map((item, i) => `${i + 1}) Buy ${item.name} (${item.basePrice}g)`).join('\n');
-      const invLines = Object.entries(this.playerParty?.inventory || {}).map(([id, qty], i) => `${i + 1}) Sell ${this.getItemName(id)} x${qty}`).join('\n') || 'No inventory';
-      return { title: 'City - Market', body: `Buy\n${buyLines}\n\nSell\n${invLines}\n\nPress B then number to buy, S then number to sell`, footer: 'Tabs: 1 Recruit, 2 Market, 3 Inn, 4 Craft | Esc exits city' };
+    if (submode === 'market') {
+      this.ensureSettlementMarketState(city);
+      const stockMap = new Map((city.marketStock || []).map((s) => [s.id, s.qty]));
+      const lines = this.itemCatalog.map((item, i) => {
+        const mark = i === this.cityMarketCursor ? '>' : ' ';
+        const mult = Number(city.priceMultiplier?.[item.id] ?? 1);
+        const buyPrice = Math.max(1, Math.round((item.baseBuy ?? item.unitValue ?? 1) * mult));
+        const sellPrice = Math.max(1, Math.floor(buyPrice * 0.7));
+        const stock = Math.max(0, Math.floor(stockMap.get(item.id) ?? 0));
+        const qty = this.getItemQty(item.id);
+        return `${mark} ${item.name}  Buy:${buyPrice} Sell:${sellPrice}  Stock:${stock}  Inv:${qty}`;
+      }).join('\n');
+      return {
+        title: 'City - Market',
+        body: `Gold: ${Math.floor(this.playerParty?.gold ?? 0)}
+
+${lines}
+
+B/Enter buy1 | Shift buy5
+S/Backspace sell1 | Shift sell5
+Esc back`,
+        footer: 'Trade uses settlement stock and your inventory',
+      };
     }
 
-    if (tab === 'inn') {
-      const wounded = (this.playerParty?.roster || []).reduce((s, r) => s + (r.wounded || 0), 0);
-      const healCost = wounded * 4;
-      return { title: 'City - Inn', body: `Wounded soldiers: ${wounded}\nHeal cost: ${healCost}g\n\nPress H to heal wounded`, footer: 'Tabs: 1 Recruit, 2 Market, 3 Inn, 4 Craft | Esc exits city' };
-    }
-
-    return { title: 'City - Craft', body: 'Crafting coming soon.', footer: 'Tabs: 1 Recruit, 2 Market, 3 Inn, 4 Craft | Esc exits city' };
-  }
-
-  recruitOffer(index) {
-    const offer = this.cityOffers[index];
-    if (!offer) return false;
-    if ((this.playerParty?.gold ?? 0) < offer.cost) {
-      this.setLastEventLog('Not enough gold for recruitment');
-      return false;
-    }
-    this.playerParty.gold -= offer.cost;
-    const stack = (this.playerParty.roster || []).find((unit) => unit.id === offer.id);
-    if (stack) {
-      stack.count += offer.count;
-    } else {
-      this.playerParty.roster.push({ id: offer.id, name: offer.name, count: offer.count, wounded: 0 });
-    }
-    this.setLastEventLog(`Recruited ${offer.name} +${offer.count}`);
-    return true;
-  }
-
-  buyMarketItem(index) {
-    const item = this.itemCatalog[index];
-    if (!item) return false;
-    if ((this.playerParty?.gold ?? 0) < item.basePrice) {
-      this.setLastEventLog('Not enough gold to buy item');
-      return false;
-    }
-    this.playerParty.gold -= item.basePrice;
-    this.addInventoryItem(item.id, 1);
-    this.setLastEventLog(`Bought ${item.name}`);
-    return true;
-  }
-
-  sellMarketItem(index) {
-    const entries = Object.entries(this.playerParty?.inventory || {});
-    const entry = entries[index];
-    if (!entry) return false;
-    const [itemId] = entry;
-    const item = this.itemCatalog.find((it) => it.id === itemId);
-    if (!item) return false;
-    const sellPrice = Math.max(1, Math.floor(item.basePrice * 0.7));
-    if (!this.removeInventoryItem(itemId, 1)) return false;
-    this.playerParty.gold += sellPrice;
-    this.setLastEventLog(`Sold ${item.name}`);
-    return true;
-  }
-
-  healWoundedAtInn() {
-    const wounded = (this.playerParty?.roster || []).reduce((sum, stack) => sum + (stack.wounded || 0), 0);
-    const cost = wounded * 4;
-    if (wounded <= 0) {
-      this.setLastEventLog('No wounded to heal');
-      return false;
-    }
-    if ((this.playerParty?.gold ?? 0) < cost) {
-      this.setLastEventLog('Not enough gold for healing');
-      return false;
-    }
-    this.playerParty.gold -= cost;
-    (this.playerParty.roster || []).forEach((stack) => { stack.wounded = 0; });
-    this.playerParty.morale = Math.min(100, (this.playerParty.morale ?? 60) + 4);
-    this.setLastEventLog('Wounded healed at inn');
-    return true;
-  }
-
-  applyAftermathToRoster(result) {
-    const roster = this.playerParty?.roster || [];
-    const total = roster.reduce((sum, stack) => sum + Math.max(0, stack.count || 0), 0);
-    const killedRange = result === 'victory' ? [1, 3] : result === 'retreat' ? [2, 5] : [4, 8];
-    const woundedRange = result === 'victory' ? [1, 3] : result === 'retreat' ? [2, 5] : [4, 9];
-    let killed = Math.min(total, killedRange[0] + Math.floor(Math.random() * (killedRange[1] - killedRange[0] + 1)));
-    let wounded = Math.min(total, woundedRange[0] + Math.floor(Math.random() * (woundedRange[1] - woundedRange[0] + 1)));
-
-    for (const stack of roster) {
-      if (killed <= 0) break;
-      const healthy = Math.max(0, (stack.count || 0) - (stack.wounded || 0));
-      const take = Math.min(healthy, killed);
-      stack.count -= take;
-      killed -= take;
-    }
-
-    for (const stack of roster) {
-      if (killed <= 0) break;
-      const take = Math.min(stack.wounded || 0, killed);
-      stack.wounded -= take;
-      stack.count -= take;
-      killed -= take;
-    }
-
-    for (const stack of roster) {
-      if (wounded <= 0) break;
-      const healthy = Math.max(0, (stack.count || 0) - (stack.wounded || 0));
-      const take = Math.min(healthy, wounded);
-      stack.wounded += take;
-      wounded -= take;
-    }
-
+    const wounded = this.getWoundedUnits();
+    const lines = wounded.length
+      ? wounded.map((unit, i) => {
+        const mark = i === this.cityHealerCursor ? '>' : ' ';
+        const missing = Math.max(0, (unit.maxHp ?? 0) - (unit.hp ?? 0));
+        const cost = Math.max(0, Math.ceil(missing * 0.2));
+        return `${mark} ${unit.name} HP ${Math.floor(unit.hp ?? 0)}/${Math.floor(unit.maxHp ?? 1)} Cost:${cost}g`;
+      }).join('
+')
+      : 'No wounded units';
     return {
-      killed: Math.max(0, total - roster.reduce((sum, stack) => sum + Math.max(0, stack.count || 0), 0)),
-      wounded: roster.reduce((sum, stack) => sum + Math.max(0, stack.wounded || 0), 0),
+      title: 'City - Healer',
+      body: `Gold: ${Math.floor(this.playerParty?.gold ?? 0)}
+
+${lines}
+
+Up/Down select, Enter heal, Esc back`,
+      footer: 'Heal wounded units',
     };
   }
 
-  generateBattleLoot(result) {
-    if (result !== 'victory') return { loot: [], gold: result === 'retreat' ? Math.floor(Math.random() * 4) : 0 };
-    const lootCount = 2 + Math.floor(Math.random() * 4);
-    const loot = [];
-    for (let i = 0; i < lootCount; i += 1) {
-      const item = this.itemCatalog[(i + Math.floor(Math.random() * this.itemCatalog.length)) % this.itemCatalog.length];
-      const qty = 1 + Math.floor(Math.random() * 3);
-      loot.push({ itemId: item.id, qty });
-      this.addInventoryItem(item.id, qty);
+  recruitCurrentUnit(hireMax = false) {
+    this.ensureCityOffers();
+    const offer = this.cityOffers[this.cityCursor];
+    if (!offer || offer.count <= 0) {
+      this.setLastEventLog('No recruits available');
+      return false;
     }
-    return { loot, gold: 10 + Math.floor(Math.random() * 16) };
+    const freeSlots = Math.max(0, 24 - (this.playerParty?.roster || []).length);
+    const affordable = Math.floor((this.playerParty?.gold ?? 0) / Math.max(1, offer.hireCost));
+    const qty = hireMax ? Math.min(offer.count, affordable, freeSlots) : Math.min(1, offer.count, affordable, freeSlots);
+    if (qty <= 0) {
+      this.setLastEventLog((this.playerParty?.gold ?? 0) < offer.hireCost ? 'Not enough gold' : 'Roster is full');
+      return false;
+    }
+
+    for (let i = 0; i < qty; i += 1) {
+      const idx = (this.playerParty.roster || []).length + 1;
+      this.playerParty.roster.push({
+        id: `${offer.unitType}-${Date.now()}-${idx}-${i}`,
+        name: `${offer.unitClassLabel} ${idx}`,
+        class: offer.unitType,
+        hp: offer.templateStats.maxHp,
+        maxHp: offer.templateStats.maxHp,
+        atk: offer.templateStats.atk,
+        def: offer.templateStats.def,
+        speed: offer.templateStats.speed,
+        meleeRange: offer.templateStats.melee ? 20 : 14,
+        isRanged: Boolean(offer.templateStats.ranged),
+        rangedRange: offer.templateStats.ranged ? 220 : 0,
+        rangedDamage: offer.templateStats.ranged ? Math.max(8, offer.templateStats.atk) : 0,
+        rangedCooldown: offer.templateStats.ranged ? 1.2 : 0,
+        wagePerDay: offer.wagePerDay,
+        quality: offer.quality,
+        wounded: false,
+        woundedDays: 0,
+      });
+    }
+
+    this.playerParty.gold -= qty * offer.hireCost;
+    offer.count = Math.max(0, offer.count - qty);
+    this.setLastEventLog(`Recruited ${offer.unitClassLabel} x${qty}`);
+    this.runAutosave('recruit');
+    return true;
   }
+
+  tradeCurrentItem(deltaQty) {
+    const entry = this.itemCatalog[this.cityMarketCursor];
+    const qty = Math.max(1, Math.floor(Math.abs(deltaQty || 1)));
+    if (!entry) return false;
+
+    const city = this.state?.city;
+    this.ensureSettlementMarketState(city);
+    const stockEntry = (city?.marketStock || []).find((s) => s.id === entry.id);
+    const mult = Number(city?.priceMultiplier?.[entry.id] ?? 1);
+    const buyPrice = Math.max(1, Math.round((entry.baseBuy ?? entry.unitValue ?? 1) * mult));
+    const sellPrice = Math.max(1, Math.floor(buyPrice * 0.7));
+
+    if ((deltaQty || 1) > 0) {
+      const available = Math.max(0, Math.floor(stockEntry?.qty ?? 0));
+      const buyQty = Math.min(qty, available);
+      if (buyQty <= 0) {
+        this.setLastEventLog('Market out of stock');
+        return false;
+      }
+      const cost = buyPrice * buyQty;
+      if ((this.playerParty?.gold ?? 0) < cost) {
+        this.setLastEventLog('Not enough gold');
+        return false;
+      }
+      this.playerParty.gold -= cost;
+      if (stockEntry) stockEntry.qty = Math.max(0, available - buyQty);
+      this.addItem(entry.id, entry.name, buyQty, entry.unitValue ?? entry.baseBuy);
+      this.setLastEventLog(`Bought ${entry.name} x${buyQty}`);
+      return true;
+    }
+
+    const sellQty = Math.min(qty, this.getItemQty(entry.id));
+    if (sellQty <= 0) {
+      this.setLastEventLog('No items to sell');
+      return false;
+    }
+    this.removeItem(entry.id, sellQty);
+    if (stockEntry) stockEntry.qty = Math.max(0, Math.floor(stockEntry.qty ?? 0)) + sellQty;
+    this.playerParty.gold = (this.playerParty.gold ?? 0) + (sellPrice * sellQty);
+    this.setLastEventLog(`Sold ${entry.name} x${sellQty}`);
+    return true;
+  }
+
+  healCurrentUnit() {
+    const wounded = this.getWoundedUnits();
+    const unit = wounded[this.cityHealerCursor];
+    if (!unit) {
+      this.setLastEventLog('No wounded unit selected');
+      return false;
+    }
+    const missing = Math.max(0, (unit.maxHp ?? 0) - (unit.hp ?? 0));
+    if (missing <= 0) {
+      unit.wounded = false;
+      unit.woundedDays = 0;
+      return false;
+    }
+    const affordableHeal = Math.min(missing, Math.floor((this.playerParty?.gold ?? 0) / 0.2));
+    if (affordableHeal <= 0) {
+      this.setLastEventLog('Not enough gold to heal');
+      return false;
+    }
+    const cost = Math.ceil(affordableHeal * 0.2);
+    unit.hp = Math.min(unit.maxHp, unit.hp + affordableHeal);
+    unit.wounded = (unit.hp / Math.max(1, unit.maxHp)) <= 0.35;
+    if (!unit.wounded) unit.woundedDays = 0;
+    this.playerParty.gold -= cost;
+    this.setLastEventLog(`Healed ${unit.name}`);
+    return true;
+  }
+
+
+  generateBattleLoot(result, battle) {
+    const enemyUnits = battle?.enemyUnits || [];
+    const infantryCount = enemyUnits.filter((u) => !u?.isRanged).length;
+    const archerCount = enemyUnits.filter((u) => u?.isRanged).length;
+    const total = enemyUnits.length;
+    const unitScale = Math.max(1, Math.floor(total / 2));
+    if (result === 'defeat') return [];
+
+    const loot = [];
+    const push = (id, qty) => {
+      if (!Number.isFinite(qty) || qty <= 0) return;
+      const item = this.itemCatalog.find((i) => i.id === id);
+      if (!item) return;
+      loot.push({ id: item.id, name: item.name, qty: Math.floor(qty), unitValue: item.unitValue ?? item.baseBuy ?? 1 });
+    };
+
+    if (result === 'victory') {
+      push('grain', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
+      push('leather', Math.max(1, Math.floor(infantryCount / 2)));
+      if (archerCount > 0) {
+        push('arrows', 2 + Math.floor(archerCount * 1.5));
+        push('wood', 1 + Math.floor(archerCount / 2)); // bow parts surrogate
+      }
+      if (Math.random() < 0.2) push('iron', 1 + Math.floor(unitScale / 3));
+    } else {
+      push('grain', Math.max(1, Math.floor(unitScale / 2)));
+      if (archerCount > 0) push('arrows', 1 + Math.floor(archerCount / 2));
+    }
+
+    return loot.slice(0, 9);
+  }
+
+  applyRosterOutcomeFromBattle(battle) {
+    const roster = this.playerParty?.roster || [];
+    const dead = [];
+    const wounded = [];
+
+    for (const unit of (battle?.playerUnits || [])) {
+      const idx = roster.findIndex((r) => r.id === unit.sourceId);
+      if (idx < 0) continue;
+      const model = roster[idx];
+      if (unit.hp <= 0 || unit.dead) {
+        dead.push({ id: model.id, name: model.name });
+        roster.splice(idx, 1);
+        continue;
+      }
+      model.hp = Math.max(1, Math.floor(unit.hp));
+      model.wounded = (model.hp / Math.max(1, model.maxHp)) <= 0.35;
+      if (model.wounded) wounded.push({ id: model.id, name: model.name });
+    }
+
+    return { dead, wounded };
+  }
+
 
   resolveBattle(result) {
     if (!this.state || this.state.mode !== 'battle') return false;
     const battle = this.state.battle;
-    if (!battle?.enemyId || battle.result) return false;
+    if (!battle?.enemyId || battle.result || this.state.aftermath) return false;
 
     const enemyId = battle.enemyId;
-    battle.ended = true;
     battle.result = result;
     battle.resolvedAt = Date.now();
 
-    const losses = this.applyAftermathToRoster(result);
-    const lootResult = this.generateBattleLoot(result);
-    const xpReward = result === 'victory' ? (8 + Math.floor(Math.random() * 11)) : result === 'retreat' ? (2 + Math.floor(Math.random() * 5)) : 0;
-    this.playerParty.gold += lootResult.gold;
-    this.playerParty.xp += xpReward;
-    const moraleDelta = result === 'victory' ? (5 + Math.floor(Math.random() * 6)) : result === 'retreat' ? -(5 + Math.floor(Math.random() * 6)) : -(10 + Math.floor(Math.random() * 11));
-    this.playerParty.morale = Math.max(0, Math.min(100, (this.playerParty.morale ?? 60) + moraleDelta));
+    const outcome = this.applyRosterOutcomeFromBattle(battle);
+    const loot = this.generateBattleLoot(result, battle);
+    const goldDelta = result === 'victory' ? 8 + Math.floor(Math.random() * 8) : result === 'retreat' ? 2 + Math.floor(Math.random() * 3) : 0;
+    const xpDelta = result === 'victory' ? 10 + Math.floor(Math.random() * 7) : result === 'retreat' ? 3 : 0;
 
-    this.battleAftermath = {
-      enemyId,
+    this.state.aftermath = {
       result,
-      killed: losses.killed,
-      wounded: losses.wounded,
-      loot: lootResult.loot,
-      goldReward: lootResult.gold,
-      xpReward,
-      moraleDelta,
+      enemyId,
+      dead: outcome.dead,
+      wounded: outcome.wounded,
+      casualties: { dead: outcome.dead.length, wounded: outcome.wounded.length, survivors: Math.max(0, (this.playerParty?.roster || []).length) },
+      loot,
+      goldDelta,
+      xpDelta,
+      timestamp: Date.now(),
     };
-
     this.state.uiPanel = this.buildAftermathPanelData();
     this.state.setMode('aftermath');
+    this.updateTransientUIState();
     return true;
   }
 
-  exitAftermathToMap() {
-    if (!this.state || this.state.mode !== 'aftermath' || !this.battleAftermath) return false;
-    const enemyId = this.battleAftermath.enemyId;
-    const result = this.battleAftermath.result;
+  exitAftermathToMap(takeLoot = true) {
+    if (!this.state || this.state.mode !== 'aftermath' || !this.state.aftermath) return false;
+    const aftermath = this.state.aftermath;
+    const enemyId = aftermath.enemyId;
+    const result = aftermath.result;
     const enemy = this.enemyParties.find((party) => party?.id === enemyId) || null;
+
+    if (takeLoot) {
+      for (const entry of aftermath.loot || []) {
+        this.addItem(entry.id, entry.name, entry.qty, entry.unitValue);
+      }
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
+      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
+      this.setLastEventLog(`Aftermath claimed: +${aftermath.goldDelta ?? 0}g, +${aftermath.xpDelta ?? 0}xp`);
+    } else {
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
+      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
+      this.setLastEventLog('Aftermath continued (loot discarded)');
+    }
 
     if (result === 'victory') {
       this.despawnEnemyParty(enemyId);
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
-      this.setLastEventLog(`Victory vs ${enemyId} (+${this.battleAftermath.goldReward}g, +${this.battleAftermath.xpReward}xp)`);
     } else if (result === 'defeat') {
       this.cancelPlayerDestination();
       this.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
-      this.setLastEventLog(`Defeated by ${enemyId}`);
     } else {
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
-      this.setLastEventLog(`Retreated from ${enemyId}`);
     }
 
     this.state.uiPanel = null;
-    this.battleAftermath = null;
+    this.state.aftermath = null;
     this.state.setMode('map');
+    this.runAutosave('aftermath-close');
     return true;
   }
+
 
   applyBattleExit(enemy, enemyId, pushbackDistance) {
     if (Number.isFinite(pushbackDistance) && pushbackDistance > 0) {
@@ -1253,6 +1691,18 @@ class FallOfCavalry {
         return;
       }
 
+      if (this.state?.accounting) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.key === 'Escape') {
+          e.preventDefault?.();
+          this.state.accounting = null;
+          this.state.uiPanel = null;
+          this.updateTransientUIState();
+          this.runAutosave('accounting-close');
+          return;
+        }
+        return;
+      }
+
       if (e.key === 'Escape') {
         if (this.state?.mode === 'roster') {
           e.preventDefault?.();
@@ -1270,14 +1720,26 @@ class FallOfCavalry {
 
         if (this.state?.mode === 'aftermath') {
           e.preventDefault?.();
-          this.exitAftermathToMap();
+          this.exitAftermathToMap(false);
+          return;
+        }
+
+        if (this.state?.saveLoadOpen) {
+          e.preventDefault?.();
+          this.closeSaveLoadPanel();
           return;
         }
 
         if (this.state?.mode === 'city') {
           e.preventDefault?.();
+          if ((this.state.citySubmode || 'menu') !== 'menu') {
+            this.state.citySubmode = 'menu';
+            this.updateTransientUIState();
+            return;
+          }
           this.state.uiPanel = null;
           this.state.setMode('map');
+          this.updateTransientUIState();
           return;
         }
 
@@ -1293,6 +1755,57 @@ class FallOfCavalry {
         if (this.mode === 'menu') {
           this.closeSettings();
         }
+        return;
+      }
+
+      if (this.state?.saveLoadOpen) {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault?.();
+          this.saveLoadCursor = Math.max(0, this.saveLoadCursor - 1);
+          this.state.uiPanel = this.buildSaveLoadPanelData();
+          this.updateTransientUIState();
+          return;
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault?.();
+          this.saveLoadCursor = Math.min(this.saveLoadRows.length - 1, this.saveLoadCursor + 1);
+          this.state.uiPanel = this.buildSaveLoadPanelData();
+          this.updateTransientUIState();
+          return;
+        }
+
+        const slot = this.getSelectedSaveSlot();
+        if (e.key === 's' || e.key === 'S') {
+          e.preventDefault?.();
+          this.saveToSlot(slot);
+          this.state.uiPanel = this.buildSaveLoadPanelData();
+          this.updateTransientUIState();
+          return;
+        }
+        if (e.key === 'l' || e.key === 'L') {
+          e.preventDefault?.();
+          this.loadFromSlot(slot);
+          this.closeSaveLoadPanel();
+          return;
+        }
+        if (e.key === 'e' || e.key === 'E') {
+          e.preventDefault?.();
+          this.exportSelectedSaveToTextarea(slot);
+          this.state.uiPanel = this.buildSaveLoadPanelData();
+          this.updateTransientUIState();
+          return;
+        }
+        if (e.key === 'i' || e.key === 'I') {
+          e.preventDefault?.();
+          const loaded = this.importTextareaToSlotAndLoad(slot);
+          if (loaded) this.closeSaveLoadPanel();
+          else {
+            this.state.uiPanel = this.buildSaveLoadPanelData();
+            this.updateTransientUIState();
+          }
+          return;
+        }
+
         return;
       }
 
@@ -1325,6 +1838,26 @@ class FallOfCavalry {
           this.toggleRosterSelectionAtCursor();
           return;
         }
+        if (e.key === 'a' || e.key === 'A') {
+          e.preventDefault?.();
+          let selected = 0;
+          this.playerRoster.forEach((unit) => {
+            if (selected < this.maxUnitsToDeploy && this.getEffectiveCount(unit) > 0) {
+              unit.selected = true;
+              selected += 1;
+            } else {
+              unit.selected = false;
+            }
+          });
+          this.updateTransientUIState();
+          return;
+        }
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault?.();
+          this.playerRoster.forEach((unit) => { unit.selected = false; });
+          this.updateTransientUIState();
+          return;
+        }
         if (e.key === 'Enter') {
           e.preventDefault?.();
           this.confirmRosterSelection();
@@ -1333,12 +1866,6 @@ class FallOfCavalry {
       }
 
       if (this.state?.mode === 'battle') {
-        if ((e.key === ' ' || e.key === 'Spacebar') && this.state?.battle?.phase === 'deploy') {
-          e.preventDefault?.();
-          this.state.battle.phase = 'fight';
-          return;
-        }
-
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault?.();
           this.resolveBattle('victory');
@@ -1357,55 +1884,48 @@ class FallOfCavalry {
       }
 
       if (this.state?.mode === 'aftermath') {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || e.key === 't' || e.key === 'T') {
           e.preventDefault?.();
-          this.exitAftermathToMap();
+          this.exitAftermathToMap(true);
+          return;
+        }
+        if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') {
+          e.preventDefault?.();
+          this.exitAftermathToMap(false);
           return;
         }
       }
 
       if (this.state?.mode === 'city') {
-        if (e.key === '1') { this.cityTab = 'recruit'; this.state.cityAction = null; this.updateTransientUIState(); return; }
-        if (e.key === '2') { this.cityTab = 'market'; this.state.cityAction = null; this.updateTransientUIState(); return; }
-        if (e.key === '3') { this.cityTab = 'inn'; this.state.cityAction = null; this.updateTransientUIState(); return; }
-        if (e.key === '4') { this.cityTab = 'craft'; this.state.cityAction = null; this.updateTransientUIState(); return; }
-
-        if (this.cityTab === 'recruit' && ['q', 'w', 'e', 'Q', 'W', 'E'].includes(e.key)) {
-          e.preventDefault?.();
-          const offerIndex = ['q', 'w', 'e'].indexOf(e.key.toLowerCase());
-          if (offerIndex >= 0) this.recruitOffer(offerIndex);
-          this.updateTransientUIState();
-          return;
+        const submode = this.state.citySubmode || 'menu';
+        if (submode === 'menu') {
+          if (e.key === '1' || e.key === 'r' || e.key === 'R') { this.state.citySubmode = 'recruit'; this.cityCursor = 0; this.updateTransientUIState(); return; }
+          if (e.key === '2' || e.key === 't' || e.key === 'T') { this.state.citySubmode = 'market'; this.cityMarketCursor = 0; this.updateTransientUIState(); return; }
+          if (e.key === 'h' || e.key === 'H') { this.state.citySubmode = 'healer'; this.cityHealerCursor = 0; this.updateTransientUIState(); return; }
+          if (e.key === 'e' || e.key === 'E') { this.state.uiPanel = null; this.state.setMode('map'); this.updateTransientUIState(); return; }
         }
 
-        if (this.cityTab === 'market' && (e.key === 'b' || e.key === 'B')) {
-          this.state.cityAction = 'buy';
-          this.updateTransientUIState();
-          return;
-        }
-        if (this.cityTab === 'market' && (e.key === 's' || e.key === 'S')) {
-          this.state.cityAction = 'sell';
-          this.updateTransientUIState();
-          return;
+        if (submode === 'recruit') {
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); this.cityCursor = Math.max(0, this.cityCursor - 1); this.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); this.cityCursor = Math.min(Math.max(0, this.cityOffers.length - 1), this.cityCursor + 1); this.updateTransientUIState(); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); this.recruitCurrentUnit(Boolean(e.shiftKey)); this.updateTransientUIState(); return; }
         }
 
-        if (this.cityTab === 'market' && /[1-9]/.test(e.key)) {
-          const idx = Number(e.key) - 1;
-          if (this.state.cityAction === 'buy') {
-            this.buyMarketItem(idx);
-          } else if (this.state.cityAction === 'sell') {
-            this.sellMarketItem(idx);
-          }
-          this.updateTransientUIState();
-          return;
+        if (submode === 'market') {
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); this.cityMarketCursor = Math.max(0, this.cityMarketCursor - 1); this.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); this.cityMarketCursor = Math.min(Math.max(0, this.itemCatalog.length - 1), this.cityMarketCursor + 1); this.updateTransientUIState(); return; }
+          if (e.key === 'b' || e.key === 'B' || e.key === 'Enter') { e.preventDefault?.(); this.tradeCurrentItem(e.shiftKey ? 5 : 1); this.updateTransientUIState(); return; }
+          if (e.key === 's' || e.key === 'S' || e.key === 'Backspace') { e.preventDefault?.(); this.tradeCurrentItem(e.shiftKey ? -5 : -1); this.updateTransientUIState(); return; }
         }
 
-        if (this.cityTab === 'inn' && (e.key === 'h' || e.key === 'H')) {
-          this.healWoundedAtInn();
-          this.updateTransientUIState();
-          return;
+        if (submode === 'healer') {
+          const wounded = this.getWoundedUnits();
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); this.cityHealerCursor = Math.max(0, this.cityHealerCursor - 1); this.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); this.cityHealerCursor = Math.min(Math.max(0, wounded.length - 1), this.cityHealerCursor + 1); this.updateTransientUIState(); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); this.healCurrentUnit(); this.updateTransientUIState(); return; }
         }
       }
+
 
       if ((e.key === 'x' || e.key === 'Backspace') && this.mode !== 'menu' && this.state?.mode === 'map') {
         e.preventDefault?.();
@@ -1424,8 +1944,14 @@ class FallOfCavalry {
 
       if ((e.key === 'c' || e.key === 'C') && this.state?.mode === 'map') {
         e.preventDefault?.();
-        this.cityTab = 'recruit';
-        this.state.cityAction = null;
+        this.state.citySubmode = 'menu';
+        this.cityCursor = 0;
+        this.cityMarketCursor = 0;
+        this.cityHealerCursor = 0;
+        this.accountingCursor = 0;
+        this.state.city = this.getActiveSettlementForCity();
+        this.ensureSettlementRecruitState(this.state.city, this.state.day ?? 1);
+        this.ensureSettlementMarketState(this.state.city);
         this.state.setMode('city');
         this.updateTransientUIState();
         return;
@@ -1445,6 +1971,10 @@ class FallOfCavalry {
 
       if (e.key === 'F5') {
         e.preventDefault?.();
+        if (this.state?.mode === 'map') {
+          this.openSaveLoadPanel();
+          return;
+        }
         this.quickSave();
       }
 
@@ -1473,6 +2003,7 @@ class FallOfCavalry {
       debugOverlay: utils.getEl('debugOverlay'),
       hudMinimapPanel: utils.getEl('hudMinimapPanel'),
       hudMiniMap: utils.getEl('hudMiniMap'),
+      saveTransferText: utils.getEl('saveTransferText'),
     };
 
     const missing = Object.entries(this.dom).filter(([, el]) => !el).map(([key]) => key);
@@ -1531,6 +2062,7 @@ class FallOfCavalry {
     if (!started) return false;
 
     this.mode = 'playing';
+    this.startAutosaveLoop();
     this.hudManager?.setMenuVisible?.(false);
     this.hudManager?.setSettingsVisible?.(false);
     this.hudManager?.setPaused?.(false);
@@ -1542,13 +2074,9 @@ class FallOfCavalry {
     this.hudManager?.setContinueEnabled?.(canContinue);
     if (!canContinue) return false;
 
-    const result = this.saveSystem?.load?.();
-    if (!result?.success || !result.data) return false;
-
-    if (typeof this.saveSystem?.deserialize === 'function' && this.state) {
-      this.saveSystem.deserialize(result.data, this.state);
-    }
-
+    const result = this.saveSystem?.loadSlot?.('manual1');
+    if (!result?.ok || !result.data) return false;
+    this.applySavePayload(result.data, { slot: 'manual1' });
     return this.startNewGame();
   }
 
@@ -1718,6 +2246,7 @@ class FallOfCavalry {
     this.mode = 'menu';
     this.playerParty = null;
     this.followParty = false;
+    this.stopAutosaveLoop();
 
     return true;
   }
@@ -1736,12 +2265,345 @@ class FallOfCavalry {
     }
   }
 
+  buildSavePayload() {
+    const nowIso = new Date().toISOString();
+    const roster = (this.playerParty?.roster || []).map((unit) => ({
+      id: unit.id,
+      class: unit.class || 'unit',
+      label: unit.name || unit.class || 'Unit',
+      hp: Math.max(1, Math.floor(unit.hp ?? unit.maxHp ?? 1)),
+      maxHp: Math.max(1, Math.floor(unit.maxHp ?? unit.hp ?? 1)),
+      atk: Math.max(1, Math.floor(unit.atk ?? 10)),
+      def: Math.max(0, Math.floor(unit.def ?? 0)),
+      speed: Math.max(20, Math.floor(unit.speed ?? 60)),
+      melee: Boolean(!unit.isRanged),
+      ranged: Boolean(unit.isRanged),
+      wagePerDay: Math.max(0, Math.floor(unit.wagePerDay ?? 0)),
+      quality: Math.max(0, Math.floor(unit.quality ?? 0)),
+      wounded: Boolean(unit.wounded),
+      woundedDays: Math.max(0, Math.floor(unit.woundedDays ?? 0)),
+      meleeRange: Math.floor(unit.meleeRange ?? 18),
+      rangedRange: Math.floor(unit.rangedRange ?? 0),
+      rangedDamage: Math.floor(unit.rangedDamage ?? 0),
+      rangedCooldown: Number(unit.rangedCooldown ?? 0),
+    }));
+
+    const settlements = this.state?.map?.settlements || [];
+    this.ensureInventoryModel();
+    const inventory = {
+      items: Array.isArray(this.playerParty?.inventory?.items) ? this.playerParty.inventory.items.map((item) => ({
+        id: item.id,
+        name: item.name || this.getItemName(item.id),
+        qty: Math.max(0, Math.floor(item.qty ?? 0)),
+        unitValue: Math.max(1, Math.floor(item.unitValue ?? this.itemCatalog.find((c) => c.id === item.id)?.unitValue ?? 1)),
+      })) : [],
+      capacity: Number.isFinite(this.playerParty?.inventory?.capacity) ? this.playerParty.inventory.capacity : null,
+    };
+
+    const settlementsRecruit = settlements
+      .filter((s) => s?.id && s?.recruit)
+      .map((s) => ({
+        settlementId: s.id,
+        lastRefreshDay: Number.isFinite(s.recruit?.lastRefreshDay) ? s.recruit.lastRefreshDay : 0,
+        refreshEveryDays: Number.isFinite(s.recruit?.refreshEveryDays) ? s.recruit.refreshEveryDays : 3,
+        offers: Array.isArray(s.recruit?.offers) ? s.recruit.offers : [],
+      }));
+
+    return {
+      schemaVersion: 1,
+      savedAt: nowIso,
+      game: {
+        day: Number.isFinite(this.state?.day) ? this.state.day : 1,
+        mode: typeof this.state?.mode === 'string' ? this.state.mode : 'map',
+        paused: Boolean(this.state?.paused),
+        camera: {
+          x: Number.isFinite(this.state?.camera?.x) ? this.state.camera.x : 0,
+          y: Number.isFinite(this.state?.camera?.y) ? this.state.camera.y : 0,
+          zoom: Number.isFinite(this.state?.camera?.zoom) ? this.state.camera.zoom : 1,
+        },
+        playerParty: {
+          x: Number.isFinite(this.playerParty?.x) ? this.playerParty.x : 320,
+          y: Number.isFinite(this.playerParty?.y) ? this.playerParty.y : 320,
+          radius: Number.isFinite(this.playerParty?.radius) ? this.playerParty.radius : 12,
+          speed: Number.isFinite(this.playerParty?.speed) ? this.playerParty.speed : 180,
+          selected: Boolean(this.playerParty?.selected),
+          destX: Number.isFinite(this.playerParty?.destX) ? this.playerParty.destX : null,
+          destY: Number.isFinite(this.playerParty?.destY) ? this.playerParty.destY : null,
+          hasDestination: Boolean(this.playerParty?.hasDestination),
+          gold: Number.isFinite(this.playerParty?.gold) ? this.playerParty.gold : 0,
+          xp: Number.isFinite(this.playerParty?.xp) ? this.playerParty.xp : 0,
+          morale: Number.isFinite(this.playerParty?.morale) ? this.playerParty.morale : 50,
+        },
+        roster,
+        enemies: (this.enemyParties || []).map((e) => ({
+          id: e.id,
+          x: Number.isFinite(e.x) ? e.x : 0,
+          y: Number.isFinite(e.y) ? e.y : 0,
+          radius: Number.isFinite(e.radius) ? e.radius : 12,
+          speed: Number.isFinite(e.speed) ? e.speed : 35,
+          vx: Number.isFinite(e.vx) ? e.vx : 0,
+          vy: Number.isFinite(e.vy) ? e.vy : 0,
+        })),
+        enemyCooldowns: this.lastEncounterEndTimeByEnemyId || {},
+        settlementsRecruit,
+        settlementsMarkets: settlements.filter((st) => st?.id).map((st) => ({
+          settlementId: st.id,
+          marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
+          priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
+        })),
+        inventory,
+      },
+    };
+  }
+
+  applySavePayload(payload, { slot = 'manual1' } = {}) {
+    const game = payload?.game || {};
+    if (!this.state || !this.playerParty) return false;
+
+    this.state.day = Number.isFinite(game.day) ? game.day : 1;
+    this.state.paused = Boolean(game.paused);
+    this.state.camera = {
+      x: Number.isFinite(game?.camera?.x) ? game.camera.x : 0,
+      y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
+      zoom: Number.isFinite(game?.camera?.zoom) ? game.camera.zoom : 1,
+    };
+
+    const p = game.playerParty || {};
+    this.playerParty.x = Number.isFinite(p.x) ? p.x : this.playerParty.x;
+    this.playerParty.y = Number.isFinite(p.y) ? p.y : this.playerParty.y;
+    this.playerParty.radius = Number.isFinite(p.radius) ? p.radius : this.playerParty.radius;
+    this.playerParty.speed = Number.isFinite(p.speed) ? p.speed : this.playerParty.speed;
+    this.playerParty.selected = Boolean(p.selected);
+    this.playerParty.destX = Number.isFinite(p.destX) ? p.destX : null;
+    this.playerParty.destY = Number.isFinite(p.destY) ? p.destY : null;
+    this.playerParty.hasDestination = Boolean(p.hasDestination);
+    this.playerParty.gold = Number.isFinite(p.gold) ? p.gold : 0;
+    this.playerParty.xp = Number.isFinite(p.xp) ? p.xp : 0;
+    this.playerParty.morale = Number.isFinite(p.morale) ? p.morale : 50;
+
+    const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null };
+    this.playerParty.inventory = {
+      items: Array.isArray(inv.items) ? inv.items.map((it) => ({
+        id: it.id,
+        name: it.name || this.getItemName(it.id),
+        qty: Math.max(0, Math.floor(it.qty ?? 0)),
+        unitValue: Math.max(1, Math.floor(it.unitValue ?? this.itemCatalog.find((c) => c.id === it.id)?.unitValue ?? 1)),
+      })).filter((it) => it.id && it.qty > 0) : [],
+      capacity: Number.isFinite(inv.capacity) ? inv.capacity : null,
+    };
+    this.ensureInventoryModel();
+
+    const roster = Array.isArray(game.roster) ? game.roster : [];
+    this.playerParty.roster = roster.map((u, i) => ({
+      id: u.id || `unit-${i + 1}`,
+      name: u.label || u.class || `Unit ${i + 1}`,
+      class: u.class || 'unit',
+      hp: Math.max(1, Math.floor(u.hp ?? u.maxHp ?? 1)),
+      maxHp: Math.max(1, Math.floor(u.maxHp ?? u.hp ?? 1)),
+      atk: Math.max(1, Math.floor(u.atk ?? 10)),
+      def: Math.max(0, Math.floor(u.def ?? 0)),
+      speed: Math.max(20, Math.floor(u.speed ?? 60)),
+      isRanged: Boolean(u.ranged),
+      meleeRange: Math.floor(u.meleeRange ?? 18),
+      rangedRange: Math.floor(u.rangedRange ?? 0),
+      rangedDamage: Math.floor(u.rangedDamage ?? 0),
+      rangedCooldown: Number(u.rangedCooldown ?? 0),
+      wagePerDay: Math.max(0, Math.floor(u.wagePerDay ?? 0)),
+      quality: Math.max(0, Math.floor(u.quality ?? 0)),
+      wounded: Boolean(u.wounded),
+      woundedDays: Math.max(0, Math.floor(u.woundedDays ?? 0)),
+    }));
+
+    this.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).map((e) => ({
+      id: e.id,
+      x: Number.isFinite(e.x) ? e.x : 0,
+      y: Number.isFinite(e.y) ? e.y : 0,
+      radius: Number.isFinite(e.radius) ? e.radius : 12,
+      speed: Number.isFinite(e.speed) ? e.speed : 35,
+      vx: Number.isFinite(e.vx) ? e.vx : 0,
+      vy: Number.isFinite(e.vy) ? e.vy : 0,
+    }));
+    this.state.aiParties = this.enemyParties;
+
+    this.lastEncounterEndTimeByEnemyId = game.enemyCooldowns && typeof game.enemyCooldowns === 'object'
+      ? game.enemyCooldowns
+      : {};
+
+    const recruitBySettlement = new Map((Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : []).map((r) => [r.settlementId, r]));
+    const settlements = this.state.map?.settlements || [];
+    settlements.forEach((s) => {
+      const rec = recruitBySettlement.get(s.id);
+      if (!rec) return;
+      s.recruit = {
+        lastRefreshDay: Number.isFinite(rec.lastRefreshDay) ? rec.lastRefreshDay : 0,
+        refreshEveryDays: Number.isFinite(rec.refreshEveryDays) ? rec.refreshEveryDays : 3,
+        offers: Array.isArray(rec.offers) ? rec.offers : [],
+      };
+    });
+
+    const marketBySettlement = new Map((Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : []).map((m) => [m.settlementId, m]));
+    settlements.forEach((s) => {
+      const market = marketBySettlement.get(s.id);
+      if (!market) return;
+      s.marketStock = Array.isArray(market.marketStock) ? market.marketStock : [];
+      s.priceMultiplier = market.priceMultiplier && typeof market.priceMultiplier === 'object' ? market.priceMultiplier : {};
+    });
+
+    const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
+    const safeModes = new Set(['map', 'city']);
+    if (!safeModes.has(loadedMode)) {
+      this.state.setMode('map');
+      this.setLastEventLog('Loaded into map for safety');
+    } else {
+      this.state.setMode(loadedMode);
+    }
+
+    this.state.encounter = null;
+    this.state.battle = null;
+    this.state.accounting = null;
+    this.state.aftermath = null;
+    this.state.lastSaveMeta = { slot, at: Date.now() };
+    this.updateTransientUIState();
+    return true;
+  }
+
+  getSelectedSaveSlot() {
+    return this.saveLoadRows[Math.max(0, Math.min(this.saveLoadRows.length - 1, this.saveLoadCursor))] || 'manual1';
+  }
+
+  openSaveLoadPanel() {
+    if (!this.state || this.state.saveLoadOpen) return false;
+    this.saveLoadPreviousMode = this.state.mode;
+    this.state.saveLoadOpen = true;
+    this.saveLoadCursor = 0;
+    this.state.uiPanel = this.buildSaveLoadPanelData();
+    this.updateTransientUIState();
+    return true;
+  }
+
+  closeSaveLoadPanel() {
+    if (!this.state?.saveLoadOpen) return false;
+    this.state.saveLoadOpen = false;
+    this.state.uiPanel = null;
+    this.updateTransientUIState();
+    return true;
+  }
+
+  buildSaveLoadPanelData() {
+    const day = Math.floor(this.state?.day ?? 1);
+    const gold = Math.floor(this.playerParty?.gold ?? 0);
+    const rosterSize = (this.playerParty?.roster || []).length;
+    const rows = this.saveLoadRows.map((slot, idx) => {
+      const mark = idx === this.saveLoadCursor ? '>' : ' ';
+      const has = this.saveSystem?.hasSlot?.(slot) ? 'saved' : 'empty';
+      return `${mark} ${slot} (${has})`;
+    }).join('\n');
+    return {
+      title: 'Save / Load',
+      body: `Day ${day}  Gold ${gold}  Roster ${rosterSize}
+
+${rows}
+
+Up/Down select slot
+S save  L load
+E export to textarea  I import from textarea
+Esc close`,
+      footer: 'Slots: autosave / manual1 / manual2',
+    };
+  }
+
+  saveToSlot(slot) {
+    const payload = this.buildSavePayload();
+    const res = this.saveSystem?.saveSlot?.(slot, payload);
+    if (!res?.ok) {
+      this.setLastEventLog('Save failed');
+      return false;
+    }
+    this.state.lastSaveMeta = { slot, at: Date.now() };
+    this.setLastEventLog(`Saved ${slot}`);
+    this.updateTransientUIState();
+    return true;
+  }
+
+  loadFromSlot(slot) {
+    const res = this.saveSystem?.loadSlot?.(slot);
+    if (!res?.ok || !res.data) {
+      this.setLastEventLog(`Load failed: ${res?.reason || 'unknown'}`);
+      return false;
+    }
+    const ok = this.applySavePayload(res.data, { slot });
+    if (!ok) {
+      this.setLastEventLog('Load failed');
+      return false;
+    }
+    this.setLastEventLog(`Loaded ${slot}`);
+    return true;
+  }
+
+  exportSelectedSaveToTextarea(slot) {
+    const json = this.saveSystem?.exportSlot?.(slot);
+    if (!json) {
+      this.setLastEventLog('Export failed');
+      return false;
+    }
+    if (this.dom?.saveTransferText) {
+      this.dom.saveTransferText.value = json;
+      this.dom.saveTransferText.focus?.();
+      this.dom.saveTransferText.select?.();
+    }
+    this.setLastEventLog(`Exported ${slot}`);
+    return true;
+  }
+
+  importTextareaToSlotAndLoad(slot) {
+    const text = this.dom?.saveTransferText?.value;
+    if (!text || typeof text !== 'string') {
+      this.setLastEventLog('Import text is empty');
+      return false;
+    }
+    const imported = this.saveSystem?.importToSlot?.(slot, text);
+    if (!imported?.ok) {
+      this.setLastEventLog(`Import failed: ${imported?.reason || 'invalid json'}`);
+      return false;
+    }
+    return this.loadFromSlot(slot);
+  }
+
+  startAutosaveLoop() {
+    if (this.autosaveTimerId) return;
+    const tick = () => {
+      this.autosaveTimerId = null;
+      if (this.state?.mode === 'map' && !this.state?.accounting && !this.state?.saveLoadOpen) {
+        this.runAutosave('interval');
+      }
+      this.startAutosaveLoop();
+    };
+    this.autosaveTimerId = setTimeout(tick, this.autosaveIntervalMs);
+  }
+
+  stopAutosaveLoop() {
+    if (!this.autosaveTimerId) return;
+    clearTimeout(this.autosaveTimerId);
+    this.autosaveTimerId = null;
+  }
+
+  runAutosave(trigger = 'manual') {
+    const ok = this.saveToSlot('autosave');
+    if (!ok) return false;
+    const now = Date.now();
+    if ((now - this.lastAutosaveHudAt) >= 30000 || trigger !== 'interval') {
+      this.lastAutosaveHudAt = now;
+      this.setLastEventLog('Autosaved', 1600);
+    }
+    return true;
+  }
+
   quickSave() {
-    console.log('[Game] Quick saving...');
+    return this.saveToSlot('manual1');
   }
 
   quickLoad() {
-    console.log('[Game] Quick loading...');
+    return this.loadFromSlot('manual1');
   }
 
   renderStart() {
@@ -1897,7 +2759,7 @@ class FallOfCavalry {
     this.ctx.font = '22px Arial';
     this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
     this.ctx.font = '18px Arial';
-    this.ctx.fillText('F = Fight, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
+    this.ctx.fillText('F = Battle Prep, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
     this.hudManager?.update?.();
   }
 
@@ -1910,112 +2772,58 @@ class FallOfCavalry {
     this.ctx.textAlign = 'center';
     this.ctx.fillText('City Services', this.canvas.width / 2, this.canvas.height / 2 - 12);
     this.ctx.font = '16px Arial';
-    this.ctx.fillText('1 Recruit  2 Market  3 Inn  4 Craft  |  Esc to leave city', this.canvas.width / 2, this.canvas.height / 2 + 18);
+    this.ctx.fillText('R Recruit  T Market  H Healer  |  E/Esc leave city', this.canvas.width / 2, this.canvas.height / 2 + 18);
     this.updateTransientUIState();
   }
 
   renderBattle() {
     if (!this.ctx || !this.canvas) return;
-    this.ctx.fillStyle = '#2f2525';
+    this.ctx.fillStyle = '#1f1f24';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
     const battle = this.state?.battle;
-    const enemyId = battle?.enemyId ?? 'unknown';
-    const arena = battle?.arena || { w: this.canvas.width, h: this.canvas.height, padding: 70 };
+    if (!battle) return;
+    const playerUnits = battle.playerUnits || [];
+    const enemyUnits = battle.enemyUnits || [];
+    const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0).length;
+    const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0).length;
 
-    this.ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    this.ctx.strokeRect(arena.padding, arena.padding, arena.w - (arena.padding * 2), arena.h - (arena.padding * 2));
-    this.ctx.fillStyle = 'rgba(74,163,255,0.08)';
-    this.ctx.fillRect(arena.padding, arena.padding, (arena.w / 2) - arena.padding, arena.h - (arena.padding * 2));
-    this.ctx.fillStyle = 'rgba(217,83,79,0.08)';
-    this.ctx.fillRect(arena.w / 2, arena.padding, (arena.w / 2) - arena.padding, arena.h - (arena.padding * 2));
-
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '34px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Battle', this.canvas.width / 2, this.canvas.height / 2 - 30);
+    this.ctx.fillStyle = '#ffffff';
     this.ctx.font = '20px Arial';
-    this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 4);
-    this.ctx.font = '17px Arial';
-    this.ctx.fillText('R = Retreat  |  ESC = Pause', this.canvas.width / 2, this.canvas.height / 2 + 38);
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   R = Retreat`, this.canvas.width / 2, 30);
 
-    if (battle?.phase === 'deploy') {
-      this.ctx.font = '22px Arial';
-      this.ctx.fillStyle = '#f2c94c';
-      this.ctx.fillText('DEPLOYMENT', this.canvas.width / 2, 54);
-      this.ctx.font = '16px Arial';
-      this.ctx.fillText('Drag units in left zone · Tab/Arrows adjust · Enter/Space start', this.canvas.width / 2, 78);
-    }
+    for (const unit of [...playerUnits, ...enemyUnits]) {
+      if (unit.dead || unit.hp <= 0) continue;
+      this.ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
+      this.ctx.beginPath();
+      this.ctx.arc(unit.x, unit.y, unit.radius || 9, 0, Math.PI * 2);
+      this.ctx.fill();
 
-    if (battle?.phase === 'fight') {
-      this.ctx.font = '16px Arial';
-      this.ctx.fillStyle = '#f2c94c';
-      this.ctx.fillText('Fight: click unit then A=attack G=guard R=retreat', this.canvas.width / 2, 78);
-    }
-
-    if (Array.isArray(battle?.units)) {
-      const selected = battle?.selection?.unitId;
-      battle.units.forEach((unit) => {
-        if (unit?.dead) return;
-        const x = Number.isFinite(unit.x) ? unit.x : 0;
-        const y = Number.isFinite(unit.y) ? unit.y : 0;
-
-        this.ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
+      if (unit.isRanged) {
+        this.ctx.fillStyle = '#f2c94c';
         this.ctx.beginPath();
-        this.ctx.arc(x, y, unit.radius ?? 10, 0, Math.PI * 2);
+        this.ctx.arc(unit.x, unit.y, 3, 0, Math.PI * 2);
         this.ctx.fill();
+      }
 
-        if (selected === unit.id && unit.side === 'player') {
-          this.ctx.strokeStyle = '#f2c94c';
-          this.ctx.lineWidth = 2;
-          this.ctx.beginPath();
-          this.ctx.arc(x, y, (unit.radius ?? 10) + 4, 0, Math.PI * 2);
-          this.ctx.stroke();
-        }
-
-        const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
-        this.ctx.fillStyle = 'rgba(0,0,0,0.45)';
-        this.ctx.fillRect(x - 16, y - 16, 32, 4);
-        this.ctx.fillStyle = '#8ad68f';
-        this.ctx.fillRect(x - 16, y - 16, 32 * hpRatio, 4);
-
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = '11px Arial';
-        this.ctx.fillText(unit.name, x, y + 18);
-      });
+      const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
+      this.ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      this.ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
+      this.ctx.fillStyle = '#89d38d';
+      this.ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
     }
 
-    (battle?.projectiles || []).forEach((projectile) => {
+    for (const projectile of (battle.projectiles || [])) {
       this.ctx.fillStyle = projectile.side === 'player' ? '#c6defd' : '#ffc5c2';
       this.ctx.beginPath();
-      this.ctx.arc(projectile.x, projectile.y, projectile.radius ?? 3, 0, Math.PI * 2);
+      this.ctx.arc(projectile.x, projectile.y, projectile.radius || 2, 0, Math.PI * 2);
       this.ctx.fill();
-    });
-
-    if (Array.isArray(battle?.log)) {
-      this.ctx.textAlign = 'left';
-      this.ctx.font = '12px Arial';
-      this.ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      battle.log.slice(-6).forEach((line, idx) => {
-        this.ctx.fillText(`• ${line.text}`, 14, this.canvas.height - 112 + (idx * 16));
-      });
-    }
-
-    if (battle?.phase === 'result') {
-      this.ctx.fillStyle = 'rgba(0,0,0,0.58)';
-      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-      this.ctx.fillStyle = '#fff';
-      this.ctx.textAlign = 'center';
-      this.ctx.font = '40px Arial';
-      this.ctx.fillText((battle.result || '').toUpperCase(), this.canvas.width / 2, this.canvas.height / 2 - 34);
-      this.ctx.font = '20px Arial';
-      this.ctx.fillText(`Casualties: ${battle.summary?.deadPlayer ?? 0} dead, ${battle.summary?.woundedPlayer ?? 0} wounded`, this.canvas.width / 2, this.canvas.height / 2);
-      this.ctx.fillText(`Rewards: +${battle.reward?.gold ?? 0}g, +${battle.reward?.xp ?? 0}xp`, this.canvas.width / 2, this.canvas.height / 2 + 30);
-      this.ctx.fillText('Press Enter to continue', this.canvas.width / 2, this.canvas.height / 2 + 60);
     }
 
     this.hudManager?.update?.();
   }
+
 
   renderDebugInfo() {
     if (!this.state || !this.input) return;

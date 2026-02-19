@@ -119,9 +119,15 @@ export class HUDManager {
     const xp = Math.floor(this.state?.playerParty?.xp ?? 0);
     const morale = Math.floor(this.state?.playerParty?.morale ?? 0);
     const units = this.state?.playerParty?.roster ?? [];
-    const totalUnits = units.reduce((sum, stack) => sum + Math.max(0, Math.floor(stack?.count ?? 0)), 0);
-    const wounded = units.reduce((sum, stack) => sum + Math.max(0, Math.floor(stack?.wounded ?? 0)), 0);
-    safeText(this.elements.hudStats, `Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}`);
+    const totalUnits = units.filter((unit) => Math.floor(unit?.hp ?? 0) > 0).length;
+    const wounded = units.filter((unit) => Boolean(unit?.wounded) || ((unit?.hp ?? 0) / Math.max(1, unit?.maxHp ?? 1)) <= 0.35).length;
+    const invItems = Array.isArray(this.state?.playerParty?.inventory?.items) ? this.state.playerParty.inventory.items : [];
+    const totalInvQty = invItems.reduce((sum, item) => sum + Math.max(0, Math.floor(item?.qty ?? 0)), 0);
+    const top = invItems.slice(0, 2).map((item) => `${item?.name || item?.id}:${Math.max(0, Math.floor(item?.qty ?? 0))}`).join(', ');
+    const saveMeta = this.state?.lastSaveMeta;
+    const minsAgo = saveMeta?.at ? Math.max(0, Math.floor((Date.now() - saveMeta.at) / 60000)) : null;
+    const saveText = saveMeta?.slot ? `  Save:${saveMeta.slot}${minsAgo !== null ? ` (${minsAgo}m)` : ''}` : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${saveText}`);
   }
 
   updateEventLine() {
@@ -135,7 +141,7 @@ export class HUDManager {
     if (!this.elements.hud) return;
     safeClass(this.elements.hud, mode === 'start' ? 'add' : 'remove', 'hidden');
     safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
-    const panelMode = mode === 'aftermath' || mode === 'city';
+    const panelMode = mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen);
     safeClass(this.elements.uiPanel, panelMode ? 'remove' : 'add', 'hidden');
     this.updateRosterPanel();
     this.updateUiPanel();
@@ -149,7 +155,9 @@ export class HUDManager {
     if (mode !== 'roster') return;
 
     const enemyId = this.state?.roster?.enemyId ?? this.state?.encounter?.enemyId ?? 'unknown';
-    safeText(this.elements.rosterEnemy, `Enemy: ${enemyId}`);
+    const selected = Number.isFinite(this.state?.rosterSelectedCount) ? this.state.rosterSelectedCount : 0;
+    const maxDeploy = Number.isFinite(this.state?.roster?.maxDeploy) ? this.state.roster.maxDeploy : 0;
+    safeText(this.elements.rosterEnemy, `Battle Prep vs ${enemyId}  |  Selected ${selected}/${maxDeploy}`);
     safeText(this.elements.rosterWarning, this.state?.roster?.warning || '');
 
     if (this.elements.rosterPlayerList) {
@@ -159,7 +167,7 @@ export class HUDManager {
         const marker = idx === cursorIndex ? '>' : ' ';
         const selected = unit?.selected ? '[x]' : '[ ]';
         const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
-        return `${marker} ${selected} ${unit?.name ?? 'Unit'} (${effective}) f${unit?.fatigue ?? 0} i${unit?.injured ?? 0}`;
+        return `${marker} ${selected} ${unit?.name ?? 'Unit'} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
       });
       safeText(this.elements.rosterPlayerList, playerRows.join('\n'));
     }
@@ -168,7 +176,7 @@ export class HUDManager {
       const roster = Array.isArray(this.state?.enemyRoster) ? this.state.enemyRoster : [];
       const enemyRows = roster.map((unit) => {
         const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
-        return `${unit?.name ?? 'Unit'} (${effective}) f${unit?.fatigue ?? 0} i${unit?.injured ?? 0}`;
+        return `${unit?.name ?? 'Unit'} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
       });
       safeText(this.elements.rosterEnemyList, enemyRows.join('\n'));
     }
@@ -178,7 +186,7 @@ export class HUDManager {
     if (!this.elements.uiPanel) return;
     const mode = this.state?.mode;
     const panelData = this.state?.uiPanel;
-    const visible = (mode === 'aftermath' || mode === 'city') && panelData;
+    const visible = (mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen)) && panelData;
     safeClass(this.elements.uiPanel, visible ? 'remove' : 'add', 'hidden');
     if (!visible) return;
     safeText(this.elements.uiPanelTitle, panelData.title || 'Panel');
