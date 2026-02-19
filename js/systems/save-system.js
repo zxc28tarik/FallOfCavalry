@@ -1,6 +1,6 @@
 /**
  * FallOfCavalry - Save System
- * Oyun kayıt/yükleme sistemi
+ * Versioned save/load helpers
  */
 
 import * as CONST from '../constants.js';
@@ -11,6 +11,11 @@ export class SaveSystem {
     this.AUTOSAVE_KEY = CONST.SAVE.AUTOSAVE_KEY;
     this.VERSION = CONST.SAVE.VERSION;
     this.warnedKeys = new Set();
+    this.slotKeys = {
+      autosave: this.AUTOSAVE_KEY || `${this.SAVE_KEY}:autosave`,
+      manual1: `${this.SAVE_KEY}:manual1`,
+      manual2: `${this.SAVE_KEY}:manual2`,
+    };
   }
 
   warnOnce(key, message) {
@@ -51,15 +56,16 @@ export class SaveSystem {
   safeParse(json) {
     try {
       const data = JSON.parse(json);
-      if (!data || typeof data !== 'object') {
-        this.warnOnce('json-shape', '[SaveSystem] Save data invalid');
-        return null;
-      }
+      if (!data || typeof data !== 'object') return null;
       return data;
     } catch (err) {
       this.warnOnce('json-parse', '[SaveSystem] Save data parse failed');
       return null;
     }
+  }
+
+  getSlotKey(slot = 'manual1') {
+    return this.slotKeys[slot] || this.slotKeys.manual1;
   }
 
   storageSetItem(key, value) {
@@ -87,235 +93,117 @@ export class SaveSystem {
     }
   }
 
-  storageRemoveItem(key) {
-    const storage = this.getStorage();
-    if (!storage) return false;
+  normalizePayload(payload) {
+    if (!payload || typeof payload !== 'object') return { ok: false, reason: 'invalid_payload' };
 
-    try {
-      storage.removeItem(key);
-      return true;
-    } catch (err) {
-      this.warnOnce(`storage-remove:${key}`, '[SaveSystem] Storage remove failed');
-      return false;
-    }
-  }
-
-  save(state, isAutosave = false) {
-    const saveData = this.serialize(state);
-    const json = this.safeStringify(saveData);
-    if (!json) {
-      return { success: false, message: 'Kaydetme başarısız' };
-    }
-
-    const key = isAutosave ? this.AUTOSAVE_KEY : this.SAVE_KEY;
-    const saved = this.storageSetItem(key, json);
-    if (!saved) {
-      return { success: false, message: 'Kaydetme başarısız' };
-    }
-
-    console.log(`[SaveSystem] Game ${isAutosave ? 'auto' : ''}saved`);
-    return { success: true, message: 'Oyun kaydedildi' };
-  }
-
-  load(isAutosave = false) {
-    const key = isAutosave ? this.AUTOSAVE_KEY : this.SAVE_KEY;
-    const json = this.storageGetItem(key);
-
-    if (!json) {
-      return { success: false, message: 'Kayıt bulunamadı' };
-    }
-
-    const data = this.safeParse(json);
-    if (!data) {
-      return { success: false, message: 'Yükleme başarısız' };
-    }
-
-    // Version check
-    if (data.version !== this.VERSION) {
-      console.warn('[SaveSystem] Version mismatch, attempting migration');
-      // TODO: Migration logic
-    }
-
-    // Validate
-    if (!this.validate(data)) {
-      return { success: false, message: 'Yükleme başarısız' };
-    }
-
-    console.log('[SaveSystem] Game loaded');
-    return { success: true, data };
-  }
-
-  serialize(state) {
-    return {
-      version: this.VERSION,
-      timestamp: Date.now(),
-
-      // Core
-      mode: state.mode,
-      seed: state.seed,
-      day: state.day,
-      timeSec: state.timeSec,
-
-      // Player
-      player: {
-        x: state.player.x,
-        y: state.player.y,
-        tx: state.player.tx,
-        ty: state.player.ty,
-        gold: state.player.gold,
-        army: state.player.army,
-        renown: state.player.renown,
-        inventory: state.player.inventory,
+    const schemaVersion = Number.isFinite(payload.schemaVersion) ? payload.schemaVersion : 0;
+    const game = payload.game && typeof payload.game === 'object' ? payload.game : {};
+    const migrated = {
+      schemaVersion: 1,
+      savedAt: typeof payload.savedAt === 'string' ? payload.savedAt : new Date().toISOString(),
+      game: {
+        day: Number.isFinite(game.day) ? game.day : 1,
+        mode: typeof game.mode === 'string' ? game.mode : 'map',
+        paused: Boolean(game.paused),
+        camera: {
+          x: Number.isFinite(game?.camera?.x) ? game.camera.x : 0,
+          y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
+          zoom: Number.isFinite(game?.camera?.zoom) ? game.camera.zoom : 1,
+        },
+        playerParty: {
+          x: Number.isFinite(game?.playerParty?.x) ? game.playerParty.x : 320,
+          y: Number.isFinite(game?.playerParty?.y) ? game.playerParty.y : 320,
+          radius: Number.isFinite(game?.playerParty?.radius) ? game.playerParty.radius : 12,
+          speed: Number.isFinite(game?.playerParty?.speed) ? game.playerParty.speed : 180,
+          selected: Boolean(game?.playerParty?.selected),
+          destX: Number.isFinite(game?.playerParty?.destX) ? game.playerParty.destX : null,
+          destY: Number.isFinite(game?.playerParty?.destY) ? game.playerParty.destY : null,
+          hasDestination: Boolean(game?.playerParty?.hasDestination),
+          gold: Number.isFinite(game?.playerParty?.gold) ? game.playerParty.gold : 0,
+          xp: Number.isFinite(game?.playerParty?.xp) ? game.playerParty.xp : 0,
+          morale: Number.isFinite(game?.playerParty?.morale) ? game.playerParty.morale : 50,
+        },
+        roster: Array.isArray(game.roster) ? game.roster : [],
+        enemies: Array.isArray(game.enemies) ? game.enemies : [],
+        enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
+        settlementsRecruit: Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : [],
+        settlementsMarkets: Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : [],
+        inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
       },
-
-      // Map (simplified)
-      map: {
-        seed: state.seed,
-        settlements: state.map.settlements.map((s) => ({
-          id: s.id,
-          x: s.x,
-          y: s.y,
-          name: s.name,
-          type: s.type,
-          owner: s.owner,
-          population: s.population,
-          garrison: s.garrison,
-          buildings: s.buildings,
-          loyalty: s.loyalty,
-        })),
-      },
-
-      // AI
-      aiParties: state.aiParties.map((p) => ({
-        id: p.id,
-        x: p.x,
-        y: p.y,
-        faction: p.faction,
-        strength: p.strength,
-      })),
-
-      // Faction
-      selectedFaction: state.selectedFaction?.id,
-
-      // Settings
-      settings: state.settings,
-
-      // Keybinds
-      keybinds: state.keybinds.map,
     };
+
+    if (schemaVersion <= 0 && payload.player && payload.map) {
+      migrated.game.day = Number.isFinite(payload.day) ? payload.day : migrated.game.day;
+      migrated.game.camera = {
+        x: Number.isFinite(payload?.camera?.x) ? payload.camera.x : migrated.game.camera.x,
+        y: Number.isFinite(payload?.camera?.y) ? payload.camera.y : migrated.game.camera.y,
+        zoom: Number.isFinite(payload?.camera?.zoom) ? payload.camera.zoom : migrated.game.camera.zoom,
+      };
+      migrated.game.playerParty = {
+        ...migrated.game.playerParty,
+        x: Number.isFinite(payload?.player?.x) ? payload.player.x : migrated.game.playerParty.x,
+        y: Number.isFinite(payload?.player?.y) ? payload.player.y : migrated.game.playerParty.y,
+        gold: Number.isFinite(payload?.player?.gold) ? payload.player.gold : migrated.game.playerParty.gold,
+      };
+      migrated.game.enemies = Array.isArray(payload.aiParties) ? payload.aiParties : [];
+    }
+
+    return { ok: true, data: migrated };
   }
 
-  deserialize(data, state) {
-    // Core
-    state.mode = data.mode || 'map';
-    state.seed = data.seed || 1337;
-    state.day = data.day || 1;
-    state.timeSec = data.timeSec || 0;
-
-    // Player
-    if (data.player) {
-      Object.assign(state.player, data.player);
-    }
-
-    // Map settlements
-    if (data.map && data.map.settlements) {
-      state.map.settlements = data.map.settlements;
-    }
-
-    // AI
-    if (data.aiParties) {
-      state.aiParties = data.aiParties;
-    }
-
-    // Settings
-    if (data.settings) {
-      Object.assign(state.settings, data.settings);
-    }
-
-    console.log('[SaveSystem] State deserialized');
+  saveSlot(slot, payload) {
+    const key = this.getSlotKey(slot);
+    const json = this.safeStringify(payload);
+    if (!json) return { ok: false, reason: 'stringify_failed' };
+    const ok = this.storageSetItem(key, json);
+    if (!ok) return { ok: false, reason: 'storage_write_failed' };
+    return { ok: true };
   }
 
-  validate(data) {
-    if (!data || typeof data !== 'object') {
-      console.error('[SaveSystem] Data is not an object');
-      return false;
-    }
-
-    if (!data.player || typeof data.player.x !== 'number') {
-      console.error('[SaveSystem] Player data invalid');
-      return false;
-    }
-
-    if (!data.map) {
-      console.error('[SaveSystem] Map data invalid');
-      return false;
-    }
-
-    return true;
+  loadSlot(slot) {
+    const key = this.getSlotKey(slot);
+    const json = this.storageGetItem(key);
+    if (!json) return { ok: false, reason: 'missing_slot' };
+    const parsed = this.safeParse(json);
+    if (!parsed) return { ok: false, reason: 'parse_failed' };
+    return this.normalizePayload(parsed);
   }
 
   hasSave() {
-    return this.storageGetItem(this.SAVE_KEY) !== null;
+    return this.hasSlot('manual1') || this.hasSlot('autosave');
   }
 
-  hasAutosave() {
-    return this.storageGetItem(this.AUTOSAVE_KEY) !== null;
+  hasSlot(slot) {
+    return this.storageGetItem(this.getSlotKey(slot)) !== null;
   }
 
-  deleteSave() {
-    if (this.storageRemoveItem(this.SAVE_KEY)) {
-      console.log('[SaveSystem] Save deleted');
-    }
+  exportSlot(slot) {
+    const key = this.getSlotKey(slot);
+    const raw = this.storageGetItem(key);
+    if (!raw) return null;
+    const parsed = this.safeParse(raw);
+    if (!parsed) return null;
+    return JSON.stringify(parsed, null, 2);
   }
 
-  deleteAutosave() {
-    if (this.storageRemoveItem(this.AUTOSAVE_KEY)) {
-      console.log('[SaveSystem] Autosave deleted');
-    }
+  importToSlot(slot, jsonText) {
+    const parsed = this.safeParse(jsonText);
+    if (!parsed) return { ok: false, reason: 'parse_failed' };
+    const normalized = this.normalizePayload(parsed);
+    if (!normalized.ok) return normalized;
+    const stored = this.storageSetItem(this.getSlotKey(slot), this.safeStringify(normalized.data));
+    return stored ? { ok: true } : { ok: false, reason: 'storage_write_failed' };
   }
 
-  export() {
-    const json = this.storageGetItem(this.SAVE_KEY);
-    if (!json) return null;
-
-    if (typeof globalThis.btoa !== 'function') {
-      this.warnOnce('btoa-missing', '[SaveSystem] Export unavailable');
-      return null;
-    }
-
-    try {
-      // Base64 encode
-      return globalThis.btoa(json);
-    } catch (err) {
-      this.warnOnce('btoa-failed', '[SaveSystem] Export failed');
-      return null;
-    }
+  // Backward compatibility wrappers
+  save(state, isAutosave = false) {
+    const slot = isAutosave ? 'autosave' : 'manual1';
+    return this.saveSlot(slot, state);
   }
 
-  import(encoded) {
-    if (typeof globalThis.atob !== 'function') {
-      this.warnOnce('atob-missing', '[SaveSystem] Import unavailable');
-      return { success: false };
-    }
-
-    try {
-      const json = globalThis.atob(encoded);
-      const data = this.safeParse(json);
-
-      if (!data || !this.validate(data)) {
-        return { success: false };
-      }
-
-      const stored = this.storageSetItem(this.SAVE_KEY, json);
-      if (!stored) {
-        return { success: false };
-      }
-
-      return { success: true };
-    } catch (err) {
-      this.warnOnce('import-failed', '[SaveSystem] Import failed');
-      return { success: false };
-    }
+  load(isAutosave = false) {
+    const slot = isAutosave ? 'autosave' : 'manual1';
+    return this.loadSlot(slot);
   }
 }
 
