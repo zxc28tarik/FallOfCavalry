@@ -429,6 +429,13 @@ class FallOfCavalry {
     return Math.max(0, count - injured);
   }
 
+  getSelectedRosterCount() {
+    if (!Array.isArray(this.playerRoster)) return 0;
+    return this.playerRoster.filter(
+      (unit) => unit?.selected === true && this.getEffectiveCount(unit) > 0
+    ).length;
+  }
+
   initEnemyParties() {
     if (!this.state) return;
 
