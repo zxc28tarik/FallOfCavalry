@@ -1193,8 +1193,7 @@ Esc / E = Exit city`,
       const lines = (this.cityOffers || []).map((offer, i) => {
         const mark = i === this.cityCursor ? '>' : ' ';
         return `${mark} ${offer.unitClassLabel} Q${offer.quality}  Av:${offer.count}  Hire:${offer.hireCost}g  Wage:${offer.wagePerDay}/d`;
-      }).join('
-') || 'No recruits available';
+      }).join('\n') || 'No recruits available';
       return {
         title: 'City - Recruit',
         body: `${city.name || 'Settlement'}  Tier:${this.getSettlementTier(city)}
@@ -1241,8 +1240,7 @@ Esc back`,
         const missing = Math.max(0, (unit.maxHp ?? 0) - (unit.hp ?? 0));
         const cost = Math.max(0, Math.ceil(missing * 0.2));
         return `${mark} ${unit.name} HP ${Math.floor(unit.hp ?? 0)}/${Math.floor(unit.maxHp ?? 1)} Cost:${cost}g`;
-      }).join('
-')
+      }).join('\n')
       : 'No wounded units';
     return {
       title: 'City - Healer',
@@ -2080,16 +2078,18 @@ Up/Down select, Enter heal, Esc back`,
       document.getElementById('hudMiniMap')
     );
 
-    document.querySelectorAll('[data-battle-speed]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const speed = parseFloat(btn.dataset.battleSpeed);
-        if (!Number.isFinite(speed)) return;
-        if (this.state?.battle) this.state.battleSpeed = speed;
-        document.querySelectorAll('[data-battle-speed]')
-          .forEach(b => b.classList.remove('is-active'));
-        btn.classList.add('is-active');
+    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+      document.querySelectorAll('[data-battle-speed]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const speed = parseFloat(btn.dataset.battleSpeed);
+          if (!Number.isFinite(speed)) return;
+          if (this.state?.battle) this.state.battleSpeed = speed;
+          document.querySelectorAll('[data-battle-speed]')
+            .forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
+        });
       });
-    });
+    }
 
     const btnBattlePause = document.getElementById('btnBattlePause');
     if (btnBattlePause) {
@@ -2161,9 +2161,13 @@ Up/Down select, Enter heal, Esc back`,
     this.hudManager?.setContinueEnabled?.(canContinue);
     if (!canContinue) return false;
 
-    const result = this.saveSystem?.loadSlot?.('manual1');
+    const hasAutosave = Boolean(this.saveSystem?.hasAutosave?.());
+    const slot = hasAutosave ? 'autosave' : 'manual1';
+    const result = typeof this.saveSystem?.load === 'function'
+      ? this.saveSystem.load(hasAutosave)
+      : this.saveSystem?.loadSlot?.(slot);
     if (!result?.ok || !result.data) return false;
-    this.applySavePayload(result.data, { slot: 'manual1' });
+    this.applySavePayload(result.data, { slot });
     return this.startNewGame();
   }
 

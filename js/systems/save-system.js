@@ -68,6 +68,10 @@ export class SaveSystem {
     return this.slotKeys[slot] || this.slotKeys.manual1;
   }
 
+  result(ok, extra = {}) {
+    return { ok, success: ok, ...extra };
+  }
+
   storageSetItem(key, value) {
     const storage = this.getStorage();
     if (!storage) return false;
@@ -94,7 +98,7 @@ export class SaveSystem {
   }
 
   normalizePayload(payload) {
-    if (!payload || typeof payload !== 'object') return { ok: false, reason: 'invalid_payload' };
+    if (!payload || typeof payload !== 'object') return this.result(false, { reason: 'invalid_payload' });
 
     const schemaVersion = Number.isFinite(payload.schemaVersion) ? payload.schemaVersion : 0;
     const game = payload.game && typeof payload.game === 'object' ? payload.game : {};
@@ -148,24 +152,24 @@ export class SaveSystem {
       migrated.game.enemies = Array.isArray(payload.aiParties) ? payload.aiParties : [];
     }
 
-    return { ok: true, data: migrated };
+    return this.result(true, { data: migrated });
   }
 
   saveSlot(slot, payload) {
     const key = this.getSlotKey(slot);
     const json = this.safeStringify(payload);
-    if (!json) return { ok: false, reason: 'stringify_failed' };
+    if (!json) return this.result(false, { reason: 'stringify_failed' });
     const ok = this.storageSetItem(key, json);
-    if (!ok) return { ok: false, reason: 'storage_write_failed' };
-    return { ok: true };
+    if (!ok) return this.result(false, { reason: 'storage_write_failed' });
+    return this.result(true);
   }
 
   loadSlot(slot) {
     const key = this.getSlotKey(slot);
     const json = this.storageGetItem(key);
-    if (!json) return { ok: false, reason: 'missing_slot' };
+    if (!json) return this.result(false, { reason: 'missing_slot' });
     const parsed = this.safeParse(json);
-    if (!parsed) return { ok: false, reason: 'parse_failed' };
+    if (!parsed) return this.result(false, { reason: 'parse_failed' });
     return this.normalizePayload(parsed);
   }
 
@@ -188,11 +192,11 @@ export class SaveSystem {
 
   importToSlot(slot, jsonText) {
     const parsed = this.safeParse(jsonText);
-    if (!parsed) return { ok: false, reason: 'parse_failed' };
+    if (!parsed) return this.result(false, { reason: 'parse_failed' });
     const normalized = this.normalizePayload(parsed);
     if (!normalized.ok) return normalized;
     const stored = this.storageSetItem(this.getSlotKey(slot), this.safeStringify(normalized.data));
-    return stored ? { ok: true } : { ok: false, reason: 'storage_write_failed' };
+    return stored ? this.result(true) : this.result(false, { reason: 'storage_write_failed' });
   }
 
   // Backward compatibility wrappers
