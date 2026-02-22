@@ -107,6 +107,7 @@ export class SaveSystem {
       savedAt: typeof payload.savedAt === 'string' ? payload.savedAt : new Date().toISOString(),
       game: {
         day: Number.isFinite(game.day) ? game.day : 1,
+        dayTime: Number.isFinite(game.dayTime) ? Math.max(0, Math.min(1, game.dayTime)) : 0,
         mode: typeof game.mode === 'string' ? game.mode : 'map',
         paused: Boolean(game.paused),
         camera: {
@@ -133,11 +134,13 @@ export class SaveSystem {
         settlementsRecruit: Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : [],
         settlementsMarkets: Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : [],
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
+        mapLayers: game.mapLayers && typeof game.mapLayers === 'object' ? game.mapLayers : {},
       },
     };
 
     if (schemaVersion <= 0 && payload.player && payload.map) {
       migrated.game.day = Number.isFinite(payload.day) ? payload.day : migrated.game.day;
+      migrated.game.dayTime = Number.isFinite(payload.dayTime) ? Math.max(0, Math.min(1, payload.dayTime)) : migrated.game.dayTime;
       migrated.game.camera = {
         x: Number.isFinite(payload?.camera?.x) ? payload.camera.x : migrated.game.camera.x,
         y: Number.isFinite(payload?.camera?.y) ? payload.camera.y : migrated.game.camera.y,

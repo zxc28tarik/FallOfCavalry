@@ -127,13 +127,14 @@ export class HUDManager {
     const saveMeta = this.state?.lastSaveMeta;
     const minsAgo = saveMeta?.at ? Math.max(0, Math.floor((Date.now() - saveMeta.at) / 60000)) : null;
     const saveText = saveMeta?.slot ? `  Save:${saveMeta.slot}${minsAgo !== null ? ` (${minsAgo}m)` : ''}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${saveText}`);
+    const dayPct = Math.max(0, Math.min(100, Math.floor((this.state?.dayTime ?? 0) * 100)));
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)} (${dayPct}%)  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${saveText}`);
   }
 
   updateEventLine() {
     if (!this.elements.hudEvent) return;
-    const message = this.state?.lastEventLog;
-    safeText(this.elements.hudEvent, message || '');
+    const message = this.state?.lastEventLog || this.state?.interactionHint || '';
+    safeText(this.elements.hudEvent, message);
     safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
   }
 
@@ -141,7 +142,7 @@ export class HUDManager {
     if (!this.elements.hud) return;
     safeClass(this.elements.hud, mode === 'start' ? 'add' : 'remove', 'hidden');
     safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
-    const panelMode = mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen);
+    const panelMode = mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen) || Boolean(this.state?.accounting);
     safeClass(this.elements.uiPanel, panelMode ? 'remove' : 'add', 'hidden');
     this.updateRosterPanel();
     this.updateUiPanel();
@@ -186,7 +187,7 @@ export class HUDManager {
     if (!this.elements.uiPanel) return;
     const mode = this.state?.mode;
     const panelData = this.state?.uiPanel;
-    const visible = (mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen)) && panelData;
+    const visible = (mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen) || Boolean(this.state?.accounting)) && panelData;
     safeClass(this.elements.uiPanel, visible ? 'remove' : 'add', 'hidden');
     if (!visible) return;
     safeText(this.elements.uiPanelTitle, panelData.title || 'Panel');

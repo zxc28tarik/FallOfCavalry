@@ -3,7 +3,7 @@
  */
 
 import * as CONST from '../constants.js';
-import { coordsToIndex, indexToCoords, inBounds } from '../utils.js';
+import { coordsToIndex, inBounds } from '../utils.js';
 
 export class MapData {
   constructor(worldData) {
@@ -13,11 +13,26 @@ export class MapData {
     this.heightMap = worldData.heightMap;
     this.distToSea = worldData.distToSea;
     this.settlements = worldData.settlements;
-    this.rivers = worldData.rivers;
-    this.roads = worldData.roads;
+    this.rivers = worldData.rivers || [];
+    this.roads = worldData.roads || [];
+    this.crossings = worldData.crossings || [];
     this.forests = worldData.forests;
     this.mountains = worldData.mountains;
     this.fog = worldData.fog;
+
+    this.riverSet = this.buildPointSet(this.rivers);
+    this.roadSet = this.buildPointSet(this.roads.map((road) => road.path || []));
+    this.crossingSet = new Set(this.crossings.map((c) => `${c.x},${c.y}`));
+  }
+
+  buildPointSet(paths) {
+    const set = new Set();
+    for (const path of paths || []) {
+      for (const point of path || []) {
+        set.add(`${point.x},${point.y}`);
+      }
+    }
+    return set;
   }
   
   getTile(x, y) {
@@ -35,6 +50,17 @@ export class MapData {
     return this.heightMap[coordsToIndex(x, y, this.width)];
   }
   
+
+  getVisibleTileRange(worldRect, tileSize = CONST.WORLD.TILE_SIZE, pad = 1) {
+    const safeTile = Math.max(1, Math.floor(tileSize || CONST.WORLD.TILE_SIZE));
+    return {
+      startX: Math.max(0, Math.floor((worldRect?.minX ?? 0) / safeTile) - pad),
+      startY: Math.max(0, Math.floor((worldRect?.minY ?? 0) / safeTile) - pad),
+      endX: Math.min(this.width, Math.ceil((worldRect?.maxX ?? 0) / safeTile) + pad),
+      endY: Math.min(this.height, Math.ceil((worldRect?.maxY ?? 0) / safeTile) + pad),
+    };
+  }
+
   isWalkable(x, y) {
     const tile = this.getTile(x, y);
     if (!tile) return false;
@@ -44,7 +70,16 @@ export class MapData {
   getMovementCost(x, y) {
     const tile = this.getTile(x, y);
     if (!tile) return 999;
-    return CONST.TERRAIN.COST[tile.type] || 1;
+    const biome = tile.biome || CONST.BIOME.TYPE.PLAINS;
+    const mult = CONST.BIOME.MOVE_MULT[biome];
+    if (mult === 0) return 999;
+    return 1 / (mult || 1);
+  }
+
+  getBiomeMoveMultiplier(x, y) {
+    const tile = this.getTile(x, y);
+    if (!tile) return 0;
+    return CONST.BIOME.MOVE_MULT[tile.biome] ?? 1;
   }
   
   getSettlementAt(x, y) {
@@ -62,15 +97,24 @@ export class MapData {
   }
   
   isRiver(x, y) {
-    return this.rivers.some(river => 
-      river.some(point => point.x === x && point.y === y)
-    );
+    return this.riverSet.has(`${x},${y}`);
+  }
+
+  isCrossing(x, y) {
+    return this.crossingSet.has(`${x},${y}`);
   }
   
   isRoad(x, y) {
-    return this.roads.some(road =>
-      road.path.some(point => point.x === x && point.y === y)
-    );
+    return this.roadSet.has(`${x},${y}`);
+  }
+
+  isRoadNearby(x, y, radius = CONST.BIOME.ROAD_NEAR_RADIUS) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (this.isRoad(x + dx, y + dy)) return true;
+      }
+    }
+    return false;
   }
 }
 
