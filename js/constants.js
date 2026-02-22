@@ -205,6 +205,62 @@ export const TERRAIN = Object.freeze({
   },
 });
 
+export const BIOME = Object.freeze({
+  TYPE: {
+    WATER: 'water',
+    COAST: 'coast',
+    PLAINS: 'plains',
+    FOREST: 'forest',
+    DESERT: 'desert',
+    SWAMP: 'swamp',
+    HILLS: 'hills',
+    MOUNTAINS: 'mountains',
+    SNOW: 'snow',
+  },
+  COLORS: {
+    water: '#1f4f73',
+    coast: '#8f7f5e',
+    plains: '#6f9d52',
+    forest: '#376238',
+    desert: '#c2a66e',
+    swamp: '#4d6a4a',
+    hills: '#7a8b59',
+    mountains: '#66605a',
+    snow: '#e8eef3',
+  },
+  MOVE_MULT: {
+    water: 0.0,
+    coast: 0.9,
+    plains: 1.0,
+    forest: 0.74,
+    desert: 0.78,
+    swamp: 0.62,
+    hills: 0.84,
+    mountains: 0.55,
+    snow: 0.7,
+  },
+  ENCOUNTER_MULT: {
+    water: 0.0,
+    coast: 1.0,
+    plains: 1.0,
+    forest: 1.2,
+    desert: 0.85,
+    swamp: 1.3,
+    hills: 1.05,
+    mountains: 0.7,
+    snow: 0.9,
+  },
+  ROAD_MOVE_MULT: 1.25,
+  ROAD_NEAR_RADIUS: 1,
+  RIVER_BLOCK_RADIUS: 0,
+});
+
+
+export const RENDER = Object.freeze({
+  CHUNK_TILES: 32,
+  MINIMAP_FOG_DIRTY_LIMIT: 256,
+});
+
 // =============================================================================
 // SAVAŞ SİSTEMİ
 // =============================================================================
