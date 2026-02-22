@@ -46,15 +46,18 @@ export class MapRenderer {
       }
     }
     
-    // Draw rivers/roads with viewport culling
-    this.drawRivers(ctx, map.rivers, TILE, startX, startY, endX, endY);
-    this.drawRoads(ctx, map.roads, TILE, startX, startY, endX, endY);
+    // Draw rivers
+    this.drawRivers(ctx, map.rivers, TILE);
+    
+    // Draw roads
+    this.drawRoads(ctx, map.roads, TILE);
     
     // Draw settlements
     for (const settlement of map.settlements) {
-      if (settlement.x < startX || settlement.x >= endX || settlement.y < startY || settlement.y >= endY) continue;
       const fogLevel = map.fog ? map.fog[settlement.y * map.width + settlement.x] : 2;
-      if (fogLevel > 0) this.drawSettlement(ctx, settlement, TILE);
+      if (fogLevel > 0) {
+        this.drawSettlement(ctx, settlement, TILE);
+      }
     }
     
     // Draw AI parties
@@ -123,7 +126,7 @@ export class MapRenderer {
     return colors[type] || CONST.WORLD.COLOR_GRASS;
   }
   
-  drawRivers(ctx, rivers, TILE, startX = 0, startY = 0, endX = Infinity, endY = Infinity) {
+  drawRivers(ctx, rivers, TILE) {
     ctx.strokeStyle = shade(CONST.WORLD.COLOR_SEA, 0.2);
     ctx.lineWidth = TILE * 0.15;
     ctx.lineCap = 'round';
@@ -131,7 +134,6 @@ export class MapRenderer {
     
     for (const river of rivers) {
       if (river.length < 2) continue;
-      if (!river.some((p) => p.x >= startX && p.x < endX && p.y >= startY && p.y < endY)) continue;
       
       ctx.beginPath();
       ctx.moveTo(river[0].x * TILE + TILE / 2, river[0].y * TILE + TILE / 2);
@@ -144,14 +146,13 @@ export class MapRenderer {
     }
   }
   
-  drawRoads(ctx, roads, TILE, startX = 0, startY = 0, endX = Infinity, endY = Infinity) {
+  drawRoads(ctx, roads, TILE) {
     ctx.strokeStyle = '#8b7355';
     ctx.lineWidth = TILE * 0.08;
     ctx.lineCap = 'round';
     
     for (const road of roads) {
       if (!road.path || road.path.length < 2) continue;
-      if (!road.path.some((p) => p.x >= startX && p.x < endX && p.y >= startY && p.y < endY)) continue;
       
       ctx.beginPath();
       ctx.moveTo(road.path[0].x * TILE + TILE / 2, road.path[0].y * TILE + TILE / 2);

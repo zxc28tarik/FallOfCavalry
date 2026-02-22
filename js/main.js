@@ -10,9 +10,7 @@ import HUDManager from './ui/hud.js';
 import SaveSystem from './systems/save-system.js';
 import AudioSystem from './systems/audio-system.js';
 import * as CONST from './constants.js';
-import Minimap from './rendering/minimap.js';
-import ChunkCache from './rendering/chunk-cache.js';
-import WorldGenerator from './world/world-generator.js';
+import MinimapSimple from './rendering/minimap-simple.js';
 
 import * as utils from './utils.js';
 
@@ -94,19 +92,8 @@ class FallOfCavalry {
     this.autosaveIntervalMs = 60000;
     this.autosaveTimerId = null;
     this.lastAutosaveHudAt = 0;
-    this.dayTimeScale = 0.04;
-    this.accountingWagePerUnit = 1;
-    this.accountingRationsPerUnit = 0.5;
-    this.accountingMoralePenalty = 8;
-    this.pendingAccountingDay = null;
-    this.aftermathCursor = 0;
-    this.eventMessageCooldowns = new Map();
-    this.showBiomeLegend = false;
 
     this.minimapRenderer = null;
-    this.mapChunkCache = new ChunkCache(CONST.RENDER?.CHUNK_TILES || 32, CONST.WORLD.TILE_SIZE);
-    this.mapRenderRevision = 0;
-    this.lastFrameDrawnChunks = 0;
     this.started = false;
     this.initialized = false;
     this.listenersBound = false;
@@ -148,7 +135,6 @@ class FallOfCavalry {
     this.audioSystem = this.audioSystem || new AudioSystem();
 
     this.setupCanvas();
-    this.ensureWorldMapLayers();
     this.setupEventListeners();
     this.initPlayerParty();
     this.setupPartyInputHandlers();
@@ -185,7 +171,7 @@ class FallOfCavalry {
     if (this.listenersBound || !this.state) return;
 
     this.state.on('mode:changed', ({ old, new: newMode }) => this.onModeChanged(old, newMode));
-    this.state.on('day:advanced', (day) => this.onDayAdvanced(day));
+    this.state.on('day:advanced', (day) => console.log(`[Game] Day ${day} started`));
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
       console.log(`[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
     });
@@ -201,79 +187,27 @@ class FallOfCavalry {
     this.state.on('city:update', () => this.updateTransientUIState());
 
     this.setupKeyboardShortcuts();
+    this.state.on('day:tick', (day) => this.processDailyEconomy(day));
     this.listenersBound = true;
   }
 
   processDailyEconomy(day) {
-    // Daily economy is handled by accounting overlay flow.
-    return day;
-  }
+    if (!this.playerParty) return;
+    const roster = this.playerParty.roster || [];
+    const totalWage = roster.reduce((sum, u) => 
+      sum + Math.max(0, Math.floor(u.wagePerDay ?? 0)), 0);
 
+    if (totalWage === 0) return;
 
-  onDayAdvanced(day) {
-    this.pendingAccountingDay = day;
-    this.processWoundedDayTick();
-  }
-
-  processWoundedDayTick() {
-    for (const unit of this.playerParty?.roster || []) {
-      if (!Number.isFinite(unit.woundedDays) || unit.woundedDays <= 0) continue;
-      unit.woundedDays = Math.max(0, unit.woundedDays - 1);
-      if (unit.woundedDays === 0) {
-        unit.wounded = false;
-        unit.hp = Math.min(unit.maxHp || unit.hp || 1, Math.max(1, Math.floor((unit.hp || 1) + 4)));
-      }
+    const canPay = (this.playerParty.gold ?? 0) >= totalWage;
+    if (canPay) {
+      this.playerParty.gold -= totalWage;
+      this.setLastEventLog(`Gün ${day}: Ücret ${totalWage}g ödendi.`);
+    } else {
+      this.playerParty.gold = 0;
+      this.playerParty.morale = Math.max(10, (this.playerParty.morale ?? 50) - 5);
+      this.setLastEventLog(`Gün ${day}: Ödeme yapılamadı! Moral -5.`);
     }
-  }
-
-  maybeOpenAccounting() {
-    if (!this.pendingAccountingDay || this.state?.accounting) return false;
-    if (this.state?.mode !== 'map') return false;
-    const rosterSize = (this.playerParty?.roster || []).length;
-    const income = Math.floor(this.state?.pendingIncomeGold ?? 0);
-    this.state.pendingIncomeGold = 0;
-    const wages = Math.floor(rosterSize * this.accountingWagePerUnit);
-    const rations = Math.floor(rosterSize * this.accountingRationsPerUnit);
-    const expenses = wages + rations;
-    const goldBefore = Math.floor(this.playerParty?.gold ?? 0);
-    const net = income - expenses;
-    const goldAfter = goldBefore + net;
-    this.playerParty.gold = goldAfter;
-    let moraleDelta = 0;
-    if (goldAfter < 0) {
-      moraleDelta = -Math.abs(this.accountingMoralePenalty);
-      this.playerParty.morale = Math.max(0, Math.min(100, Math.floor((this.playerParty.morale ?? 60) + moraleDelta)));
-    }
-    this.state.accounting = {
-      day: this.pendingAccountingDay,
-      goldBefore,
-      income,
-      wages,
-      rations,
-      net,
-      goldAfter,
-      moraleDelta,
-    };
-    this.pendingAccountingDay = null;
-    this.state.uiPanel = this.buildAccountingPanelData();
-    this.state.interactionHint = 'Accounting: Enter to continue';
-    return true;
-  }
-
-  buildAccountingPanelData() {
-    const a = this.state?.accounting;
-    if (!a) return { title: 'Daily Accounting', body: 'No data', footer: 'Enter to continue' };
-    return {
-      title: `Daily Accounting — Day ${Math.floor(a.day ?? this.state?.day ?? 1)}`,
-      body: `Gold before: ${a.goldBefore}
-Income: +${a.income}
-Wages: -${a.wages}
-Rations: -${a.rations}
-Net: ${a.net >= 0 ? '+' : ''}${a.net}
-Gold after: ${a.goldAfter}
-${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
-      footer: 'Enter / Space / Esc to continue',
-    };
   }
 
   getCameraSafe() {
@@ -289,118 +223,6 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
     }
 
     return this.state.camera;
-  }
-
-
-  ensureWorldMapLayers() {
-    if (!this.state) return false;
-
-    const map = this.state.map || {};
-    const needsGenerate = !Array.isArray(map.tiles) || map.tiles.length === 0 || !map.tiles[0]?.biome;
-    if (!needsGenerate) return true;
-
-    const seed = Number.isFinite(this.state.seed) ? this.state.seed : 1337;
-    const generator = new WorldGenerator(seed);
-    const world = generator.generate();
-    this.state.map = {
-      ...this.state.map,
-      ...world,
-    };
-    this.state.seed = seed;
-    this.clearMapRenderCaches();
-    return true;
-  }
-
-  regenerateWorldMapLayers(seed = this.state?.seed) {
-    if (!this.state) return false;
-    const safeSeed = Number.isFinite(seed) ? seed : 1337;
-    const generator = new WorldGenerator(safeSeed);
-    const generated = generator.generate();
-    this.state.map = {
-      ...this.state.map,
-      ...generated,
-    };
-    this.state.seed = safeSeed;
-    this.clearMapRenderCaches();
-    return true;
-  }
-
-
-  clearMapRenderCaches() {
-    this.mapChunkCache?.clearAll?.();
-    this.minimapRenderer?.markDirty?.();
-    this.mapRenderRevision += 1;
-  }
-
-  getTileAtWorld(worldX, worldY) {
-    const map = this.state?.map;
-    if (!map || !Array.isArray(map.tiles) || map.width <= 0 || map.height <= 0) return null;
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    const tx = Math.floor(worldX / tileSize);
-    const ty = Math.floor(worldY / tileSize);
-    if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return null;
-    return map.tiles[ty * map.width + tx] || null;
-  }
-
-  getTileCoordsFromWorld(worldX, worldY) {
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    return {
-      x: Math.floor(worldX / tileSize),
-      y: Math.floor(worldY / tileSize),
-    };
-  }
-
-  hasRoadNearbyTile(tx, ty) {
-    const map = this.state?.map;
-    if (!map?.roads) return false;
-    const radius = CONST.BIOME.ROAD_NEAR_RADIUS || 0;
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        const cx = tx + dx;
-        const cy = ty + dy;
-        if (cx < 0 || cy < 0 || cx >= map.width || cy >= map.height) continue;
-        const tile = map.tiles[cy * map.width + cx];
-        if (tile?.hasRoad) return true;
-      }
-    }
-    return false;
-  }
-
-  canTraverseRiver(fromX, fromY, toX, toY) {
-    const map = this.state?.map;
-    if (!map || !Array.isArray(map.rivers) || map.rivers.length === 0) return true;
-    const from = this.getTileCoordsFromWorld(fromX, fromY);
-    const to = this.getTileCoordsFromWorld(toX, toY);
-    if (from.x === to.x && from.y === to.y) return true;
-
-    const key = (x, y) => `${x},${y}`;
-    if (!this._riverPointSetCache || this._riverPointSetVersion !== map.rivers) {
-      this._riverPointSetCache = new Set();
-      for (const river of map.rivers) for (const p of river || []) this._riverPointSetCache.add(key(p.x, p.y));
-      this._crossingPointSetCache = new Set((map.crossings || []).map((c) => key(c.x, c.y)));
-      this._riverPointSetVersion = map.rivers;
-    }
-
-    const fromRiver = this._riverPointSetCache.has(key(from.x, from.y));
-    const toRiver = this._riverPointSetCache.has(key(to.x, to.y));
-    if (!fromRiver && !toRiver) return true;
-
-    for (let y = Math.min(from.y, to.y) - 1; y <= Math.max(from.y, to.y) + 1; y++) {
-      for (let x = Math.min(from.x, to.x) - 1; x <= Math.max(from.x, to.x) + 1; x++) {
-        if (this._crossingPointSetCache.has(key(x, y))) return true;
-      }
-    }
-
-    this.warnEventCooldown('river-block', 'River blocks the way — find a ford/bridge.', 1400);
-    return false;
-  }
-
-  warnEventCooldown(key, message, cooldownMs = 1500) {
-    const now = Date.now();
-    const until = this.eventMessageCooldowns.get(key) || 0;
-    if (now < until) return;
-    this.eventMessageCooldowns.set(key, now + cooldownMs);
-    this.setLastEventLog(message, cooldownMs);
   }
 
   getWorldBounds() {
@@ -630,25 +452,7 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
   }
 
   updateMapSimulation(dt) {
-    const hasBlockingOverlay = Boolean(
-      this.state?.saveLoadOpen
-      || this.state?.accounting
-      || this.state?.mode === 'encounter'
-      || this.state?.mode === 'battle'
-      || this.state?.mode === 'aftermath'
-      || this.state?.mode === 'city'
-    );
-
-    if (hasBlockingOverlay && Number.isFinite(dt) && dt > 0 && Number.isFinite(this.state?.dayTimer)) {
-      this.state.dayTimer = Math.max(0, this.state.dayTimer - dt);
-    }
-
-    if (Number.isFinite(this.state?.dayTimer) && Number.isFinite(CONST.GAME?.DAY_LENGTH_SEC) && CONST.GAME.DAY_LENGTH_SEC > 0) {
-      this.state.dayTime = Math.max(0, Math.min(1, this.state.dayTimer / CONST.GAME.DAY_LENGTH_SEC));
-    }
-    this.maybeOpenAccounting();
     this.updateTransientUIState();
-    if (this.state?.accounting) return;
     this.updatePlayerParty(dt);
     this.updateEnemyParties(dt);
     this.tryTriggerEncounter();
@@ -696,15 +500,6 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
 
     if (this.state.mode === 'aftermath') {
       this.state.uiPanel = this.buildAftermathPanelData();
-    }
-
-    if (this.state.accounting) {
-      this.state.uiPanel = this.buildAccountingPanelData();
-      this.state.interactionHint = 'Accounting: Enter to continue';
-    } else if (this.state.mode === 'aftermath') {
-      this.state.interactionHint = 'Aftermath: Enter to confirm';
-    } else if (!this.state.saveLoadOpen) {
-      this.state.interactionHint = '';
     }
 
     this.hudManager?.update?.();
@@ -871,32 +666,14 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
       return;
     }
 
-    const currentTile = this.getTileAtWorld(this.playerParty.x, this.playerParty.y);
-    const currentBiome = currentTile?.biome || CONST.BIOME.TYPE.PLAINS;
-    const biomeMult = CONST.BIOME.MOVE_MULT[currentBiome] ?? 1;
-    const tileCoords = this.getTileCoordsFromWorld(this.playerParty.x, this.playerParty.y);
-    const roadMult = this.hasRoadNearbyTile(tileCoords.x, tileCoords.y) ? CONST.BIOME.ROAD_MOVE_MULT : 1;
-
-    const effectiveSpeed = this.playerParty.speed * biomeMult * roadMult;
-    const step = effectiveSpeed * dt;
+    const step = this.playerParty.speed * dt;
     if (step >= dist) {
-      if (!this.canTraverseRiver(this.playerParty.x, this.playerParty.y, this.playerParty.destX, this.playerParty.destY)) {
-        this.cancelPlayerDestination();
-        return;
-      }
       this.completePlayerArrival();
       return;
     }
 
-    const nextX = this.playerParty.x + (dx / dist) * step;
-    const nextY = this.playerParty.y + (dy / dist) * step;
-    if (!this.canTraverseRiver(this.playerParty.x, this.playerParty.y, nextX, nextY)) {
-      this.cancelPlayerDestination();
-      return;
-    }
-
-    this.playerParty.x = nextX;
-    this.playerParty.y = nextY;
+    this.playerParty.x += (dx / dist) * step;
+    this.playerParty.y += (dy / dist) * step;
 
     const clamped = this.clampToWorld(this.playerParty.x, this.playerParty.y);
     this.playerParty.x = clamped.x;
@@ -1187,7 +964,7 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
         if (id === 'items' || id === 'capacity' || id === 'gold') return;
         if (!Number.isFinite(qty) || qty <= 0) return;
         const cat = this.itemCatalog.find((i) => i.id === id);
-        mapped.push({ id, name: cat?.name || id, qty: Math.floor(qty), value: cat?.unitValue ?? cat?.baseBuy ?? 1, weight: 1, type: 'loot', unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
+        mapped.push({ id, name: cat?.name || id, qty: Math.floor(qty), unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
       });
       this.playerParty.inventory = {
         items: mapped,
@@ -1209,7 +986,7 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
     return Math.max(0, Math.floor(item?.qty ?? 0));
   }
 
-  addItem(itemId, name, qty = 1, unitValue = null, type = 'loot', weight = 1) {
+  addItem(itemId, name, qty = 1, unitValue = null) {
     this.ensureInventoryModel();
     if (!itemId || !Number.isFinite(qty) || qty <= 0 || !this.playerParty?.inventory?.items) return false;
     const list = this.playerParty.inventory.items;
@@ -1219,9 +996,6 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
       existing.qty = Math.max(0, Math.floor(existing.qty ?? 0) + amount);
       if (!existing.name) existing.name = name || this.getItemName(itemId);
       if (!Number.isFinite(existing.unitValue)) existing.unitValue = unitValue ?? this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1;
-      if (!Number.isFinite(existing.value)) existing.value = existing.unitValue;
-      if (!Number.isFinite(existing.weight)) existing.weight = Number.isFinite(weight) ? weight : 1;
-      if (!existing.type) existing.type = type || 'loot';
       return true;
     }
 
@@ -1230,9 +1004,6 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
       name: name || this.getItemName(itemId),
       qty: amount,
       unitValue: Number.isFinite(unitValue) ? unitValue : (this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1),
-      value: Number.isFinite(unitValue) ? unitValue : (this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1),
-      weight: Number.isFinite(weight) ? weight : 1,
-      type: type || 'loot',
     });
     return true;
   }
@@ -1266,28 +1037,13 @@ ${a.moraleDelta ? `Morale: ${a.moraleDelta}` : 'Morale: 0'}`,
     if (!a) return { title: 'Aftermath', body: 'No aftermath data', footer: 'Enter to continue' };
     const deadLines = (a.dead || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
     const woundedLines = (a.wounded || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
-    const loot = a.loot || [];
-    this.aftermathCursor = Math.max(0, Math.min(Math.max(loot.length - 1, 0), this.aftermathCursor));
-    const lootLines = loot.map((l, idx) => {
-      const mark = idx === this.aftermathCursor ? '>' : ' ';
-      const take = a.lootSelection?.[idx] ? '[x]' : '[ ]';
-      return `${mark} ${take} ${l.name || this.getItemName(l.id)} x${l.qty}`;
-    }).join('\n') || 'No loot';
-    const selectedValue = loot.reduce((sum, l, idx) => sum + ((a.lootSelection?.[idx] ? 1 : 0) * ((l.unitValue ?? l.value ?? 0) * (l.qty ?? 0))), 0);
+    const lootLines = (a.loot || []).map((l) => `+ ${l.name || this.getItemName(l.id)} x${l.qty}`).join('\n') || 'No loot';
+    const lootValue = (a.loot || []).reduce((sum, l) => sum + ((l.unitValue ?? 0) * (l.qty ?? 0)), 0);
+    const survivors = Math.max(0, (this.playerParty?.roster || []).length);
     return {
       title: `Aftermath: ${String(a.result || '').toUpperCase()}`,
-      body: `Dead (${a.dead?.length ?? 0})
-${deadLines}
-
-Wounded (${a.wounded?.length ?? 0})
-${woundedLines}
-
-Loot
-${lootLines}
-
-Gold: ${a.goldDelta >= 0 ? '+' : ''}${a.goldDelta}  XP: ${a.xpDelta >= 0 ? '+' : ''}${a.xpDelta}
-Selected Loot Value: ${selectedValue}`,
-      footer: 'Up/Down move · Space toggle · A take all · C clear · Enter confirm · Esc leave',
+      body: `Dead (${a.dead?.length ?? 0})\n${deadLines}\n\nWounded (${a.wounded?.length ?? 0})\n${woundedLines}\n\nSurvivors: ${survivors}\n\nLoot\n${lootLines}\nTotal Loot Value: ${lootValue}\nGold: ${a.goldDelta >= 0 ? '+' : ''}${a.goldDelta}\nXP: ${a.xpDelta >= 0 ? '+' : ''}${a.xpDelta}`,
+      footer: 'T / Enter = Take Loot   |   L / Esc = Leave Loot',
     };
   }
 
@@ -1329,7 +1085,7 @@ Selected Loot Value: ${selectedValue}`,
       return (seed % 1000) / 1000;
     };
 
-    const count = this.getRecruitPoolSize(settlement);
+    const count = 4 + tier;
     const offers = [];
     for (let i = 0; i < count; i += 1) {
       const ranged = tier > 1 ? rand() < 0.4 : rand() < 0.2;
@@ -1367,10 +1123,10 @@ Selected Loot Value: ${selectedValue}`,
     if (!settlement || typeof settlement !== 'object') return;
     const today = Math.max(1, Math.floor(dayNow ?? this.state?.day ?? 1));
     if (!settlement.recruit || typeof settlement.recruit !== 'object') {
-      settlement.recruit = { lastRefreshDay: today, refreshEveryDays: 1, offers: this.generateRecruitOffersForSettlement(settlement) };
+      settlement.recruit = { lastRefreshDay: today, refreshEveryDays: 3, offers: this.generateRecruitOffersForSettlement(settlement) };
       return;
     }
-    if (!Number.isFinite(settlement.recruit.refreshEveryDays)) settlement.recruit.refreshEveryDays = 1;
+    if (!Number.isFinite(settlement.recruit.refreshEveryDays)) settlement.recruit.refreshEveryDays = 3;
     if (!Array.isArray(settlement.recruit.offers)) settlement.recruit.offers = [];
     if (!Number.isFinite(settlement.recruit.lastRefreshDay)) settlement.recruit.lastRefreshDay = today;
     if ((today - settlement.recruit.lastRefreshDay) >= settlement.recruit.refreshEveryDays) {
@@ -1414,7 +1170,7 @@ Selected Loot Value: ${selectedValue}`,
   buildCityPanelData() {
     this.ensureCityOffers();
     const submode = this.state?.citySubmode || 'menu';
-    const city = this.state?.city || { name: 'Settlement', type: 'town', recruit: { refreshEveryDays: 1, lastRefreshDay: this.state?.day ?? 1 } };
+    const city = this.state?.city || { name: 'Settlement', type: 'town', recruit: { refreshEveryDays: 3, lastRefreshDay: this.state?.day ?? 1 } };
     const day = this.state?.day ?? 1;
 
     if (submode === 'menu') {
@@ -1432,7 +1188,7 @@ Esc / E = Exit city`,
     }
 
     if (submode === 'recruit') {
-      const recruit = city.recruit || { refreshEveryDays: 1, lastRefreshDay: day };
+      const recruit = city.recruit || { refreshEveryDays: 3, lastRefreshDay: day };
       const daysToRefresh = Math.max(0, recruit.refreshEveryDays - (day - (recruit.lastRefreshDay ?? day)));
       const lines = (this.cityOffers || []).map((offer, i) => {
         const mark = i === this.cityCursor ? '>' : ' ';
@@ -1613,20 +1369,6 @@ Up/Down select, Enter heal, Esc back`,
   }
 
 
-
-  deterministicRoll(parts = [], modulo = 1000) {
-    const values = Array.isArray(parts) ? parts : [parts];
-    let hash = Number.isFinite(this.state?.seed) ? Math.floor(this.state.seed) : 1337;
-    for (const part of values) {
-      const str = String(part ?? '');
-      for (let i = 0; i < str.length; i += 1) {
-        hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-      }
-    }
-    const safeModulo = Math.max(1, Math.floor(modulo || 1));
-    return hash % safeModulo;
-  }
-
   generateBattleLoot(result, battle) {
     const enemyUnits = battle?.enemyUnits || [];
     const infantryCount = enemyUnits.filter((u) => !u?.isRanged).length;
@@ -1644,13 +1386,13 @@ Up/Down select, Enter heal, Esc back`,
     };
 
     if (result === 'victory') {
-      push('grain', 1 + Math.floor(infantryCount / 2) + this.deterministicRoll([battle?.enemyId, result, 'grain'], 2));
+      push('grain', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
       push('leather', Math.max(1, Math.floor(infantryCount / 2)));
       if (archerCount > 0) {
         push('arrows', 2 + Math.floor(archerCount * 1.5));
         push('wood', 1 + Math.floor(archerCount / 2)); // bow parts surrogate
       }
-      if (this.deterministicRoll([battle?.enemyId, result, 'iron'], 10) < 2) push('iron', 1 + Math.floor(unitScale / 3));
+      if (Math.random() < 0.2) push('iron', 1 + Math.floor(unitScale / 3));
     } else {
       push('grain', Math.max(1, Math.floor(unitScale / 2)));
       if (archerCount > 0) push('arrows', 1 + Math.floor(archerCount / 2));
@@ -1659,7 +1401,7 @@ Up/Down select, Enter heal, Esc back`,
     return loot.slice(0, 9);
   }
 
-  applyRosterOutcomeFromBattle(battle, result = 'victory') {
+  applyRosterOutcomeFromBattle(battle) {
     const roster = this.playerParty?.roster || [];
     const dead = [];
     const wounded = [];
@@ -1674,14 +1416,8 @@ Up/Down select, Enter heal, Esc back`,
         continue;
       }
       model.hp = Math.max(1, Math.floor(unit.hp));
-      model.wounded = (model.hp / Math.max(1, model.maxHp)) <= 0.3;
-      if (model.wounded) {
-        const baseDays = result === 'defeat' ? 2 : 1;
-        model.woundedDays = baseDays + this.deterministicRoll([battle?.enemyId, model.id, result, 'wound-days'], 2);
-        wounded.push({ id: model.id, name: model.name });
-      } else {
-        model.woundedDays = 0;
-      }
+      model.wounded = (model.hp / Math.max(1, model.maxHp)) <= 0.35;
+      if (model.wounded) wounded.push({ id: model.id, name: model.name });
     }
 
     return { dead, wounded };
@@ -1697,10 +1433,10 @@ Up/Down select, Enter heal, Esc back`,
     battle.result = result;
     battle.resolvedAt = Date.now();
 
-    const outcome = this.applyRosterOutcomeFromBattle(battle, result);
+    const outcome = this.applyRosterOutcomeFromBattle(battle);
     const loot = this.generateBattleLoot(result, battle);
-    const goldDelta = result === 'victory' ? 8 + this.deterministicRoll([enemyId, result, 'gold'], 8) : result === 'retreat' ? 2 + this.deterministicRoll([enemyId, result, 'gold'], 3) : 0;
-    const xpDelta = result === 'victory' ? 10 + this.deterministicRoll([enemyId, result, 'xp'], 7) : result === 'retreat' ? 3 : 0;
+    const goldDelta = result === 'victory' ? 8 + Math.floor(Math.random() * 8) : result === 'retreat' ? 2 + Math.floor(Math.random() * 3) : 0;
+    const xpDelta = result === 'victory' ? 10 + Math.floor(Math.random() * 7) : result === 'retreat' ? 3 : 0;
 
     this.state.aftermath = {
       result,
@@ -1709,14 +1445,11 @@ Up/Down select, Enter heal, Esc back`,
       wounded: outcome.wounded,
       casualties: { dead: outcome.dead.length, wounded: outcome.wounded.length, survivors: Math.max(0, (this.playerParty?.roster || []).length) },
       loot,
-      lootSelection: loot.map(() => result === 'victory'),
       goldDelta,
       xpDelta,
       timestamp: Date.now(),
     };
-    this.aftermathCursor = 0;
     this.state.uiPanel = this.buildAftermathPanelData();
-    this.state.interactionHint = 'Aftermath: Enter to confirm';
     this.state.setMode('aftermath');
     this.updateTransientUIState();
     return true;
@@ -1729,19 +1462,18 @@ Up/Down select, Enter heal, Esc back`,
     const result = aftermath.result;
     const enemy = this.enemyParties.find((party) => party?.id === enemyId) || null;
 
-    const selectedLoot = (aftermath.loot || []).filter((entry, idx) => Boolean(aftermath.lootSelection?.[idx]));
-    const deadCount = Math.max(0, Math.floor(aftermath?.dead?.length ?? 0));
-    const woundedCount = Math.max(0, Math.floor(aftermath?.wounded?.length ?? 0));
     if (takeLoot) {
-      for (const entry of selectedLoot) {
-        this.addItem(entry.id, entry.name, entry.qty, entry.unitValue, entry.type || 'loot', entry.weight ?? 1);
+      for (const entry of aftermath.loot || []) {
+        this.addItem(entry.id, entry.name, entry.qty, entry.unitValue);
       }
-      this.setLastEventLog(`Aftermath: ${selectedLoot.length} loot, ${deadCount} dead, ${woundedCount} wounded`);
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
+      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
+      this.setLastEventLog(`Aftermath claimed: +${aftermath.goldDelta ?? 0}g, +${aftermath.xpDelta ?? 0}xp`);
     } else {
-      this.setLastEventLog(`Aftermath: loot discarded, ${deadCount} dead, ${woundedCount} wounded`);
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
+      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
+      this.setLastEventLog('Aftermath continued (loot discarded)');
     }
-    this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
-    this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
 
     if (result === 'victory') {
       this.despawnEnemyParty(enemyId);
@@ -1755,7 +1487,6 @@ Up/Down select, Enter heal, Esc back`,
 
     this.state.uiPanel = null;
     this.state.aftermath = null;
-    this.state.interactionHint = '';
     this.state.setMode('map');
     this.runAutosave('aftermath-close');
     return true;
@@ -1997,7 +1728,6 @@ Up/Down select, Enter heal, Esc back`,
           e.preventDefault?.();
           this.state.accounting = null;
           this.state.uiPanel = null;
-          this.state.interactionHint = '';
           this.updateTransientUIState();
           this.runAutosave('accounting-close');
           return;
@@ -2186,52 +1916,16 @@ Up/Down select, Enter heal, Esc back`,
       }
 
       if (this.state?.mode === 'aftermath') {
-        const loot = this.state.aftermath?.loot || [];
-        const selection = this.state.aftermath?.lootSelection || [];
-        if (e.key === 'ArrowUp') {
-          e.preventDefault?.();
-          this.aftermathCursor = Math.max(0, this.aftermathCursor - 1);
-          this.updateTransientUIState();
-          return;
-        }
-        if (e.key === 'ArrowDown') {
-          e.preventDefault?.();
-          this.aftermathCursor = Math.min(Math.max(0, loot.length - 1), this.aftermathCursor + 1);
-          this.updateTransientUIState();
-          return;
-        }
-        if (e.key === ' ' || e.key === 'Spacebar') {
-          e.preventDefault?.();
-          if (loot.length > 0) {
-            selection[this.aftermathCursor] = !selection[this.aftermathCursor];
-            this.state.aftermath.lootSelection = selection;
-            this.updateTransientUIState();
-          }
-          return;
-        }
-        if (e.key === 'a' || e.key === 'A') {
-          e.preventDefault?.();
-          this.state.aftermath.lootSelection = loot.map(() => true);
-          this.updateTransientUIState();
-          return;
-        }
-        if (e.key === 'c' || e.key === 'C') {
-          e.preventDefault?.();
-          this.state.aftermath.lootSelection = loot.map(() => false);
-          this.updateTransientUIState();
-          return;
-        }
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || e.key === 't' || e.key === 'T') {
           e.preventDefault?.();
           this.exitAftermathToMap(true);
           return;
         }
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') {
           e.preventDefault?.();
           this.exitAftermathToMap(false);
           return;
         }
-        return;
       }
 
       if (this.state?.mode === 'city') {
@@ -2268,13 +1962,6 @@ Up/Down select, Enter heal, Esc back`,
       if ((e.key === 'x' || e.key === 'Backspace') && this.mode !== 'menu' && this.state?.mode === 'map') {
         e.preventDefault?.();
         this.cancelPlayerDestination();
-        return;
-      }
-
-
-      if ((e.key === 'b' || e.key === 'B') && this.state?.mode === 'map') {
-        e.preventDefault?.();
-        this.showBiomeLegend = !this.showBiomeLegend;
         return;
       }
 
@@ -2387,7 +2074,7 @@ Up/Down select, Enter heal, Esc back`,
       document.getElementById('saveTransferModal')?.classList.add('hidden');
     });
 
-    this.minimapRenderer = new Minimap(
+    this.minimapRenderer = new MinimapSimple(
       document.getElementById('hudMiniMap')
     );
 
@@ -2699,10 +2386,7 @@ Up/Down select, Enter heal, Esc back`,
         id: item.id,
         name: item.name || this.getItemName(item.id),
         qty: Math.max(0, Math.floor(item.qty ?? 0)),
-        unitValue: Math.max(1, Math.floor(item.unitValue ?? item.value ?? this.itemCatalog.find((c) => c.id === item.id)?.unitValue ?? 1)),
-        value: Math.max(1, Math.floor(item.value ?? item.unitValue ?? this.itemCatalog.find((c) => c.id === item.id)?.unitValue ?? 1)),
-        weight: Math.max(0, Number(item.weight ?? 1)),
-        type: item.type || 'loot',
+        unitValue: Math.max(1, Math.floor(item.unitValue ?? this.itemCatalog.find((c) => c.id === item.id)?.unitValue ?? 1)),
       })) : [],
       capacity: Number.isFinite(this.playerParty?.inventory?.capacity) ? this.playerParty.inventory.capacity : null,
     };
@@ -2721,7 +2405,6 @@ Up/Down select, Enter heal, Esc back`,
       savedAt: nowIso,
       game: {
         day: Number.isFinite(this.state?.day) ? this.state.day : 1,
-        dayTime: Number.isFinite(this.state?.dayTime) ? this.state.dayTime : 0,
         mode: typeof this.state?.mode === 'string' ? this.state.mode : 'map',
         paused: Boolean(this.state?.paused),
         camera: {
@@ -2760,15 +2443,6 @@ Up/Down select, Enter heal, Esc back`,
           priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
         })),
         inventory,
-        mapLayers: {
-          seed: Number.isFinite(this.state?.seed) ? this.state.seed : 1337,
-          biomes: Array.isArray(this.state?.map?.tiles)
-            ? this.state.map.tiles.map((tile) => tile?.biome || CONST.BIOME.TYPE.PLAINS)
-            : [],
-          rivers: Array.isArray(this.state?.map?.rivers) ? this.state.map.rivers : [],
-          roads: Array.isArray(this.state?.map?.roads) ? this.state.map.roads : [],
-          crossings: Array.isArray(this.state?.map?.crossings) ? this.state.map.crossings : [],
-        },
       },
     };
   }
@@ -2778,10 +2452,6 @@ Up/Down select, Enter heal, Esc back`,
     if (!this.state || !this.playerParty) return false;
 
     this.state.day = Number.isFinite(game.day) ? game.day : 1;
-    this.state.dayTime = Number.isFinite(game.dayTime) ? Math.max(0, Math.min(1, game.dayTime)) : 0;
-    if (Number.isFinite(CONST.GAME?.DAY_LENGTH_SEC) && CONST.GAME.DAY_LENGTH_SEC > 0) {
-      this.state.dayTimer = this.state.dayTime * CONST.GAME.DAY_LENGTH_SEC;
-    }
     this.state.paused = Boolean(game.paused);
     this.state.camera = {
       x: Number.isFinite(game?.camera?.x) ? game.camera.x : 0,
@@ -2808,10 +2478,7 @@ Up/Down select, Enter heal, Esc back`,
         id: it.id,
         name: it.name || this.getItemName(it.id),
         qty: Math.max(0, Math.floor(it.qty ?? 0)),
-        unitValue: Math.max(1, Math.floor(it.unitValue ?? it.value ?? this.itemCatalog.find((c) => c.id === it.id)?.unitValue ?? 1)),
-        value: Math.max(1, Math.floor(it.value ?? it.unitValue ?? this.itemCatalog.find((c) => c.id === it.id)?.unitValue ?? 1)),
-        weight: Math.max(0, Number(it.weight ?? 1)),
-        type: it.type || 'loot',
+        unitValue: Math.max(1, Math.floor(it.unitValue ?? this.itemCatalog.find((c) => c.id === it.id)?.unitValue ?? 1)),
       })).filter((it) => it.id && it.qty > 0) : [],
       capacity: Number.isFinite(inv.capacity) ? inv.capacity : null,
     };
@@ -2873,31 +2540,6 @@ Up/Down select, Enter heal, Esc back`,
       s.priceMultiplier = market.priceMultiplier && typeof market.priceMultiplier === 'object' ? market.priceMultiplier : {};
     });
 
-    const mapLayers = game.mapLayers && typeof game.mapLayers === 'object' ? game.mapLayers : {};
-    const layerSeed = Number.isFinite(mapLayers.seed) ? mapLayers.seed : this.state.seed;
-    this.regenerateWorldMapLayers(layerSeed);
-    if (Array.isArray(this.state?.map?.tiles) && Array.isArray(mapLayers.biomes) && mapLayers.biomes.length === this.state.map.tiles.length) {
-      this.state.map.tiles.forEach((tile, idx) => {
-        tile.biome = mapLayers.biomes[idx] || tile.biome;
-      });
-    }
-    if (Array.isArray(mapLayers.rivers) && mapLayers.rivers.length > 0) {
-      this.state.map.rivers = mapLayers.rivers;
-    }
-    if (Array.isArray(mapLayers.roads) && mapLayers.roads.length > 0) {
-      this.state.map.roads = mapLayers.roads;
-      for (const tile of this.state.map.tiles || []) tile.hasRoad = false;
-      for (const road of this.state.map.roads) {
-        for (const p of road.path || []) {
-          const tile = this.state.map.tiles[p.y * this.state.map.width + p.x];
-          if (tile) tile.hasRoad = true;
-        }
-      }
-    }
-    if (Array.isArray(mapLayers.crossings)) {
-      this.state.map.crossings = mapLayers.crossings;
-    }
-
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
     if (!safeModes.has(loadedMode)) {
@@ -2912,7 +2554,6 @@ Up/Down select, Enter heal, Esc back`,
     this.state.accounting = null;
     this.state.aftermath = null;
     this.state.lastSaveMeta = { slot, at: Date.now() };
-    this.clearMapRenderCaches();
     this.updateTransientUIState();
     return true;
   }
@@ -3070,7 +2711,6 @@ Esc close`,
 
   renderMap() {
     if (!this.ctx || !this.canvas) return;
-    const frameStart = (globalThis.performance?.now?.() ?? Date.now());
     const camera = this.getCameraSafe();
     this.clampCameraToWorld();
     this.ctx.fillStyle = '#1a1a1a';
@@ -3080,29 +2720,20 @@ Esc close`,
     this.ctx.scale(camera.zoom, camera.zoom);
     this.ctx.translate(-camera.x, -camera.y);
 
-    const drawnChunks = this.drawStaticChunks(this.ctx, camera);
-    this.lastFrameDrawnChunks = drawnChunks;
     this.renderWorldOverlays(this.ctx, camera);
 
     this.ctx.restore();
+
+    this.ctx.fillStyle = '#fff';
+    this.ctx.font = '24px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('Map View (TODO)', this.canvas.width / 2, this.canvas.height / 2);
 
     if (this.followParty) {
       this.ctx.font = '12px Arial';
       this.ctx.textAlign = 'left';
       this.ctx.fillStyle = 'rgba(255,255,255,0.75)';
       this.ctx.fillText('Follow: ON (F)', 12, this.canvas.height - 12);
-    }
-
-    if (this.showBiomeLegend) {
-      this.drawBiomeLegend(this.ctx);
-    }
-
-    const renderMs = (globalThis.performance?.now?.() ?? Date.now()) - frameStart;
-    if (this.state?.debug) {
-      this.state.debug.mapRenderMs = Math.max(0, Number(renderMs.toFixed(2)));
-      this.state.debug.mapChunksDrawn = drawnChunks;
-      this.state.debug.mapChunkCacheHits = this.mapChunkCache?.hits || 0;
-      this.state.debug.mapChunkCacheMisses = this.mapChunkCache?.misses || 0;
     }
 
     if (this.state?.debug?.enabled) {
@@ -3113,216 +2744,11 @@ Esc close`,
     this.minimapRenderer?.render(this);
   }
 
-
-  getVisibleWorldRect(camera) {
-    const zoom = Math.max(0.001, camera?.zoom || 1);
-    return {
-      minX: camera?.x || 0,
-      minY: camera?.y || 0,
-      maxX: (camera?.x || 0) + (this.canvas.width / zoom),
-      maxY: (camera?.y || 0) + (this.canvas.height / zoom),
-    };
-  }
-
-  getVisibleTileBounds(camera, padTiles = 1) {
-    const map = this.state?.map;
-    if (!map) return { startX: 0, startY: 0, endX: 0, endY: 0 };
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    const rect = this.getVisibleWorldRect(camera);
-    return {
-      startX: Math.max(0, Math.floor(rect.minX / tileSize) - padTiles),
-      startY: Math.max(0, Math.floor(rect.minY / tileSize) - padTiles),
-      endX: Math.min(map.width, Math.ceil(rect.maxX / tileSize) + padTiles),
-      endY: Math.min(map.height, Math.ceil(rect.maxY / tileSize) + padTiles),
-    };
-  }
-
-  drawStaticChunks(ctx, camera) {
-    const map = this.state?.map;
-    if (!map || !Array.isArray(map.tiles) || map.tiles.length === 0) return 0;
-
-    this.mapChunkCache?.setTileSize?.(CONST.WORLD.TILE_SIZE);
-    const chunkRange = this.mapChunkCache.getVisibleChunkRange(
-      camera,
-      this.canvas.width,
-      this.canvas.height,
-      map.width,
-      map.height
-    );
-
-    const chunkPx = this.mapChunkCache.getChunkPixelSize();
-    let drawn = 0;
-    for (let cy = chunkRange.startY; cy <= chunkRange.endY; cy++) {
-      for (let cx = chunkRange.startX; cx <= chunkRange.endX; cx++) {
-        const chunkCanvas = this.mapChunkCache.getOrCreateChunk(
-          cx,
-          cy,
-          this.mapRenderRevision,
-          (chunkX, chunkY) => this.buildStaticChunkCanvas(chunkX, chunkY)
-        );
-        if (!chunkCanvas) continue;
-        ctx.drawImage(chunkCanvas, cx * chunkPx, cy * chunkPx);
-        drawn += 1;
-      }
-    }
-    return drawn;
-  }
-
-  buildStaticChunkCanvas(chunkX, chunkY) {
-    const map = this.state?.map;
-    if (!map) return null;
-
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    const chunkTiles = this.mapChunkCache.chunkTiles;
-    const chunkPx = chunkTiles * tileSize;
-    const startX = chunkX * chunkTiles;
-    const startY = chunkY * chunkTiles;
-    const endX = Math.min(map.width, startX + chunkTiles);
-    const endY = Math.min(map.height, startY + chunkTiles);
-
-    let canvas = null;
-    if (typeof OffscreenCanvas !== 'undefined') {
-      canvas = new OffscreenCanvas(chunkPx, chunkPx);
-    } else if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-      canvas = document.createElement('canvas');
-      canvas.width = chunkPx;
-      canvas.height = chunkPx;
-    }
-    if (!canvas) return null;
-
-    const cctx = canvas.getContext?.('2d');
-    if (!cctx) return null;
-
-    // biome base
-    for (let y = startY; y < endY; y++) {
-      for (let x = startX; x < endX; x++) {
-        const tile = map.tiles[y * map.width + x];
-        if (!tile) continue;
-        cctx.fillStyle = CONST.BIOME.COLORS[tile.biome] || CONST.BIOME.COLORS.plains;
-        cctx.fillRect((x - startX) * tileSize, (y - startY) * tileSize, tileSize, tileSize);
-      }
-    }
-
-    // roads
-    cctx.strokeStyle = '#7d5f3e';
-    cctx.lineWidth = 4;
-    cctx.lineCap = 'round';
-    for (const road of map.roads || []) {
-      const path = road?.path;
-      if (!Array.isArray(path) || path.length < 2) continue;
-      const inChunk = path.some((p) => p.x >= startX && p.x < endX && p.y >= startY && p.y < endY);
-      if (!inChunk) continue;
-      cctx.beginPath();
-      cctx.moveTo((path[0].x - startX) * tileSize + tileSize * 0.5, (path[0].y - startY) * tileSize + tileSize * 0.5);
-      for (let i = 1; i < path.length; i++) cctx.lineTo((path[i].x - startX) * tileSize + tileSize * 0.5, (path[i].y - startY) * tileSize + tileSize * 0.5);
-      cctx.stroke();
-    }
-
-    // rivers
-    cctx.strokeStyle = '#2f79bf';
-    cctx.lineWidth = 6;
-    for (const river of map.rivers || []) {
-      if (!Array.isArray(river) || river.length < 2) continue;
-      const inChunk = river.some((p) => p.x >= startX && p.x < endX && p.y >= startY && p.y < endY);
-      if (!inChunk) continue;
-      cctx.beginPath();
-      cctx.moveTo((river[0].x - startX) * tileSize + tileSize * 0.5, (river[0].y - startY) * tileSize + tileSize * 0.5);
-      for (let i = 1; i < river.length; i++) cctx.lineTo((river[i].x - startX) * tileSize + tileSize * 0.5, (river[i].y - startY) * tileSize + tileSize * 0.5);
-      cctx.stroke();
-    }
-
-    // crossings
-    for (const crossing of map.crossings || []) {
-      if (crossing.x < startX || crossing.x >= endX || crossing.y < startY || crossing.y >= endY) continue;
-      const cx = (crossing.x - startX) * tileSize + tileSize * 0.5;
-      const cy = (crossing.y - startY) * tileSize + tileSize * 0.5;
-      if (crossing.type === 'bridge') {
-        cctx.fillStyle = '#d9c8a9';
-        cctx.fillRect(cx - 6, cy - 3, 12, 6);
-      } else {
-        cctx.strokeStyle = '#f2e6c9';
-        cctx.lineWidth = 2;
-        cctx.beginPath();
-        cctx.arc(cx, cy, 4, 0, Math.PI * 2);
-        cctx.stroke();
-      }
-    }
-
-    // poi/settlement base marker
-    for (const poi of map.pois || map.settlements || []) {
-      if (!Number.isFinite(poi?.x) || !Number.isFinite(poi?.y)) continue;
-      if (poi.x < startX || poi.x >= endX || poi.y < startY || poi.y >= endY) continue;
-      const px = (poi.x - startX) * tileSize + tileSize * 0.5;
-      const py = (poi.y - startY) * tileSize + tileSize * 0.5;
-      cctx.fillStyle = '#f0e2b6';
-      cctx.beginPath();
-      cctx.arc(px, py, Math.max(3, tileSize * 0.15), 0, Math.PI * 2);
-      cctx.fill();
-    }
-
-    return canvas;
-  }
-
-  drawBiomeLayer() {}
-  drawRoadRiverLayer() {}
-
-  drawBiomeLegend(ctx) {
-    const types = [
-      CONST.BIOME.TYPE.PLAINS,
-      CONST.BIOME.TYPE.FOREST,
-      CONST.BIOME.TYPE.DESERT,
-      CONST.BIOME.TYPE.SWAMP,
-      CONST.BIOME.TYPE.HILLS,
-      CONST.BIOME.TYPE.MOUNTAINS,
-      CONST.BIOME.TYPE.SNOW,
-      CONST.BIOME.TYPE.COAST,
-      CONST.BIOME.TYPE.WATER,
-    ];
-
-    const x = 12;
-    const y = 12;
-    const rowH = 18;
-    const width = 180;
-    const height = 24 + rowH * types.length;
-
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.7)';
-    ctx.fillRect(x, y, width, height);
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'left';
-    ctx.fillText('Biome Legend (B)', x + 8, y + 15);
-
-    types.forEach((biome, idx) => {
-      const ry = y + 24 + idx * rowH;
-      ctx.fillStyle = CONST.BIOME.COLORS[biome] || '#777';
-      ctx.fillRect(x + 8, ry, 12, 12);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(biome, x + 28, ry + 10);
-    });
-    ctx.restore();
-  }
-
   renderWorldOverlays(ctx, camera) {
     if (!ctx || !camera || !this.playerParty) return;
 
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    const tileBounds = this.getVisibleTileBounds(camera, 2);
-    const rect = this.getVisibleWorldRect(camera);
     const lineBase = 2 / camera.zoom;
     const party = this.playerParty;
-
-    if (!this.state?.fogDisabled && Array.isArray(this.state?.map?.fog)) {
-      const fog = this.state.map.fog;
-      for (let y = tileBounds.startY; y < tileBounds.endY; y++) {
-        for (let x = tileBounds.startX; x < tileBounds.endX; x++) {
-          const level = fog[y * this.state.map.width + x] ?? 2;
-          if (level === 2) continue;
-          ctx.fillStyle = level === 1 ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.72)';
-          ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-        }
-      }
-    }
 
     if (party.hasDestination) {
       ctx.strokeStyle = 'rgba(212,175,55,0.45)';
@@ -3349,6 +2775,15 @@ Esc close`,
       ctx.moveTo(party.x, party.y);
       ctx.lineTo(this.mouseWorldX, this.mouseWorldY);
       ctx.stroke();
+
+      const pd = 6;
+      ctx.strokeStyle = 'rgba(200,220,255,0.45)';
+      ctx.beginPath();
+      ctx.moveTo(this.mouseWorldX - pd, this.mouseWorldY);
+      ctx.lineTo(this.mouseWorldX + pd, this.mouseWorldY);
+      ctx.moveTo(this.mouseWorldX, this.mouseWorldY - pd);
+      ctx.lineTo(this.mouseWorldX, this.mouseWorldY + pd);
+      ctx.stroke();
     }
 
     if (party.arrivalFeedbackTimer > 0) {
@@ -3367,6 +2802,14 @@ Esc close`,
     ctx.arc(party.x, party.y, party.radius, 0, Math.PI * 2);
     ctx.fill();
 
+    if (party.hovered && !party.selected) {
+      ctx.strokeStyle = 'rgba(170,205,255,0.65)';
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.arc(party.x, party.y, party.radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     if (party.selected) {
       const encounterRadius = party.radius + this.encounterMargin;
       ctx.strokeStyle = 'rgba(255,120,120,0.2)';
@@ -3383,15 +2826,14 @@ Esc close`,
     }
 
     if (Array.isArray(this.enemyParties)) {
-      for (const enemy of this.enemyParties) {
-        if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) continue;
-        if (enemy.x < rect.minX - 60 || enemy.x > rect.maxX + 60 || enemy.y < rect.minY - 60 || enemy.y > rect.maxY + 60) continue;
+      this.enemyParties.forEach((enemy) => {
+        if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
         const enemyRadius = Number.isFinite(enemy.radius) ? enemy.radius : 12;
         ctx.fillStyle = '#d9534f';
         ctx.beginPath();
         ctx.arc(enemy.x, enemy.y, enemyRadius, 0, Math.PI * 2);
         ctx.fill();
-      }
+      });
     }
   }
 
@@ -3482,10 +2924,7 @@ Esc close`,
       `FPS: ${this.state.debug.fps.toFixed(0)}`,
       `Mode: ${this.state.mode}`,
       `Day: ${this.state.day}`,
-      `Gold: ${Math.floor(this.playerParty?.gold ?? this.state?.player?.gold ?? 0)}`,
-      `Map ms: ${(this.state.debug.mapRenderMs ?? 0).toFixed(2)}`,
-      `Chunks: ${this.state.debug.mapChunksDrawn ?? 0}`,
-      `Cache H/M: ${this.state.debug.mapChunkCacheHits ?? 0}/${this.state.debug.mapChunkCacheMisses ?? 0}`,
+      `Gold: ${this.state.player.gold}`,
       `Mouse: (${this.input.mouse.x.toFixed(0)}, ${this.input.mouse.y.toFixed(0)})`,
     ];
 
