@@ -32,11 +32,9 @@ export class WorldGenerator {
     
     // Distance to sea hesapla
     const distToSea = this.buildDistanceToSea(heightMap, this.MAP_W, this.MAP_H);
-    const moistureMap = this.buildMoistureField();
-    this.blurField(moistureMap, this.MAP_W, this.MAP_H, 2);
     
     // Tile'ları oluştur
-    const tiles = this.createTiles(heightMap, distToSea, moistureMap);
+    const tiles = this.createTiles(heightMap, distToSea);
     
     // Nehirler
     const rivers = this.generateRivers(heightMap);
@@ -49,8 +47,6 @@ export class WorldGenerator {
     
     // Yollar
     const roads = this.connectRoads(settlements);
-    const crossings = this.generateRiverCrossings(rivers, roads);
-    this.applyRoadFlags(tiles, roads);
     
     // Fog of war
     const fog = this.initFogOfWar();
@@ -66,13 +62,11 @@ export class WorldGenerator {
       settlements,
       rivers,
       roads,
-      crossings,
       forests,
       mountains,
       fog,
       heightMap,
       distToSea,
-      moistureMap,
       seed: this.seed,
     };
   }
@@ -106,8 +100,7 @@ export class WorldGenerator {
         const islandFactor = 1.0 - Math.min(1, distFromCenter * 1.8);
         
         val *= islandFactor;
-        val = (val * 0.95) + 0.22;
-
+        
         arr[i] = utils.clamp(val, 0, 1);
       }
     }
@@ -196,31 +189,13 @@ export class WorldGenerator {
     
     return dist;
   }
-
-  buildMoistureField() {
-    const arr = new Float32Array(this.MAP_W * this.MAP_H);
-    for (let y = 0; y < this.MAP_H; y++) {
-      for (let x = 0; x < this.MAP_W; x++) {
-        const i = y * this.MAP_W + x;
-        const nx = x / this.MAP_W;
-        const ny = y / this.MAP_H;
-        let val = 0;
-        val += this.noise2d(nx * 2.5, ny * 2.5, this.seed + 401) * 0.6;
-        val += this.noise2d(nx * 6.5, ny * 6.5, this.seed + 907) * 0.3;
-        val += this.noise2d(nx * 13.5, ny * 13.5, this.seed + 1701) * 0.1;
-        arr[i] = utils.clamp(val, 0, 1);
-      }
-    }
-    return arr;
-  }
   
   // ========================================================================
   // BIOME ASSIGNMENT
   // ========================================================================
   
-  createTiles(heightMap, distToSea, moistureMap) {
+  createTiles(heightMap, distToSea) {
     const tiles = [];
-    const biomes = new Array(this.MAP_H * this.MAP_W);
     
     for (let y = 0; y < this.MAP_H; y++) {
       for (let x = 0; x < this.MAP_W; x++) {
@@ -229,7 +204,6 @@ export class WorldGenerator {
         const d = distToSea[i];
         
         let type = CONST.TERRAIN.TYPE.GRASS;
-        const biome = this.pickBiome(x, y, h, moistureMap[i]);
         
         if (h < CONST.WORLD.SEA_LEVEL) {
           type = CONST.TERRAIN.TYPE.WATER;
@@ -245,77 +219,15 @@ export class WorldGenerator {
           x,
           y,
           type,
-          biome,
-          hasRoad: false,
           height: h,
           distToSea: d,
           explored: false,
           visible: false,
         });
-        biomes[i] = biome;
       }
     }
-
-    this.smoothBiomes(tiles, biomes);
     
     return tiles;
-  }
-
-  pickBiome(x, y, height, moisture) {
-    const B = CONST.BIOME.TYPE;
-    if (height < CONST.WORLD.SEA_LEVEL) return B.WATER;
-    if (height < CONST.WORLD.SHORE_MAX) return B.COAST;
-
-    const localMountain = CONST.WORLD.SHORE_MAX + 0.065;
-    const localSnow = CONST.WORLD.SHORE_MAX + 0.08;
-    if (height > localSnow) return B.SNOW;
-    if (height > localMountain) return B.MOUNTAINS;
-
-    const latitude = Math.abs((y / Math.max(1, this.MAP_H - 1)) - 0.5) * 2;
-    const coldness = utils.clamp01((latitude - 0.5) * 1.8 + (height - CONST.WORLD.SHORE_MAX) * 3.2);
-
-    if (coldness > 0.75) return B.SNOW;
-    if (height > CONST.WORLD.SHORE_MAX + 0.04) return B.HILLS;
-    if (moisture < 0.45 && latitude < 0.75) return B.DESERT;
-    if (moisture > 0.55 && height < CONST.WORLD.SHORE_MAX + 0.03) return B.SWAMP;
-    if (moisture > 0.5) return B.FOREST;
-    return B.PLAINS;
-  }
-
-  smoothBiomes(tiles, biomeBuffer) {
-    const B = CONST.BIOME.TYPE;
-    const locked = new Set([B.WATER, B.COAST, B.MOUNTAINS, B.SNOW]);
-    const next = biomeBuffer.slice();
-    for (let pass = 0; pass < 2; pass++) {
-      for (let y = 1; y < this.MAP_H - 1; y++) {
-        for (let x = 1; x < this.MAP_W - 1; x++) {
-          const i = y * this.MAP_W + x;
-          const curr = biomeBuffer[i];
-          if (locked.has(curr)) continue;
-          const counts = new Map();
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              const b = biomeBuffer[(y + dy) * this.MAP_W + (x + dx)];
-              counts.set(b, (counts.get(b) || 0) + 1);
-            }
-          }
-          let best = curr;
-          let bestCount = counts.get(curr) || 0;
-          counts.forEach((count, biome) => {
-            if (count > bestCount + 1) {
-              best = biome;
-              bestCount = count;
-            }
-          });
-          next[i] = best;
-        }
-      }
-      for (let i = 0; i < biomeBuffer.length; i++) biomeBuffer[i] = next[i];
-    }
-
-    for (let i = 0; i < tiles.length; i++) {
-      tiles[i].biome = biomeBuffer[i];
-    }
   }
   
   // ========================================================================
@@ -325,36 +237,21 @@ export class WorldGenerator {
   generateRivers(heightMap) {
     const rivers = [];
     const riverCount = CONST.WORLD.RIVER_COUNT;
-    const candidates = [];
-
-    for (let y = 4; y < this.MAP_H - 4; y++) {
-      for (let x = 4; x < this.MAP_W - 4; x++) {
-        const h = heightMap[y * this.MAP_W + x];
-        if (h > CONST.WORLD.SHORE_MAX + 0.03) candidates.push({ x, y, h });
+    
+    for (let r = 0; r < riverCount; r++) {
+      const river = this.generateSingleRiver(heightMap);
+      if (river && river.length > 5) {
+        rivers.push(river);
       }
     }
-    candidates.sort((a, b) => b.h - a.h);
-
-    const usedStarts = new Set();
-    let tries = 0;
-    while (rivers.length < riverCount && tries < riverCount * 12) {
-      tries++;
-      const source = candidates[Math.floor(this.rng() * Math.max(1, Math.min(candidates.length, 3000)))];
-      if (!source) break;
-      const sk = `${source.x},${source.y}`;
-      if (usedStarts.has(sk)) continue;
-      usedStarts.add(sk);
-      const river = this.generateSingleRiver(heightMap, source.x, source.y);
-      if (river && river.length > 8) rivers.push(river);
-    }
-
+    
     return rivers;
   }
   
-  generateSingleRiver(heightMap, sourceX = null, sourceY = null) {
+  generateSingleRiver(heightMap) {
     // Start from high ground
-    let startX = Number.isFinite(sourceX) ? sourceX : this.randInt(20, this.MAP_W - 20);
-    let startY = Number.isFinite(sourceY) ? sourceY : this.randInt(20, this.MAP_H - 20);
+    let startX = utils.randInt(20, this.MAP_W - 20);
+    let startY = utils.randInt(20, this.MAP_H - 20);
     
     // Find highest nearby point
     let maxH = 0;
@@ -398,18 +295,15 @@ export class WorldGenerator {
       let lowestH = currentH;
       let nextX = x;
       let nextY = y;
-      let tieBreaker = Number.POSITIVE_INFINITY;
       
       const neighbors = utils.getNeighbors8(x, y);
       for (const n of neighbors) {
         if (n.x >= 0 && n.x < this.MAP_W && n.y >= 0 && n.y < this.MAP_H) {
           const h = heightMap[n.y * this.MAP_W + n.x];
-          const coastBias = Math.min(n.x, this.MAP_W - 1 - n.x, n.y, this.MAP_H - 1 - n.y);
-          if (h < lowestH - 0.0005 || (Math.abs(h - lowestH) <= 0.0005 && coastBias < tieBreaker)) {
+          if (h < lowestH) {
             lowestH = h;
             nextX = n.x;
             nextY = n.y;
-            tieBreaker = coastBias;
           }
         }
       }
@@ -475,25 +369,20 @@ export class WorldGenerator {
     
     // Try to place ~20 settlements
     const targetCount = 20;
-    const candidates = [];
-    for (let y = 8; y < this.MAP_H - 8; y++) {
-      for (let x = 8; x < this.MAP_W - 8; x++) {
-        const h = heightMap[y * this.MAP_W + x];
-        if (h >= CONST.WORLD.SHORE_MAX + 0.01 && h <= CONST.WORLD.SHORE_MAX + 0.09) {
-          candidates.push({ x, y, h });
-        }
-      }
-    }
-
     let attempts = 0;
-    const maxAttempts = Math.max(1500, candidates.length * 2);
+    const maxAttempts = 1000;
     
     while (settlements.length < targetCount && attempts < maxAttempts) {
       attempts++;
-      const pick = candidates[this.randInt(0, Math.max(0, candidates.length - 1))];
-      if (!pick) break;
-      const x = pick.x;
-      const y = pick.y;
+      
+      const x = utils.randInt(10, this.MAP_W - 10);
+      const y = utils.randInt(10, this.MAP_H - 10);
+      const h = heightMap[y * this.MAP_W + x];
+      
+      // Only on land
+      if (h < CONST.WORLD.SHORE_MAX || h > CONST.WORLD.MOUNTAIN_MIN) {
+        continue;
+      }
       
       // Check distance to other settlements
       let tooClose = false;
@@ -518,8 +407,8 @@ export class WorldGenerator {
         name: this.generateSettlementName(),
         type: this.determineSettlementType(id),
         owner,
-        population: this.randInt(500, 5000),
-        garrison: this.randInt(20, 100),
+        population: utils.randInt(500, 5000),
+        garrison: utils.randInt(20, 100),
         buildings: [],
         taxRate: CONST.SETTLEMENT.BASE_TAX_RATE,
         loyalty: 100,
@@ -541,8 +430,8 @@ export class WorldGenerator {
       'kale', 'hisar', 'köy', 'belde', 'ova', 'tepe'
     ];
     
-    const prefix = this.randChoice(prefixes);
-    const suffix = this.randChoice(suffixes);
+    const prefix = utils.randChoice(prefixes);
+    const suffix = utils.randChoice(suffixes);
     
     return `${prefix}${suffix}`;
   }
@@ -602,56 +491,6 @@ export class WorldGenerator {
     }
     
     return path;
-  }
-
-  generateRiverCrossings(rivers, roads) {
-    const crossings = [];
-    const crossingKeys = new Set();
-    const roadSet = new Set();
-    for (const road of roads || []) {
-      for (const p of road.path || []) roadSet.add(`${p.x},${p.y}`);
-    }
-
-    const addCrossing = (x, y, type) => {
-      const key = `${x},${y}`;
-      if (crossingKeys.has(key)) return;
-      crossingKeys.add(key);
-      crossings.push({ x, y, type });
-    };
-
-    for (const river of rivers || []) {
-      if (!Array.isArray(river) || river.length < 4) continue;
-      for (let i = 2; i < river.length - 2; i++) {
-        const p = river[i];
-        if (roadSet.has(`${p.x},${p.y}`)) addCrossing(p.x, p.y, 'bridge');
-      }
-      const stride = Math.max(8, Math.floor(river.length / 3));
-      for (let i = stride; i < river.length - stride; i += stride) {
-        const p = river[i];
-        addCrossing(p.x, p.y, 'ford');
-      }
-    }
-
-    return crossings;
-  }
-
-  applyRoadFlags(tiles, roads) {
-    for (const road of roads || []) {
-      for (const p of road.path || []) {
-        if (p.x < 0 || p.y < 0 || p.x >= this.MAP_W || p.y >= this.MAP_H) continue;
-        const tile = tiles[p.y * this.MAP_W + p.x];
-        if (tile) tile.hasRoad = true;
-      }
-    }
-  }
-
-  randInt(min, max) {
-    return Math.floor(min + this.rng() * (max - min + 1));
-  }
-
-  randChoice(array) {
-    if (!Array.isArray(array) || array.length === 0) return null;
-    return array[Math.floor(this.rng() * array.length)];
   }
   
   // ========================================================================
