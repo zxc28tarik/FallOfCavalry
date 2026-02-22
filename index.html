@@ -20,6 +20,20 @@
 
 <body class="bg-neutral-900 text-neutral-100 overflow-hidden">
     <div id="appRoot" class="w-screen h-screen relative">
+        <div id="bootNotice" class="boot-notice hidden">
+            <div class="boot-notice-card">
+                <div class="royal-font boot-notice-title">Başlatma Uyarısı</div>
+                <div class="boot-notice-text">
+                    Bu oyun ES module (type="module") import kullanıyor. <b>file://</b> ile açınca tarayıcı JS’i engelleyebilir ve menü boş görünür.
+                    <br><br>
+                    Klasörde terminal açıp şunu çalıştır:
+                    <pre class="boot-notice-pre">python -m http.server 4173</pre>
+                    Sonra şu adresten aç:
+                    <pre class="boot-notice-pre">http://127.0.0.1:4173/index.html</pre>
+                </div>
+            </div>
+        </div>
+
         <!-- Canvas -->
         <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
 
@@ -433,5 +447,13 @@
             </div>
         </div>
     </div>
+    <script>
+      setTimeout(function () {
+        if (!window.__FOC_BOOT_OK__) {
+          var el = document.getElementById('bootNotice');
+          if (el) el.classList.remove('hidden');
+        }
+      }, 800);
+    </script>
 </body>
 </html>

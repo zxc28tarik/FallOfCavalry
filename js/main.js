@@ -14,12 +14,23 @@ import MinimapSimple from './rendering/minimap-simple.js';
 
 import * as utils from './utils.js';
 
+window.__FOC_BOOT_OK__ = true;
+
 const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
 const GLOBAL_KEYS = {
   game: '__fallOfCavalryGameInstance__',
   bootstrapWarned: '__fallOfCavalryBootstrapWarned__',
   domReadyBound: '__fallOfCavalryDomReadyBound__',
 };
+
+const START_FACTIONS = [
+  { id: 'ottoman', name: 'Osmanlı', color: '#b22222', doctrine: 'Sipahi Hücumu', desc: 'Hızlı süvari baskını ve dayanıklı cephe.', startingGold: 520, startingRenown: 15 },
+  { id: 'hre', name: 'Kutsal Roma', color: '#d4af37', doctrine: 'İmparatorluk Disiplini', desc: 'Düzenli piyade ve sağlam savunma.', startingGold: 480, startingRenown: 14 },
+  { id: 'polish', name: 'Lehistan', color: '#f5f5f5', doctrine: 'Kanat Süvarisi', desc: 'Yüksek moral ve güçlü ilk darbe.', startingGold: 500, startingRenown: 16 },
+  { id: 'spanish', name: 'İspanya', color: '#c0392b', doctrine: 'Tercio Duvarı', desc: 'Mızrak ve ateşli birlik uyumu.', startingGold: 470, startingRenown: 13 },
+  { id: 'venice', name: 'Venedik', color: '#1abc9c', doctrine: 'Ticaret Prensliği', desc: 'Ekonomi odaklı başlangıç ve dengeli birlik.', startingGold: 560, startingRenown: 11 },
+  { id: 'bandit', name: 'Haydutlar', color: '#7f8c8d', doctrine: 'Dağınık Baskın', desc: 'Düşük düzen, yüksek fırsatçılık.', startingGold: 430, startingRenown: 10 },
+];
 
 function warnBootstrapOnce(message) {
   if (ROOT_SCOPE[GLOBAL_KEYS.bootstrapWarned]) return;
@@ -98,6 +109,8 @@ class FallOfCavalry {
     this.initialized = false;
     this.listenersBound = false;
     this.warnedKeys = new Set();
+    this._startScreenBound = false;
+    this.startSelectedFactionId = null;
 
     console.log('🎮 FallOfCavalry - Initializing...');
     this.init();
@@ -140,7 +153,9 @@ class FallOfCavalry {
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
     this.setupMenuActions();
+    this.setupStartScreen();
     this.enterMenu();
+    this.onModeChanged(this.state.mode, this.state.mode);
 
     if (typeof window !== 'undefined') {
       window.game = this;
@@ -2028,6 +2043,19 @@ Up/Down select, Enter heal, Esc back`,
       hudRenown: utils.getEl('hudRenown'),
       hudDay: utils.getEl('hudDay'),
       startModal: utils.getEl('startModal'),
+      factionGrid: utils.getEl('factionGrid'),
+      btnStart: utils.getEl('btnStart'),
+      btnContinue: utils.getEl('btnContinue'),
+      btnLoadStart: utils.getEl('btnLoadStart'),
+      seedInput: utils.getEl('seedInput'),
+      randomSeedBtn: utils.getEl('randomSeedBtn'),
+      startMiniMap: utils.getEl('startMiniMap'),
+      startSaveInfo: utils.getEl('startSaveInfo'),
+      selectedFactionName: utils.getEl('selectedFactionName'),
+      selectedFactionDesc: utils.getEl('selectedFactionDesc'),
+      selectedFactionDoc: utils.getEl('selectedFactionDoc'),
+      selectedFactionArmy: utils.getEl('selectedFactionArmy'),
+      mainMenuOverlay: utils.getEl('mainMenuOverlay'),
       settlementModal: utils.getEl('settlementModal'),
       encounterModal: utils.getEl('encounterModal'),
       battleResultModal: utils.getEl('battleResultModal'),
@@ -2038,7 +2066,8 @@ Up/Down select, Enter heal, Esc back`,
       saveTransferText: utils.getEl('saveTransferText'),
     };
 
-    const missing = Object.entries(this.dom).filter(([, el]) => !el).map(([key]) => key);
+    const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startMiniMap', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
+    const missing = Object.entries(this.dom).filter(([key, el]) => !el && !optionalStartUi.has(key)).map(([key]) => key);
     if (missing.length) {
       this.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
     }
@@ -2104,12 +2133,120 @@ Up/Down select, Enter heal, Esc back`,
     if (newMode === 'start') {
       utils.safeClass(this.dom.hud, 'add', 'hidden');
       utils.safeClass(this.dom.startModal, 'remove', 'hidden');
+      utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
+      this.refreshStartScreen();
+      return;
+    }
+
+    utils.safeClass(this.dom.hud, 'remove', 'hidden');
+    utils.safeClass(this.dom.startModal, 'add', 'hidden');
+    if (this.mode === 'menu') {
+      utils.safeClass(this.dom.mainMenuOverlay, 'remove', 'hidden');
     } else {
-      utils.safeClass(this.dom.hud, 'remove', 'hidden');
-      utils.safeClass(this.dom.startModal, 'add', 'hidden');
+      utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
     }
   }
 
+
+
+  setupStartScreen() {
+    if (this._startScreenBound) return;
+    this._startScreenBound = true;
+
+    const grid = this.dom.factionGrid;
+    if (grid) {
+      grid.innerHTML = '';
+      START_FACTIONS.forEach((faction) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'action-btn btn-dark w-full text-left';
+        card.dataset.factionId = faction.id;
+        card.innerHTML = `<div class="font-bold" style="color:${faction.color}">${faction.name}</div><div class="text-xs opacity-80 mt-1">${faction.doctrine}</div>`;
+        card.addEventListener('click', () => this.selectStartFaction(faction.id));
+        grid.appendChild(card);
+      });
+    }
+
+    if (this.dom.btnStart) this.dom.btnStart.addEventListener('click', () => {
+      if (!this.applyStartSelection()) return;
+      this.startNewGame();
+    });
+
+    if (this.dom.seedInput) {
+      this.dom.seedInput.value = String(this.state?.seed ?? 1337);
+      this.dom.seedInput.addEventListener('input', () => {
+        const value = String(this.dom.seedInput.value || '').trim();
+        this.state.seed = value || '1337';
+      });
+    }
+
+    if (this.dom.randomSeedBtn) this.dom.randomSeedBtn.addEventListener('click', () => {
+      const seed = this.makeRandomSeed();
+      if (this.dom.seedInput) this.dom.seedInput.value = seed;
+      this.state.seed = seed;
+    });
+
+    if (this.dom.btnContinue) this.dom.btnContinue.addEventListener('click', () => this.continueGame());
+    if (this.dom.btnLoadStart) this.dom.btnLoadStart.addEventListener('click', () => this.openSaveLoadPanel());
+
+    this.refreshStartScreen();
+  }
+
+  refreshStartScreen() {
+    const selected = START_FACTIONS.find((f) => f.id === this.startSelectedFactionId) || null;
+
+    if (this.dom.factionGrid) {
+      this.dom.factionGrid.querySelectorAll('[data-faction-id]').forEach((el) => {
+        const isActive = el.dataset.factionId === this.startSelectedFactionId;
+        el.classList.toggle('btn-gold', isActive);
+        el.classList.toggle('btn-dark', !isActive);
+      });
+    }
+
+    if (this.dom.selectedFactionName) this.dom.selectedFactionName.textContent = selected?.name || '-';
+    if (this.dom.selectedFactionDesc) this.dom.selectedFactionDesc.textContent = selected?.desc || '-';
+    if (this.dom.selectedFactionDoc) this.dom.selectedFactionDoc.textContent = selected?.doctrine || '-';
+    if (this.dom.selectedFactionArmy) this.dom.selectedFactionArmy.textContent = selected ? `Altın ${selected.startingGold} · Şöhret ${selected.startingRenown}` : '-';
+    if (this.dom.btnStart) this.dom.btnStart.disabled = !selected;
+    if (this.dom.btnContinue) this.dom.btnContinue.disabled = !Boolean(this.saveSystem?.hasSave?.());
+  }
+
+  selectStartFaction(id) {
+    const faction = START_FACTIONS.find((item) => item.id === id);
+    this.startSelectedFactionId = faction?.id || null;
+    this.refreshStartScreen();
+  }
+
+  applyStartSelection() {
+    const faction = START_FACTIONS.find((item) => item.id === this.startSelectedFactionId);
+    if (!faction) {
+      if (this.dom.startSaveInfo) this.dom.startSaveInfo.textContent = 'Önce sancak seçmelisin.';
+      return false;
+    }
+
+    const rawSeed = String(this.dom.seedInput?.value || '').trim();
+    const seed = rawSeed || '1337';
+
+    this.state.selectedFaction = {
+      id: faction.id,
+      name: faction.name,
+      color: faction.color,
+      doctrine: faction.doctrine,
+      desc: faction.desc,
+    };
+    this.state.seed = seed;
+
+    if (!this.state.player || typeof this.state.player !== 'object') this.state.player = {};
+    this.state.player.gold = faction.startingGold;
+    this.state.player.renown = faction.startingRenown;
+
+    if (this.dom.startSaveInfo) this.dom.startSaveInfo.textContent = `Seed: ${seed}`;
+    return true;
+  }
+
+  makeRandomSeed() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
   setupMenuActions() {
     if (!this.hudManager || typeof this.hudManager.setMenuHandlers !== 'function') return;
 
