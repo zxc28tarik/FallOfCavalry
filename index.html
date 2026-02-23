@@ -19,20 +19,24 @@
 </head>
 
 <body class="bg-neutral-900 text-neutral-100 overflow-hidden">
-    <div id="appRoot" class="w-screen h-screen relative">
-        <div id="bootNotice" class="boot-notice hidden">
-            <div class="boot-notice-card">
-                <div class="royal-font boot-notice-title">Başlatma Uyarısı</div>
-                <div class="boot-notice-text">
-                    Bu oyun ES module (type="module") import kullanıyor. <b>file://</b> ile açınca tarayıcı JS’i engelleyebilir ve menü boş görünür.
-                    <br><br>
-                    Klasörde terminal açıp şunu çalıştır:
-                    <pre class="boot-notice-pre">python -m http.server 4173</pre>
-                    Sonra şu adresten aç:
-                    <pre class="boot-notice-pre">http://127.0.0.1:4173/index.html</pre>
-                </div>
-            </div>
+    <div id="bootNotice" class="boot-notice hidden">
+      <div class="boot-notice-card">
+        <div class="royal-font boot-notice-title">Başlatma Uyarısı</div>
+        <div class="boot-notice-text">
+          Bu oyun ES module import kullanıyor. <b>file://</b> ile açınca tarayıcı JS’i engelleyebilir ve menü boş görünebilir.
+          <br><br>
+          Klasörde terminal açıp şunu çalıştır:
+          <pre class="boot-notice-pre">python -m http.server 4173</pre>
+          Sonra şuradan aç:
+          <pre class="boot-notice-pre">http://127.0.0.1:4173/index.html</pre>
+          <div class="mt-2 text-xs opacity-80">
+            (Python yoksa VS Code → Live Server da olur.)
+          </div>
         </div>
+      </div>
+    </div>
+
+    <div id="appRoot" class="w-screen h-screen relative">
 
         <!-- Canvas -->
         <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
@@ -278,13 +282,39 @@
                             <button id="randomSeedBtn" class="action-btn btn-dark text-xs w-full sm:w-auto">Rastgele</button>
                         </div>
 
-                        <div class="mt-3">
-                            <div class="text-xs font-bold opacity-80 mb-2">Mini Harita</div>
-                            <canvas id="startMiniMap" width="320" height="180" class="w-full rounded-xl"></canvas>
-                        </div>
-
                         <button id="btnStart" class="action-btn btn-gold w-full mt-4">Başla</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div id="campModal" class="modal-wrap hidden">
+            <div class="modal-card max-w-xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font text-2xl font-extrabold">Kamp</div>
+                        <div class="mt-1 text-sm opacity-85">Nöbet seviyesini ayarla ve lojistiği kontrol et.</div>
+                    </div>
+                    <button id="campCloseBtn" class="action-btn btn-dark">Kapat</button>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button class="action-btn btn-dark" data-watch-level="low">Nöbet: Düşük</button>
+                    <button class="action-btn btn-gold" data-watch-level="med">Nöbet: Orta</button>
+                    <button class="action-btn btn-dark" data-watch-level="high">Nöbet: Yüksek</button>
+                </div>
+                <div id="campStatusText" class="mt-4 text-sm opacity-90">-</div>
+            </div>
+        </div>
+
+
+
+        <div id="accountingModal" class="modal hidden">
+            <div class="modal-card">
+                <div class="royal-font modal-title">Gün Sonu Muhasebe</div>
+                <div id="accountingBody" class="modal-body"></div>
+                <div class="modal-actions">
+                    <button id="btnAccountingContinue" class="action-btn btn-primary">Devam</button>
                 </div>
             </div>
         </div>
@@ -370,6 +400,7 @@
 
         <!-- Battle HUD -->
         <div id="battleHud" class="battle-hud hidden">
+        <div id="battleCommandBar" class="battle-command-bar hidden"></div>
             <div class="battle-card frame-dark">
                 <div class="flex items-center justify-between">
                     <div class="text-xs font-bold">Savaş</div>
@@ -409,6 +440,18 @@
                         <button id="btnAutoDeploy" class="action-btn btn-dark text-xs flex-1">Oto</button>
                         <button id="btnStartBattle" class="action-btn btn-gold text-xs flex-1">Başlat</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div id="battleDeployOverlay" class="deploy-overlay hidden">
+            <div class="deploy-card">
+                <div id="deployHint" class="deploy-hint"></div>
+                <div class="deploy-actions">
+                    <button id="btnDeployStart" class="action-btn btn-primary">Savaşı Başlat</button>
+                    <button id="btnDeployCancel" class="action-btn btn-dark">Geri</button>
                 </div>
             </div>
         </div>
