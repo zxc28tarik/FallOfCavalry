@@ -135,6 +135,7 @@ export class SaveSystem {
         markets: game.markets && typeof game.markets === 'object' ? game.markets : {},
         supplies: game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 },
         camp: game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' },
+        poiState: game.poiState && typeof game.poiState === 'object' ? game.poiState : {},
         status: game.status && typeof game.status === 'object' ? game.status : { starving: false },
         lastAccounting: game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null,
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
