@@ -132,6 +132,11 @@ export class SaveSystem {
         enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
         settlementsRecruit: Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : [],
         settlementsMarkets: Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : [],
+        markets: game.markets && typeof game.markets === 'object' ? game.markets : {},
+        supplies: game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 },
+        camp: game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' },
+        status: game.status && typeof game.status === 'object' ? game.status : { starving: false },
+        lastAccounting: game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null,
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
       },
     };
@@ -174,7 +179,11 @@ export class SaveSystem {
   }
 
   hasSave() {
-    return this.hasSlot('manual1') || this.hasSlot('autosave');
+    return this.hasSlot('autosave');
+  }
+
+  hasAnySave() {
+    return this.hasSlot('autosave') || this.hasSlot('manual1') || this.hasSlot('manual2');
   }
 
   hasSlot(slot) {
@@ -226,6 +235,17 @@ export class SaveSystem {
     if (!storage) return false;
     try { storage.removeItem(this.getSlotKey('autosave')); return true; }
     catch { return false; }
+  }
+
+
+  loadLatest() {
+    const latest = this.loadSlot('autosave');
+    if (!latest?.ok || !latest.data) return null;
+    return latest.data;
+  }
+
+  openLoadPanel() {
+    return false;
   }
 
   export(slot = 'manual1') {

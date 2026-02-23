@@ -60,6 +60,14 @@ export const GAME = Object.freeze({
   STARTING_GOLD: 1000,
   STARTING_ARMY: 50,
   STARTING_RENOWN: 0,
+
+  // 2.x Hareket / encounter tuning
+  ROAD_SPEED_MULT: 1.2,
+  OFFROAD_SPEED_MULT: 1.0,
+  RIVER_CROSSING_PENALTY_MULT: 0.35,
+  ENCOUNTER_CHANCE_ROAD: 0.6,
+  ENCOUNTER_CHANCE_OFFROAD: 1.2,
+  RIVER_BLOCK_NON_CROSSING: true,
 });
 
 // =============================================================================
@@ -145,6 +153,17 @@ export const FACTION = Object.freeze({
   // Bu sabitleri buraya koyduk ki import döngüsü olmasın
 });
 
+
+
+export const FACTIONS = Object.freeze([
+  { id: FACTION.ID.OTTOMAN, name: 'Osmanlı', color: '#c0392b', doctrine: 'Sipahi Hücumu', desc: 'Hızlı taarruz ve çeviklik.', startingGold: 120, startingArmy: 0, startingRenown: 10, armyHint: 'Sipahi ağırlıklı başlangıç.' },
+  { id: FACTION.ID.HRE, name: 'Kutsal Roma', color: '#f1c40f', doctrine: 'İmparatorluk Disiplini', desc: 'Düzenli birlikler ve dayanıklılık.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Dengeli düzenli kuvvet.' },
+  { id: FACTION.ID.POLISH, name: 'Lehistan', color: '#ffffff', doctrine: 'Kanat Süvarisi', desc: 'Şok hücum ve moral.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Husaria etkisi (tematik).' },
+  { id: FACTION.ID.SPANISH, name: 'İspanya', color: '#e74c3c', doctrine: 'Tercio Duvarı', desc: 'Denge ve sürdürülebilirlik.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Piyade çekirdeği (tematik).' },
+  { id: FACTION.ID.VENICE, name: 'Venedik', color: '#16a085', doctrine: 'Ticaret Prensliği', desc: 'Ekonomi ve esneklik.', startingGold: 130, startingArmy: 0, startingRenown: 6, armyHint: 'Paralı asker esnekliği.' },
+  { id: FACTION.ID.BANDIT, name: 'Haydutlar', color: '#95a5a6', doctrine: 'Dağınık Baskın', desc: 'Riskli ama hızlı başlangıç.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Düşük şöhret, düşük kaynak.' },
+]);
+
 // =============================================================================
 // KARŞILAŞMA TİPLERİ
 // =============================================================================
@@ -203,6 +222,176 @@ export const TERRAIN = Object.freeze({
     MOUNTAIN: 10,
     SNOW: 5,
   },
+});
+
+
+
+export const BIOME = Object.freeze({
+  SEA: 0,
+  SHORE: 1,
+  PLAINS: 2,
+  FOREST: 3,
+  HILLS: 4,
+  MOUNTAIN: 5,
+  SNOW: 6,
+});
+
+export const BIOME_COLORS = Object.freeze({
+  [BIOME.SEA]: '#1a4d6f',
+  [BIOME.SHORE]: '#8b7355',
+  [BIOME.PLAINS]: '#6f8f4e',
+  [BIOME.FOREST]: '#2f5a33',
+  [BIOME.HILLS]: '#7a6a4a',
+  [BIOME.MOUNTAIN]: '#5a524a',
+  [BIOME.SNOW]: '#e6edf5',
+});
+
+export const BIOME_BAND_PARAMS = Object.freeze({
+  SNOW_HEIGHT: 0.7,
+  MOUNTAIN_HEIGHT: 0.56,
+  HILL_HEIGHT: 0.48,
+  COLD_BAND_EDGE: 0.1,
+  COLD_BAND_BLEND: 0.18,
+  FOREST_BASE_CHANCE: 0.34,
+  FOREST_MOISTURE_WEIGHT: 0.3,
+  SMOOTH_RADIUS: 1,
+  POI_MIN: 5,
+  POI_MAX: 12,
+  POI_MIN_SETTLEMENT_DIST: 4,
+});
+
+
+
+export const TRADE_ITEMS = Object.freeze([
+  { id: 'grain', name: 'Grain', basePrice: 4, weight: 1 },
+  { id: 'meat', name: 'Meat', basePrice: 6, weight: 1 },
+  { id: 'wood', name: 'Wood', basePrice: 5, weight: 2 },
+  { id: 'iron', name: 'Iron', basePrice: 11, weight: 3 },
+  { id: 'cloth', name: 'Cloth', basePrice: 7, weight: 1 },
+  { id: 'salt', name: 'Salt', basePrice: 8, weight: 1 },
+]);
+
+export const SETTLEMENT_TIER = Object.freeze({
+  village: 1,
+  town: 2,
+  city: 3,
+  fort: 2,
+});
+
+export const RECRUIT_POOL_BY_TIER = Object.freeze({
+  1: Object.freeze([
+    { id: 'levy_spear', label: 'Levy Spear', class: 'infantry', cost: 9, hp: 90, maxHp: 90, atk: 11, def: 5, wage: 1, speed: 70 },
+    { id: 'levy_archer', label: 'Levy Archer', class: 'archer', cost: 11, hp: 76, maxHp: 76, atk: 10, def: 4, wage: 1, speed: 72, isRanged: true, rangedRange: 210, rangedDamage: 10, rangedCooldown: 1.2 },
+  ]),
+  2: Object.freeze([
+    { id: 'militia_sword', label: 'Militia Sword', class: 'infantry', cost: 13, hp: 98, maxHp: 98, atk: 13, def: 7, wage: 2, speed: 72 },
+    { id: 'crossbow', label: 'Crossbow', class: 'archer', cost: 15, hp: 82, maxHp: 82, atk: 12, def: 5, wage: 2, speed: 68, isRanged: true, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.25 },
+  ]),
+  3: Object.freeze([
+    { id: 'men_at_arms', label: 'Men-at-Arms', class: 'infantry', cost: 18, hp: 112, maxHp: 112, atk: 15, def: 9, wage: 3, speed: 70 },
+    { id: 'veteran_archer', label: 'Veteran Archer', class: 'archer', cost: 20, hp: 88, maxHp: 88, atk: 14, def: 6, wage: 3, speed: 70, isRanged: true, rangedRange: 230, rangedDamage: 14, rangedCooldown: 1.15 },
+  ]),
+});
+
+export const TRADE_PRICE_PARAMS = Object.freeze({
+  supplyWeight: 0.08,
+  demandWeight: 0.22,
+  biomeWeight: 0.1,
+  tierWeight: 0.07,
+  sellFactor: 0.68,
+  maxScarcityBoost: 0.35,
+});
+
+
+
+export const SUPPLIES = Object.freeze({
+  DAILY_BASE_CONSUMPTION: 1,
+  DAILY_PER_UNIT_CONSUMPTION: 0.15,
+  STARVATION_MORALE_PENALTY: 6,
+  STARVATION_SPEED_MULT: 0.75,
+});
+
+export const CAPACITY = Object.freeze({
+  BASE_CAPACITY: 40,
+  PER_UNIT_CAPACITY: 2,
+  OVERCAP_SPEED_MULT_MIN: 0.55,
+});
+
+export const CAMP = Object.freeze({
+  RAID_BASE_CHANCE: 0.06,
+  WATCH_MULT: Object.freeze({ low: 1.4, med: 1.0, high: 0.7 }),
+  CAMP_CONSUMPTION_MULT: 0.5,
+  CAMP_HEAL_PER_DAY: 2,
+});
+
+
+export const ACCOUNTING = Object.freeze({
+  NEGATIVE_GOLD_MORALE_PENALTY: 4,
+  AUTO_OPEN: true,
+});
+
+
+export const PERF = Object.freeze({
+  PROJECTILE_POOL: 128,
+  FLOATTEXT_POOL: 64,
+  HIDDEN_TICK_THROTTLE_MS: 250,
+});
+
+
+export const ARMOR_TYPE = Object.freeze({
+  NONE: 'none',
+  LIGHT: 'light',
+  MEDIUM: 'medium',
+  HEAVY: 'heavy',
+});
+
+export const ARMOR_MITIGATION = Object.freeze({
+  [ARMOR_TYPE.NONE]: 0.0,
+  [ARMOR_TYPE.LIGHT]: 0.10,
+  [ARMOR_TYPE.MEDIUM]: 0.22,
+  [ARMOR_TYPE.HEAVY]: 0.35,
+});
+
+export const DAMAGE_TYPE = Object.freeze({
+  CUT: 'cut',
+  PIERCE: 'pierce',
+  BLUNT: 'blunt',
+});
+
+export const DAMAGE_VS_ARMOR = Object.freeze({
+  [DAMAGE_TYPE.CUT]: Object.freeze({ none: 0.00, light: 0.02, medium: 0.00, heavy: -0.06 }),
+  [DAMAGE_TYPE.PIERCE]: Object.freeze({ none: 0.00, light: 0.03, medium: 0.05, heavy: 0.12 }),
+  [DAMAGE_TYPE.BLUNT]: Object.freeze({ none: 0.00, light: 0.00, medium: 0.10, heavy: 0.04 }),
+});
+
+export const TERRAIN_MODS = Object.freeze({
+  PLAINS: Object.freeze({ speed: 1.0, acc: 1.0, charge: 1.0 }),
+  FOREST: Object.freeze({ speed: 0.85, acc: 0.95, charge: 0.80 }),
+  HILLS: Object.freeze({ speed: 0.92, acc: 1.05, charge: 0.95 }),
+  MOUNTAIN: Object.freeze({ speed: 0.80, acc: 1.00, charge: 0.75 }),
+  SNOW: Object.freeze({ speed: 0.82, acc: 0.92, charge: 0.80 }),
+  SHORE: Object.freeze({ speed: 0.88, acc: 0.95, charge: 0.85 }),
+});
+
+export const BATTLE_COMMANDS = Object.freeze({
+  HOLD: 'hold',
+  FOCUS: 'focus',
+  RETREAT: 'retreat',
+});
+
+
+export const FORMATION = Object.freeze({
+  LINE: 'line',
+  COLUMN: 'column',
+  WEDGE: 'wedge',
+  SCATTER: 'scatter',
+});
+
+export const DEPLOY = Object.freeze({
+  PREVIEW_UNIT_SPACING: 28,
+  PREVIEW_DEPTH: 4,
+  ROTATE_STEP_DEG: 15,
+  DEFAULT_FORMATION: FORMATION.LINE,
 });
 
 // =============================================================================
@@ -405,4 +594,14 @@ export default {
   DEBUG,
   ECONOMY,
   DIPLOMACY,
+  ACCOUNTING,
+  PERF,
+  ARMOR_TYPE,
+  ARMOR_MITIGATION,
+  DAMAGE_TYPE,
+  DAMAGE_VS_ARMOR,
+  TERRAIN_MODS,
+  BATTLE_COMMANDS,
+  FORMATION,
+  DEPLOY,
 };

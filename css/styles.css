@@ -7,7 +7,7 @@
 *{ box-sizing: border-box; }
 body{ font-family: "Crimson Text", serif; }
 .royal-font{ font-family: "Cinzel", serif; }
-.hidden { display: none !important; }
+.hidden{ display:none !important; }
 
 .boot-notice{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -114,6 +114,22 @@ body{ font-family: "Crimson Text", serif; }
   border-radius: 18px;
   backdrop-filter: blur(6px);
 }
+
+
+.modal{
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0,0,0,0.65);
+  z-index: 6000;
+}
+
+.modal-title{ font-size: 20px; font-weight: 800; }
+.modal-body{ margin-top:12px; font-size:14px; line-height:1.5; }
+.modal-actions{ margin-top:14px; display:flex; justify-content:flex-end; gap:10px; }
 
 .modal-wrap{
   position:absolute;
@@ -222,8 +238,12 @@ body{ font-family: "Crimson Text", serif; }
   font-size: 11px;
   line-height: 1.4;
   z-index: 45;
-  pointer-events: none;
+  pointer-events: auto;
 }
+
+.debug-info{ white-space: pre-line; flex:1 1 220px; }
+.debug-actions{ display:flex; flex-direction:column; gap:8px; width:min(280px,100%); }
+.smoke-results{ margin:0; white-space:pre-wrap; max-height:180px; overflow:auto; font-size:11px; opacity:0.95; }
 
 .battle-speed-btn.is-active,
 .battle-pause-btn.is-active{
@@ -522,3 +542,41 @@ body{ font-family: "Crimson Text", serif; }
   font-size: 12px;
   opacity: 0.85;
 }
+
+
+.battle-command-bar{
+  position:absolute;
+  left:50%;
+  bottom:14px;
+  transform:translateX(-50%);
+  display:flex;
+  gap:8px;
+  z-index:46;
+}
+.battle-command-bar .action-btn.is-active{
+  border-color: rgba(212,175,55,0.75);
+  background: linear-gradient(180deg, rgba(212,175,55,0.22), rgba(0,0,0,0.35));
+}
+
+
+.deploy-overlay{
+  position:absolute;
+  top:14px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:47;
+  width:min(980px, calc(100vw - 28px));
+  pointer-events:auto;
+}
+.deploy-card{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(212,175,55,0.32);
+  background: rgba(8,9,12,0.84);
+}
+.deploy-hint{ font-size:12px; opacity:0.92; }
+.deploy-actions{ display:flex; gap:8px; }

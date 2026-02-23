@@ -253,7 +253,7 @@ const warningState = {
   emitted: new Set(),
 };
 
-function warnOnce(key, message) {
+export function warnOnce(key, message) {
   if (warningState.emitted.has(key)) return;
   warningState.emitted.add(key);
   console.warn(message);
@@ -545,6 +545,7 @@ export default {
   safeAttr,
   getEl,
   createElement,
+  warnOnce,
   
   // Array
   shuffle,

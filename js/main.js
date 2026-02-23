@@ -11,6 +11,22 @@ import SaveSystem from './systems/save-system.js';
 import AudioSystem from './systems/audio-system.js';
 import * as CONST from './constants.js';
 import MinimapSimple from './rendering/minimap-simple.js';
+import StartScreen from './ui/start-screen.js';
+import WorldGenerator from './world/world-generator.js';
+import FogOfWar from './world/fog-of-war.js';
+import * as recruitmentSystem from './systems/recruitment.js';
+import * as tradeSystem from './systems/trade.js';
+import CityServicesUI from './ui/city-services.js';
+import * as suppliesSystem from './systems/supplies.js';
+import * as capacitySystem from './systems/capacity.js';
+import * as campSystem from './systems/camp.js';
+import CampUI from './ui/camp-ui.js';
+import AccountingUI from './ui/accounting-ui.js';
+import { computeDamage, applyCommandEffects } from './systems/combat-rules.js';
+import { getBattleTerrainContext } from './systems/terrain-effects.js';
+import BattleCommandsUI from './ui/battle-commands.js';
+import BattleDeployMode from './game-modes/battle-deploy-mode.js';
+import BattleDeployUI from './ui/battle-deploy-ui.js';
 
 import * as utils from './utils.js';
 
@@ -23,19 +39,31 @@ const GLOBAL_KEYS = {
   domReadyBound: '__fallOfCavalryDomReadyBound__',
 };
 
-const START_FACTIONS = [
-  { id: 'ottoman', name: 'Osmanlı', color: '#b22222', doctrine: 'Sipahi Hücumu', desc: 'Hızlı süvari baskını ve dayanıklı cephe.', startingGold: 520, startingRenown: 15 },
-  { id: 'hre', name: 'Kutsal Roma', color: '#d4af37', doctrine: 'İmparatorluk Disiplini', desc: 'Düzenli piyade ve sağlam savunma.', startingGold: 480, startingRenown: 14 },
-  { id: 'polish', name: 'Lehistan', color: '#f5f5f5', doctrine: 'Kanat Süvarisi', desc: 'Yüksek moral ve güçlü ilk darbe.', startingGold: 500, startingRenown: 16 },
-  { id: 'spanish', name: 'İspanya', color: '#c0392b', doctrine: 'Tercio Duvarı', desc: 'Mızrak ve ateşli birlik uyumu.', startingGold: 470, startingRenown: 13 },
-  { id: 'venice', name: 'Venedik', color: '#1abc9c', doctrine: 'Ticaret Prensliği', desc: 'Ekonomi odaklı başlangıç ve dengeli birlik.', startingGold: 560, startingRenown: 11 },
-  { id: 'bandit', name: 'Haydutlar', color: '#7f8c8d', doctrine: 'Dağınık Baskın', desc: 'Düşük düzen, yüksek fırsatçılık.', startingGold: 430, startingRenown: 10 },
-];
 
 function warnBootstrapOnce(message) {
   if (ROOT_SCOPE[GLOBAL_KEYS.bootstrapWarned]) return;
   ROOT_SCOPE[GLOBAL_KEYS.bootstrapWarned] = true;
   console.warn(message);
+}
+
+class ObjectPool {
+  constructor(size, factory, resetter = null) {
+    this.size = Math.max(1, size | 0);
+    this.factory = typeof factory === 'function' ? factory : (() => ({}));
+    this.resetter = typeof resetter === 'function' ? resetter : null;
+    this.free = [];
+    for (let i = 0; i < this.size; i += 1) this.free.push(this.factory());
+  }
+
+  acquire() {
+    return this.free.pop() || this.factory();
+  }
+
+  release(obj) {
+    if (!obj || this.free.length >= this.size) return;
+    if (this.resetter) this.resetter(obj);
+    this.free.push(obj);
+  }
 }
 
 class FallOfCavalry {
@@ -48,6 +76,21 @@ class FallOfCavalry {
     this.hudManager = null;
     this.saveSystem = null;
     this.audioSystem = null;
+    this.startScreen = null;
+    this.cityUI = null;
+    this.campUI = null;
+    this.accountingUI = null;
+    this.battleCommandsUI = null;
+    this.battleDeployMode = null;
+    this.battleDeployUI = null;
+    this.fogOfWar = null;
+    this._worldSeedCache = null;
+    this._crossingSet = new Set();
+    this._roadMask = null;
+    this._riverMask = null;
+    this._encounterRollByEnemyId = {};
+    this.currentTerrainStatus = 'Arazi: normal';
+    this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
 
     this.mode = 'menu'; // menu | playing | paused
     this.dom = {};
@@ -92,6 +135,7 @@ class FallOfCavalry {
     this.cityMarketCursor = 0;
     this.cityHealerCursor = 0;
     this.battleProjectiles = [];
+    this.floatingTexts = [];
     this.battleRecoveryTimer = 0;
     this.battleDragUnitId = null;
     this.battleDragOffsetX = 0;
@@ -105,13 +149,13 @@ class FallOfCavalry {
     this.lastAutosaveHudAt = 0;
 
     this.minimapRenderer = null;
+    this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2 }), (p) => { p.ttl = 0; });
+    this.floatingTextPool = new ObjectPool(CONST.PERF.FLOATTEXT_POOL, () => ({ x: 0, y: 0, text: '', color: '#fff', ttl: 0, vy: -18 }), (t) => { t.ttl = 0; t.text = ''; });
+    this.smokeResults = [];
     this.started = false;
     this.initialized = false;
     this.listenersBound = false;
     this.warnedKeys = new Set();
-    this._startScreenBound = false;
-    this.startSelectedFactionId = null;
-
     console.log('🎮 FallOfCavalry - Initializing...');
     this.init();
   }
@@ -119,7 +163,7 @@ class FallOfCavalry {
   warnOnce(key, message) {
     if (this.warnedKeys.has(key)) return;
     this.warnedKeys.add(key);
-    console.warn(message);
+    utils.warnOnce(key, message);
   }
 
   init() {
@@ -141,6 +185,9 @@ class FallOfCavalry {
     }
 
     this.state = this.state || new GameState();
+    if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
@@ -153,8 +200,13 @@ class FallOfCavalry {
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
     this.setupMenuActions();
-    this.setupStartScreen();
-    this.enterMenu();
+    this.setupStartFlow();
+    this.setupCityServicesUI();
+    this.setupCampUI();
+    this.setupBattleCommandsUI();
+    this.setupBattleDeployUI();
+    this.setupAccountingUI();
+    this.enterStart();
     this.onModeChanged(this.state.mode, this.state.mode);
 
     if (typeof window !== 'undefined') {
@@ -208,20 +260,85 @@ class FallOfCavalry {
 
   processDailyEconomy(day) {
     if (!this.playerParty) return;
+
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
+    this.ensureInventoryModel();
+
+    const { weight, cap, overcapMult } = this.getLogisticsSpeedMult();
+    const goldBefore = Math.floor(this.playerParty.gold ?? 0);
+    const moraleBefore = Math.floor(this.playerParty.morale ?? 50);
+    const foodBefore = Number(this.state?.supplies?.food ?? 0);
+    const notes = [];
+
     const roster = this.playerParty.roster || [];
-    const totalWage = roster.reduce((sum, u) => 
-      sum + Math.max(0, Math.floor(u.wagePerDay ?? 0)), 0);
+    const totalWage = roster.reduce((sum, u) => sum + Math.max(0, Math.floor(u.wagePerDay ?? u.wage ?? 0)), 0);
 
-    if (totalWage === 0) return;
+    if (totalWage > 0) {
+      const canPay = (this.playerParty.gold ?? 0) >= totalWage;
+      if (canPay) {
+        this.playerParty.gold -= totalWage;
+      } else {
+        this.playerParty.gold -= totalWage;
+        this.playerParty.morale = Math.max(10, (this.playerParty.morale ?? 50) - 5);
+        notes.push('Maaşlar ödenemedi, moral düştü.');
+      }
+    }
 
-    const canPay = (this.playerParty.gold ?? 0) >= totalWage;
-    if (canPay) {
-      this.playerParty.gold -= totalWage;
-      this.setLastEventLog(`Gün ${day}: Ücret ${totalWage}g ödendi.`);
-    } else {
-      this.playerParty.gold = 0;
-      this.playerParty.morale = Math.max(10, (this.playerParty.morale ?? 50) - 5);
-      this.setLastEventLog(`Gün ${day}: Ödeme yapılamadı! Moral -5.`);
+    const supplyRes = suppliesSystem.applyEndOfDay(this.state, this.playerParty, { inCamp: Boolean(this.state?.camp?.active) });
+
+    let raid = { happened: false, lossText: '' };
+    if (this.state?.camp?.active) {
+      campSystem.applyCampBenefits(this.playerParty);
+      const raided = campSystem.rollRaid(this.state, Math.random);
+      if (raided) {
+        raid.happened = true;
+        if ((this.state.supplies?.food ?? 0) > 1.5) {
+          this.state.supplies.food = Math.max(0, Number((this.state.supplies.food - 2).toFixed(2)));
+          raid.lossText = 'Erzak -2';
+          this.setLastEventLog(`Gün ${day}: Kamp baskını! Erzak -2.`);
+        } else {
+          this.playerParty.gold = Math.floor((this.playerParty.gold ?? 0) - 10);
+          raid.lossText = 'Altın -10';
+          this.setLastEventLog(`Gün ${day}: Kamp baskını! Altın -10.`);
+        }
+      } else if (supplyRes.starved) {
+        this.setLastEventLog(`Gün ${day}: Erzak bitti! Moral ${supplyRes.moraleDelta}.`);
+      }
+    } else if (supplyRes.starved) {
+      this.setLastEventLog(`Gün ${day}: Erzak bitti! Moral ${supplyRes.moraleDelta}.`);
+    }
+
+    if ((this.playerParty.gold ?? 0) < 0) {
+      this.playerParty.morale = Math.max(0, (this.playerParty.morale ?? 50) - CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY);
+      notes.push(`Altın negatif: Moral -${CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY}`);
+    }
+
+    const summary = {
+      day: Number.isFinite(day) ? day : Math.floor(this.state?.day ?? 1),
+      foodBefore,
+      foodAfter: Number(this.state?.supplies?.food ?? 0),
+      consumed: Number(supplyRes?.consumed ?? 0),
+      starved: Boolean(supplyRes?.starved),
+      starvationMoraleDelta: Number(supplyRes?.moraleDelta ?? 0),
+      weight,
+      capacity: cap,
+      overcap: weight > cap,
+      overcapSpeedMult: overcapMult,
+      camp: { active: Boolean(this.state?.camp?.active), watch: this.state?.camp?.watch || 'med' },
+      raid,
+      goldBefore,
+      goldAfter: Math.floor(this.playerParty.gold ?? 0),
+      moraleBefore,
+      moraleAfter: Math.floor(this.playerParty.morale ?? 50),
+      notes,
+    };
+
+    this.state.lastAccounting = summary;
+    if (CONST.ACCOUNTING.AUTO_OPEN) {
+      this.state.accounting = summary;
+      this.state.paused = true;
+      this.accountingUI?.show?.(summary);
     }
   }
 
@@ -468,6 +585,7 @@ class FallOfCavalry {
 
   updateMapSimulation(dt) {
     this.updateTransientUIState();
+    if (this.state?.paused || this.state?.accounting) return;
     this.updatePlayerParty(dt);
     this.updateEnemyParties(dt);
     this.tryTriggerEncounter();
@@ -485,6 +603,167 @@ class FallOfCavalry {
         });
       }
     }
+
+    this.updateFogFromPlayer();
+  }
+
+  ensureWorldGenerated(seed) {
+    if (!this.state) return null;
+
+    const normalizedSeed = Number.isFinite(seed) ? seed : parseInt(String(seed || this.state.seed || 1337), 10) || 1337;
+    const hasExistingTiles = Array.isArray(this.state?.map?.tiles) && this.state.map.tiles.length > 0;
+    if (hasExistingTiles && this._worldSeedCache === normalizedSeed) {
+      if (this.state.map.fog instanceof Uint8Array) {
+        this.fogOfWar = new FogOfWar(this.state.map.width, this.state.map.height, this.state.map.fog);
+      }
+      this._crossingSet = new Set((this.state.map.crossings || []).map((p) => `${p.x},${p.y}`));
+      this.rebuildMovementMasks();
+      return this.state.map;
+    }
+
+    const world = new WorldGenerator(normalizedSeed).generate();
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const settlements = (world.settlements || []).map((settlement, index) => {
+      const tx = Number.isFinite(settlement.tx) ? settlement.tx : settlement.x;
+      const ty = Number.isFinite(settlement.ty) ? settlement.ty : settlement.y;
+      return {
+        ...settlement,
+        id: settlement.id ?? `settlement-${index + 1}`,
+        tx,
+        ty,
+        x: tx * tileSize + tileSize * 0.5,
+        y: ty * tileSize + tileSize * 0.5,
+      };
+    });
+
+    const fog = world.fog instanceof Uint8Array
+      ? world.fog
+      : new Uint8Array(world.width * world.height);
+
+    this.state.map = {
+      width: world.width,
+      height: world.height,
+      tiles: Array.isArray(world.tiles) ? world.tiles : [],
+      settlements,
+      rivers: Array.isArray(world.rivers) ? world.rivers : [],
+      roads: Array.isArray(world.roads) ? world.roads : [],
+      forests: Array.isArray(world.forests) ? world.forests : [],
+      mountains: Array.isArray(world.mountains) ? world.mountains : [],
+      crossings: Array.isArray(world.crossings) ? world.crossings : [],
+      biomes: world.biomes instanceof Uint8Array ? world.biomes : null,
+      pois: Array.isArray(world.pois) ? world.pois : [],
+      fog,
+    };
+
+    if (!(this.state.map.biomes instanceof Uint8Array) || this.state.map.biomes.length !== this.state.map.width * this.state.map.height) {
+      const fallbackBiomes = new Uint8Array(this.state.map.width * this.state.map.height);
+      (this.state.map.tiles || []).forEach((tile, idx) => {
+        if (tile?.type === CONST.TERRAIN.TYPE.WATER) fallbackBiomes[idx] = CONST.BIOME.SEA;
+        else if (tile?.type === CONST.TERRAIN.TYPE.SHORE) fallbackBiomes[idx] = CONST.BIOME.SHORE;
+        else if (tile?.type === CONST.TERRAIN.TYPE.MOUNTAIN) fallbackBiomes[idx] = CONST.BIOME.MOUNTAIN;
+        else if (tile?.type === CONST.TERRAIN.TYPE.SNOW) fallbackBiomes[idx] = CONST.BIOME.SNOW;
+        else if (tile?.type === CONST.TERRAIN.TYPE.FOREST) fallbackBiomes[idx] = CONST.BIOME.FOREST;
+        else fallbackBiomes[idx] = CONST.BIOME.PLAINS;
+      });
+      this.state.map.biomes = fallbackBiomes;
+    }
+
+    this._crossingSet = new Set(this.state.map.crossings.map((p) => `${p.x},${p.y}`));
+    this.rebuildMovementMasks();
+
+    this._worldSeedCache = normalizedSeed;
+    this.fogOfWar = new FogOfWar(world.width, world.height, this.state.map.fog);
+    this.updateFogFromPlayer();
+    return this.state.map;
+  }
+
+  updateFogFromPlayer() {
+    const map = this.state?.map;
+    const player = this.playerParty;
+    if (!map || !player) return;
+    if (!Array.isArray(map.tiles) || map.tiles.length === 0) return;
+
+    if (!(map.fog instanceof Uint8Array) || map.fog.length !== map.width * map.height) {
+      map.fog = new Uint8Array(map.width * map.height);
+    }
+
+    if (!this.fogOfWar || this.fogOfWar.width !== map.width || this.fogOfWar.height !== map.height || this.fogOfWar.data !== map.fog) {
+      this.fogOfWar = new FogOfWar(map.width, map.height, map.fog);
+    }
+
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const px = Math.floor(player.x / tileSize);
+    const py = Math.floor(player.y / tileSize);
+    this.fogOfWar.updateVision(px, py, 6);
+  }
+
+
+
+  rebuildMovementMasks() {
+    const map = this.state?.map;
+    if (!map || !Number.isFinite(map.width) || !Number.isFinite(map.height)) {
+      this._roadMask = null;
+      this._riverMask = null;
+      return;
+    }
+
+    const mapSize = Math.max(0, map.width * map.height);
+    this._roadMask = new Uint8Array(mapSize);
+    this._riverMask = new Uint8Array(mapSize);
+
+    (map.roads || []).forEach((road) => {
+      (road?.path || []).forEach((point) => {
+        if (!point) return;
+        const ix = point.y * map.width + point.x;
+        if (ix >= 0 && ix < this._roadMask.length) this._roadMask[ix] = 1;
+      });
+    });
+
+    (map.rivers || []).forEach((river) => {
+      (river || []).forEach((point) => {
+        if (!point) return;
+        const ix = point.y * map.width + point.x;
+        if (ix >= 0 && ix < this._riverMask.length) this._riverMask[ix] = 1;
+      });
+    });
+  }
+
+  getTilePosition(x, y) {
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const tx = Math.floor((Number.isFinite(x) ? x : 0) / tileSize);
+    const ty = Math.floor((Number.isFinite(y) ? y : 0) / tileSize);
+    return { tx, ty };
+  }
+
+  getMovementContextAt(x, y) {
+    const map = this.state?.map;
+    if (!map) {
+      return { onRoad: false, onRiver: false, onCrossing: false, blocked: false, speedMult: CONST.GAME.OFFROAD_SPEED_MULT, encounterMult: CONST.GAME.ENCOUNTER_CHANCE_OFFROAD, terrainLabel: 'Arazi: normal' };
+    }
+
+    const { tx, ty } = this.getTilePosition(x, y);
+    if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) {
+      return { onRoad: false, onRiver: false, onCrossing: false, blocked: false, speedMult: CONST.GAME.OFFROAD_SPEED_MULT, encounterMult: CONST.GAME.ENCOUNTER_CHANCE_OFFROAD, terrainLabel: 'Arazi: normal' };
+    }
+
+    const idx = ty * map.width + tx;
+    const onRoad = Boolean(this._roadMask?.[idx]);
+    const onRiver = Boolean(this._riverMask?.[idx]);
+    const onCrossing = this._crossingSet?.has?.(`${tx},${ty}`) || false;
+    const blocked = onRiver && !onCrossing && Boolean(CONST.GAME.RIVER_BLOCK_NON_CROSSING);
+
+    let speedMult = onRoad ? CONST.GAME.ROAD_SPEED_MULT : CONST.GAME.OFFROAD_SPEED_MULT;
+    if (onRiver && !onCrossing && !CONST.GAME.RIVER_BLOCK_NON_CROSSING) {
+      speedMult *= CONST.GAME.RIVER_CROSSING_PENALTY_MULT;
+    }
+
+    const encounterMult = onRoad ? CONST.GAME.ENCOUNTER_CHANCE_ROAD : CONST.GAME.ENCOUNTER_CHANCE_OFFROAD;
+
+    let terrainLabel = onRoad ? `Yol: +%${Math.round((CONST.GAME.ROAD_SPEED_MULT - 1) * 100)}` : 'Arazi: normal';
+    if (onRiver && onCrossing) terrainLabel = 'Geçit: köprü/ford';
+    if (onRiver && !onCrossing) terrainLabel = CONST.GAME.RIVER_BLOCK_NON_CROSSING ? 'Nehir: geçiş yok' : 'Nehir: ağır geçiş';
+
+    return { onRoad, onRiver, onCrossing, blocked, speedMult, encounterMult, terrainLabel };
   }
 
   updateTransientUIState() {
@@ -511,11 +790,28 @@ class FallOfCavalry {
 
     if (this.state.mode === 'city') {
       this.state.uiPanel = this.buildCityPanelData();
+      const settlement = this.state.city;
+      if (settlement?.id) {
+        this.cityUI?.setData?.({
+          recruitPool: settlement.recruitPool || [],
+          market: this.state?.markets?.[settlement.id] || null,
+        });
+      }
     }
 
     if (this.state.mode === 'aftermath') {
       this.state.uiPanel = this.buildAftermathPanelData();
     }
+
+    if (this.state?.camp?.active) {
+      const { weight, cap } = this.getLogisticsSpeedMult();
+      const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
+      const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
+      this.campUI?.refresh?.({ weight, capacity: cap, raidChance });
+    }
+
+    if (this.state?.accounting) this.accountingUI?.show?.(this.state.accounting);
+    else this.accountingUI?.hide?.();
 
     this.hudManager?.update?.();
   }
@@ -532,8 +828,33 @@ class FallOfCavalry {
       return;
     }
 
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      this.updateTransientUIState();
+      return;
+    }
+
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
+
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
+      this.ctx.fillStyle = 'rgba(212,175,55,0.12)';
+      this.ctx.fillRect(40, 60, Math.max(120, (this.canvas.width / 2) - 80), Math.max(120, this.canvas.height - 120));
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(90,180,255,0.45)';
+      preview.forEach((p) => { this.ctx.beginPath(); this.ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); this.ctx.fill(); });
+      const ax = this.battleDeployMode.anchorX;
+      const ay = this.battleDeployMode.anchorY;
+      const len = 42;
+      const rad = (this.battleDeployMode.angleDeg * Math.PI) / 180;
+      this.ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(ax, ay);
+      this.ctx.lineTo(ax + Math.cos(rad) * len, ay + Math.sin(rad) * len);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     const allUnits = [...playerUnits, ...enemyUnits];
 
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
@@ -548,6 +869,10 @@ class FallOfCavalry {
       unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
 
       let target = enemies.find((e) => e.unitId === unit.targetId && !e.dead && e.hp > 0);
+      if (unit.command === CONST.BATTLE_COMMANDS.FOCUS && unit.focusTargetId) {
+        const focused = enemies.find((e) => e.unitId === unit.focusTargetId && !e.dead && e.hp > 0);
+        if (focused) target = focused;
+      }
       if (!target) {
         target = this.findNearestEnemy(unit, enemies);
         unit.targetId = target?.unitId || null;
@@ -557,6 +882,16 @@ class FallOfCavalry {
       const dx = target.x - unit.x;
       const dy = target.y - unit.y;
       const dist = Math.hypot(dx, dy) || 0.001;
+      const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+      const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
+      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed);
+
+      if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
+        const retreatStep = Math.min(dist, stepSpeed * dt);
+        unit.x -= (dx / dist) * retreatStep;
+        unit.y -= (dy / dist) * retreatStep;
+        continue;
+      }
 
       if (unit.isRanged) {
         if (dist <= unit.rangedRange) {
@@ -565,7 +900,7 @@ class FallOfCavalry {
             unit.rangedTimer = unit.rangedCooldown;
           }
         } else {
-          const step = Math.min(dist, unit.speed * dt);
+          const step = Math.min(dist, stepSpeed * dt);
           unit.x += (dx / dist) * step;
           unit.y += (dy / dist) * step;
         }
@@ -575,7 +910,7 @@ class FallOfCavalry {
           unit.attackTimer = 0.9;
         }
       } else {
-        const step = Math.min(dist, unit.speed * dt);
+        const step = Math.min(dist, stepSpeed * dt);
         unit.x += (dx / dist) * step;
         unit.y += (dy / dist) * step;
       }
@@ -586,7 +921,7 @@ class FallOfCavalry {
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       projectile.ttl -= dt;
-      if (projectile.ttl <= 0) continue;
+      if (projectile.ttl <= 0) { this.projectilePool.release(projectile); continue; }
       const targets = projectile.side === 'player' ? enemyUnits : playerUnits;
       let hit = false;
       for (const unit of targets) {
@@ -595,12 +930,14 @@ class FallOfCavalry {
         if (hitDist <= (unit.radius || 9)) {
           this.applyUnitDamage(projectile, unit, projectile.damage);
           hit = true;
+          this.projectilePool.release(projectile);
           break;
         }
       }
       if (!hit) nextProjectiles.push(projectile);
     }
     battle.projectiles = nextProjectiles;
+    this.updateFloatingTexts(dt);
 
     this.updateTransientUIState();
   }
@@ -622,9 +959,13 @@ class FallOfCavalry {
   applyUnitDamage(attacker, target, baseDamage) {
     if (!target || target.dead || target.hp <= 0) return 0;
     const variance = 0.9 + (Math.random() * 0.2);
-    const raw = Math.max(1, (baseDamage ?? 1) - (target.def ?? 0));
-    const damage = Math.max(1, Math.floor(raw * variance));
+    const type = attacker?.damageType || (attacker?.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT);
+    const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+    const cmdCtx = { defMult: Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1), retreating: Boolean(target?.retreating) };
+    const base = Math.max(1, ((baseDamage ?? 1) - (target.def ?? 0)));
+    const damage = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
     target.hp -= damage;
+    this.spawnFloatingText(target.x || 0, target.y || 0, `-${damage}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
@@ -643,16 +984,40 @@ class FallOfCavalry {
     const sin = Math.sin(spread);
     const nx = (dx / dist) * cos - (dy / dist) * sin;
     const ny = (dx / dist) * sin + (dy / dist) * cos;
-    list.push({
-      x: shooter.x,
-      y: shooter.y,
-      vx: nx * speed,
-      vy: ny * speed,
-      side: shooter.side,
-      damage: Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8)),
-      ttl: 1.5,
-      radius: 2,
-    });
+    const projectile = this.projectilePool.acquire();
+    projectile.x = shooter.x;
+    projectile.y = shooter.y;
+    projectile.vx = nx * speed;
+    projectile.vy = ny * speed;
+    projectile.side = shooter.side;
+    projectile.damage = Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8));
+    projectile.ttl = 1.5;
+    projectile.radius = 2;
+    list.push(projectile);
+  }
+
+
+  spawnFloatingText(x, y, text, color = '#ffffff') {
+    const ft = this.floatingTextPool.acquire();
+    ft.x = x;
+    ft.y = y;
+    ft.text = String(text || '');
+    ft.color = color;
+    ft.ttl = 0.8;
+    ft.vy = -20;
+    this.floatingTexts.push(ft);
+  }
+
+  updateFloatingTexts(dt) {
+    if (!Number.isFinite(dt) || dt <= 0) return;
+    const next = [];
+    for (const ft of this.floatingTexts) {
+      ft.ttl -= dt;
+      ft.y += ft.vy * dt;
+      if (ft.ttl <= 0) this.floatingTextPool.release(ft);
+      else next.push(ft);
+    }
+    this.floatingTexts = next;
   }
 
 
@@ -681,14 +1046,35 @@ class FallOfCavalry {
       return;
     }
 
-    const step = this.playerParty.speed * dt;
+    if (this.state?.camp?.active) {
+      this.cancelPlayerDestination();
+      return;
+    }
+
+    const currentContext = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
+    const logistics = this.getLogisticsSpeedMult();
+    this.currentTerrainStatus = `${currentContext.terrainLabel} | Yük: ${Math.round(logistics.weight)}/${Math.round(logistics.cap)}`;
+    if (currentContext.blocked) {
+      this.cancelPlayerDestination();
+      return;
+    }
+
+    const step = this.playerParty.speed * currentContext.speedMult * logistics.starvingMult * logistics.overcapMult * dt;
     if (step >= dist) {
       this.completePlayerArrival();
       return;
     }
 
-    this.playerParty.x += (dx / dist) * step;
-    this.playerParty.y += (dy / dist) * step;
+    const nx = this.playerParty.x + (dx / dist) * step;
+    const ny = this.playerParty.y + (dy / dist) * step;
+    const nextContext = this.getMovementContextAt(nx, ny);
+    if (nextContext.blocked) {
+      this.cancelPlayerDestination();
+      return;
+    }
+
+    this.playerParty.x = nx;
+    this.playerParty.y = ny;
 
     const clamped = this.clampToWorld(this.playerParty.x, this.playerParty.y);
     this.playerParty.x = clamped.x;
@@ -719,8 +1105,18 @@ class FallOfCavalry {
 
       const speed = Number.isFinite(enemy.speed) ? enemy.speed : 35;
       const radius = Number.isFinite(enemy.radius) ? enemy.radius : 12;
-      enemy.x += enemy.vx * speed * dt;
-      enemy.y += enemy.vy * speed * dt;
+      const context = this.getMovementContextAt(enemy.x, enemy.y);
+      const moveSpeed = speed * context.speedMult;
+      const nx = enemy.x + enemy.vx * moveSpeed * dt;
+      const ny = enemy.y + enemy.vy * moveSpeed * dt;
+      const nextContext = this.getMovementContextAt(nx, ny);
+      if (nextContext.blocked) {
+        enemy.vx *= -1;
+        enemy.vy *= -1;
+      } else {
+        enemy.x = nx;
+        enemy.y = ny;
+      }
 
       if (enemy.x < bounds.minX + radius || enemy.x > bounds.maxX - radius) {
         enemy.vx *= -1;
@@ -747,6 +1143,18 @@ class FallOfCavalry {
       const dist = Math.hypot(this.playerParty.x - enemy.x, this.playerParty.y - enemy.y);
       const triggerDist = (this.playerParty.radius ?? 12) + (enemy.radius ?? 12) + this.encounterMargin;
       if (dist > triggerDist) continue;
+
+      const rollAt = this._encounterRollByEnemyId[enemy.id] ?? 0;
+      if (now - rollAt < 350) continue;
+      this._encounterRollByEnemyId[enemy.id] = now;
+
+      const moveContext = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
+      let chance = 0.1 * moveContext.encounterMult;
+      if (moveContext.onRiver && !moveContext.onCrossing) {
+        chance *= 1.35;
+      }
+
+      if (Math.random() > Math.max(0.01, Math.min(0.95, chance))) continue;
 
       this.triggerEncounter(enemy);
       return true;
@@ -814,7 +1222,8 @@ class FallOfCavalry {
     this.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
-      this.state.setMode('map');
+      this.battleCommandsUI?.hide?.();
+    this.state.setMode('map');
     }
   }
 
@@ -863,7 +1272,6 @@ class FallOfCavalry {
     const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
     const playerUnits = this.createBattleUnitsFromRoster(selected, 'player');
     const enemyUnits = this.createBattleUnitsFromRoster(this.enemyRoster, 'enemy');
-    this.placeBattleUnits(playerUnits, 'player');
     this.placeBattleUnits(enemyUnits, 'enemy');
 
     this.cancelPlayerDestination();
@@ -878,9 +1286,14 @@ class FallOfCavalry {
       enemyUnits,
       projectiles: [],
       targetRetargetTimer: 0,
+      settlement: this.getActiveSettlementForCity(),
+      phase: 'deploy',
     };
 
+    this.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
     this.state.setMode('battle');
+    this.battleCommandsUI?.show?.();
+    this.startBattleDeployment();
     this.updateTransientUIState();
     return true;
   }
@@ -908,6 +1321,13 @@ class FallOfCavalry {
       rangedCooldown: Math.max(0.3, Number(entry.rangedCooldown ?? 1.2)),
       rangedTimer: 0,
       targetId: null,
+      armorType: entry.armorType || (entry.isRanged ? CONST.ARMOR_TYPE.LIGHT : (String(entry.class || '').includes('cav') ? CONST.ARMOR_TYPE.HEAVY : CONST.ARMOR_TYPE.MEDIUM)),
+      damageType: entry.damageType || (entry.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT),
+      command: null,
+      commandSpeedMult: 1,
+      commandDefMult: 1,
+      focusTargetId: null,
+      retreating: false,
       attackTimer: 0,
       radius: 9,
       dead: false,
@@ -1062,6 +1482,241 @@ class FallOfCavalry {
     };
   }
 
+
+
+  setupCityServicesUI() {
+    if (this.cityUI) return;
+    this.cityUI = new CityServicesUI({
+      state: this.state,
+      party: this.playerParty,
+      recruitmentSystem,
+      tradeSystem,
+      onRecruit: (unit) => {
+        const result = recruitmentSystem.hireUnit(this.playerParty, unit);
+        if (result?.ok) {
+          if (Array.isArray(this.state?.city?.recruitPool)) {
+            this.state.city.recruitPool = this.state.city.recruitPool.filter((it) => it.uid !== unit.uid);
+          }
+          this.setLastEventLog(result.message || 'Birlik kiralandı.');
+          this.runAutosave('recruit');
+        } else {
+          this.setLastEventLog(result?.message || 'Kiralama başarısız.');
+        }
+      },
+      onBuy: (itemId, qty) => {
+        const settlement = this.state?.city;
+        if (!settlement) return;
+        const market = this.getOrCreateMarketForSettlement(settlement);
+        const result = tradeSystem.buy(this.playerParty, market, settlement, itemId, qty);
+        this.ensureInventoryModel();
+        this.state.markets[settlement.id] = market;
+        this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
+        if (result?.ok) this.runAutosave('trade');
+      },
+      onSell: (itemId, qty) => {
+        const settlement = this.state?.city;
+        if (!settlement) return;
+        const market = this.getOrCreateMarketForSettlement(settlement);
+        const result = tradeSystem.sell(this.playerParty, market, settlement, itemId, qty);
+        this.ensureInventoryModel();
+        this.state.markets[settlement.id] = market;
+        this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
+        if (result?.ok) this.runAutosave('trade');
+      },
+      onClose: () => this.exitCityServices(),
+    });
+
+    this.cityUI.bind({
+      cityRoot: utils.getEl('settlementModal'),
+      btnRecruit: utils.getEl('btnRecruit'),
+      btnTrade: utils.getEl('btnTrade'),
+      cityClose: utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
+      cityList: utils.getEl('settlementLore'),
+    });
+  }
+
+  getOrCreateMarketForSettlement(settlement) {
+    if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
+    if (!settlement?.id) return tradeSystem.initMarket(settlement, this.state?.seed);
+    if (!this.state.markets[settlement.id]) {
+      this.state.markets[settlement.id] = tradeSystem.initMarket(settlement, this.state?.seed);
+    }
+    return this.state.markets[settlement.id];
+  }
+
+  enterCityServices() {
+    if (!this.state) return false;
+    this.setupCityServicesUI();
+    this.state.city = this.getActiveSettlementForCity();
+    const settlement = this.state.city;
+    settlement.tier = this.getSettlementTier(settlement);
+    const recruitPool = recruitmentSystem.getRecruitPool(settlement, this.state?.seed);
+    settlement.recruitPool = recruitPool;
+    const market = this.getOrCreateMarketForSettlement(settlement);
+    this.state.setMode('city');
+    this.cityUI?.show?.(settlement, { recruitPool, market });
+    this.updateTransientUIState();
+    return true;
+  }
+
+  exitCityServices() {
+    this.cityUI?.hide?.();
+    if (this.state?.mode === 'city') this.state.setMode('map');
+    this.updateTransientUIState();
+    return true;
+  }
+
+
+  getLogisticsSpeedMult() {
+    const starvingMult = this.state?.status?.starving ? CONST.SUPPLIES.STARVATION_SPEED_MULT : 1;
+    this.ensureInventoryModel();
+    const weight = capacitySystem.computeCarryWeight(this.playerParty?.inventory);
+    const cap = capacitySystem.computeCapacity(this.playerParty);
+    const overcapMult = capacitySystem.computeOvercapSpeedMult(weight, cap);
+    return { starvingMult, overcapMult, weight, cap };
+  }
+
+  setupCampUI() {
+    if (this.campUI) return;
+    this.campUI = new CampUI({
+      state: this.state,
+      onClose: () => {
+        if (this.state?.camp?.active) campSystem.toggleCamp(this.state);
+        this.campUI?.hide?.();
+      },
+      onSetWatch: (level) => {
+        campSystem.setWatch(this.state, level);
+      },
+    });
+
+    this.campUI.bind({
+      root: utils.getEl('campModal'),
+      closeBtn: utils.getEl('campCloseBtn'),
+      status: utils.getEl('campStatusText'),
+    });
+  }
+
+  toggleCampMode() {
+    campSystem.ensureCampState(this.state);
+    const active = campSystem.toggleCamp(this.state);
+    if (active) {
+      this.cancelPlayerDestination();
+      const { weight, cap } = this.getLogisticsSpeedMult();
+      const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
+      const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
+      this.campUI?.show?.({ weight, capacity: cap, raidChance });
+      this.setLastEventLog('Kamp kuruldu.');
+    } else {
+      this.campUI?.hide?.();
+      this.setLastEventLog('Kamptan çıkıldı.');
+    }
+  }
+
+
+  setupBattleDeployUI() {
+    if (this.battleDeployUI) return;
+    this.battleDeployUI = new BattleDeployUI({
+      onStart: () => this.confirmBattleDeployment(),
+      onCancel: () => this.cancelBattleDeployment(),
+    });
+    this.battleDeployUI.bind({
+      root: this.dom?.battleDeployOverlay || utils.getEl('battleDeployOverlay'),
+      btnStart: this.dom?.btnDeployStart || utils.getEl('btnDeployStart'),
+      btnCancel: this.dom?.btnDeployCancel || utils.getEl('btnDeployCancel'),
+      hintText: this.dom?.deployHint || utils.getEl('deployHint'),
+    });
+  }
+
+  startBattleDeployment() {
+    const battle = this.state?.battle;
+    if (!battle) return false;
+    this.battleDeployMode = new BattleDeployMode({
+      state: this.state,
+      party: this.playerParty,
+      battle,
+      camera: this.state?.camera,
+    });
+    this.battleDeployUI?.setFormation?.(this.battleDeployMode.formation);
+    this.battleDeployUI?.show?.();
+    return true;
+  }
+
+  confirmBattleDeployment() {
+    const battle = this.state?.battle;
+    if (!battle || !this.battleDeployMode?.active) return false;
+    this.battleDeployMode.applyDeployment(battle.playerUnits || []);
+    battle.phase = 'fight';
+    this.battleDeployUI?.hide?.();
+    return true;
+  }
+
+  cancelBattleDeployment() {
+    this.battleDeployMode?.cancel?.();
+    this.battleDeployUI?.hide?.();
+    this.battleDeployMode = null;
+    if (this.state) {
+      this.state.battle = null;
+      this.state.setMode('map');
+    }
+    return true;
+  }
+
+  setupBattleCommandsUI() {
+    if (this.battleCommandsUI) return;
+    this.battleCommandsUI = new BattleCommandsUI({
+      onCommand: (cmd) => this.applyBattleCommand(cmd),
+    });
+    this.battleCommandsUI.bind({ root: this.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
+  }
+
+  applyBattleCommand(cmd) {
+    const battle = this.state?.battle;
+    if (!battle || this.state?.mode !== 'battle') return false;
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) return false;
+
+    const playerUnits = battle.playerUnits || [];
+    const selectedId = this.state?.battle?.selection?.unitId || null;
+    const targets = selectedId ? playerUnits.filter((u) => u.unitId === selectedId) : playerUnits;
+
+    targets.forEach((unit) => {
+      applyCommandEffects(unit, cmd);
+      if (cmd === CONST.BATTLE_COMMANDS.FOCUS) {
+        const enemy = this.findNearestEnemy(unit, battle.enemyUnits || []);
+        unit.focusTargetId = enemy?.unitId || null;
+      }
+    });
+
+    this.battleCommandsUI?.setActiveCommand?.(cmd);
+    return true;
+  }
+
+
+  setupAccountingUI() {
+    if (this.accountingUI) return;
+    this.accountingUI = new AccountingUI();
+    this.accountingUI.bind({
+      modal: this.dom.accountingModal,
+      body: this.dom.accountingBody,
+      btnContinue: this.dom.btnAccountingContinue,
+    });
+
+    if (this.dom.btnAccountingContinue && !this._accountingContinueBound) {
+      this._accountingContinueBound = true;
+      this.dom.btnAccountingContinue.addEventListener('click', () => {
+        this.closeAccountingModal();
+      });
+    }
+  }
+
+  closeAccountingModal() {
+    this.accountingUI?.hide?.();
+    this.state.accounting = null;
+    this.state.uiPanel = null;
+    if (this.state) this.state.paused = false;
+    this.updateTransientUIState();
+    this.runAutosave('accounting-close');
+    return true;
+  }
 
 
   getSettlementTier(settlement) {
@@ -1299,6 +1954,8 @@ Up/Down select, Enter heal, Esc back`,
         rangedRange: offer.templateStats.ranged ? 220 : 0,
         rangedDamage: offer.templateStats.ranged ? Math.max(8, offer.templateStats.atk) : 0,
         rangedCooldown: offer.templateStats.ranged ? 1.2 : 0,
+        armorType: offer.templateStats.ranged ? CONST.ARMOR_TYPE.LIGHT : CONST.ARMOR_TYPE.MEDIUM,
+        damageType: offer.templateStats.ranged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT,
         wagePerDay: offer.wagePerDay,
         quality: offer.quality,
         wounded: false,
@@ -1518,6 +2175,9 @@ Up/Down select, Enter heal, Esc back`,
 
     this.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     this.state.battle = null;
+    this.battleCommandsUI?.hide?.();
+    this.battleDeployUI?.hide?.();
+    this.battleDeployMode = null;
   }
 
   despawnEnemyParty(enemyId) {
@@ -1601,15 +2261,16 @@ Up/Down select, Enter heal, Esc back`,
         const rect = this.canvas.getBoundingClientRect();
         const x = (event?.clientX ?? 0) - rect.left;
         const y = (event?.clientY ?? 0) - rect.top;
-        const hit = (this.state?.battle?.units || []).find((u) => !u.dead && u.side === 'player' && Math.hypot(u.x - x, u.y - y) <= ((u.radius ?? 10) + 8));
+
+        if (this.state?.battle?.phase === 'deploy' && this.battleDeployMode?.active) {
+          this.battleDeployMode.setAnchor(x, y);
+          return;
+        }
+
+        const hit = (this.state?.battle?.playerUnits || []).find((u) => !u.dead && Math.hypot(u.x - x, u.y - y) <= ((u.radius ?? 10) + 8));
         if (!hit) return;
         this.state.battle.selection = this.state.battle.selection || {};
-        this.state.battle.selection.unitId = hit.id;
-        if (this.state?.battle?.phase === 'deploy' && this.mode !== 'paused') {
-          this.battleDragUnitId = hit.id;
-          this.battleDragOffsetX = x - hit.x;
-          this.battleDragOffsetY = y - hit.y;
-        }
+        this.state.battle.selection.unitId = hit.unitId;
         return;
       }
 
@@ -1647,14 +2308,6 @@ Up/Down select, Enter heal, Esc back`,
 
     this.partyPointerMoveHandler = (event) => {
       if (this.state?.mode === 'battle') {
-        if (!this.battleDragUnitId || this.state?.battle?.phase !== 'deploy' || this.mode === 'paused') return;
-        const unit = this.state.battle.units.find((u) => u.id === this.battleDragUnitId);
-        if (!unit) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (event?.clientX ?? 0) - rect.left - this.battleDragOffsetX;
-        const y = (event?.clientY ?? 0) - rect.top - this.battleDragOffsetY;
-        unit.x = Math.max(70, Math.min((this.canvas.width / 2) - 24, x));
-        unit.y = Math.max(70, Math.min(this.canvas.height - 70, y));
         return;
       }
 
@@ -1734,17 +2387,20 @@ Up/Down select, Enter heal, Esc back`,
 
       if (e.key === 'Enter' && this.mode === 'menu') {
         e.preventDefault?.();
-        this.startNewGame();
+        this.enterStart();
+        return;
+      }
+
+      if ((e.key === 'k' || e.key === 'K') && this.state?.mode === 'map') {
+        e.preventDefault?.();
+        this.toggleCampMode();
         return;
       }
 
       if (this.state?.accounting) {
         if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.key === 'Escape') {
           e.preventDefault?.();
-          this.state.accounting = null;
-          this.state.uiPanel = null;
-          this.updateTransientUIState();
-          this.runAutosave('accounting-close');
+          this.closeAccountingModal();
           return;
         }
         return;
@@ -1913,14 +2569,24 @@ Up/Down select, Enter heal, Esc back`,
       }
 
       if (this.state?.mode === 'battle') {
+        if (this.state?.battle?.phase === 'deploy' && this.battleDeployMode?.active) {
+          if (e.key === '1') { e.preventDefault?.(); this.battleDeployMode.setFormation(CONST.FORMATION.LINE); this.battleDeployUI?.setFormation?.(CONST.FORMATION.LINE); return; }
+          if (e.key === '2') { e.preventDefault?.(); this.battleDeployMode.setFormation(CONST.FORMATION.COLUMN); this.battleDeployUI?.setFormation?.(CONST.FORMATION.COLUMN); return; }
+          if (e.key === '3') { e.preventDefault?.(); this.battleDeployMode.setFormation(CONST.FORMATION.WEDGE); this.battleDeployUI?.setFormation?.(CONST.FORMATION.WEDGE); return; }
+          if (e.key === '4') { e.preventDefault?.(); this.battleDeployMode.setFormation(CONST.FORMATION.SCATTER); this.battleDeployUI?.setFormation?.(CONST.FORMATION.SCATTER); return; }
+          if (e.key === 'q' || e.key === 'Q') { e.preventDefault?.(); this.battleDeployMode.rotate(-1); return; }
+          if (e.key === 'e' || e.key === 'E') { e.preventDefault?.(); this.battleDeployMode.rotate(1); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); this.confirmBattleDeployment(); return; }
+          if (e.key === 'Escape') { e.preventDefault?.(); this.cancelBattleDeployment(); return; }
+          return;
+        }
+
+        if (e.key === 'h' || e.key === 'H') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.HOLD); return; }
+        if (e.key === 'f' || e.key === 'F') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.FOCUS); return; }
+        if (e.key === 'r' || e.key === 'R') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.RETREAT); return; }
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault?.();
           this.resolveBattle('victory');
-          return;
-        }
-        if (e.key === 'r' || e.key === 'R') {
-          e.preventDefault?.();
-          this.resolveBattle('retreat');
           return;
         }
         if (e.key === 'd' || e.key === 'D') {
@@ -1991,16 +2657,7 @@ Up/Down select, Enter heal, Esc back`,
 
       if ((e.key === 'c' || e.key === 'C') && this.state?.mode === 'map') {
         e.preventDefault?.();
-        this.state.citySubmode = 'menu';
-        this.cityCursor = 0;
-        this.cityMarketCursor = 0;
-        this.cityHealerCursor = 0;
-        this.accountingCursor = 0;
-        this.state.city = this.getActiveSettlementForCity();
-        this.ensureSettlementRecruitState(this.state.city, this.state.day ?? 1);
-        this.ensureSettlementMarketState(this.state.city);
-        this.state.setMode('city');
-        this.updateTransientUIState();
+        this.enterCityServices();
         return;
       }
 
@@ -2049,7 +2706,6 @@ Up/Down select, Enter heal, Esc back`,
       btnLoadStart: utils.getEl('btnLoadStart'),
       seedInput: utils.getEl('seedInput'),
       randomSeedBtn: utils.getEl('randomSeedBtn'),
-      startMiniMap: utils.getEl('startMiniMap'),
       startSaveInfo: utils.getEl('startSaveInfo'),
       selectedFactionName: utils.getEl('selectedFactionName'),
       selectedFactionDesc: utils.getEl('selectedFactionDesc'),
@@ -2059,14 +2715,22 @@ Up/Down select, Enter heal, Esc back`,
       settlementModal: utils.getEl('settlementModal'),
       encounterModal: utils.getEl('encounterModal'),
       battleResultModal: utils.getEl('battleResultModal'),
+      battleCommandBar: utils.getEl('battleCommandBar'),
+      battleDeployOverlay: utils.getEl('battleDeployOverlay'),
+      btnDeployStart: utils.getEl('btnDeployStart'),
+      btnDeployCancel: utils.getEl('btnDeployCancel'),
+      deployHint: utils.getEl('deployHint'),
       tooltip: utils.getEl('tooltip'),
       debugOverlay: utils.getEl('debugOverlay'),
       hudMinimapPanel: utils.getEl('hudMinimapPanel'),
       hudMiniMap: utils.getEl('hudMiniMap'),
       saveTransferText: utils.getEl('saveTransferText'),
+      accountingModal: utils.getEl('accountingModal'),
+      accountingBody: utils.getEl('accountingBody'),
+      btnAccountingContinue: utils.getEl('btnAccountingContinue'),
     };
 
-    const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startMiniMap', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
+    const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
     const missing = Object.entries(this.dom).filter(([key, el]) => !el && !optionalStartUi.has(key)).map(([key]) => key);
     if (missing.length) {
       this.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
@@ -2126,6 +2790,83 @@ Up/Down select, Enter heal, Esc back`,
         if (this.state?.mode === 'battle') this.togglePaused();
       });
     }
+
+    this.setupDebugSmokePanel();
+  }
+
+
+  setupDebugSmokePanel() {
+    if (!this.dom?.debugOverlay) return;
+    if (this.dom.debugOverlay.dataset.smokeReady === '1') return;
+    this.dom.debugOverlay.dataset.smokeReady = '1';
+    this.dom.debugOverlay.innerHTML = '<div id="debugInfo" class="debug-info"></div><div class="debug-actions"><button id="btnRunSmoke" class="action-btn btn-dark text-xs">Run Smoke</button><pre id="smokeResults" class="smoke-results"></pre></div>';
+    this.dom.btnRunSmoke = this.dom.debugOverlay.querySelector('#btnRunSmoke');
+    this.dom.smokeResults = this.dom.debugOverlay.querySelector('#smokeResults');
+
+    if (this.dom.btnRunSmoke && !this._smokeBtnBound) {
+      this._smokeBtnBound = true;
+      this.dom.btnRunSmoke.addEventListener('click', async () => {
+        await this.runSmokeScenarios();
+      });
+    }
+  }
+
+  appendSmokeResults(results) {
+    if (!this.dom?.smokeResults) return;
+    const rows = (results || []).map((r) => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.msg}`);
+    this.dom.smokeResults.textContent = rows.join('\n');
+  }
+
+  async runSmokeScenarios() {
+    const out = [];
+    const push = (name, ok, msg) => out.push({ name, ok: Boolean(ok), msg: msg || (ok ? 'PASS' : 'FAIL') });
+
+    push('1) Start screen opens', this.state?.mode === 'start', `mode=${this.state?.mode}`);
+    push('2) Faction cards exist', (document.querySelectorAll('.faction-card').length || 0) > 0, `cards=${document.querySelectorAll('.faction-card').length}`);
+    push('3) Start button state exists', Boolean(this.dom?.btnStart), this.dom?.btnStart?.disabled ? 'disabled' : 'enabled');
+
+    const prevMode = this.state?.mode;
+    this.startNewGame();
+    push('4) Start enters map', this.state?.mode === 'map', `mode=${this.state?.mode}`);
+
+    const nearSettlement = this.getActiveSettlementForCity();
+    push('5) Settlement nearby query', Boolean(nearSettlement), nearSettlement ? (nearSettlement.name || nearSettlement.id) : 'none');
+
+    const prevCamp = Boolean(this.state?.camp?.active);
+    if (!prevCamp) this.toggleCampMode();
+    push('6) Camp can activate', Boolean(this.state?.camp?.active), `active=${this.state?.camp?.active}`);
+    if (this.state?.camp?.active) this.toggleCampMode();
+    push('7) Camp can deactivate', !this.state?.camp?.active, `active=${this.state?.camp?.active}`);
+
+    const movementCtx = this.getMovementContextAt(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
+    push('8) Movement context valid', Number.isFinite(movementCtx?.speedMult), `speedMult=${movementCtx?.speedMult}`);
+
+    const foodBefore = this.state?.supplies?.food ?? 0;
+    this.processDailyEconomy((this.state?.day ?? 1) + 1);
+    push('9) End day opens accounting', Boolean(this.state?.accounting), this.state?.accounting ? 'opened' : 'not opened');
+    push('10) Food consumed/unchanged', (this.state?.supplies?.food ?? 0) <= foodBefore, `${foodBefore}→${this.state?.supplies?.food ?? 0}`);
+
+    const saveOk = this.saveToSlot('manual2');
+    const loadOk = this.loadFromSlot('manual2');
+    push('11) Save+Load works', Boolean(saveOk && loadOk), `save=${saveOk} load=${loadOk}`);
+    push('12) lastAccounting exists', Boolean(this.state?.lastAccounting), this.state?.lastAccounting ? 'present' : 'missing');
+
+    push('13) Battle command UI exists', Boolean(this.dom?.battleCommandBar), this.dom?.battleCommandBar ? 'present' : 'missing');
+    const dmgTest = computeDamage({ attacker: { atk: 10, damageType: CONST.DAMAGE_TYPE.CUT }, defender: { armorType: CONST.ARMOR_TYPE.HEAVY }, base: 10, terrainMods: CONST.TERRAIN_MODS.PLAINS });
+    push('14) computeDamage finite', Number.isFinite(dmgTest), `damage=${dmgTest}`);
+
+    this.state.battle = this.state.battle || { playerUnits: [{ unitId: 'p1' }], enemyUnits: [], phase: 'deploy', projectiles: [] };
+    this.battleDeployMode = new BattleDeployMode({ state: this.state, party: this.playerParty, battle: this.state.battle, camera: this.state?.camera });
+    this.battleDeployUI?.show?.();
+    push('15) Deployment overlay shows on battle start', !(this.dom?.battleDeployOverlay?.classList?.contains('hidden')), this.dom?.battleDeployOverlay?.classList?.contains('hidden') ? 'hidden' : 'visible');
+    const previewCount = this.battleDeployMode.computePreviewPositions((this.state.battle.playerUnits || []).length).length;
+    push('16) Formation preview count matches units', previewCount === (this.state.battle.playerUnits || []).length, `preview=${previewCount}`);
+
+    if (prevMode === 'start') this.enterStart();
+
+    this.smokeResults = out;
+    this.appendSmokeResults(out);
+    return out;
   }
 
   onModeChanged(oldMode, newMode) {
@@ -2134,124 +2875,85 @@ Up/Down select, Enter heal, Esc back`,
       utils.safeClass(this.dom.hud, 'add', 'hidden');
       utils.safeClass(this.dom.startModal, 'remove', 'hidden');
       utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
-      this.refreshStartScreen();
+      this.startScreen?.refresh?.();
+      this.battleCommandsUI?.hide?.();
       return;
     }
 
     utils.safeClass(this.dom.hud, 'remove', 'hidden');
     utils.safeClass(this.dom.startModal, 'add', 'hidden');
-    if (this.mode === 'menu') {
-      utils.safeClass(this.dom.mainMenuOverlay, 'remove', 'hidden');
+    utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
+    if (newMode === 'battle') this.battleCommandsUI?.show?.();
+    else this.battleCommandsUI?.hide?.();
+    if (newMode !== 'battle') this.battleDeployUI?.hide?.();
+  }
+
+
+
+  setupStartFlow() {
+    if (!this.startScreen) {
+      this.startScreen = new StartScreen({
+        state: this.state,
+        saveSystem: this.saveSystem,
+        onStart: ({ faction, seed }) => {
+          this.state.seed = seed;
+          this.state.selectedFaction = {
+            id: faction.id,
+            name: faction.name,
+            color: faction.color,
+            doctrine: faction.doctrine,
+            desc: faction.desc,
+          };
+          if (this.state.player) {
+            this.state.player.gold = faction.startingGold;
+            this.state.player.renown = faction.startingRenown;
+            this.state.player.army = faction.startingArmy;
+          }
+          if (this.playerParty) {
+            this.playerParty.gold = faction.startingGold;
+          }
+
+          this.ensureWorldGenerated(seed);
+          this.startNewGame();
+        },
+        onContinue: () => this.continueGame(),
+        onLoad: () => this.openSaveLoadPanel(),
+      });
+    }
+
+    this.startScreen.bind({
+      factionGrid: utils.getEl('factionGrid'),
+      btnStart: utils.getEl('btnStart'),
+      btnContinue: utils.getEl('btnContinue'),
+      btnLoadStart: utils.getEl('btnLoadStart'),
+      seedInput: utils.getEl('seedInput'),
+      randomSeedBtn: utils.getEl('randomSeedBtn'),
+      selectedFactionName: utils.getEl('selectedFactionName'),
+      selectedFactionDesc: utils.getEl('selectedFactionDesc'),
+      selectedFactionDoc: utils.getEl('selectedFactionDoc'),
+      selectedFactionArmy: utils.getEl('selectedFactionArmy'),
+      startSaveInfo: utils.getEl('startSaveInfo'),
+    });
+  }
+
+  enterStart() {
+    this.mode = 'menu';
+    this.hudManager?.setMenuVisible?.(false);
+    this.hudManager?.setSettingsVisible?.(false);
+
+    if (this.state?.mode !== 'start') {
+      this.state.setMode('start');
     } else {
-      utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
-    }
-  }
-
-
-
-  setupStartScreen() {
-    if (this._startScreenBound) return;
-    this._startScreenBound = true;
-
-    const grid = this.dom.factionGrid;
-    if (grid) {
-      grid.innerHTML = '';
-      START_FACTIONS.forEach((faction) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = 'action-btn btn-dark w-full text-left';
-        card.dataset.factionId = faction.id;
-        card.innerHTML = `<div class="font-bold" style="color:${faction.color}">${faction.name}</div><div class="text-xs opacity-80 mt-1">${faction.doctrine}</div>`;
-        card.addEventListener('click', () => this.selectStartFaction(faction.id));
-        grid.appendChild(card);
-      });
+      this.onModeChanged('menu', 'start');
     }
 
-    if (this.dom.btnStart) this.dom.btnStart.addEventListener('click', () => {
-      if (!this.applyStartSelection()) return;
-      this.startNewGame();
-    });
-
-    if (this.dom.seedInput) {
-      this.dom.seedInput.value = String(this.state?.seed ?? 1337);
-      this.dom.seedInput.addEventListener('input', () => {
-        const value = String(this.dom.seedInput.value || '').trim();
-        this.state.seed = value || '1337';
-      });
-    }
-
-    if (this.dom.randomSeedBtn) this.dom.randomSeedBtn.addEventListener('click', () => {
-      const seed = this.makeRandomSeed();
-      if (this.dom.seedInput) this.dom.seedInput.value = seed;
-      this.state.seed = seed;
-    });
-
-    if (this.dom.btnContinue) this.dom.btnContinue.addEventListener('click', () => this.continueGame());
-    if (this.dom.btnLoadStart) this.dom.btnLoadStart.addEventListener('click', () => this.openSaveLoadPanel());
-
-    this.refreshStartScreen();
-  }
-
-  refreshStartScreen() {
-    const selected = START_FACTIONS.find((f) => f.id === this.startSelectedFactionId) || null;
-
-    if (this.dom.factionGrid) {
-      this.dom.factionGrid.querySelectorAll('[data-faction-id]').forEach((el) => {
-        const isActive = el.dataset.factionId === this.startSelectedFactionId;
-        el.classList.toggle('btn-gold', isActive);
-        el.classList.toggle('btn-dark', !isActive);
-      });
-    }
-
-    if (this.dom.selectedFactionName) this.dom.selectedFactionName.textContent = selected?.name || '-';
-    if (this.dom.selectedFactionDesc) this.dom.selectedFactionDesc.textContent = selected?.desc || '-';
-    if (this.dom.selectedFactionDoc) this.dom.selectedFactionDoc.textContent = selected?.doctrine || '-';
-    if (this.dom.selectedFactionArmy) this.dom.selectedFactionArmy.textContent = selected ? `Altın ${selected.startingGold} · Şöhret ${selected.startingRenown}` : '-';
-    if (this.dom.btnStart) this.dom.btnStart.disabled = !selected;
-    if (this.dom.btnContinue) this.dom.btnContinue.disabled = !Boolean(this.saveSystem?.hasSave?.());
-  }
-
-  selectStartFaction(id) {
-    const faction = START_FACTIONS.find((item) => item.id === id);
-    this.startSelectedFactionId = faction?.id || null;
-    this.refreshStartScreen();
-  }
-
-  applyStartSelection() {
-    const faction = START_FACTIONS.find((item) => item.id === this.startSelectedFactionId);
-    if (!faction) {
-      if (this.dom.startSaveInfo) this.dom.startSaveInfo.textContent = 'Önce sancak seçmelisin.';
-      return false;
-    }
-
-    const rawSeed = String(this.dom.seedInput?.value || '').trim();
-    const seed = rawSeed || '1337';
-
-    this.state.selectedFaction = {
-      id: faction.id,
-      name: faction.name,
-      color: faction.color,
-      doctrine: faction.doctrine,
-      desc: faction.desc,
-    };
-    this.state.seed = seed;
-
-    if (!this.state.player || typeof this.state.player !== 'object') this.state.player = {};
-    this.state.player.gold = faction.startingGold;
-    this.state.player.renown = faction.startingRenown;
-
-    if (this.dom.startSaveInfo) this.dom.startSaveInfo.textContent = `Seed: ${seed}`;
-    return true;
-  }
-
-  makeRandomSeed() {
-    return String(Math.floor(100000 + Math.random() * 900000));
+    document.getElementById('mainMenuOverlay')?.classList.add('hidden');
   }
   setupMenuActions() {
     if (!this.hudManager || typeof this.hudManager.setMenuHandlers !== 'function') return;
 
     this.hudManager.setMenuHandlers({
-      onStart: () => this.startNewGame(),
+      onStart: () => this.enterStart(),
       onContinue: () => this.continueGame(),
       onQuitToMenu: () => this.quitToMenu(),
       onSettings: () => this.openSettings(),
@@ -2296,16 +2998,39 @@ Up/Down select, Enter heal, Esc back`,
   continueGame() {
     const canContinue = Boolean(this.saveSystem?.hasSave?.());
     this.hudManager?.setContinueEnabled?.(canContinue);
-    if (!canContinue) return false;
+    if (!canContinue) {
+      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      return false;
+    }
 
-    const hasAutosave = Boolean(this.saveSystem?.hasAutosave?.());
-    const slot = hasAutosave ? 'autosave' : 'manual1';
-    const result = typeof this.saveSystem?.load === 'function'
-      ? this.saveSystem.load(hasAutosave)
-      : this.saveSystem?.loadSlot?.(slot);
-    if (!result?.ok || !result.data) return false;
-    this.applySavePayload(result.data, { slot });
-    return this.startNewGame();
+    const payload = this.saveSystem?.loadLatest?.();
+    if (!payload) {
+      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      return false;
+    }
+
+    const ok = this.applySavePayload(payload, { slot: 'autosave' });
+    if (!ok) {
+      this.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
+      return false;
+    }
+
+    if (!this.started && this.gameLoop?.start) {
+      this.started = true;
+      this.gameLoop.start();
+    }
+
+    this.mode = 'playing';
+    if (this.state?.mode !== 'map') this.state.setMode('map');
+    this.startAutosaveLoop();
+    this.hudManager?.setPaused?.(false);
+    this.hudManager?.setMenuVisible?.(false);
+    this.hudManager?.setSettingsVisible?.(false);
+    utils.safeClass(this.dom.startModal, 'add', 'hidden');
+    utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
+    this.clampCameraToWorld();
+    this.updateTransientUIState();
+    return true;
   }
 
   openSettings() {
@@ -2356,6 +3081,10 @@ Up/Down select, Enter heal, Esc back`,
     if (!this.state || !this.gameLoop || typeof this.gameLoop.start !== 'function') {
       this.warnOnce('game:start-unavailable', '[Game] start() unavailable');
       return false;
+    }
+
+    if (!Array.isArray(this.state?.map?.tiles) || this.state.map.tiles.length === 0) {
+      this.ensureWorldGenerated(this.state?.seed);
     }
 
     if (this.state.mode !== 'map') {
@@ -2579,6 +3308,11 @@ Up/Down select, Enter heal, Esc back`,
           marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
           priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
         })),
+        markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
+        supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
+        camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
+        status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
+        lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         inventory,
       },
     };
@@ -2677,6 +3411,14 @@ Up/Down select, Enter heal, Esc back`,
       s.priceMultiplier = market.priceMultiplier && typeof market.priceMultiplier === 'object' ? market.priceMultiplier : {};
     });
 
+    this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
+    this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
+    this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
+    this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
+    this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
+
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
     if (!safeModes.has(loadedMode)) {
@@ -2700,13 +3442,25 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   openSaveLoadPanel() {
-    if (!this.state || this.state.saveLoadOpen) return false;
-    this.saveLoadPreviousMode = this.state.mode;
-    this.state.saveLoadOpen = true;
-    this.saveLoadCursor = 0;
-    this.state.uiPanel = this.buildSaveLoadPanelData();
-    this.updateTransientUIState();
-    return true;
+    if (typeof this.saveSystem?.openLoadPanel === 'function') {
+      const opened = this.saveSystem.openLoadPanel();
+      if (opened) return true;
+    }
+
+    if (this.state && !this.state.saveLoadOpen) {
+      this.saveLoadPreviousMode = this.state.mode;
+      this.state.saveLoadOpen = true;
+      this.saveLoadCursor = 0;
+      this.state.uiPanel = this.buildSaveLoadPanelData();
+      this.updateTransientUIState();
+      return true;
+    }
+
+    const continued = this.continueGame();
+    if (!continued) {
+      this.startScreen?.setInfoMessage?.('Kayıt yükleme arayüzü yok; autosave yok.');
+    }
+    return continued;
   }
 
   closeSaveLoadPanel() {
@@ -2857,14 +3611,10 @@ Esc close`,
     this.ctx.scale(camera.zoom, camera.zoom);
     this.ctx.translate(-camera.x, -camera.y);
 
+    this.renderWorldTerrain(this.ctx, camera);
     this.renderWorldOverlays(this.ctx, camera);
 
     this.ctx.restore();
-
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '24px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Map View (TODO)', this.canvas.width / 2, this.canvas.height / 2);
 
     if (this.followParty) {
       this.ctx.font = '12px Arial';
@@ -2879,6 +3629,129 @@ Esc close`,
 
     this.hudManager?.update?.();
     this.minimapRenderer?.render(this);
+  }
+
+  renderWorldTerrain(ctx, camera) {
+    const map = this.state?.map;
+    if (!map || !Array.isArray(map.tiles) || map.tiles.length === 0) return;
+
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const width = Number.isFinite(map.width) ? map.width : CONST.WORLD.MAP_WIDTH;
+    const height = Number.isFinite(map.height) ? map.height : CONST.WORLD.MAP_HEIGHT;
+    const fog = map.fog instanceof Uint8Array ? map.fog : null;
+
+    const minX = Math.max(0, Math.floor(camera.x / tileSize) - 1);
+    const minY = Math.max(0, Math.floor(camera.y / tileSize) - 1);
+    const maxX = Math.min(width - 1, Math.ceil((camera.x + (this.canvas.width / camera.zoom)) / tileSize) + 1);
+    const maxY = Math.min(height - 1, Math.ceil((camera.y + (this.canvas.height / camera.zoom)) / tileSize) + 1);
+
+    const biomeColors = CONST.BIOME_COLORS || {};
+    const biomes = map.biomes instanceof Uint8Array ? map.biomes : null;
+
+    for (let ty = minY; ty <= maxY; ty++) {
+      for (let tx = minX; tx <= maxX; tx++) {
+        const idx = ty * width + tx;
+        const tile = map.tiles[idx];
+        const fallbackBiome = tile?.type === CONST.TERRAIN.TYPE.WATER
+          ? CONST.BIOME.SEA
+          : tile?.type === CONST.TERRAIN.TYPE.SHORE
+            ? CONST.BIOME.SHORE
+            : tile?.type === CONST.TERRAIN.TYPE.MOUNTAIN
+              ? CONST.BIOME.MOUNTAIN
+              : tile?.type === CONST.TERRAIN.TYPE.SNOW
+                ? CONST.BIOME.SNOW
+                : tile?.type === CONST.TERRAIN.TYPE.FOREST
+                  ? CONST.BIOME.FOREST
+                  : CONST.BIOME.PLAINS;
+        const biome = biomes ? biomes[idx] : fallbackBiome;
+        ctx.fillStyle = biomeColors[biome] || CONST.WORLD.COLOR_GRASS;
+        ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+
+        const fogLevel = fog ? fog[idx] : 2;
+        if (fogLevel === 0) {
+          ctx.fillStyle = 'rgba(0,0,0,0.92)';
+          ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+        } else if (fogLevel === 1) {
+          ctx.fillStyle = 'rgba(0,0,0,0.45)';
+          ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+        }
+      }
+    }
+
+    ctx.lineWidth = Math.max(1, 2 / camera.zoom);
+    ctx.strokeStyle = 'rgba(69,116,184,0.9)';
+    (map.rivers || []).forEach((river) => {
+      if (!Array.isArray(river) || river.length < 2) return;
+      ctx.beginPath();
+      river.forEach((p, i) => {
+        const x = (p.x + 0.5) * tileSize;
+        const y = (p.y + 0.5) * tileSize;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+
+    ctx.strokeStyle = 'rgba(161,129,88,0.8)';
+    (map.roads || []).forEach((road) => {
+      const path = road?.path;
+      if (!Array.isArray(path) || path.length < 2) return;
+      ctx.beginPath();
+      path.forEach((p, i) => {
+        const x = (p.x + 0.5) * tileSize;
+        const y = (p.y + 0.5) * tileSize;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+
+
+    (map.pois || []).forEach((poi) => {
+      const tx = poi?.x;
+      const ty = poi?.y;
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+      if (tx < minX || tx > maxX || ty < minY || ty > maxY) return;
+      const fogLevel = fog ? fog[ty * width + tx] : 2;
+      if (fogLevel === 0) return;
+      const px = (tx + 0.5) * tileSize;
+      const py = (ty + 0.5) * tileSize;
+      ctx.strokeStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
+      ctx.fillStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
+      ctx.lineWidth = Math.max(1, 1.6 / camera.zoom);
+
+      if (poi.type === 'camp') {
+        const s = Math.max(4, 8 / camera.zoom);
+        ctx.beginPath();
+        ctx.moveTo(px, py - s);
+        ctx.lineTo(px - s * 0.8, py + s * 0.7);
+        ctx.lineTo(px + s * 0.8, py + s * 0.7);
+        ctx.closePath();
+        ctx.stroke();
+      } else {
+        const s = Math.max(4, 7 / camera.zoom);
+        ctx.beginPath();
+        ctx.moveTo(px - s, py - s);
+        ctx.lineTo(px + s, py + s);
+        ctx.moveTo(px + s, py - s);
+        ctx.lineTo(px - s, py + s);
+        ctx.stroke();
+      }
+    });
+
+    (map.settlements || []).forEach((settlement) => {
+      const tx = Number.isFinite(settlement.tx) ? settlement.tx : Math.floor((settlement.x || 0) / tileSize);
+      const ty = Number.isFinite(settlement.ty) ? settlement.ty : Math.floor((settlement.y || 0) / tileSize);
+      if (tx < minX || tx > maxX || ty < minY || ty > maxY) return;
+      const fogLevel = fog ? fog[ty * width + tx] : 2;
+      if (fogLevel === 0) return;
+      const sx = Number.isFinite(settlement.x) ? settlement.x : (tx + 0.5) * tileSize;
+      const sy = Number.isFinite(settlement.y) ? settlement.y : (ty + 0.5) * tileSize;
+      ctx.fillStyle = fogLevel === 1 ? 'rgba(232,196,76,0.65)' : '#e8c44c';
+      ctx.beginPath();
+      ctx.arc(sx, sy, Math.max(3, 7 / camera.zoom), 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   renderWorldOverlays(ctx, camera) {
@@ -3012,15 +3885,40 @@ Esc close`,
 
     const battle = this.state?.battle;
     if (!battle) return;
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      this.updateTransientUIState();
+      return;
+    }
+
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
+
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
+      this.ctx.fillStyle = 'rgba(212,175,55,0.12)';
+      this.ctx.fillRect(40, 60, Math.max(120, (this.canvas.width / 2) - 80), Math.max(120, this.canvas.height - 120));
+      this.ctx.save();
+      this.ctx.fillStyle = 'rgba(90,180,255,0.45)';
+      preview.forEach((p) => { this.ctx.beginPath(); this.ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); this.ctx.fill(); });
+      const ax = this.battleDeployMode.anchorX;
+      const ay = this.battleDeployMode.anchorY;
+      const len = 42;
+      const rad = (this.battleDeployMode.angleDeg * Math.PI) / 180;
+      this.ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.moveTo(ax, ay);
+      this.ctx.lineTo(ax + Math.cos(rad) * len, ay + Math.sin(rad) * len);
+      this.ctx.stroke();
+      this.ctx.restore();
+    }
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0).length;
     const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0).length;
 
     this.ctx.fillStyle = '#ffffff';
     this.ctx.font = '20px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   R = Retreat`, this.canvas.width / 2, 30);
+    this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R Commands`, this.canvas.width / 2, 30);
 
     for (const unit of [...playerUnits, ...enemyUnits]) {
       if (unit.dead || unit.hp <= 0) continue;
@@ -3028,6 +3926,13 @@ Esc close`,
       this.ctx.beginPath();
       this.ctx.arc(unit.x, unit.y, unit.radius || 9, 0, Math.PI * 2);
       this.ctx.fill();
+
+      if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
+        const retreatStep = Math.min(dist, stepSpeed * dt);
+        unit.x -= (dx / dist) * retreatStep;
+        unit.y -= (dy / dist) * retreatStep;
+        continue;
+      }
 
       if (unit.isRanged) {
         this.ctx.fillStyle = '#f2c94c';
@@ -3050,6 +3955,16 @@ Esc close`,
       this.ctx.fill();
     }
 
+    this.ctx.save();
+    this.ctx.textAlign = 'center';
+    this.ctx.font = '12px Arial';
+    for (const ft of this.floatingTexts) {
+      this.ctx.globalAlpha = Math.max(0, Math.min(1, ft.ttl / 0.8));
+      this.ctx.fillStyle = ft.color || '#ffffff';
+      this.ctx.fillText(ft.text || '', ft.x, ft.y);
+    }
+    this.ctx.restore();
+
     this.hudManager?.update?.();
   }
 
@@ -3066,7 +3981,9 @@ Esc close`,
     ];
 
     if (this.dom.debugOverlay) {
-      this.dom.debugOverlay.textContent = lines.join('\n');
+      const infoEl = this.dom.debugOverlay.querySelector?.('#debugInfo');
+      if (infoEl) infoEl.textContent = lines.join('\n');
+      else this.dom.debugOverlay.textContent = lines.join('\n');
     }
   }
 }

@@ -22,6 +22,7 @@ export class GameLoop {
     this.boundTick = this.tick.bind(this);
     this.warnedMissingState = false;
     this.warnedMissingRAF = false;
+    this.hiddenAccumMs = 0;
     
     // Update fonksiyonları (game mode'a göre)
     this.updateHandlers = {
@@ -123,18 +124,35 @@ export class GameLoop {
     // Delta time hesapla (max 50ms cap)
     const rawDt = Math.min(0.05, (now - this.lastTime) / 1000);
     this.lastTime = now;
-    
+
+    if (typeof document !== 'undefined' && document?.hidden) {
+      this.hiddenAccumMs += rawDt * 1000;
+      if (this.hiddenAccumMs < CONST.PERF.HIDDEN_TICK_THROTTLE_MS) {
+        if (!this.canScheduleFrame()) {
+          this.stop();
+          return;
+        }
+        this.rafId = requestAnimationFrame((nextNow) => this.boundTick(nextNow, token));
+        return;
+      }
+    }
+
+    const effectiveDt = this.hiddenAccumMs > 0
+      ? Math.min(0.25, this.hiddenAccumMs / 1000)
+      : rawDt;
+    this.hiddenAccumMs = 0;
+
     // Pause kontrolü
-    const dt = this.state.paused ? 0 : rawDt;
+    const dt = this.state.paused ? 0 : effectiveDt;
     
     // FPS tracking
-    this.updateFPS(rawDt);
+    this.updateFPS(effectiveDt);
     
     // Zaman güncelle
     if (!this.state.paused && this.state.mode !== 'start') {
-      this.state.timeSec += rawDt;
-      this.updateDayTimer(rawDt);
-      this.updateAutosave(rawDt);
+      this.state.timeSec += effectiveDt;
+      this.updateDayTimer(effectiveDt);
+      this.updateAutosave(effectiveDt);
     }
     
     // Input güncelle (world coords)
@@ -150,7 +168,7 @@ export class GameLoop {
     
     // Render
     const renderHandler = this.renderHandlers[this.state.mode];
-    if (renderHandler && this.renderer) {
+    if (renderHandler) {
       renderHandler();
     }
     
