@@ -324,6 +324,17 @@ export const CAMP = Object.freeze({
   CAMP_HEAL_PER_DAY: 2,
 });
 
+export const POI = Object.freeze({
+  INTERACT_RADIUS_TILES: 1.4,
+  COOLDOWN_DAYS: 2,
+  AMBUSH_CHANCE_RUIN: 0.35,
+  AMBUSH_CHANCE_CAMP: 0.20,
+  LOOT_GOLD_RANGE: Object.freeze([6, 18]),
+  LOOT_FOOD_RANGE: Object.freeze([1, 4]),
+  LOOT_ITEM_ROLLS: 1,
+  AMBUSH_TEMPORARY: true,
+});
+
 
 export const ACCOUNTING = Object.freeze({
   NEGATIVE_GOLD_MORALE_PENALTY: 4,

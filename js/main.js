@@ -27,6 +27,8 @@ import { getBattleTerrainContext } from './systems/terrain-effects.js';
 import BattleCommandsUI from './ui/battle-commands.js';
 import BattleDeployMode from './game-modes/battle-deploy-mode.js';
 import BattleDeployUI from './ui/battle-deploy-ui.js';
+import PoiUI from './ui/poi-ui.js';
+import * as PoiSystem from './systems/poi-system.js';
 
 import * as utils from './utils.js';
 
@@ -83,6 +85,8 @@ class FallOfCavalry {
     this.battleCommandsUI = null;
     this.battleDeployMode = null;
     this.battleDeployUI = null;
+    this.poiUI = null;
+    this.activePoi = null;
     this.fogOfWar = null;
     this._worldSeedCache = null;
     this._crossingSet = new Set();
@@ -188,6 +192,7 @@ class FallOfCavalry {
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
+    if (this.state) PoiSystem.ensurePoiState(this.state);
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
@@ -206,6 +211,7 @@ class FallOfCavalry {
     this.setupBattleCommandsUI();
     this.setupBattleDeployUI();
     this.setupAccountingUI();
+    this.setupPoiUI();
     this.enterStart();
     this.onModeChanged(this.state.mode, this.state.mode);
 
@@ -584,6 +590,7 @@ class FallOfCavalry {
   }
 
   updateMapSimulation(dt) {
+    this.updatePoiInteractHint();
     this.updateTransientUIState();
     if (this.state?.paused || this.state?.accounting) return;
     this.updatePlayerParty(dt);
@@ -1219,6 +1226,7 @@ class FallOfCavalry {
 
   finishEncounterToMap(enemy, enemyId) {
     this.applyEncounterPushback(enemy);
+    if (enemy?.temporary) this.despawnEnemyParty(enemyId);
     this.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
@@ -1718,6 +1726,148 @@ class FallOfCavalry {
     return true;
   }
 
+  setupPoiUI() {
+    if (this.poiUI) return;
+    this.poiUI = new PoiUI();
+    this.poiUI.bind({
+      modal: this.dom.poiModal,
+      title: this.dom.poiTitle,
+      desc: this.dom.poiDesc,
+      cooldown: this.dom.poiCooldown,
+      btnClose: this.dom.btnClosePoi,
+      btnInvestigate: this.dom.btnPoiInvestigate,
+      btnLeave: this.dom.btnPoiLeave,
+    });
+    this.poiUI.onLeave = () => {
+      this.activePoi = null;
+    };
+    this.poiUI.onInvestigate = () => {
+      this.investigateActivePoi();
+    };
+  }
+
+  getNearestInteractablePoi() {
+    const nearest = PoiSystem.getNearestPoi(this.state?.map, this.playerParty?.x, this.playerParty?.y, CONST.WORLD.TILE_SIZE);
+    if (!nearest || nearest.distTiles > CONST.POI.INTERACT_RADIUS_TILES) return null;
+    return nearest;
+  }
+
+  updatePoiInteractHint() {
+    if (!this.state) return;
+    const map = this.state?.map;
+    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) {
+      this.state.interactHint = '';
+      return;
+    }
+    const nearest = this.getNearestInteractablePoi();
+    if (!nearest?.poi) {
+      this.state.interactHint = '';
+      return;
+    }
+    const typeText = nearest.poi.type === 'ruin' ? 'Harabe' : 'Kamp';
+    this.state.interactHint = `E: İncele (${typeText})`;
+  }
+
+  openPoiModal() {
+    if (this.state?.mode !== 'map') return false;
+    const map = this.state?.map;
+    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) return false;
+    if (!this.poiUI || typeof this.poiUI.show !== 'function') return false;
+    const nearest = this.getNearestInteractablePoi();
+    if (!nearest?.poi) return false;
+    this.activePoi = nearest.poi;
+    const can = PoiSystem.canInteract(this.state, nearest.poi);
+    const cooldownText = can ? '' : `Tekrar inceleme için ${CONST.POI.COOLDOWN_DAYS} gün bekle.`;
+    this.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText });
+    return true;
+  }
+
+  investigateActivePoi() {
+    const poi = this.activePoi;
+    if (!poi || !this.state) return false;
+    if (!PoiSystem.canInteract(this.state, poi)) {
+      this.setLastEventLog(`Bu bölgeyi tekrar incelemek için ${CONST.POI.COOLDOWN_DAYS} gün bekle.`);
+      return false;
+    }
+
+    const outcome = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi });
+    PoiSystem.markInvestigated(this.state, poi);
+
+    if (outcome.kind === 'loot') {
+      let gold = 0;
+      let food = 0;
+      const itemTexts = [];
+      const canAddFood = Number.isFinite(this.state?.supplies?.food);
+      const hasInventoryArray = Array.isArray(this.playerParty?.inventory?.items);
+
+      (outcome.loot || []).forEach((entry) => {
+        if (entry.kind === 'gold') {
+          gold += Math.max(0, Math.floor(entry.qty ?? 0));
+        } else if (entry.kind === 'food' && canAddFood) {
+          food += Math.max(0, Math.floor(entry.qty ?? 0));
+        } else if (entry.kind === 'item' && entry.itemId && hasInventoryArray) {
+          this.addItem(entry.itemId, entry.name || this.getItemName(entry.itemId), Math.max(1, Math.floor(entry.qty ?? 1)));
+          itemTexts.push(`${entry.name || entry.itemId} x${Math.max(1, Math.floor(entry.qty ?? 1))}`);
+        }
+      });
+
+      if (typeof this.state?.player?.gold === 'number') {
+        this.state.player.gold += gold;
+      } else if (typeof this.playerParty?.gold === 'number') {
+        this.playerParty.gold += gold;
+      }
+      if (canAddFood) {
+        this.state.supplies.food += food;
+      }
+
+      const lootParts = [`+${gold} altın`];
+      if (canAddFood) lootParts.push(`+${food} erzak`);
+      if (itemTexts.length) lootParts.push(itemTexts.join(', '));
+      const lootText = lootParts.join(' | ');
+      this.setLastEventLog(`POI ganimeti: ${lootText}`);
+      this.poiUI?.hide?.();
+      this.activePoi = null;
+      return true;
+    }
+
+    if (outcome.kind === 'ambush') {
+      const enemyId = outcome.enemyId;
+      const canStartEncounter = typeof this.enterEncounter === 'function'
+        || typeof this.startEncounter === 'function'
+        || (typeof this.state?.setMode === 'function' && typeof this.state?.mode === 'string');
+
+      if (!canStartEncounter) {
+        this.setLastEventLog('Pusu! (TODO)');
+        this.poiUI?.hide?.();
+        this.activePoi = null;
+        return true;
+      }
+
+      if (Array.isArray(this.enemyParties)) {
+        this.enemyParties.push({
+          id: enemyId,
+          x: (this.playerParty?.x ?? 0) + 60,
+          y: (this.playerParty?.y ?? 0) + 40,
+          radius: 12,
+          speed: 40,
+          vx: 0,
+          vy: 0,
+          temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
+        });
+        this.state.aiParties = this.enemyParties;
+      }
+      this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
+      if (typeof this.enterEncounter === 'function') this.enterEncounter(enemyId);
+      else if (typeof this.startEncounter === 'function') this.startEncounter(enemyId);
+      else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
+      this.poiUI?.hide?.();
+      this.activePoi = null;
+      return true;
+    }
+
+    return false;
+  }
+
 
   getSettlementTier(settlement) {
     const type = String(settlement?.type || '').toLowerCase();
@@ -2152,8 +2302,10 @@ Up/Down select, Enter heal, Esc back`,
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     } else if (result === 'defeat') {
       this.cancelPlayerDestination();
+      if (enemy?.temporary) this.despawnEnemyParty(enemyId);
       this.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
+      if (enemy?.temporary) this.despawnEnemyParty(enemyId);
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     }
 
@@ -2661,6 +2813,17 @@ Up/Down select, Enter heal, Esc back`,
         return;
       }
 
+      if ((e.key === 'e' || e.key === 'E') && this.state?.mode === 'map') {
+        e.preventDefault?.();
+        const pois = this.state?.map?.pois;
+        if (!Array.isArray(pois) || pois.length === 0) {
+          if (this.state) this.state.interactHint = '';
+          return;
+        }
+        this.openPoiModal();
+        return;
+      }
+
       if (this.mode !== 'playing') return;
 
       if (e.key === ' ' && this.state?.mode !== 'start') {
@@ -2714,6 +2877,13 @@ Up/Down select, Enter heal, Esc back`,
       mainMenuOverlay: utils.getEl('mainMenuOverlay'),
       settlementModal: utils.getEl('settlementModal'),
       encounterModal: utils.getEl('encounterModal'),
+      poiModal: utils.getEl('poiModal'),
+      poiTitle: utils.getEl('poiTitle'),
+      poiDesc: utils.getEl('poiDesc'),
+      poiCooldown: utils.getEl('poiCooldown'),
+      btnClosePoi: utils.getEl('btnClosePoi'),
+      btnPoiInvestigate: utils.getEl('btnPoiInvestigate'),
+      btnPoiLeave: utils.getEl('btnPoiLeave'),
       battleResultModal: utils.getEl('battleResultModal'),
       battleCommandBar: utils.getEl('battleCommandBar'),
       battleDeployOverlay: utils.getEl('battleDeployOverlay'),
@@ -2862,6 +3032,27 @@ Up/Down select, Enter heal, Esc back`,
     const previewCount = this.battleDeployMode.computePreviewPositions((this.state.battle.playerUnits || []).length).length;
     push('16) Formation preview count matches units', previewCount === (this.state.battle.playerUnits || []).length, `preview=${previewCount}`);
 
+    const mapPois = this.state?.map?.pois || [];
+    if (mapPois.length > 0) {
+      const p = mapPois[0];
+      const tileSize = CONST.WORLD.TILE_SIZE;
+      this.playerParty.x = p.x * tileSize + tileSize * 0.5;
+      this.playerParty.y = p.y * tileSize + tileSize * 0.5;
+      this.updatePoiInteractHint();
+      push('17) POI interaction hint appears near POI', Boolean(this.state?.interactHint), this.state?.interactHint || 'missing');
+
+      const poiKey = PoiSystem.keyOfPoi(p);
+      const prevVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
+      this.activePoi = p;
+      this.investigateActivePoi();
+      const nowVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
+      const expectedDay = Number(this.state?.day ?? 1);
+      push('18) POI investigate updates poiState', nowVisited === expectedDay || nowVisited === prevVisited, `lastVisited=${nowVisited}`);
+    } else {
+      push('17) POI interaction hint appears near POI', true, 'SKIP (no POI data)');
+      push('18) POI investigate updates poiState', true, 'SKIP (no POI data)');
+    }
+
     if (prevMode === 'start') this.enterStart();
 
     this.smokeResults = out;
@@ -2871,6 +3062,11 @@ Up/Down select, Enter heal, Esc back`,
 
   onModeChanged(oldMode, newMode) {
     console.log(`[Game] Mode changed: ${oldMode} → ${newMode}`);
+    if (newMode !== 'map') {
+      this.poiUI?.hide?.();
+      this.activePoi = null;
+      if (this.state) this.state.interactHint = '';
+    }
     if (newMode === 'start') {
       utils.safeClass(this.dom.hud, 'add', 'hidden');
       utils.safeClass(this.dom.startModal, 'remove', 'hidden');
@@ -3300,6 +3496,7 @@ Up/Down select, Enter heal, Esc back`,
           speed: Number.isFinite(e.speed) ? e.speed : 35,
           vx: Number.isFinite(e.vx) ? e.vx : 0,
           vy: Number.isFinite(e.vy) ? e.vy : 0,
+          temporary: Boolean(e.temporary),
         })),
         enemyCooldowns: this.lastEncounterEndTimeByEnemyId || {},
         settlementsRecruit,
@@ -3311,6 +3508,7 @@ Up/Down select, Enter heal, Esc back`,
         markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
+        poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
         status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         inventory,
@@ -3384,6 +3582,7 @@ Up/Down select, Enter heal, Esc back`,
       speed: Number.isFinite(e.speed) ? e.speed : 35,
       vx: Number.isFinite(e.vx) ? e.vx : 0,
       vy: Number.isFinite(e.vy) ? e.vy : 0,
+      temporary: Boolean(e.temporary),
     }));
     this.state.aiParties = this.enemyParties;
 
@@ -3414,10 +3613,12 @@ Up/Down select, Enter heal, Esc back`,
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
+    this.state.poiState = game.poiState && typeof game.poiState === 'object' ? game.poiState : {};
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
+    PoiSystem.ensurePoiState(this.state);
 
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);

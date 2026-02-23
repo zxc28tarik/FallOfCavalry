@@ -132,7 +132,7 @@ export class HUDManager {
 
   updateEventLine() {
     if (!this.elements.hudEvent) return;
-    const message = this.state?.lastEventLog;
+    const message = this.state?.lastEventLog || this.state?.interactHint;
     safeText(this.elements.hudEvent, message || '');
     safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
   }
