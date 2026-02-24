@@ -23,6 +23,8 @@ export default class AccountingUI {
       : 'Yok';
     const notes = Array.isArray(summary.notes) ? summary.notes : [];
     const negativeGold = (summary.goldAfter ?? 0) < 0;
+    const tradePL = Number(summary.tradePL ?? 0);
+    const tradePLText = `${tradePL >= 0 ? '+' : ''}${fmt(tradePL, 0)}`;
 
     this.dom.body.innerHTML = `
       <div><b>Gün:</b> ${summary.day ?? '-'}</div>
@@ -32,6 +34,7 @@ export default class AccountingUI {
       <div><b>Camp:</b> ${summary.camp?.active ? 'Açık' : 'Kapalı'} / nöbet: ${summary.camp?.watch || '-'}</div>
       <div><b>Raid:</b> ${raidText}</div>
       <div><b>Gold:</b> ${fmt(summary.goldBefore, 0)} → ${fmt(summary.goldAfter, 0)} (Δ: ${fmt((summary.goldAfter ?? 0) - (summary.goldBefore ?? 0), 0)})</div>
+      <div><b>Trade P/L (Bugün):</b> ${tradePLText}</div>
       <div><b>Morale:</b> ${fmt(summary.moraleBefore, 0)} → ${fmt(summary.moraleAfter, 0)} (Δ: ${fmt((summary.moraleAfter ?? 0) - (summary.moraleBefore ?? 0), 0)})</div>
       ${negativeGold ? '<div style="margin-top:8px;color:#ff7675;"><b>Uyarı:</b> Altın negatif, moral cezası uygulandı.</div>' : ''}
       ${notes.length ? `<div style="margin-top:8px;opacity:.9;"><b>Notlar:</b><ul style="margin:6px 0 0 18px;">${notes.map((n) => `<li>${n}</li>`).join('')}</ul></div>` : ''}

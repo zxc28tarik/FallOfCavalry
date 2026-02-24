@@ -192,6 +192,7 @@ class FallOfCavalry {
     this.state = this.state || new GameState();
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
     if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
+    if (!this.state.dailyLedger || typeof this.state.dailyLedger !== 'object') this.state.dailyLedger = { tradePL: 0 };
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     if (this.state) PoiSystem.ensurePoiState(this.state);
@@ -246,7 +247,10 @@ class FallOfCavalry {
     if (this.listenersBound || !this.state) return;
 
     this.state.on('mode:changed', ({ old, new: newMode }) => this.onModeChanged(old, newMode));
-    this.state.on('day:advanced', (day) => console.log(`[Game] Day ${day} started`));
+    this.state.on('day:advanced', (day) => {
+      this.state.dailyLedger = { tradePL: 0 };
+      console.log(`[Game] Day ${day} started`);
+    });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
       console.log(`[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
     });
@@ -273,6 +277,9 @@ class FallOfCavalry {
     campSystem.ensureCampState(this.state);
     this.cleanupExpiredMarketOpportunities(day);
     this.ensureInventoryModel();
+    this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
+      ? this.state.dailyLedger
+      : { tradePL: 0 };
 
     const { weight, cap, overcapMult } = this.getLogisticsSpeedMult();
     const goldBefore = Math.floor(this.playerParty.gold ?? 0);
@@ -323,6 +330,23 @@ class FallOfCavalry {
       notes.push(`Altın negatif: Moral -${CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY}`);
     }
 
+    if (this.state.markets && typeof this.state.markets === 'object') {
+      const settlements = this.state?.map?.settlements || [];
+      const settlementMap = new Map(settlements.filter((s) => s?.id).map((s) => [s.id, s]));
+      Object.entries(this.state.markets).forEach(([settlementKey, market]) => {
+        const settlement = settlementMap.get(settlementKey);
+        if (!settlement) return;
+        settlement.tier = this.getSettlementTier(settlement);
+        const biomeKey = this.getBiomeKeyAtTile(settlement.tx, settlement.ty);
+        tradeSystem.advanceMarketOneDay(settlement, market, {
+          seed: this.state?.seed,
+          day: this.state?.day,
+          settlementKey,
+          biomeKey,
+        });
+      });
+    }
+
     const summary = {
       day: Number.isFinite(day) ? day : Math.floor(this.state?.day ?? 1),
       foodBefore,
@@ -340,6 +364,7 @@ class FallOfCavalry {
       goldAfter: Math.floor(this.playerParty.gold ?? 0),
       moraleBefore,
       moraleAfter: Math.floor(this.playerParty.morale ?? 50),
+      tradePL: Number(this.state?.dailyLedger?.tradePL ?? 0),
       notes,
     };
 
@@ -1560,6 +1585,12 @@ class FallOfCavalry {
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
+        if (result?.ok) {
+          this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
+            ? this.state.dailyLedger
+            : { tradePL: 0 };
+          this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) - Number(result?.spentGold ?? 0);
+        }
         this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
         if (result?.ok) this.runAutosave('trade');
       },
@@ -1574,6 +1605,12 @@ class FallOfCavalry {
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
+        if (result?.ok) {
+          this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
+            ? this.state.dailyLedger
+            : { tradePL: 0 };
+          this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
+        }
         this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
         if (result?.ok) this.runAutosave('trade');
       },
@@ -1594,6 +1631,9 @@ class FallOfCavalry {
     if (!settlement?.id) return tradeSystem.initMarket(settlement, this.state?.seed);
     if (!this.state.markets[settlement.id]) {
       this.state.markets[settlement.id] = tradeSystem.initMarket(settlement, this.state?.seed);
+    }
+    if (!this.state.markets[settlement.id].momentum || typeof this.state.markets[settlement.id].momentum !== 'object') {
+      this.state.markets[settlement.id].momentum = {};
     }
     return this.state.markets[settlement.id];
   }
@@ -3698,6 +3738,7 @@ Up/Down select, Enter heal, Esc back`,
         marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
         status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
+        dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
       },
     };
@@ -3798,6 +3839,10 @@ Up/Down select, Enter heal, Esc back`,
     });
 
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
+    Object.values(this.state.markets).forEach((market) => {
+      if (!market || typeof market !== 'object') return;
+      if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+    });
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
     this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
@@ -3807,6 +3852,9 @@ Up/Down select, Enter heal, Esc back`,
       : {};
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
+    this.state.dailyLedger = game.dailyLedger && typeof game.dailyLedger === 'object'
+      ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
+      : { tradePL: 0 };
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);

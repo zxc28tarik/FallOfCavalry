@@ -302,6 +302,28 @@ export const TRADE_PRICE_PARAMS = Object.freeze({
   maxScarcityBoost: 0.35,
 });
 
+export const MARKET = Object.freeze({
+  DRIFT_STOCK_STEP_RANGE: Object.freeze([-3, 5]),
+  DRIFT_DEMAND_STEP_RANGE: Object.freeze([-0.08, 0.10]),
+  DEMAND_MEAN_REVERT: 0.12,
+  STOCK_FLOOR: 0,
+  STOCK_CEIL_CITY: 80,
+  STOCK_CEIL_TOWN: 55,
+  STOCK_CEIL_VILLAGE: 35,
+  MOMENTUM_DECAY: 0.55,
+  MOMENTUM_MAX_ABS: 0.35,
+  MOMENTUM_PER_QTY: 0.015,
+});
+
+export const MARKET_BIOME_PRODUCTION = Object.freeze({
+  PLAINS: Object.freeze({ grain: 3, meat: 2, cloth: 0 }),
+  FOREST: Object.freeze({ wood: 3, meat: 2 }),
+  HILLS: Object.freeze({ iron: 3, wood: 2 }),
+  SHORE: Object.freeze({ salt: 3, cloth: 2 }),
+  MOUNTAIN: Object.freeze({ iron: 3, meat: -2 }),
+  SNOW: Object.freeze({ meat: -2, grain: -3 }),
+});
+
 
 
 export const SUPPLIES = Object.freeze({
@@ -638,6 +660,8 @@ export default {
   DIPLOMACY,
   ACCOUNTING,
   PERF,
+  MARKET,
+  MARKET_BIOME_PRODUCTION,
   ARMOR_TYPE,
   ARMOR_MITIGATION,
   DAMAGE_TYPE,

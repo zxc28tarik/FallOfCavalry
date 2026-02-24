@@ -102,6 +102,12 @@ export class SaveSystem {
 
     const schemaVersion = Number.isFinite(payload.schemaVersion) ? payload.schemaVersion : 0;
     const game = payload.game && typeof payload.game === 'object' ? payload.game : {};
+    const normalizedMarkets = game.markets && typeof game.markets === 'object' ? game.markets : {};
+    Object.values(normalizedMarkets).forEach((market) => {
+      if (!market || typeof market !== 'object') return;
+      if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+    });
+
     const migrated = {
       schemaVersion: 1,
       savedAt: typeof payload.savedAt === 'string' ? payload.savedAt : new Date().toISOString(),
@@ -132,7 +138,7 @@ export class SaveSystem {
         enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
         settlementsRecruit: Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : [],
         settlementsMarkets: Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : [],
-        markets: game.markets && typeof game.markets === 'object' ? game.markets : {},
+        markets: normalizedMarkets,
         supplies: game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 },
         camp: game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' },
         poiState: game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {},
@@ -141,6 +147,9 @@ export class SaveSystem {
           : {},
         status: game.status && typeof game.status === 'object' ? game.status : { starving: false },
         lastAccounting: game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null,
+        dailyLedger: game.dailyLedger && typeof game.dailyLedger === 'object'
+          ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
+          : { tradePL: 0 },
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
       },
     };
