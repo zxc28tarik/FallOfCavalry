@@ -87,6 +87,7 @@ class FallOfCavalry {
     this.battleDeployUI = null;
     this.poiUI = null;
     this.activePoi = null;
+    this.pendingPoiAmbush = null;
     this.fogOfWar = null;
     this._worldSeedCache = null;
     this._crossingSet = new Set();
@@ -773,8 +774,42 @@ class FallOfCavalry {
     return { onRoad, onRiver, onCrossing, blocked, speedMult, encounterMult, terrainLabel };
   }
 
+  getBiomeKeyAtTile(tx, ty) {
+    const map = this.state?.map;
+    if (!map || tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return null;
+    const idx = ty * map.width + tx;
+    const biome = map.biomes?.[idx];
+    switch (biome) {
+      case CONST.BIOME.FOREST: return 'FOREST';
+      case CONST.BIOME.HILLS: return 'HILLS';
+      case CONST.BIOME.MOUNTAIN: return 'MOUNTAIN';
+      case CONST.BIOME.SNOW: return 'SNOW';
+      case CONST.BIOME.SHORE: return 'SHORE';
+      default: return 'PLAINS';
+    }
+  }
+
+  getNearestSettlementTierAt(tx, ty) {
+    const settlements = this.state?.map?.settlements || [];
+    let nearest = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const settlement of settlements) {
+      const sx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
+      const sy = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor(Number(settlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
+      const dist = Math.hypot((sx - tx), (sy - ty));
+      if (dist < bestDist) {
+        bestDist = dist;
+        nearest = settlement;
+      }
+    }
+    return nearest ? this.getSettlementTier(nearest) : 2;
+  }
+
   updateTransientUIState() {
     if (!this.state) return;
+    if (this.state.clueMarker && Number(this.state.day ?? 1) > Number(this.state.clueMarker.expiresDay ?? 0)) {
+      this.state.clueMarker = null;
+    }
     if (this.state.lastEventLog && Date.now() >= (this.state.lastEventLogUntil ?? 0)) {
       this.state.lastEventLog = '';
       this.state.lastEventLogUntil = 0;
@@ -1734,11 +1769,13 @@ class FallOfCavalry {
       title: this.dom.poiTitle,
       desc: this.dom.poiDesc,
       cooldown: this.dom.poiCooldown,
+      result: this.dom.poiResult,
       btnClose: this.dom.btnClosePoi,
       btnInvestigate: this.dom.btnPoiInvestigate,
       btnLeave: this.dom.btnPoiLeave,
     });
     this.poiUI.onLeave = () => {
+      this.resolvePoiFollowup();
       this.activePoi = null;
     };
     this.poiUI.onInvestigate = () => {
@@ -1796,15 +1833,23 @@ class FallOfCavalry {
     const poiWorldX = poi.x * tileSize + tileSize * 0.5;
     const poiWorldY = poi.y * tileSize + tileSize * 0.5;
     const movementContext = this.getMovementContextAt(poiWorldX, poiWorldY);
+    const biomeKey = this.getBiomeKeyAtTile(poi.x, poi.y);
+    const settlementTier = this.getNearestSettlementTierAt(poi.x, poi.y);
+
     const outcome = PoiSystem.rollOutcome({
       seed: this.state.seed,
       day: this.state.day,
       poi,
-      context: { onRoad: Boolean(movementContext?.onRoad) },
+      context: {
+        onRoad: Boolean(movementContext?.onRoad),
+        biomeKey,
+        settlementTier,
+        map: this.state?.map,
+      },
     });
     PoiSystem.markInvestigated(this.state, poi);
 
-    if (outcome.kind === 'loot') {
+    if (outcome.kind === CONST.POI.OUTCOME.LOOT) {
       const gold = Math.max(0, Math.floor(outcome?.loot?.gold ?? 0));
       const food = Math.max(0, Math.floor(outcome?.loot?.food ?? 0));
       const firstItem = Array.isArray(outcome?.loot?.items) ? outcome.loot.items[0] : null;
@@ -1819,56 +1864,77 @@ class FallOfCavalry {
       if (firstItem?.id) {
         itemQty = Math.max(1, Math.floor(firstItem.qty ?? 1));
         itemLabel = this.getItemName(firstItem.id);
-        if (hasInventoryArray) {
-          this.addItem(firstItem.id, itemLabel, itemQty);
-        }
+        if (hasInventoryArray) this.addItem(firstItem.id, itemLabel, itemQty);
       }
 
       const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
       this.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}`);
-      this.poiUI?.hide?.();
-      this.activePoi = null;
+      this.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`] });
       return true;
     }
 
-    if (outcome.kind === 'ambush') {
-      const enemyId = outcome.enemyId;
-      const canStartEncounter = typeof this.enterEncounter === 'function'
-        || typeof this.startEncounter === 'function'
-        || (typeof this.state?.setMode === 'function' && typeof this.state?.mode === 'string');
+    if (outcome.kind === CONST.POI.OUTCOME.CLUE) {
+      const gold = Math.max(0, Math.floor(outcome?.reward?.gold ?? 0));
+      const food = Math.max(0, Math.floor(outcome?.reward?.food ?? 0));
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + gold;
+      if (Number.isFinite(this.state?.supplies?.food)) this.state.supplies.food += food;
 
-      if (!canStartEncounter) {
-        this.setLastEventLog('Pusu! Encounter altyapısı bulunamadı, güvenli çıkış yapıldı.');
-        this.poiUI?.hide?.();
-        this.activePoi = null;
-        return true;
+      if (outcome?.clue && Number.isFinite(outcome.clue.x) && Number.isFinite(outcome.clue.y)) {
+        this.state.clueMarker = {
+          x: outcome.clue.x,
+          y: outcome.clue.y,
+          label: outcome.clue.label || 'Şüpheli iz',
+          expiresDay: Number(this.state.day ?? 1) + 3,
+        };
       }
 
-      if (Array.isArray(this.enemyParties)) {
-        this.enemyParties.push({
-          id: enemyId,
-          x: (this.playerParty?.x ?? 0) + 60,
-          y: (this.playerParty?.y ?? 0) + 40,
-          radius: 12,
-          speed: 40,
-          vx: 0,
-          vy: 0,
-          temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
-        });
-        this.state.aiParties = this.enemyParties;
-      }
-      this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
-      if (typeof this.enterEncounter === 'function') this.enterEncounter(enemyId);
-      else if (typeof this.startEncounter === 'function') this.startEncounter(enemyId);
-      else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
-      this.poiUI?.hide?.();
-      this.activePoi = null;
+      const clueLabel = outcome?.clue?.label || 'Belirsiz hedef';
+      this.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak.`);
+      this.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`] });
+      return true;
+    }
+
+    if (outcome.kind === CONST.POI.OUTCOME.NOTHING) {
+      const msg = outcome?.message || 'Burada kayda değer bir şey yok...';
+      this.setLastEventLog(msg);
+      this.poiUI?.showResult?.({ kind: 'nothing', lines: [msg] });
+      return true;
+    }
+
+    if (outcome.kind === CONST.POI.OUTCOME.AMBUSH) {
+      this.pendingPoiAmbush = outcome.enemyId;
+      this.setLastEventLog('Pusu! Hazırlıksız yakalandın.');
+      this.poiUI?.showResult?.({ kind: 'ambush', lines: ['Pusu! Kapat ile karşılaşmaya geç.'] });
       return true;
     }
 
     return false;
   }
 
+
+  resolvePoiFollowup() {
+    const enemyId = this.pendingPoiAmbush;
+    this.pendingPoiAmbush = null;
+    if (!enemyId) return;
+
+    if (Array.isArray(this.enemyParties)) {
+      this.enemyParties.push({
+        id: enemyId,
+        x: (this.playerParty?.x ?? 0) + 60,
+        y: (this.playerParty?.y ?? 0) + 40,
+        radius: 12,
+        speed: 40,
+        vx: 0,
+        vy: 0,
+        temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
+      });
+      this.state.aiParties = this.enemyParties;
+    }
+    this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
+    if (typeof this.enterEncounter === 'function') this.enterEncounter(enemyId);
+    else if (typeof this.startEncounter === 'function') this.startEncounter(enemyId);
+    else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
+  }
 
   getSettlementTier(settlement) {
     const type = String(settlement?.type || '').toLowerCase();
@@ -2890,6 +2956,7 @@ Up/Down select, Enter heal, Esc back`,
       poiTitle: utils.getEl('poiTitle'),
       poiDesc: utils.getEl('poiDesc'),
       poiCooldown: utils.getEl('poiCooldown'),
+      poiResult: utils.getEl('poiResult'),
       btnClosePoi: utils.getEl('btnClosePoi'),
       btnPoiInvestigate: utils.getEl('btnPoiInvestigate'),
       btnPoiLeave: utils.getEl('btnPoiLeave'),
@@ -3057,9 +3124,21 @@ Up/Down select, Enter heal, Esc back`,
       const nowVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
       const expectedDay = Number(this.state?.day ?? 1);
       push('18) POI investigate updates poiState', nowVisited === expectedDay || nowVisited === prevVisited, `lastVisited=${nowVisited}`);
+
+      const moveCtxAtPoi = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
+      const testCtx = {
+        onRoad: Boolean(moveCtxAtPoi?.onRoad),
+        biomeKey: this.getBiomeKeyAtTile(p.x, p.y),
+        settlementTier: this.getNearestSettlementTierAt(p.x, p.y),
+        map: this.state?.map,
+      };
+      const first = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx });
+      const second = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx });
+      push('19) POI rollOutcome deterministic kind', first?.kind === second?.kind, `${first?.kind} vs ${second?.kind}`);
     } else {
       push('17) POI interaction hint appears near POI', true, 'PASS (no POI data)');
       push('18) POI investigate updates poiState', true, 'PASS (no POI data)');
+      push('19) POI rollOutcome deterministic kind', true, 'PASS (no POI data)');
     }
 
     if (prevMode === 'start') this.enterStart();
@@ -3518,6 +3597,7 @@ Up/Down select, Enter heal, Esc back`,
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
         poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
+        clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
         status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         inventory,
@@ -3623,6 +3703,7 @@ Up/Down select, Enter heal, Esc back`,
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
     this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
+    this.state.clueMarker = game.clueMarker && typeof game.clueMarker === 'object' ? game.clueMarker : null;
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
     suppliesSystem.ensureSuppliesState(this.state);
@@ -3962,6 +4043,29 @@ Esc close`,
       ctx.arc(sx, sy, Math.max(3, 7 / camera.zoom), 0, Math.PI * 2);
       ctx.fill();
     });
+
+    const clue = this.state?.clueMarker;
+    if (clue && Number.isFinite(clue.x) && Number.isFinite(clue.y)) {
+      const cx = Number(clue.x);
+      const cy = Number(clue.y);
+      if (cx >= minX && cx <= maxX && cy >= minY && cy <= maxY) {
+        const fogLevel = fog ? fog[cy * width + cx] : 2;
+        if (fogLevel > 0) {
+          const x = (cx + 0.5) * tileSize;
+          const y = (cy + 0.5) * tileSize;
+          ctx.strokeStyle = fogLevel === 1 ? 'rgba(245,218,96,0.6)' : 'rgba(245,218,96,0.95)';
+          ctx.lineWidth = Math.max(1, 2.2 / camera.zoom);
+          ctx.beginPath();
+          ctx.arc(x, y, Math.max(6, 11 / camera.zoom), 0, Math.PI * 2);
+          ctx.stroke();
+          if (camera.zoom >= 0.6) {
+            ctx.fillStyle = 'rgba(245,218,96,0.95)';
+            ctx.font = `${Math.max(10, 12 / camera.zoom)}px Inter`;
+            ctx.fillText(String(clue.label || 'İpucu'), x + (10 / camera.zoom), y - (8 / camera.zoom));
+          }
+        }
+      }
+    }
   }
 
   renderWorldOverlays(ctx, camera) {
