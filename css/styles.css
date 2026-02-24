@@ -9,6 +9,16 @@ body{ font-family: "Crimson Text", serif; }
 .royal-font{ font-family: "Cinzel", serif; }
 .hidden{ display:none !important; }
 
+.build-info{
+  position: fixed;
+  left: 10px;
+  bottom: 8px;
+  font-size: 11px;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 100;
+}
+
 .boot-notice{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   background: rgba(0,0,0,0.65); z-index: 9999;

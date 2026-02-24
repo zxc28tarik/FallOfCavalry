@@ -1,24 +1,43 @@
 # Release / Export Build
 
-## Tek tık (Node varsa)
+## Node ile tek komut
 
-Projede Node yüklüyse kökten şu komutu çalıştır:
+Repo kökünden çalıştırın:
 
 ```bash
-npx --yes bestzip FallOfCavalry-build.zip index.html css js docs
+node tools/export-build.mjs
 ```
 
-Bu komut statik dağıtım dosyalarını tek zip içine koyar.
+Bu komut `dist/` klasörünü sıfırdan üretir, sadece release için gerekli dosyaları kopyalar (`index.html`, `css/`, `js/`, `assets/`, varsa favicon), sonra `js/constants.js` içindeki `BUILD_INFO` alanına version + build zamanı damgası basar.
 
-## Manual export (Node yoksa)
+## Node yoksa (Windows PowerShell)
 
-1. `index.html`, `css/`, `js/`, `docs/` klasörlerini seç.
-2. Sistem zip aracı ile `FallOfCavalry-build.zip` oluştur.
-3. Zip açıldığında `index.html` aynı kök seviyede olmalı.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\export-build.ps1
+```
 
-## Version stamp
+Bu yol da `dist/` üretir ve `RELEASE.txt` içine sürüm damgası yazar.
 
-Node olmadan hızlı sürüm damgası için:
+## Tamamen manuel export
 
-- `index.html` footer veya changelog satırına tarih/saat ekleyin (`YYYY-MM-DD HH:mm`).
-- Eğer commit hash erişimi yoksa bu damga release etiketi olarak kabul edilir.
+Node ve PowerShell yoksa şu dosyaları `dist/` içine kopyalayın:
+
+- `index.html`
+- `css/`
+- `js/`
+- `assets/` (varsa)
+- `favicon.*` (varsa)
+
+Ardından `dist/RELEASE.txt` dosyası oluşturup en azından tarih/saat damgası ekleyin.
+
+## Dist'i localde çalıştırma
+
+- VS Code: `dist/index.html` üzerinde **Open with Live Server**
+- Python:
+
+```bash
+cd dist
+python -m http.server 8080
+```
+
+Sonra `http://localhost:8080` açın.
