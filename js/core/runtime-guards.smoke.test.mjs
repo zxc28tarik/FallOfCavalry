@@ -330,6 +330,7 @@ const createMainTestEnvironment = () => {
   assert.equal(game.mode, 'playing', 'Enter should start game from menu');
   assert.equal(game.started, true, 'Main game should be started after Enter');
   assert.equal(menuOverlay.classList.has('hidden'), true, 'Menu overlay should be hidden in playing mode');
+  assert.equal(typeof game.state?.encounterRisk, 'object', 'Encounter risk object should exist after entering map');
 
   documentForGame.dispatch('keydown', { key: 'Escape', preventDefault() {} });
   assert.equal(game.mode, 'paused', 'Escape should pause while playing');

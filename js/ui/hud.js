@@ -127,7 +127,8 @@ export class HUDManager {
     const saveMeta = this.state?.lastSaveMeta;
     const minsAgo = saveMeta?.at ? Math.max(0, Math.floor((Date.now() - saveMeta.at) / 60000)) : null;
     const saveText = saveMeta?.slot ? `  Save:${saveMeta.slot}${minsAgo !== null ? ` (${minsAgo}m)` : ''}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${saveText}`);
+    const riskText = this.state?.encounterRisk?.label ? `  Risk: ${this.state.encounterRisk.label}` : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${saveText}`);
   }
 
   updateEventLine() {

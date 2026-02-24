@@ -346,6 +346,27 @@ export const CAMP = Object.freeze({
   CAMP_HEAL_PER_DAY: 2,
 });
 
+export const ENCOUNTER_RISK = Object.freeze({
+  BASE: 1.0,
+  ROAD_MULT: 0.70,
+  OFFROAD_MULT: 1.15,
+  BIOME_MULT: Object.freeze({ PLAINS: 1.0, FOREST: 1.15, HILLS: 1.10, MOUNTAIN: 1.25, SNOW: 1.20, SHORE: 1.05 }),
+  STARVING_MULT: 1.35,
+  LOW_SUPPLIES_MULT: 1.15,
+  LOW_SUPPLIES_THRESHOLD: 2,
+  CAMP_ACTIVE_MULT: 0.55,
+  CAMP_RAID_BONUS: 0.30,
+  MARKET_SCARCITY_MULT: 1.10,
+  SCARCITY_STOCK_THRESHOLD: 4,
+  MIN_MULT: 0.4,
+  MAX_MULT: 2.5,
+});
+
+export const ENCOUNTER_RISK_UI = Object.freeze({
+  LOW_MAX: 0.85,
+  HIGH_MIN: 1.20,
+});
+
 export const POI = Object.freeze({
   MIN_COUNT: 6,
   MAX_COUNT: 14,
