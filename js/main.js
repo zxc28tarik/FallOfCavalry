@@ -50,6 +50,18 @@ function warnBootstrapOnce(message) {
   console.warn(message);
 }
 
+function formatBuildTimestamp(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
 function chooseTutorialHint({ state, mode, nearSettlement, nearPoi, inCamp, inBattleDeploy, inBattleFight, inEncounter }) {
   if (!state || typeof state !== 'object') return null;
   const tutorial = state.tutorial && typeof state.tutorial === 'object' ? state.tutorial : null;
@@ -328,6 +340,26 @@ class FallOfCavalry {
   }
 
 
+  updateBuildInfoBadge() {
+    const el = this.dom?.buildInfo;
+    if (!el) return;
+
+    const version = typeof CONST.BUILD_INFO?.version === 'string' ? CONST.BUILD_INFO.version.trim() : '';
+    const builtAt = typeof CONST.BUILD_INFO?.builtAt === 'string' ? CONST.BUILD_INFO.builtAt.trim() : '';
+
+    if (!version && !builtAt) {
+      el.classList.add('hidden');
+      return;
+    }
+
+    const stamp = formatBuildTimestamp(builtAt);
+    const pieces = [];
+    if (version) pieces.push(`v${version}`);
+    if (stamp) pieces.push(stamp);
+    el.textContent = pieces.join(' • ');
+    el.classList.remove('hidden');
+  }
+
   applyDevOnlyDomLock() {
     const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel', 'fpsOverlay', 'perfOverlay', 'debugStats'];
     if (typeof document === 'undefined') return;
@@ -403,6 +435,7 @@ class FallOfCavalry {
     this.initPlayerParty();
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
+    this.updateBuildInfoBadge();
     this.applyDevOnlyDomLock();
     this.setupSettingsUI();
     this.setupMenuActions();
@@ -3368,6 +3401,7 @@ Up/Down select, Enter heal, Esc back`,
       btnCloseTuning: utils.getEl('btnCloseTuning'),
       btnTuningSave: utils.getEl('btnTuningSave'),
       btnTuningReset: utils.getEl('btnTuningReset'),
+      buildInfo: utils.getEl('buildInfo'),
     };
 
     const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
