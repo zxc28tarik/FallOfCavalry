@@ -29,6 +29,7 @@ import BattleDeployMode from './game-modes/battle-deploy-mode.js';
 import BattleDeployUI from './ui/battle-deploy-ui.js';
 import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
+import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
 
 import * as utils from './utils.js';
 
@@ -832,8 +833,48 @@ class FallOfCavalry {
     return nearest ? this.getSettlementTier(nearest) : 2;
   }
 
+  getNearestSettlementAt(tx, ty) {
+    const settlements = this.state?.map?.settlements || [];
+    let nearest = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const settlement of settlements) {
+      const sx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
+      const sy = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor(Number(settlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
+      const dist = Math.hypot((sx - tx), (sy - ty));
+      if (dist < bestDist) {
+        bestDist = dist;
+        nearest = settlement;
+      }
+    }
+    return nearest;
+  }
+
+  computeEncounterRiskContext() {
+    const player = this.playerParty;
+    if (!player || !this.state?.map) return { mult: 1, label: 'Orta' };
+
+    const moveContext = this.getMovementContextAt(player.x, player.y);
+    const { tx, ty } = this.getTilePosition(player.x, player.y);
+    const biomeKey = this.getBiomeKeyAtTile(tx, ty) || 'PLAINS';
+    const nearestSettlement = this.getNearestSettlementAt(tx, ty);
+    const settlementTx = Number.isFinite(nearestSettlement?.tx) ? nearestSettlement.tx : Math.floor(Number(nearestSettlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
+    const settlementTy = Number.isFinite(nearestSettlement?.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
+    const nearSettlement = nearestSettlement && Math.hypot((settlementTx - tx), (settlementTy - ty)) <= 2.5;
+    const market = nearSettlement ? this.state?.markets?.[nearestSettlement.id] : null;
+    const mult = computeRiskMultiplier({
+      state: this.state,
+      movementCtx: moveContext,
+      biomeKey,
+      inCamp: Boolean(this.state?.camp?.active),
+      supplies: this.state?.supplies,
+      market,
+    });
+    return { mult, label: riskLabel(mult) };
+  }
+
   updateTransientUIState() {
     if (!this.state) return;
+    this.state.encounterRisk = this.computeEncounterRiskContext();
     if (this.state.clueMarker && Number(this.state.day ?? 1) > Number(this.state.clueMarker.expiresDay ?? 0)) {
       this.state.clueMarker = null;
     }
@@ -1219,7 +1260,9 @@ class FallOfCavalry {
       this._encounterRollByEnemyId[enemy.id] = now;
 
       const moveContext = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
-      let chance = 0.1 * moveContext.encounterMult;
+      const riskCtx = this.computeEncounterRiskContext();
+      this.state.encounterRisk = riskCtx;
+      let chance = 0.1 * moveContext.encounterMult * (Number(riskCtx?.mult) || 1);
       if (moveContext.onRiver && !moveContext.onCrossing) {
         chance *= 1.35;
       }
@@ -3511,6 +3554,8 @@ Up/Down select, Enter heal, Esc back`,
     if (this.state.mode !== 'map') {
       this.state.setMode('map');
     }
+
+    this.updateTransientUIState();
 
     this.gameLoop.start();
     this.started = true;
