@@ -580,3 +580,10 @@ body{ font-family: "Crimson Text", serif; }
 }
 .deploy-hint{ font-size:12px; opacity:0.92; }
 .deploy-actions{ display:flex; gap:8px; }
+
+.tuning-grid{ display:grid; grid-template-columns: 1fr 140px; gap:10px 12px; margin-top: 12px; }
+.tuning-row{ display: contents; }
+.tuning-label{ font-size: 13px; opacity: 0.92; }
+.tuning-input{ width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: inherit; }
+.tuning-group-title{ margin-top: 14px; font-weight: 800; opacity: 0.95; }
+.tuning-help{ font-size: 12px; opacity: 0.75; margin-top: 2px; }

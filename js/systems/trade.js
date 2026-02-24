@@ -42,8 +42,12 @@ function settlementTier(settlement) {
     : CONST.SETTLEMENT_TIER[String(settlement?.type || '').toLowerCase()] || CONST.SETTLEMENT_TIER.village;
 }
 
-function clampMomentum(raw) {
-  return clamp(raw, -CONST.MARKET.MOMENTUM_MAX_ABS, CONST.MARKET.MOMENTUM_MAX_ABS);
+function resolveMarketCfg(ctx) {
+  return { ...CONST.MARKET, ...(ctx?.tuning?.MARKET || {}) };
+}
+
+function clampMomentum(raw, cfg = CONST.MARKET) {
+  return clamp(raw, -Number(cfg.MOMENTUM_MAX_ABS), Number(cfg.MOMENTUM_MAX_ABS));
 }
 
 export function initMarket(settlement, seed) {
@@ -75,7 +79,8 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   const biomeMult = 1 + ((settlement?.biomeMod || 0) * CONST.TRADE_PRICE_PARAMS.biomeWeight);
 
   let price = item.basePrice * demand * scarcity * tierMult * biomeMult;
-  const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0));
+  const cfg = resolveMarketCfg(options);
+  const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0), cfg);
   price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
@@ -119,8 +124,9 @@ export function buy(party, market, settlement, itemId, qty, options) {
   const existing = party.inventory.items.find((it) => it.id === itemId);
   if (existing) existing.qty = Math.max(0, Math.floor(existing.qty || 0)) + amount;
   else party.inventory.items.push({ id: itemId, name: item?.name || itemId, qty: amount });
-  const momentumDelta = CONST.MARKET.MOMENTUM_PER_QTY * amount;
-  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) + momentumDelta);
+  const cfg = resolveMarketCfg(options);
+  const momentumDelta = Number(cfg.MOMENTUM_PER_QTY) * amount;
+  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) + momentumDelta, cfg);
   return {
     ok: true,
     message: `${item?.name || itemId} x${amount} alındı.`,
@@ -147,8 +153,9 @@ export function sell(party, market, settlement, itemId, qty, options) {
     party.inventory.items = party.inventory.items.filter((it) => it.id !== itemId);
   }
   market.stocks[itemId] = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0)) + amount;
-  const momentumDelta = CONST.MARKET.MOMENTUM_PER_QTY * amount;
-  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) - momentumDelta);
+  const cfg = resolveMarketCfg(options);
+  const momentumDelta = Number(cfg.MOMENTUM_PER_QTY) * amount;
+  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) - momentumDelta, cfg);
   const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
   return {
     ok: true,
@@ -174,6 +181,7 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
   const settlementKey = ctx?.settlementKey || settlement?.id || `${settlement?.tx},${settlement?.ty}`;
   const seedBase = `${ctx?.seed ?? 'seed'}:${day}:${settlementKey}`;
   const rng = mulberry32(hashSeed(seedBase));
+  const cfg = resolveMarketCfg(ctx);
   const biomeKey = String(ctx?.biomeKey || settlement?.biomeKey || 'PLAINS').toUpperCase();
   const biomeBiasMap = CONST.MARKET_BIOME_PRODUCTION?.[biomeKey] || {};
   const tierStockCeil = getTierStockCeil(settlement);
@@ -181,22 +189,22 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
   for (const item of (CONST.TRADE_ITEMS || [])) {
     const itemId = item.id;
 
-    const stockMin = Number(CONST.MARKET.DRIFT_STOCK_STEP_RANGE?.[0] ?? -3);
-    const stockMax = Number(CONST.MARKET.DRIFT_STOCK_STEP_RANGE?.[1] ?? 5);
+    const stockMin = Number(cfg.DRIFT_STOCK_STEP_RANGE?.[0] ?? -3);
+    const stockMax = Number(cfg.DRIFT_STOCK_STEP_RANGE?.[1] ?? 5);
     const stockStep = Math.floor(rng() * (stockMax - stockMin + 1)) + stockMin;
     const biomeBias = Number(biomeBiasMap[itemId] ?? 0);
     const nextStock = Math.floor(Number(market.stocks[itemId] ?? 0) + stockStep + biomeBias);
-    market.stocks[itemId] = clamp(nextStock, CONST.MARKET.STOCK_FLOOR, tierStockCeil);
+    market.stocks[itemId] = clamp(nextStock, Number(cfg.STOCK_FLOOR), tierStockCeil);
 
-    const demandMin = Number(CONST.MARKET.DRIFT_DEMAND_STEP_RANGE?.[0] ?? -0.08);
-    const demandMax = Number(CONST.MARKET.DRIFT_DEMAND_STEP_RANGE?.[1] ?? 0.10);
+    const demandMin = Number(cfg.DRIFT_DEMAND_STEP_RANGE?.[0] ?? -0.08);
+    const demandMax = Number(cfg.DRIFT_DEMAND_STEP_RANGE?.[1] ?? 0.10);
     const demandStep = demandMin + (rng() * (demandMax - demandMin));
     let demand = Number(market.demand[itemId] ?? 0) + demandStep;
-    demand += (0 - demand) * CONST.MARKET.DEMAND_MEAN_REVERT;
+    demand += (0 - demand) * Number(cfg.DEMAND_MEAN_REVERT);
     market.demand[itemId] = clamp(demand, -0.6, 0.6);
 
-    const momentum = Number(market.momentum[itemId] ?? 0) * CONST.MARKET.MOMENTUM_DECAY;
-    market.momentum[itemId] = clampMomentum(momentum);
+    const momentum = Number(market.momentum[itemId] ?? 0) * Number(cfg.MOMENTUM_DECAY);
+    market.momentum[itemId] = clampMomentum(momentum, cfg);
   }
 }
 

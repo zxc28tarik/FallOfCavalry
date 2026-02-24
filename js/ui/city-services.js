@@ -125,6 +125,7 @@ export default class CityServicesUI {
         day,
         settlementKey,
         marketOpportunities: this.state?.marketOpportunities,
+        tuning: this.state?.tuning,
       };
       const buyPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'buy', priceOpts);
       const sellPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'sell', priceOpts);

@@ -30,6 +30,7 @@ import BattleDeployUI from './ui/battle-deploy-ui.js';
 import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
 import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
+import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
 
 import * as utils from './utils.js';
 
@@ -121,6 +122,8 @@ class FallOfCavalry {
     this.battleDeployMode = null;
     this.battleDeployUI = null;
     this.poiUI = null;
+    this.tuningUI = null;
+    this.TuningUIClass = null;
     this.activePoi = null;
     this.pendingPoiAmbush = null;
     this.fogOfWar = null;
@@ -187,6 +190,7 @@ class FallOfCavalry {
     this.autosaveIntervalMs = 60000;
     this.autosaveTimerId = null;
     this.lastAutosaveHudAt = 0;
+    this._tuningPauseMode = null;
 
     this.minimapRenderer = null;
     this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2 }), (p) => { p.ttl = 0; });
@@ -215,6 +219,132 @@ class FallOfCavalry {
       lastShownAt: Number.isFinite(current.lastShownAt) ? current.lastShownAt : 0,
       shown,
     };
+  }
+
+  ensureTuningState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
+  }
+
+  getTuningDefaults() {
+    return {
+      ENCOUNTER_RISK: {
+        ROAD_MULT: Number(CONST.ENCOUNTER_RISK.ROAD_MULT),
+        OFFROAD_MULT: Number(CONST.ENCOUNTER_RISK.OFFROAD_MULT),
+        STARVING_MULT: Number(CONST.ENCOUNTER_RISK.STARVING_MULT),
+      },
+      POI: {
+        AMBUSH_CHANCE_RUIN: Number(CONST.POI.AMBUSH_CHANCE_RUIN),
+        CLUE_CHANCE_RUIN: Number(CONST.POI.CLUE_CHANCE_RUIN),
+        RARE_BONUS_CHANCE: Number(CONST.POI.RARE_BONUS_CHANCE),
+      },
+      MARKET: {
+        MOMENTUM_PER_QTY: Number(CONST.MARKET.MOMENTUM_PER_QTY),
+        MOMENTUM_DECAY: Number(CONST.MARKET.MOMENTUM_DECAY),
+      },
+      SUPPLIES: {
+        DAILY_PER_UNIT_CONSUMPTION: Number(CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION),
+        STARVATION_MORALE_PENALTY: Number(CONST.SUPPLIES.STARVATION_MORALE_PENALTY),
+      },
+    };
+  }
+
+  getEffectiveTuning() {
+    const defaults = this.getTuningDefaults();
+    this.ensureTuningState();
+    const tuning = this.state?.tuning || {};
+    Object.keys(defaults).forEach((group) => {
+      defaults[group] = { ...defaults[group], ...(tuning[group] || {}) };
+    });
+    return defaults;
+  }
+
+  applyTuningDraft(draft) {
+    if (!draft || typeof draft !== 'object') return;
+    this.ensureTuningState();
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES'].forEach((group) => {
+      if (!draft[group] || typeof draft[group] !== 'object') return;
+      this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
+    });
+    this.state.tuningDraft = draft;
+  }
+
+  async setupTuningUI() {
+    if (!this.state?.devMode) return;
+    if (!this.TuningUIClass) {
+      const mod = await import('./ui/tuning-ui.js');
+      this.TuningUIClass = mod?.default || null;
+    }
+    if (!this.TuningUIClass || this.tuningUI) return;
+    this.tuningUI = new this.TuningUIClass({
+      getDefaults: () => this.getTuningDefaults(),
+      getCurrent: () => this.getEffectiveTuning(),
+      onApply: (draft) => {
+        this.applyTuningDraft(draft);
+        this.updateTransientUIState();
+      },
+      onSave: (draft) => {
+        this.state.tuning = draft && typeof draft === 'object' ? draft : {};
+        this.runAutosave('tuning');
+      },
+      onReset: () => {
+        this.state.tuning = {};
+        this.state.tuningDraft = null;
+        this.updateTransientUIState();
+      },
+    });
+
+    this.tuningUI.bind({
+      modal: this.dom?.tuningModal,
+      body: this.dom?.tuningBody,
+      btnClose: this.dom?.btnCloseTuning,
+      btnSave: this.dom?.btnTuningSave,
+      btnReset: this.dom?.btnTuningReset,
+    });
+
+    if (this.dom?.btnCloseTuning && this.dom.btnCloseTuning.dataset.boundMainTuning !== '1') {
+      this.dom.btnCloseTuning.dataset.boundMainTuning = '1';
+      this.dom.btnCloseTuning.addEventListener('click', () => this.hideTuningModal());
+    }
+  }
+
+  async showTuningModal() {
+    this.ensureTuningState();
+    if (!this.state?.devMode) return false;
+    await this.setupTuningUI();
+    if (!this.dom?.tuningModal) return false;
+    this._tuningPauseMode = this.mode;
+    this.setPaused(true);
+    this.tuningUI?.show?.();
+    return true;
+  }
+
+  hideTuningModal() {
+    if (!this.dom?.tuningModal || this.dom.tuningModal.classList.contains('hidden')) return false;
+    this.tuningUI?.hide?.();
+    if (this._tuningPauseMode === 'playing') this.setPaused(false);
+    this._tuningPauseMode = null;
+    return true;
+  }
+
+
+  applyDevOnlyDomLock() {
+    const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel'];
+    if (typeof document === 'undefined') return;
+    for (const id of devOnlyIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (!this.state?.devMode) {
+        el.classList.add('hidden');
+        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('inert', '');
+        el.style.pointerEvents = 'none';
+      } else {
+        el.removeAttribute('inert');
+        el.style.pointerEvents = '';
+        el.removeAttribute('aria-hidden');
+      }
+    }
   }
 
   maybeShowTutorialHint(context = {}) {
@@ -255,6 +385,13 @@ class FallOfCavalry {
     campSystem.ensureCampState(this.state);
     if (this.state) PoiSystem.ensurePoiState(this.state);
     this.ensureTutorialState();
+    this.ensureTuningState();
+    this.state.devMode = isDevMode();
+    this.applyDevOnlyDomLock();
+    const storageTuning = loadTuningFromStorage();
+    if (storageTuning) {
+      this.state.tuning = { ...(this.state.tuning || {}), ...storageTuning };
+    }
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
@@ -266,6 +403,7 @@ class FallOfCavalry {
     this.initPlayerParty();
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
+    this.applyDevOnlyDomLock();
     this.setupSettingsUI();
     this.setupMenuActions();
     this.setupStartFlow();
@@ -403,6 +541,7 @@ class FallOfCavalry {
           day: this.state?.day,
           settlementKey,
           biomeKey,
+          tuning: this.state?.tuning,
         });
       });
     }
@@ -1702,6 +1841,7 @@ class FallOfCavalry {
           day: this.state?.day,
           settlementKey: this.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          tuning: this.state?.tuning,
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -1722,6 +1862,7 @@ class FallOfCavalry {
           day: this.state?.day,
           settlementKey: this.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          tuning: this.state?.tuning,
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -2022,6 +2163,7 @@ class FallOfCavalry {
         settlementTier,
         map: this.state?.map,
       },
+      tuning: this.state?.tuning,
     });
     PoiSystem.markInvestigated(this.state, poi);
 
@@ -2843,6 +2985,21 @@ Up/Down select, Enter heal, Esc back`,
     this.keyboardHandler = (e) => {
       if (!e || typeof e.key !== 'string') return;
 
+      if (this.state?.devMode && e.shiftKey && (e.key === 'T' || e.key === 't')) {
+        e.preventDefault?.();
+        if (this.dom?.tuningModal && !this.dom.tuningModal.classList.contains('hidden')) this.hideTuningModal();
+        else { this.showTuningModal(); }
+        return;
+      }
+
+      if (this.dom?.tuningModal && !this.dom.tuningModal.classList.contains('hidden')) {
+        if (e.key === 'Escape') {
+          e.preventDefault?.();
+          this.hideTuningModal();
+        }
+        return;
+      }
+
       if (e.key === 'Enter' && this.mode === 'menu') {
         e.preventDefault?.();
         this.enterStart();
@@ -3137,7 +3294,7 @@ Up/Down select, Enter heal, Esc back`,
         this.state.togglePause();
       }
 
-      if (e.key === 'F3') {
+      if (this.state?.devMode && e.key === 'F3') {
         e.preventDefault?.();
         this.toggleDebug();
       }
@@ -3206,6 +3363,11 @@ Up/Down select, Enter heal, Esc back`,
       accountingModal: utils.getEl('accountingModal'),
       accountingBody: utils.getEl('accountingBody'),
       btnAccountingContinue: utils.getEl('btnAccountingContinue'),
+      tuningModal: utils.getEl('tuningModal'),
+      tuningBody: utils.getEl('tuningBody'),
+      btnCloseTuning: utils.getEl('btnCloseTuning'),
+      btnTuningSave: utils.getEl('btnTuningSave'),
+      btnTuningReset: utils.getEl('btnTuningReset'),
     };
 
     const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
@@ -3291,17 +3453,32 @@ Up/Down select, Enter heal, Esc back`,
 
   setupDebugSmokePanel() {
     if (!this.dom?.debugOverlay) return;
+    if (!this.state?.devMode) {
+      this.dom.debugOverlay.classList.add('hidden');
+      this.dom.debugOverlay.innerHTML = '';
+      return;
+    }
     if (this.dom.debugOverlay.dataset.smokeReady === '1') return;
     this.dom.debugOverlay.dataset.smokeReady = '1';
-    this.dom.debugOverlay.innerHTML = '<div id="debugInfo" class="debug-info"></div><div class="debug-actions"><button id="btnRunSmoke" class="action-btn btn-dark text-xs">Run Smoke</button><pre id="smokeResults" class="smoke-results"></pre></div>';
+    this.dom.debugOverlay.innerHTML = '<div id="debugInfo" class="debug-info"></div><div class="debug-actions"><button id="btnOpenTuning" class="action-btn btn-dark text-xs">Tuning</button><button id="btnRunSmoke" class="action-btn btn-dark text-xs">Run Smoke</button><pre id="smokeResults" class="smoke-results"></pre></div>';
     this.dom.btnRunSmoke = this.dom.debugOverlay.querySelector('#btnRunSmoke');
+    this.dom.btnOpenTuning = this.dom.debugOverlay.querySelector('#btnOpenTuning');
     this.dom.smokeResults = this.dom.debugOverlay.querySelector('#smokeResults');
+
+    if (this.dom.btnOpenTuning && !this._tuningDebugBtnBound) {
+      this._tuningDebugBtnBound = true;
+      this.dom.btnOpenTuning.addEventListener('click', () => { this.showTuningModal(); });
+    }
 
     if (this.dom.btnRunSmoke && !this._smokeBtnBound) {
       this._smokeBtnBound = true;
       this.dom.btnRunSmoke.addEventListener('click', async () => {
         await this.runSmokeScenarios();
       });
+    }
+
+    if (typeof window !== 'undefined' && this.state?.devMode) {
+      window.__FOC_RUN_SMOKE__ = () => this.runSmokeScenarios();
     }
   }
 
@@ -3380,8 +3557,8 @@ Up/Down select, Enter heal, Esc back`,
         settlementTier: this.getNearestSettlementTierAt(p.x, p.y),
         map: this.state?.map,
       };
-      const first = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx });
-      const second = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx });
+      const first = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx, tuning: this.state?.tuning });
+      const second = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx, tuning: this.state?.tuning });
       push('19) POI rollOutcome deterministic kind', first?.kind === second?.kind, `${first?.kind} vs ${second?.kind}`);
     } else {
       push('17) POI interaction hint appears near POI', true, 'PASS (no POI data)');
@@ -3399,12 +3576,14 @@ Up/Down select, Enter heal, Esc back`,
           day: this.state.day,
           settlementKey,
           marketOpportunities: {},
+          tuning: this.state?.tuning,
         });
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
         const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
           day: this.state.day,
           settlementKey,
           marketOpportunities: this.state.marketOpportunities,
+          tuning: this.state?.tuning,
         });
         push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
 
@@ -3419,6 +3598,26 @@ Up/Down select, Enter heal, Esc back`,
       push('20) Opportunity modifies sell price when active', true, 'PASS (no settlement data)');
       push('21) Expired opportunities are cleaned', true, 'PASS (no settlement data)');
     }
+
+    push('22) Tuning state exists', Boolean(this.state?.tuning && typeof this.state.tuning === 'object' && !Array.isArray(this.state.tuning)), this.state?.tuning ? 'present' : 'missing');
+
+    const baseRisk = computeRiskMultiplier({
+      state: { ...this.state, tuning: {} },
+      movementCtx: { onRoad: true },
+      biomeKey: 'PLAINS',
+      inCamp: false,
+      supplies: { food: 10 },
+      market: null,
+    });
+    const tunedRisk = computeRiskMultiplier({
+      state: { ...this.state, tuning: { ENCOUNTER_RISK: { ROAD_MULT: Number(CONST.ENCOUNTER_RISK.ROAD_MULT) + 0.25 } } },
+      movementCtx: { onRoad: true },
+      biomeKey: 'PLAINS',
+      inCamp: false,
+      supplies: { food: 10 },
+      market: null,
+    });
+    push('23) Tuning override affects encounterRisk', tunedRisk !== baseRisk, `${baseRisk}→${tunedRisk}`);
 
     if (prevMode === 'start') this.enterStart();
 
@@ -3774,7 +3973,7 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   toggleDebug() {
-    if (!this.state?.debug) return;
+    if (!this.state?.devMode || !this.state?.debug) return;
 
     this.state.debug.enabled = !this.state.debug.enabled;
 
@@ -3888,6 +4087,7 @@ Up/Down select, Enter heal, Esc back`,
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
+        tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
       },
     };
   }
@@ -4008,6 +4208,7 @@ Up/Down select, Enter heal, Esc back`,
     this.state.dailyLedger = game.dailyLedger && typeof game.dailyLedger === 'object'
       ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
       : { tradePL: 0 };
+    this.state.tuning = game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {};
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);

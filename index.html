@@ -324,6 +324,25 @@
             </div>
         </div>
 
+        <div id="tuningModal" class="modal hidden">
+            <div class="modal-card">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="royal-font modal-title">Tuning</div>
+                        <div class="text-xs opacity-80 mt-1">Değişiklikler anında uygulanır. Save/Load ile korunur.</div>
+                    </div>
+                    <button id="btnCloseTuning" class="action-btn btn-dark">Kapat</button>
+                </div>
+
+                <div id="tuningBody" class="modal-body"></div>
+
+                <div class="modal-actions">
+                    <button id="btnTuningReset" class="action-btn btn-dark">Varsayılanlara Dön</button>
+                    <button id="btnTuningSave" class="action-btn btn-primary">Kaydet</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Settlement Modal -->
         <div id="settlementModal" class="modal-wrap hidden">
             <div id="settlementBody" class="modal-card max-w-3xl">
