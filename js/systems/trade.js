@@ -39,7 +39,7 @@ export function initMarket(settlement, seed) {
   return { stocks, demand };
 }
 
-export function getPrice(settlement, market, itemId, side = 'buy') {
+export function getPrice(settlement, market, itemId, side = 'buy', options = null) {
   const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
   if (!item) return 1;
   const tier = Number.isFinite(settlement?.tier)
@@ -54,17 +54,38 @@ export function getPrice(settlement, market, itemId, side = 'buy') {
   const biomeMult = 1 + ((settlement?.biomeMod || 0) * CONST.TRADE_PRICE_PARAMS.biomeWeight);
 
   let price = item.basePrice * demand * scarcity * tierMult * biomeMult;
-  if (side === 'sell') price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
+  if (side === 'sell') {
+    price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
+    const opportunity = getActiveOpportunity(settlement, itemId, options);
+    if (opportunity) {
+      const baseSellPrice = price;
+      const boosted = baseSellPrice * (1 + (Number(opportunity.bonusPct) / 100));
+      const baseRounded = Math.max(1, Math.round(baseSellPrice));
+      price = Math.round(boosted) <= baseRounded ? (baseRounded + 1) : boosted;
+    }
+  }
   return Math.max(1, Math.round(price));
 }
 
-export function buy(party, market, settlement, itemId, qty) {
+function getActiveOpportunity(settlement, itemId, options) {
+  const data = options && typeof options === 'object' ? options : null;
+  const opportunities = data?.marketOpportunities;
+  if (!opportunities || typeof opportunities !== 'object') return null;
+  const settlementKey = data.settlementKey || settlement?.id || `${settlement?.tx},${settlement?.ty}`;
+  const opportunity = opportunities[settlementKey];
+  if (!opportunity || opportunity.itemId !== itemId) return null;
+  const day = Number(data?.day ?? 1);
+  if (Number.isFinite(opportunity.expiresDay) && day > Number(opportunity.expiresDay)) return null;
+  return opportunity;
+}
+
+export function buy(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
   const count = Math.max(1, Math.floor(qty || 1));
   const stock = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0));
   if (stock <= 0) return { ok: false, message: 'Stok yok.' };
   const amount = Math.min(stock, count);
-  const price = getPrice(settlement, market, itemId, 'buy');
+  const price = getPrice(settlement, market, itemId, 'buy', options);
   const total = price * amount;
   if ((party.gold || 0) < total) return { ok: false, message: 'Altın yetersiz.' };
 
@@ -77,7 +98,7 @@ export function buy(party, market, settlement, itemId, qty) {
   return { ok: true, message: `${item?.name || itemId} x${amount} alındı.` };
 }
 
-export function sell(party, market, settlement, itemId, qty) {
+export function sell(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
   const count = Math.max(1, Math.floor(qty || 1));
   const entry = party.inventory.items.find((it) => it.id === itemId);
@@ -85,7 +106,7 @@ export function sell(party, market, settlement, itemId, qty) {
   if (have <= 0) return { ok: false, message: 'Envanterde yok.' };
 
   const amount = Math.min(have, count);
-  const price = getPrice(settlement, market, itemId, 'sell');
+  const price = getPrice(settlement, market, itemId, 'sell', options);
   const total = price * amount;
   party.gold = Math.max(0, Math.floor((party.gold || 0) + total));
   entry.qty = have - amount;

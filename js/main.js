@@ -191,6 +191,7 @@ class FallOfCavalry {
 
     this.state = this.state || new GameState();
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
+    if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     if (this.state) PoiSystem.ensurePoiState(this.state);
@@ -270,6 +271,7 @@ class FallOfCavalry {
 
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
+    this.cleanupExpiredMarketOpportunities(day);
     this.ensureInventoryModel();
 
     const { weight, cap, overcapMult } = this.getLogisticsSpeedMult();
@@ -810,6 +812,7 @@ class FallOfCavalry {
     if (this.state.clueMarker && Number(this.state.day ?? 1) > Number(this.state.clueMarker.expiresDay ?? 0)) {
       this.state.clueMarker = null;
     }
+    this.cleanupExpiredMarketOpportunities(this.state.day);
     if (this.state.lastEventLog && Date.now() >= (this.state.lastEventLogUntil ?? 0)) {
       this.state.lastEventLog = '';
       this.state.lastEventLogUntil = 0;
@@ -1550,7 +1553,11 @@ class FallOfCavalry {
         const settlement = this.state?.city;
         if (!settlement) return;
         const market = this.getOrCreateMarketForSettlement(settlement);
-        const result = tradeSystem.buy(this.playerParty, market, settlement, itemId, qty);
+        const result = tradeSystem.buy(this.playerParty, market, settlement, itemId, qty, {
+          day: this.state?.day,
+          settlementKey: this.getSettlementOpportunityKey(settlement),
+          marketOpportunities: this.state?.marketOpportunities,
+        });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
         this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
@@ -1560,7 +1567,11 @@ class FallOfCavalry {
         const settlement = this.state?.city;
         if (!settlement) return;
         const market = this.getOrCreateMarketForSettlement(settlement);
-        const result = tradeSystem.sell(this.playerParty, market, settlement, itemId, qty);
+        const result = tradeSystem.sell(this.playerParty, market, settlement, itemId, qty, {
+          day: this.state?.day,
+          settlementKey: this.getSettlementOpportunityKey(settlement),
+          marketOpportunities: this.state?.marketOpportunities,
+        });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
         this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
@@ -1879,16 +1890,30 @@ class FallOfCavalry {
       this.playerParty.gold = (this.playerParty.gold ?? 0) + gold;
       if (Number.isFinite(this.state?.supplies?.food)) this.state.supplies.food += food;
 
+      let clueLabel = outcome?.clue?.label || 'Belirsiz hedef';
       if (outcome?.clue && Number.isFinite(outcome.clue.x) && Number.isFinite(outcome.clue.y)) {
+        let markerOpportunity = null;
+        if (outcome?.opportunity?.itemId) {
+          const settlementKey = String(outcome.opportunity.settlementKey || outcome?.clue?.settlementKey || `${outcome.clue.x},${outcome.clue.y}`);
+          const dayNow = Number(this.state.day ?? 1);
+          const expiresDay = Number(outcome.opportunity.expiresDay ?? dayNow + CONST.POI.OPPORTUNITY_DURATION_DAYS);
+          const bonusPct = Math.max(1, Math.floor(outcome.opportunity.bonusPct ?? 0));
+          const itemId = outcome.opportunity.itemId;
+          const itemName = this.getItemName(itemId);
+          const daysLeft = Math.max(0, expiresDay - dayNow);
+          markerOpportunity = { settlementKey, itemId, bonusPct, expiresDay };
+          this.state.marketOpportunities = this.state.marketOpportunities || {};
+          this.state.marketOpportunities[settlementKey] = markerOpportunity;
+          clueLabel = `${outcome.clue.label || 'Yerleşim'}: ${itemName} +%${bonusPct} (${daysLeft} gün)`;
+        }
         this.state.clueMarker = {
           x: outcome.clue.x,
           y: outcome.clue.y,
-          label: outcome.clue.label || 'Şüpheli iz',
+          label: clueLabel,
           expiresDay: Number(this.state.day ?? 1) + 3,
+          opportunity: markerOpportunity,
         };
       }
-
-      const clueLabel = outcome?.clue?.label || 'Belirsiz hedef';
       this.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak.`);
       this.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`] });
       return true;
@@ -1902,9 +1927,23 @@ class FallOfCavalry {
     }
 
     if (outcome.kind === CONST.POI.OUTCOME.AMBUSH) {
+      const loss = outcome?.loss;
+      if (loss?.mode === 'food' && Number.isFinite(this.state?.supplies?.food)) {
+        const before = Math.max(0, Math.floor(this.state.supplies.food));
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        this.state.supplies.food = Math.max(0, before - amount);
+      } else if (loss?.mode === 'gold') {
+        const before = Math.max(0, Math.floor(this.playerParty.gold ?? 0));
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        this.playerParty.gold = Math.max(0, before - amount);
+      } else if (loss?.mode === 'morale') {
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        this.playerParty.morale = Math.max(0, Math.floor((this.playerParty.morale ?? 50) - amount));
+      }
       this.pendingPoiAmbush = outcome.enemyId;
-      this.setLastEventLog('Pusu! Hazırlıksız yakalandın.');
-      this.poiUI?.showResult?.({ kind: 'ambush', lines: ['Pusu! Kapat ile karşılaşmaya geç.'] });
+      const lossText = loss?.mode ? `${Math.max(0, Math.floor(loss.amount ?? 0))} ${loss.mode === 'food' ? 'erzak' : (loss.mode === 'gold' ? 'altın' : 'moral')} kaybettin` : 'kayıp yaşandı';
+      this.setLastEventLog(`Pusu! ${lossText}.`);
+      this.poiUI?.showResult?.({ kind: 'ambush', lines: [`Pusu! ${lossText}.`, 'Kapat ile karşılaşmaya geç.'] });
       return true;
     }
 
@@ -1941,6 +1980,33 @@ class FallOfCavalry {
     if (type.includes('city') || type.includes('castle')) return 3;
     if (type.includes('town')) return 2;
     return 1;
+  }
+
+  getSettlementOpportunityKey(settlement) {
+    if (!settlement || typeof settlement !== 'object') return null;
+    if (settlement.id) return String(settlement.id);
+    if (Number.isFinite(settlement.tx) && Number.isFinite(settlement.ty)) return `${settlement.tx},${settlement.ty}`;
+    if (Number.isFinite(settlement.x) && Number.isFinite(settlement.y)) {
+      const tx = Math.floor(settlement.x / CONST.WORLD.TILE_SIZE);
+      const ty = Math.floor(settlement.y / CONST.WORLD.TILE_SIZE);
+      return `${tx},${ty}`;
+    }
+    return null;
+  }
+
+  cleanupExpiredMarketOpportunities(day = this.state?.day) {
+    if (!this.state) return;
+    if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') {
+      this.state.marketOpportunities = {};
+      return;
+    }
+    const nowDay = Number(day ?? 1);
+    Object.keys(this.state.marketOpportunities).forEach((key) => {
+      const opportunity = this.state.marketOpportunities[key];
+      if (!opportunity || !Number.isFinite(opportunity.expiresDay) || nowDay > Number(opportunity.expiresDay)) {
+        delete this.state.marketOpportunities[key];
+      }
+    });
   }
 
   getActiveSettlementForCity() {
@@ -3141,6 +3207,37 @@ Up/Down select, Enter heal, Esc back`,
       push('19) POI rollOutcome deterministic kind', true, 'PASS (no POI data)');
     }
 
+    const firstSettlement = this.state?.map?.settlements?.[0] || null;
+    if (firstSettlement) {
+      const settlementKey = this.getSettlementOpportunityKey(firstSettlement);
+      const market = this.getOrCreateMarketForSettlement(firstSettlement);
+      const itemId = (CONST.TRADE_ITEMS?.[0]?.id) || null;
+      if (settlementKey && itemId) {
+        const baseSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
+          day: this.state.day,
+          settlementKey,
+          marketOpportunities: {},
+        });
+        this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
+        const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
+          day: this.state.day,
+          settlementKey,
+          marketOpportunities: this.state.marketOpportunities,
+        });
+        push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
+
+        this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) - 1 };
+        this.cleanupExpiredMarketOpportunities(this.state.day);
+        push('21) Expired opportunities are cleaned', !this.state.marketOpportunities[settlementKey], this.state.marketOpportunities[settlementKey] ? 'not cleaned' : 'cleaned');
+      } else {
+        push('20) Opportunity modifies sell price when active', true, 'PASS (missing settlementKey/itemId)');
+        push('21) Expired opportunities are cleaned', true, 'PASS (missing settlementKey/itemId)');
+      }
+    } else {
+      push('20) Opportunity modifies sell price when active', true, 'PASS (no settlement data)');
+      push('21) Expired opportunities are cleaned', true, 'PASS (no settlement data)');
+    }
+
     if (prevMode === 'start') this.enterStart();
 
     this.smokeResults = out;
@@ -3598,6 +3695,7 @@ Up/Down select, Enter heal, Esc back`,
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
         poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
         clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
+        marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
         status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         inventory,
@@ -3704,11 +3802,15 @@ Up/Down select, Enter heal, Esc back`,
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
     this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
     this.state.clueMarker = game.clueMarker && typeof game.clueMarker === 'object' ? game.clueMarker : null;
+    this.state.marketOpportunities = game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
+      ? game.marketOpportunities
+      : {};
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
+    this.cleanupExpiredMarketOpportunities(this.state.day);
 
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
