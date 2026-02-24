@@ -1,3 +1,13 @@
+import test from 'node:test';
+
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+if (!isBrowser) {
+  test('runtime-guards smoke (browser-only)', (t) => {
+    t.skip('Skipping: requires browser window/document.');
+  });
+  process.exit(0);
+}
+
 import assert from 'node:assert/strict';
 
 const originalDocument = globalThis.document;

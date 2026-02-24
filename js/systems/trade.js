@@ -25,27 +25,48 @@ function ensureInventory(party) {
   if (!Array.isArray(party.inventory.items)) party.inventory.items = [];
 }
 
-export function initMarket(settlement, seed) {
-  const tier = Number.isFinite(settlement?.tier)
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeMarket(market) {
+  if (!market || typeof market !== 'object') return;
+  if (!market.stocks || typeof market.stocks !== 'object') market.stocks = {};
+  if (!market.demand || typeof market.demand !== 'object') market.demand = {};
+  if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+}
+
+function settlementTier(settlement) {
+  return Number.isFinite(settlement?.tier)
     ? settlement.tier
     : CONST.SETTLEMENT_TIER[String(settlement?.type || '').toLowerCase()] || CONST.SETTLEMENT_TIER.village;
+}
+
+function clampMomentum(raw) {
+  return clamp(raw, -CONST.MARKET.MOMENTUM_MAX_ABS, CONST.MARKET.MOMENTUM_MAX_ABS);
+}
+
+export function initMarket(settlement, seed) {
+  const tier = settlementTier(settlement);
   const rng = mulberry32(hashSeed(`${settlement?.id || 'settlement'}:${seed || 1}:market`));
   const stocks = {};
   const demand = {};
+  const momentum = {};
   (CONST.TRADE_ITEMS || []).forEach((item, index) => {
     stocks[item.id] = Math.max(1, Math.floor((4 + tier * 2) + rng() * (8 + index % 3)));
-    demand[item.id] = Number((0.85 + rng() * 0.5).toFixed(2));
+    demand[item.id] = Number((-0.12 + rng() * 0.24).toFixed(2));
+    momentum[item.id] = 0;
   });
-  return { stocks, demand };
+  return { stocks, demand, momentum };
 }
 
 export function getPrice(settlement, market, itemId, side = 'buy', options = null) {
+  normalizeMarket(market);
   const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
   if (!item) return 1;
-  const tier = Number.isFinite(settlement?.tier)
-    ? settlement.tier
-    : CONST.SETTLEMENT_TIER[String(settlement?.type || '').toLowerCase()] || CONST.SETTLEMENT_TIER.village;
-  const demand = Number(market?.demand?.[itemId] ?? 1);
+  const tier = settlementTier(settlement);
+  const demandShift = Number(market?.demand?.[itemId] ?? 0);
+  const demand = Math.max(0.2, 1 + demandShift);
   const stock = Number(market?.stocks?.[itemId] ?? 0);
   const scarcity = stock <= 0
     ? 1 + CONST.TRADE_PRICE_PARAMS.maxScarcityBoost
@@ -54,6 +75,8 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   const biomeMult = 1 + ((settlement?.biomeMod || 0) * CONST.TRADE_PRICE_PARAMS.biomeWeight);
 
   let price = item.basePrice * demand * scarcity * tierMult * biomeMult;
+  const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0));
+  price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
     const opportunity = getActiveOpportunity(settlement, itemId, options);
@@ -81,6 +104,7 @@ function getActiveOpportunity(settlement, itemId, options) {
 
 export function buy(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
+  normalizeMarket(market);
   const count = Math.max(1, Math.floor(qty || 1));
   const stock = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0));
   if (stock <= 0) return { ok: false, message: 'Stok yok.' };
@@ -95,11 +119,20 @@ export function buy(party, market, settlement, itemId, qty, options) {
   const existing = party.inventory.items.find((it) => it.id === itemId);
   if (existing) existing.qty = Math.max(0, Math.floor(existing.qty || 0)) + amount;
   else party.inventory.items.push({ id: itemId, name: item?.name || itemId, qty: amount });
-  return { ok: true, message: `${item?.name || itemId} x${amount} alındı.` };
+  const momentumDelta = CONST.MARKET.MOMENTUM_PER_QTY * amount;
+  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) + momentumDelta);
+  return {
+    ok: true,
+    message: `${item?.name || itemId} x${amount} alındı.`,
+    qty: amount,
+    spentGold: total,
+    deltaGold: -total,
+  };
 }
 
 export function sell(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
+  normalizeMarket(market);
   const count = Math.max(1, Math.floor(qty || 1));
   const entry = party.inventory.items.find((it) => it.id === itemId);
   const have = Math.max(0, Math.floor(entry?.qty ?? 0));
@@ -114,8 +147,57 @@ export function sell(party, market, settlement, itemId, qty, options) {
     party.inventory.items = party.inventory.items.filter((it) => it.id !== itemId);
   }
   market.stocks[itemId] = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0)) + amount;
+  const momentumDelta = CONST.MARKET.MOMENTUM_PER_QTY * amount;
+  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) - momentumDelta);
   const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
-  return { ok: true, message: `${item?.name || itemId} x${amount} satıldı.` };
+  return {
+    ok: true,
+    message: `${item?.name || itemId} x${amount} satıldı.`,
+    qty: amount,
+    earnedGold: total,
+    deltaGold: total,
+  };
+}
+
+function getTierStockCeil(settlement) {
+  const tier = settlementTier(settlement);
+  if (tier >= CONST.SETTLEMENT_TIER.city) return CONST.MARKET.STOCK_CEIL_CITY;
+  if (tier >= CONST.SETTLEMENT_TIER.town) return CONST.MARKET.STOCK_CEIL_TOWN;
+  return CONST.MARKET.STOCK_CEIL_VILLAGE;
+}
+
+export function advanceMarketOneDay(settlement, market, ctx = {}) {
+  if (!market || typeof market !== 'object') return;
+  normalizeMarket(market);
+
+  const day = Number.isFinite(ctx?.day) ? ctx.day : 1;
+  const settlementKey = ctx?.settlementKey || settlement?.id || `${settlement?.tx},${settlement?.ty}`;
+  const seedBase = `${ctx?.seed ?? 'seed'}:${day}:${settlementKey}`;
+  const rng = mulberry32(hashSeed(seedBase));
+  const biomeKey = String(ctx?.biomeKey || settlement?.biomeKey || 'PLAINS').toUpperCase();
+  const biomeBiasMap = CONST.MARKET_BIOME_PRODUCTION?.[biomeKey] || {};
+  const tierStockCeil = getTierStockCeil(settlement);
+
+  for (const item of (CONST.TRADE_ITEMS || [])) {
+    const itemId = item.id;
+
+    const stockMin = Number(CONST.MARKET.DRIFT_STOCK_STEP_RANGE?.[0] ?? -3);
+    const stockMax = Number(CONST.MARKET.DRIFT_STOCK_STEP_RANGE?.[1] ?? 5);
+    const stockStep = Math.floor(rng() * (stockMax - stockMin + 1)) + stockMin;
+    const biomeBias = Number(biomeBiasMap[itemId] ?? 0);
+    const nextStock = Math.floor(Number(market.stocks[itemId] ?? 0) + stockStep + biomeBias);
+    market.stocks[itemId] = clamp(nextStock, CONST.MARKET.STOCK_FLOOR, tierStockCeil);
+
+    const demandMin = Number(CONST.MARKET.DRIFT_DEMAND_STEP_RANGE?.[0] ?? -0.08);
+    const demandMax = Number(CONST.MARKET.DRIFT_DEMAND_STEP_RANGE?.[1] ?? 0.10);
+    const demandStep = demandMin + (rng() * (demandMax - demandMin));
+    let demand = Number(market.demand[itemId] ?? 0) + demandStep;
+    demand += (0 - demand) * CONST.MARKET.DEMAND_MEAN_REVERT;
+    market.demand[itemId] = clamp(demand, -0.6, 0.6);
+
+    const momentum = Number(market.momentum[itemId] ?? 0) * CONST.MARKET.MOMENTUM_DECAY;
+    market.momentum[itemId] = clampMomentum(momentum);
+  }
 }
 
 export default {
@@ -123,4 +205,5 @@ export default {
   getPrice,
   buy,
   sell,
+  advanceMarketOneDay,
 };
