@@ -259,6 +259,14 @@ export function warnOnce(key, message) {
   console.warn(message);
 }
 
+export function devLog(stateOrBool, ...args) {
+  const enabled = typeof stateOrBool === 'boolean'
+    ? stateOrBool
+    : Boolean(stateOrBool && typeof stateOrBool === 'object' && stateOrBool.devMode);
+  if (!enabled) return;
+  console.log(...args);
+}
+
 /**
  * Güvenli element text setter
  */
