@@ -141,6 +141,12 @@ export class SaveSystem {
         markets: normalizedMarkets,
         supplies: game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 },
         camp: game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' },
+        tutorial: {
+          enabled: typeof game?.tutorial?.enabled === 'boolean' ? game.tutorial.enabled : true,
+          shown: game?.tutorial?.shown && typeof game.tutorial.shown === 'object' && !Array.isArray(game.tutorial.shown)
+            ? game.tutorial.shown
+            : {},
+        },
         poiState: game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {},
         marketOpportunities: game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
           ? game.marketOpportunities

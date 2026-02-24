@@ -597,6 +597,32 @@ export const UI = Object.freeze({
   MINIMAP_ZOOM: 0.1,
 });
 
+export const TUTORIAL_HINTS = Object.freeze({
+  ENABLED_DEFAULT: true,
+  MAX_DAYS: 3,
+  MAX_REALTIME_SEC: 600,
+  COOLDOWN_MS: 6500,
+  PRIORITY: Object.freeze({
+    encounter: 100,
+    battleDeploy: 90,
+    battleCmd: 90,
+    city: 80,
+    poi: 70,
+    camp: 60,
+    movement: 50,
+  }),
+});
+
+export const HINT_TEXT = Object.freeze({
+  encounter: 'İpucu: Karşılaşmada Fight ile savaşa gir veya Retreat ile geri çekil.',
+  movement: 'İpucu: Haritada WASD / sürükle ile gez, mouse tekeri ile zoom.',
+  city: 'İpucu: Şehir yakınında C ile şehre gir (Recruit/Trade).',
+  poi: 'İpucu: POI yakınında E ile incele (ganimet/pusu/ipucu).',
+  camp: 'İpucu: K ile kamp kur, nöbet seç; erzak tüketimi düşer.',
+  battleDeploy: 'İpucu: Deploy: 1-4 formasyon, Q/E dön, tıkla yerleştir, Enter başlat.',
+  battleCmd: 'İpucu: Komutlar: H Hold, F Focus, R Retreat.',
+});
+
 // =============================================================================
 // DEBUG MOD
 // =============================================================================
@@ -676,6 +702,8 @@ export default {
   DEFAULT_KEYBINDS,
   SAVE,
   UI,
+  TUTORIAL_HINTS,
+  HINT_TEXT,
   DEBUG,
   ECONOMY,
   DIPLOMACY,

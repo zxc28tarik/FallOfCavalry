@@ -4,6 +4,7 @@
  */
 
 import { safeClass, safeText, getEl } from '../utils.js';
+import { TUTORIAL_HINTS } from '../constants.js';
 
 export class HUDManager {
   constructor(state) {
@@ -21,6 +22,8 @@ export class HUDManager {
       onVolumeChange: null,
     };
     this.warnedKeys = new Set();
+    this.transientHintTimer = null;
+    this.transientHintRestore = null;
 
     this.setupElements();
     this.setupListeners();
@@ -133,9 +136,43 @@ export class HUDManager {
 
   updateEventLine() {
     if (!this.elements.hudEvent) return;
+    if (this.transientHintRestore) return;
     const message = this.state?.lastEventLog || this.state?.interactHint;
     safeText(this.elements.hudEvent, message || '');
     safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
+  }
+
+  showTransientHint(text, ms = TUTORIAL_HINTS.COOLDOWN_MS) {
+    const hintText = typeof text === 'string' ? text.trim() : '';
+    if (!hintText) return false;
+    const el = this.elements?.hudEvent;
+    if (!el) {
+      this.warnOnce('hud:hint-fallback', `[HUD] ${hintText}`);
+      return false;
+    }
+
+    if (this.transientHintTimer) {
+      clearTimeout(this.transientHintTimer);
+      this.transientHintTimer = null;
+    }
+
+    this.transientHintRestore = this.transientHintRestore || {
+      text: this.state?.lastEventLog || this.state?.interactHint || '',
+      hidden: el.classList?.contains('hidden') ?? true,
+    };
+
+    safeText(el, hintText);
+    safeClass(el, 'remove', 'hidden');
+
+    const duration = Number.isFinite(ms) ? Math.max(250, Math.floor(ms)) : TUTORIAL_HINTS.COOLDOWN_MS;
+    this.transientHintTimer = setTimeout(() => {
+      const restore = this.transientHintRestore || { text: '', hidden: true };
+      this.transientHintRestore = null;
+      safeText(el, restore.text || '');
+      safeClass(el, (restore.text || '').length > 0 ? 'remove' : 'add', 'hidden');
+    }, duration);
+
+    return true;
   }
 
   updateVisibility(mode) {
@@ -263,6 +300,11 @@ export class HUDManager {
     });
     this.uiHandlers.clear();
     this.listenersBound = false;
+    if (this.transientHintTimer) {
+      clearTimeout(this.transientHintTimer);
+      this.transientHintTimer = null;
+    }
+    this.transientHintRestore = null;
   }
 }
 

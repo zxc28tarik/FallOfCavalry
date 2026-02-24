@@ -49,6 +49,40 @@ function warnBootstrapOnce(message) {
   console.warn(message);
 }
 
+function chooseTutorialHint({ state, mode, nearSettlement, nearPoi, inCamp, inBattleDeploy, inBattleFight, inEncounter }) {
+  if (!state || typeof state !== 'object') return null;
+  const tutorial = state.tutorial && typeof state.tutorial === 'object' ? state.tutorial : null;
+  if (!tutorial?.enabled) return null;
+
+  const day = Number(state.day ?? 1);
+  const timeSec = Number(state.timeSec ?? 0);
+  const outOfDayWindow = day > CONST.TUTORIAL_HINTS.MAX_DAYS;
+  const outOfTimeWindow = Number.isFinite(timeSec) && timeSec > CONST.TUTORIAL_HINTS.MAX_REALTIME_SEC;
+  if (outOfDayWindow && outOfTimeWindow) return null;
+
+  const now = Date.now();
+  const lastShownAt = Number(tutorial.lastShownAt ?? 0);
+  if (Number.isFinite(lastShownAt) && (now - lastShownAt) < CONST.TUTORIAL_HINTS.COOLDOWN_MS) return null;
+
+  const shown = tutorial.shown && typeof tutorial.shown === 'object' ? tutorial.shown : {};
+  const candidates = [
+    inEncounter ? 'encounter' : null,
+    inBattleDeploy ? 'battleDeploy' : null,
+    inBattleFight ? 'battleCmd' : null,
+    nearSettlement ? 'city' : null,
+    nearPoi ? 'poi' : null,
+    inCamp ? 'camp' : null,
+    mode === 'map' ? 'movement' : null,
+  ].filter(Boolean);
+
+  const key = candidates
+    .filter((candidate) => !shown[candidate] && CONST.HINT_TEXT[candidate])
+    .sort((a, b) => (CONST.TUTORIAL_HINTS.PRIORITY[b] ?? 0) - (CONST.TUTORIAL_HINTS.PRIORITY[a] ?? 0))[0];
+
+  if (!key) return null;
+  return { key, text: CONST.HINT_TEXT[key] };
+}
+
 class ObjectPool {
   constructor(size, factory, resetter = null) {
     this.size = Math.max(1, size | 0);
@@ -172,6 +206,29 @@ class FallOfCavalry {
     utils.warnOnce(key, message);
   }
 
+  ensureTutorialState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    const current = this.state.tutorial && typeof this.state.tutorial === 'object' ? this.state.tutorial : {};
+    const shown = current.shown && typeof current.shown === 'object' ? current.shown : {};
+    this.state.tutorial = {
+      enabled: typeof current.enabled === 'boolean' ? current.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
+      lastShownAt: Number.isFinite(current.lastShownAt) ? current.lastShownAt : 0,
+      shown,
+    };
+  }
+
+  maybeShowTutorialHint(context = {}) {
+    this.ensureTutorialState();
+    const hint = chooseTutorialHint({ state: this.state, mode: this.state?.mode, ...context });
+    if (!hint) return false;
+    this.state.tutorial.lastShownAt = Date.now();
+    this.state.tutorial.shown[hint.key] = true;
+    if (!this.hudManager?.showTransientHint?.(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS)) {
+      this.setLastEventLog(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS);
+    }
+    return true;
+  }
+
   init() {
     if (this.initialized) {
       this.warnOnce('game:init-duplicate', '[Game] init() already completed');
@@ -197,6 +254,7 @@ class FallOfCavalry {
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     if (this.state) PoiSystem.ensurePoiState(this.state);
+    this.ensureTutorialState();
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
@@ -208,6 +266,7 @@ class FallOfCavalry {
     this.initPlayerParty();
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
+    this.setupSettingsUI();
     this.setupMenuActions();
     this.setupStartFlow();
     this.setupCityServicesUI();
@@ -625,6 +684,23 @@ class FallOfCavalry {
     this.updatePlayerParty(dt);
     this.updateEnemyParties(dt);
     this.tryTriggerEncounter();
+
+    const party = this.playerParty;
+    const tilePos = this.getTilePosition(party?.x ?? 0, party?.y ?? 0);
+    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    const settlementTx = Number.isFinite(nearestSettlement?.tx) ? nearestSettlement.tx : Math.floor(Number(nearestSettlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
+    const settlementTy = Number.isFinite(nearestSettlement?.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
+    const nearSettlement = Boolean(nearestSettlement) && Math.hypot(settlementTx - tilePos.tx, settlementTy - tilePos.ty) <= 2.5;
+    const nearPoi = Boolean(this.getNearestInteractablePoi());
+
+    this.maybeShowTutorialHint({
+      nearSettlement,
+      nearPoi,
+      inCamp: Boolean(this.state?.camp?.active),
+      inBattleDeploy: false,
+      inBattleFight: false,
+      inEncounter: this.state?.mode === 'encounter',
+    });
 
     if (Number.isFinite(dt) && dt > 0) {
       this.battleRecoveryTimer += dt;
@@ -1291,6 +1367,7 @@ class FallOfCavalry {
       },
     };
     this.state.setMode('encounter');
+    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: true });
     return true;
   }
 
@@ -1684,6 +1761,7 @@ class FallOfCavalry {
   enterCityServices() {
     if (!this.state) return false;
     this.setupCityServicesUI();
+    this.maybeShowTutorialHint({ nearSettlement: true, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
     this.state.city = this.getActiveSettlementForCity();
     const settlement = this.state.city;
     settlement.tier = this.getSettlementTier(settlement);
@@ -1736,6 +1814,7 @@ class FallOfCavalry {
   toggleCampMode() {
     campSystem.ensureCampState(this.state);
     const active = campSystem.toggleCamp(this.state);
+    if (active) this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: true, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
     if (active) {
       this.cancelPlayerDestination();
       const { weight, cap } = this.getLogisticsSpeedMult();
@@ -1767,6 +1846,7 @@ class FallOfCavalry {
   startBattleDeployment() {
     const battle = this.state?.battle;
     if (!battle) return false;
+    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: true, inBattleFight: false, inEncounter: false });
     this.battleDeployMode = new BattleDeployMode({
       state: this.state,
       party: this.playerParty,
@@ -1781,6 +1861,7 @@ class FallOfCavalry {
   confirmBattleDeployment() {
     const battle = this.state?.battle;
     if (!battle || !this.battleDeployMode?.active) return false;
+    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: true, inEncounter: false });
     this.battleDeployMode.applyDeployment(battle.playerUnits || []);
     battle.phase = 'fight';
     this.battleDeployUI?.hide?.();
@@ -1906,6 +1987,7 @@ class FallOfCavalry {
     if (!this.poiUI || typeof this.poiUI.show !== 'function') return false;
     const nearest = this.getNearestInteractablePoi();
     if (!nearest?.poi) return false;
+    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: true, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
     this.activePoi = nearest.poi;
     const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
     const can = PoiSystem.canInteract(this.state, nearest.poi);
@@ -3115,6 +3197,7 @@ Up/Down select, Enter heal, Esc back`,
       btnDeployStart: utils.getEl('btnDeployStart'),
       btnDeployCancel: utils.getEl('btnDeployCancel'),
       deployHint: utils.getEl('deployHint'),
+      toggleHints: utils.getEl('toggleHints'),
       tooltip: utils.getEl('tooltip'),
       debugOverlay: utils.getEl('debugOverlay'),
       hudMinimapPanel: utils.getEl('hudMinimapPanel'),
@@ -3187,6 +3270,22 @@ Up/Down select, Enter heal, Esc back`,
     }
 
     this.setupDebugSmokePanel();
+  }
+
+
+  setupSettingsUI() {
+    const toggleHints = this.dom?.toggleHints;
+    this.ensureTutorialState();
+    if (!toggleHints) return;
+    toggleHints.checked = Boolean(this.state?.tutorial?.enabled);
+    if (toggleHints.dataset.boundHintToggle === '1') return;
+    toggleHints.dataset.boundHintToggle = '1';
+    toggleHints.addEventListener('change', (event) => {
+      this.ensureTutorialState();
+      const checked = Boolean(event?.target?.checked);
+      this.state.tutorial.enabled = checked;
+      if (!checked) this.state.tutorial.lastShownAt = 0;
+    });
   }
 
 
@@ -3778,6 +3877,10 @@ Up/Down select, Enter heal, Esc back`,
         markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
+        tutorial: {
+          enabled: Boolean(this.state?.tutorial?.enabled ?? CONST.TUTORIAL_HINTS.ENABLED_DEFAULT),
+          shown: this.state?.tutorial?.shown && typeof this.state.tutorial.shown === 'object' ? this.state.tutorial.shown : {},
+        },
         poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
         clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
         marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
@@ -3890,6 +3993,11 @@ Up/Down select, Enter heal, Esc back`,
     });
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
+    this.state.tutorial = {
+      enabled: typeof game?.tutorial?.enabled === 'boolean' ? game.tutorial.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
+      shown: game?.tutorial?.shown && typeof game.tutorial.shown === 'object' && !Array.isArray(game.tutorial.shown) ? game.tutorial.shown : {},
+      lastShownAt: 0,
+    };
     this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
     this.state.clueMarker = game.clueMarker && typeof game.clueMarker === 'object' ? game.clueMarker : null;
     this.state.marketOpportunities = game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
@@ -3919,6 +4027,7 @@ Up/Down select, Enter heal, Esc back`,
     this.state.accounting = null;
     this.state.aftermath = null;
     this.state.lastSaveMeta = { slot, at: Date.now() };
+    this.setupSettingsUI();
     this.updateTransientUIState();
     return true;
   }
