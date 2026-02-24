@@ -34,12 +34,16 @@ export function getNearestPoi(map, partyX, partyY, tileSize) {
   return nearest;
 }
 
-export function canInteract(state, poi) {
+export function getCooldownRemainingDays(state, poi) {
   const poiState = ensurePoiState(state);
   const key = keyOfPoi(poi);
   const lastVisitedDay = Number(poiState?.[key]?.lastVisitedDay ?? -99999);
   const day = Number(state?.day ?? 1);
-  return (day - lastVisitedDay) >= CONST.POI.COOLDOWN_DAYS;
+  return Math.max(0, CONST.POI.COOLDOWN_DAYS - (day - lastVisitedDay));
+}
+
+export function canInteract(state, poi) {
+  return getCooldownRemainingDays(state, poi) <= 0;
 }
 
 function createDeterministicRng(seed, day, poi) {
@@ -64,12 +68,14 @@ function randInt(rand, min, max) {
   return lo + Math.floor(rand() * (hi - lo + 1));
 }
 
-export function rollOutcome({ seed, day, poi } = {}) {
+export function rollOutcome({ seed, day, poi, context } = {}) {
   const normalizedType = (poi?.type === 'camp' || poi?.type === 'ruin') ? poi.type : 'ruin';
   const normalizedPoi = { ...poi, type: normalizedType };
   const rand = createDeterministicRng(seed, day, normalizedPoi);
   const isRuin = normalizedPoi.type === 'ruin';
-  const ambushChance = isRuin ? CONST.POI.AMBUSH_CHANCE_RUIN : CONST.POI.AMBUSH_CHANCE_CAMP;
+  const baseAmbushChance = isRuin ? CONST.POI.AMBUSH_CHANCE_RUIN : CONST.POI.AMBUSH_CHANCE_CAMP;
+  const riskMult = context?.onRoad ? CONST.POI.AMBUSH_RISK_MULT_ON_ROAD : CONST.POI.AMBUSH_RISK_MULT_OFFROAD;
+  const ambushChance = Math.max(0, Math.min(1, baseAmbushChance * riskMult));
 
   if (rand() < ambushChance) {
     const enemyId = `poi-ambush-${normalizedPoi.type}-${normalizedPoi?.x ?? 0}-${normalizedPoi?.y ?? 0}-${day ?? 0}`;
@@ -78,17 +84,28 @@ export function rollOutcome({ seed, day, poi } = {}) {
 
   const [goldMin, goldMax] = CONST.POI.LOOT_GOLD_RANGE;
   const [foodMin, foodMax] = CONST.POI.LOOT_FOOD_RANGE;
-  const gold = randInt(rand, goldMin, goldMax);
+  const items = Array.isArray(CONST.TRADE_ITEMS) ? CONST.TRADE_ITEMS : [];
+  const picked = items.length ? items[Math.floor(rand() * items.length)] : null;
+  let itemQty = randInt(rand, 1, 3);
+  let gold = randInt(rand, goldMin, goldMax);
   const food = randInt(rand, foodMin, foodMax);
-  const loot = [{ kind: 'gold', qty: gold }, { kind: 'food', qty: food }];
-  for (let i = 0; i < (CONST.POI.LOOT_ITEM_ROLLS || 0); i += 1) {
-    const items = CONST.TRADE_ITEMS || [];
-    if (!items.length) break;
-    const picked = items[Math.floor(rand() * items.length)];
-    if (!picked) continue;
-    loot.push({ kind: 'item', itemId: picked.id, name: picked.name, qty: randInt(rand, 1, 3) });
+  let rare = false;
+
+  if (rand() < CONST.POI.RARE_BONUS_CHANCE) {
+    const [rareGoldMin, rareGoldMax] = CONST.POI.RARE_BONUS_GOLD_RANGE;
+    const [rareQtyMin, rareQtyMax] = CONST.POI.RARE_BONUS_ITEM_QTY_RANGE;
+    gold += randInt(rand, rareGoldMin, rareGoldMax);
+    itemQty += randInt(rand, rareQtyMin, rareQtyMax);
+    rare = true;
   }
-  return { kind: 'loot', loot };
+
+  const loot = {
+    gold,
+    food,
+    items: picked ? [{ id: picked.id, qty: itemQty }] : [],
+  };
+
+  return { kind: 'loot', loot, rare };
 }
 
 export function markInvestigated(state, poi) {

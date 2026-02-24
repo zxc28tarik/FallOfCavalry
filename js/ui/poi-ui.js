@@ -30,14 +30,18 @@ export default class PoiUI {
     this.bound = true;
   }
 
-  show({ poi, canInvestigate, cooldownText } = {}) {
+  show({ poi, canInvestigate, cooldownText, remainingDays } = {}) {
     this.currentPoi = poi || null;
     const label = poi?.type === 'ruin' ? 'Harabe' : 'Kamp';
     safeText(this.refs.title, label);
     safeText(this.refs.desc, poi?.type === 'ruin' ? 'Yıkık duvarlar arasında değerli bir şeyler olabilir.' : 'Sönmüş ateşler ve terk edilmiş çadırlar dikkat çekiyor.');
-    safeText(this.refs.cooldown, cooldownText || '');
+    const hasRemaining = Number.isFinite(remainingDays) && remainingDays > 0;
+    const finalCooldownText = hasRemaining
+      ? `Tekrar inceleme: ${remainingDays} gün sonra`
+      : (cooldownText || '');
+    safeText(this.refs.cooldown, finalCooldownText);
     if (this.refs.btnInvestigate) {
-      this.refs.btnInvestigate.disabled = !canInvestigate;
+      this.refs.btnInvestigate.disabled = !canInvestigate || hasRemaining;
     }
     safeClass(this.refs.modal, 'remove', 'hidden');
   }

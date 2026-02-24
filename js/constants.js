@@ -325,13 +325,20 @@ export const CAMP = Object.freeze({
 });
 
 export const POI = Object.freeze({
+  MIN_COUNT: 6,
+  MAX_COUNT: 14,
+  MIN_DISTANCE_TO_SETTLEMENT_TILES: 5,
   INTERACT_RADIUS_TILES: 1.4,
   COOLDOWN_DAYS: 2,
   AMBUSH_CHANCE_RUIN: 0.35,
   AMBUSH_CHANCE_CAMP: 0.20,
+  AMBUSH_RISK_MULT_ON_ROAD: 0.85,
+  AMBUSH_RISK_MULT_OFFROAD: 1.15,
   LOOT_GOLD_RANGE: Object.freeze([6, 18]),
   LOOT_FOOD_RANGE: Object.freeze([1, 4]),
-  LOOT_ITEM_ROLLS: 1,
+  RARE_BONUS_CHANCE: 0.08,
+  RARE_BONUS_GOLD_RANGE: Object.freeze([25, 60]),
+  RARE_BONUS_ITEM_QTY_RANGE: Object.freeze([2, 5]),
   AMBUSH_TEMPORARY: true,
 });
 

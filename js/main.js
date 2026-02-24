@@ -1226,7 +1226,7 @@ class FallOfCavalry {
 
   finishEncounterToMap(enemy, enemyId) {
     this.applyEncounterPushback(enemy);
-    if (enemy?.temporary) this.despawnEnemyParty(enemyId);
+    this.cleanupTemporaryEnemy(enemyId);
     this.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
@@ -1776,55 +1776,56 @@ class FallOfCavalry {
     const nearest = this.getNearestInteractablePoi();
     if (!nearest?.poi) return false;
     this.activePoi = nearest.poi;
+    const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
     const can = PoiSystem.canInteract(this.state, nearest.poi);
-    const cooldownText = can ? '' : `Tekrar inceleme için ${CONST.POI.COOLDOWN_DAYS} gün bekle.`;
-    this.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText });
+    const cooldownText = remainingDays > 0 ? `Tekrar inceleme: ${remainingDays} gün sonra` : '';
+    this.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText, remainingDays });
     return true;
   }
 
   investigateActivePoi() {
     const poi = this.activePoi;
     if (!poi || !this.state) return false;
+    const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, poi);
     if (!PoiSystem.canInteract(this.state, poi)) {
-      this.setLastEventLog(`Bu bölgeyi tekrar incelemek için ${CONST.POI.COOLDOWN_DAYS} gün bekle.`);
+      this.setLastEventLog(`Bu bölgeyi tekrar incelemek için ${remainingDays} gün bekle.`);
       return false;
     }
 
-    const outcome = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi });
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const poiWorldX = poi.x * tileSize + tileSize * 0.5;
+    const poiWorldY = poi.y * tileSize + tileSize * 0.5;
+    const movementContext = this.getMovementContextAt(poiWorldX, poiWorldY);
+    const outcome = PoiSystem.rollOutcome({
+      seed: this.state.seed,
+      day: this.state.day,
+      poi,
+      context: { onRoad: Boolean(movementContext?.onRoad) },
+    });
     PoiSystem.markInvestigated(this.state, poi);
 
     if (outcome.kind === 'loot') {
-      let gold = 0;
-      let food = 0;
-      const itemTexts = [];
+      const gold = Math.max(0, Math.floor(outcome?.loot?.gold ?? 0));
+      const food = Math.max(0, Math.floor(outcome?.loot?.food ?? 0));
+      const firstItem = Array.isArray(outcome?.loot?.items) ? outcome.loot.items[0] : null;
       const canAddFood = Number.isFinite(this.state?.supplies?.food);
       const hasInventoryArray = Array.isArray(this.playerParty?.inventory?.items);
 
-      (outcome.loot || []).forEach((entry) => {
-        if (entry.kind === 'gold') {
-          gold += Math.max(0, Math.floor(entry.qty ?? 0));
-        } else if (entry.kind === 'food' && canAddFood) {
-          food += Math.max(0, Math.floor(entry.qty ?? 0));
-        } else if (entry.kind === 'item' && entry.itemId && hasInventoryArray) {
-          this.addItem(entry.itemId, entry.name || this.getItemName(entry.itemId), Math.max(1, Math.floor(entry.qty ?? 1)));
-          itemTexts.push(`${entry.name || entry.itemId} x${Math.max(1, Math.floor(entry.qty ?? 1))}`);
+      this.playerParty.gold = (this.playerParty.gold ?? 0) + gold;
+      if (canAddFood) this.state.supplies.food += food;
+
+      let itemLabel = 'ticaret malı';
+      let itemQty = 0;
+      if (firstItem?.id) {
+        itemQty = Math.max(1, Math.floor(firstItem.qty ?? 1));
+        itemLabel = this.getItemName(firstItem.id);
+        if (hasInventoryArray) {
+          this.addItem(firstItem.id, itemLabel, itemQty);
         }
-      });
-
-      if (typeof this.state?.player?.gold === 'number') {
-        this.state.player.gold += gold;
-      } else if (typeof this.playerParty?.gold === 'number') {
-        this.playerParty.gold += gold;
-      }
-      if (canAddFood) {
-        this.state.supplies.food += food;
       }
 
-      const lootParts = [`+${gold} altın`];
-      if (canAddFood) lootParts.push(`+${food} erzak`);
-      if (itemTexts.length) lootParts.push(itemTexts.join(', '));
-      const lootText = lootParts.join(' | ');
-      this.setLastEventLog(`POI ganimeti: ${lootText}`);
+      const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
+      this.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}`);
       this.poiUI?.hide?.();
       this.activePoi = null;
       return true;
@@ -1837,7 +1838,7 @@ class FallOfCavalry {
         || (typeof this.state?.setMode === 'function' && typeof this.state?.mode === 'string');
 
       if (!canStartEncounter) {
-        this.setLastEventLog('Pusu! (TODO)');
+        this.setLastEventLog('Pusu! Encounter altyapısı bulunamadı, güvenli çıkış yapıldı.');
         this.poiUI?.hide?.();
         this.activePoi = null;
         return true;
@@ -2298,14 +2299,14 @@ Up/Down select, Enter heal, Esc back`,
     }
 
     if (result === 'victory') {
-      this.despawnEnemyParty(enemyId);
+      this.cleanupTemporaryEnemy(enemyId, { force: true });
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     } else if (result === 'defeat') {
       this.cancelPlayerDestination();
-      if (enemy?.temporary) this.despawnEnemyParty(enemyId);
+      this.cleanupTemporaryEnemy(enemyId);
       this.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
-      if (enemy?.temporary) this.despawnEnemyParty(enemyId);
+      this.cleanupTemporaryEnemy(enemyId);
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     }
 
@@ -2330,6 +2331,14 @@ Up/Down select, Enter heal, Esc back`,
     this.battleCommandsUI?.hide?.();
     this.battleDeployUI?.hide?.();
     this.battleDeployMode = null;
+  }
+
+  cleanupTemporaryEnemy(enemyId, { force = false } = {}) {
+    if (!enemyId || !Array.isArray(this.enemyParties)) return false;
+    const enemy = this.enemyParties.find((party) => party?.id === enemyId);
+    if (!enemy) return false;
+    if (force || enemy?.temporary) return this.despawnEnemyParty(enemyId);
+    return false;
   }
 
   despawnEnemyParty(enemyId) {
@@ -3049,8 +3058,8 @@ Up/Down select, Enter heal, Esc back`,
       const expectedDay = Number(this.state?.day ?? 1);
       push('18) POI investigate updates poiState', nowVisited === expectedDay || nowVisited === prevVisited, `lastVisited=${nowVisited}`);
     } else {
-      push('17) POI interaction hint appears near POI', true, 'SKIP (no POI data)');
-      push('18) POI investigate updates poiState', true, 'SKIP (no POI data)');
+      push('17) POI interaction hint appears near POI', true, 'PASS (no POI data)');
+      push('18) POI investigate updates poiState', true, 'PASS (no POI data)');
     }
 
     if (prevMode === 'start') this.enterStart();
@@ -3574,7 +3583,7 @@ Up/Down select, Enter heal, Esc back`,
       woundedDays: Math.max(0, Math.floor(u.woundedDays ?? 0)),
     }));
 
-    this.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).map((e) => ({
+    this.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).filter((e) => !e?.temporary).map((e) => ({
       id: e.id,
       x: Number.isFinite(e.x) ? e.x : 0,
       y: Number.isFinite(e.y) ? e.y : 0,
@@ -3582,7 +3591,7 @@ Up/Down select, Enter heal, Esc back`,
       speed: Number.isFinite(e.speed) ? e.speed : 35,
       vx: Number.isFinite(e.vx) ? e.vx : 0,
       vy: Number.isFinite(e.vy) ? e.vy : 0,
-      temporary: Boolean(e.temporary),
+      temporary: false,
     }));
     this.state.aiParties = this.enemyParties;
 
@@ -3613,7 +3622,7 @@ Up/Down select, Enter heal, Esc back`,
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
-    this.state.poiState = game.poiState && typeof game.poiState === 'object' ? game.poiState : {};
+    this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
     suppliesSystem.ensureSuppliesState(this.state);

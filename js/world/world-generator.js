@@ -338,13 +338,25 @@ export class WorldGenerator {
   }
 
   generatePOIs(biomes, settlements) {
-    const count = this.randInt(CONST.BIOME_BAND_PARAMS.POI_MIN, CONST.BIOME_BAND_PARAMS.POI_MAX);
+    const count = this.randInt(CONST.POI.MIN_COUNT, CONST.POI.MAX_COUNT);
     const pois = [];
     const taken = new Set();
     const allowed = new Set([CONST.BIOME.PLAINS, CONST.BIOME.FOREST, CONST.BIOME.HILLS]);
+    const minSettlementDist = Math.max(1, Number(CONST.POI.MIN_DISTANCE_TO_SETTLEMENT_TILES) || 1);
+
+    const settlementDistance = (x, y) => {
+      let nearestDist = Number.POSITIVE_INFINITY;
+      for (const s of settlements || []) {
+        const dist = utils.distance(x, y, s.x, s.y);
+        if (dist < nearestDist) nearestDist = dist;
+      }
+      return nearestDist;
+    };
 
     let attempts = 0;
-    const maxAttempts = count * 80;
+    const maxAttempts = count * 220;
+    const relaxedAfter = maxAttempts + 1;
+    const relaxedMinDist = Math.max(1, Math.floor(minSettlementDist * 0.5));
     while (pois.length < count && attempts < maxAttempts) {
       attempts++;
       const x = this.randInt(2, this.MAP_W - 3);
@@ -354,34 +366,35 @@ export class WorldGenerator {
       const key = `${x},${y}`;
       if (taken.has(key)) continue;
 
-      let tooClose = false;
-      for (const s of settlements || []) {
-        if (utils.distance(x, y, s.x, s.y) < CONST.BIOME_BAND_PARAMS.POI_MIN_SETTLEMENT_DIST) {
-          tooClose = true;
-          break;
-        }
-      }
+      const minDistForAttempt = attempts > relaxedAfter ? relaxedMinDist : minSettlementDist;
+      const tooClose = settlementDistance(x, y) < minDistForAttempt;
       if (tooClose) continue;
 
       taken.add(key);
       pois.push({ x, y, type: this.rand() < 0.55 ? 'ruin' : 'camp' });
     }
 
-    if (pois.length < CONST.BIOME_BAND_PARAMS.POI_MIN) {
-      const candidates = [];
+    if (pois.length < CONST.POI.MIN_COUNT) {
+      const strictCandidates = [];
+      const relaxedCandidates = [];
       for (let y = 2; y < this.MAP_H - 2; y++) {
         for (let x = 2; x < this.MAP_W - 2; x++) {
           const idx = y * this.MAP_W + x;
           if (!allowed.has(biomes[idx])) continue;
           const key = `${x},${y}`;
           if (taken.has(key)) continue;
-          candidates.push({ x, y, key });
+          const candidate = { x, y, key, settlementDist: settlementDistance(x, y) };
+          if (candidate.settlementDist >= minSettlementDist) strictCandidates.push(candidate);
+          else relaxedCandidates.push(candidate);
         }
       }
 
-      while (pois.length < CONST.BIOME_BAND_PARAMS.POI_MIN && candidates.length) {
-        const pickIndex = this.randInt(0, candidates.length - 1);
-        const pick = candidates.splice(pickIndex, 1)[0];
+      strictCandidates.sort((a, b) => b.settlementDist - a.settlementDist);
+      relaxedCandidates.sort((a, b) => b.settlementDist - a.settlementDist);
+      const fillQueue = strictCandidates.concat(relaxedCandidates);
+
+      while (pois.length < CONST.POI.MIN_COUNT && fillQueue.length) {
+        const pick = fillQueue.shift();
         taken.add(pick.key);
         pois.push({ x: pick.x, y: pick.y, type: this.rand() < 0.55 ? 'ruin' : 'camp' });
       }
