@@ -10,15 +10,17 @@ export function ensureSuppliesState(state) {
   if (typeof state.status.starving !== 'boolean') state.status.starving = false;
 }
 
-export function computeDailyConsumption(party) {
+export function computeDailyConsumption(party, state = null) {
   const units = Array.isArray(party?.roster) ? party.roster.length : 0;
-  return CONST.SUPPLIES.DAILY_BASE_CONSUMPTION + (units * CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION);
+  const cfg = { ...CONST.SUPPLIES, ...(state?.tuning?.SUPPLIES || {}) };
+  return Number(cfg.DAILY_BASE_CONSUMPTION) + (units * Number(cfg.DAILY_PER_UNIT_CONSUMPTION));
 }
 
 export function applyEndOfDay(state, party, { inCamp = false } = {}) {
   ensureSuppliesState(state);
   const mult = inCamp ? CONST.CAMP.CAMP_CONSUMPTION_MULT : 1;
-  const consumed = computeDailyConsumption(party) * mult;
+  const cfg = { ...CONST.SUPPLIES, ...(state?.tuning?.SUPPLIES || {}) };
+  const consumed = computeDailyConsumption(party, state) * mult;
 
   state.supplies.food = Math.max(0, Number((state.supplies.food - consumed).toFixed(2)));
 
@@ -26,7 +28,7 @@ export function applyEndOfDay(state, party, { inCamp = false } = {}) {
   let starved = false;
   if (state.supplies.food <= 0) {
     starved = true;
-    moraleDelta = -Math.abs(CONST.SUPPLIES.STARVATION_MORALE_PENALTY);
+    moraleDelta = -Math.abs(Number(cfg.STARVATION_MORALE_PENALTY));
     if (party) {
       party.morale = Math.max(0, Math.floor((party.morale ?? 50) + moraleDelta));
     }

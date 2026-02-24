@@ -157,6 +157,7 @@ export class SaveSystem {
           ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
           : { tradePL: 0 },
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
+        tuning: game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {},
       },
     };
 

@@ -173,18 +173,19 @@ function pickClueTarget(poi, context) {
   };
 }
 
-export function rollOutcome({ seed, day, poi, context } = {}) {
+export function rollOutcome({ seed, day, poi, context, tuning } = {}) {
+  const cfg = { ...CONST.POI, ...(tuning?.POI || {}) };
   const normalizedType = (poi?.type === 'camp' || poi?.type === 'ruin') ? poi.type : 'ruin';
   const normalizedPoi = { ...poi, type: normalizedType };
   const rand = createDeterministicRng(seed, day, normalizedPoi);
   const isRuin = normalizedPoi.type === 'ruin';
-  const biomeRiskMult = Number(CONST.POI.BIOME_RISK_MODS?.[context?.biomeKey]) || 1;
-  const roadRiskMult = context?.onRoad ? CONST.POI.AMBUSH_RISK_MULT_ON_ROAD : CONST.POI.AMBUSH_RISK_MULT_OFFROAD;
+  const biomeRiskMult = Number(cfg.BIOME_RISK_MODS?.[context?.biomeKey]) || 1;
+  const roadRiskMult = context?.onRoad ? cfg.AMBUSH_RISK_MULT_ON_ROAD : cfg.AMBUSH_RISK_MULT_OFFROAD;
   const settlementTier = Number(context?.settlementTier ?? 2);
-  const settlementRiskMult = Number(CONST.POI.AMBUSH_SETTLEMENT_TIER_MULT?.[settlementTier]) || 1;
-  const baseAmbushChance = (isRuin ? CONST.POI.AMBUSH_CHANCE_RUIN : CONST.POI.AMBUSH_CHANCE_CAMP) * roadRiskMult * biomeRiskMult * settlementRiskMult;
-  const baseClueChance = (isRuin ? CONST.POI.CLUE_CHANCE_RUIN : CONST.POI.CLUE_CHANCE_CAMP) * (context?.onRoad ? 0.9 : 1.1);
-  const baseNothingChance = isRuin ? CONST.POI.NOTHING_CHANCE_RUIN : CONST.POI.NOTHING_CHANCE_CAMP;
+  const settlementRiskMult = Number(cfg.AMBUSH_SETTLEMENT_TIER_MULT?.[settlementTier]) || 1;
+  const baseAmbushChance = (isRuin ? cfg.AMBUSH_CHANCE_RUIN : cfg.AMBUSH_CHANCE_CAMP) * roadRiskMult * biomeRiskMult * settlementRiskMult;
+  const baseClueChance = (isRuin ? cfg.CLUE_CHANCE_RUIN : cfg.CLUE_CHANCE_CAMP) * (context?.onRoad ? 0.9 : 1.1);
+  const baseNothingChance = isRuin ? cfg.NOTHING_CHANCE_RUIN : cfg.NOTHING_CHANCE_CAMP;
 
   const ambushChance = clamp01(baseAmbushChance);
   const clueChance = clamp01(baseClueChance);
@@ -198,18 +199,18 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
   const roll = rand();
   if (roll < ambushFinal) {
     const enemyId = `poi-ambush-${normalizedPoi.type}-${normalizedPoi?.x ?? 0}-${normalizedPoi?.y ?? 0}-${day ?? 0}`;
-    return { kind: CONST.POI.OUTCOME.AMBUSH, enemyId, loss: pickAmbushLoss(rand) };
+    return { kind: cfg.OUTCOME.AMBUSH, enemyId, loss: pickAmbushLoss(rand) };
   }
 
   if (roll < ambushFinal + clueFinal) {
     const clueTarget = pickClueTarget(normalizedPoi, context);
     if (!clueTarget) {
-      return { kind: CONST.POI.OUTCOME.NOTHING, message: 'Burada kayda değer bir şey yok...' };
+      return { kind: cfg.OUTCOME.NOTHING, message: 'Burada kayda değer bir şey yok...' };
     }
     const [clueGoldMin, clueGoldMax] = CONST.POI.CLUE_REWARD_GOLD_RANGE;
     const [clueFoodMin, clueFoodMax] = CONST.POI.CLUE_REWARD_FOOD_RANGE;
     return {
-      kind: CONST.POI.OUTCOME.CLUE,
+      kind: cfg.OUTCOME.CLUE,
       clue: clueTarget,
       opportunity: maybeBuildClueOpportunity(rand, clueTarget, day),
       reward: {
@@ -220,7 +221,7 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
   }
 
   if (roll < ambushFinal + clueFinal + nothingFinal) {
-    return { kind: CONST.POI.OUTCOME.NOTHING, message: 'Burada kayda değer bir şey yok...' };
+    return { kind: cfg.OUTCOME.NOTHING, message: 'Burada kayda değer bir şey yok...' };
   }
 
   const [goldMin, goldMax] = CONST.POI.LOOT_GOLD_RANGE;
@@ -232,10 +233,10 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
   const food = randInt(rand, foodMin, foodMax);
   let rare = false;
 
-  const rareRoadMult = context?.onRoad ? CONST.POI.RARE_LOOT_ROAD_MULT_ON_ROAD : CONST.POI.RARE_LOOT_ROAD_MULT_OFFROAD;
-  const rareSettlementMult = Number(CONST.POI.RARE_LOOT_SETTLEMENT_TIER_MULT?.[settlementTier]) || 1;
+  const rareRoadMult = context?.onRoad ? cfg.RARE_LOOT_ROAD_MULT_ON_ROAD : cfg.RARE_LOOT_ROAD_MULT_OFFROAD;
+  const rareSettlementMult = Number(cfg.RARE_LOOT_SETTLEMENT_TIER_MULT?.[settlementTier]) || 1;
   const rareBiomeMult = 1 / Math.max(0.8, biomeRiskMult);
-  const rareChance = clamp01(CONST.POI.RARE_BONUS_CHANCE * rareRoadMult * rareSettlementMult * rareBiomeMult);
+  const rareChance = clamp01(cfg.RARE_BONUS_CHANCE * rareRoadMult * rareSettlementMult * rareBiomeMult);
 
   if (rand() < rareChance) {
     const [rareGoldMin, rareGoldMax] = CONST.POI.RARE_BONUS_GOLD_RANGE;
@@ -251,7 +252,7 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
     items: picked ? [{ id: picked.id, qty: itemQty }] : [],
   };
 
-  return { kind: CONST.POI.OUTCOME.LOOT, loot, rare };
+  return { kind: cfg.OUTCOME.LOOT, loot, rare };
 }
 
 export function markInvestigated(state, poi) {

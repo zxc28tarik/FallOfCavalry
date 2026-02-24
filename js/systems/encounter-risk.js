@@ -6,7 +6,7 @@ function clamp(value, min, max) {
 }
 
 export function computeRiskMultiplier({ state, movementCtx, biomeKey, inCamp, supplies, market } = {}) {
-  const tuning = CONST.ENCOUNTER_RISK;
+  const tuning = { ...CONST.ENCOUNTER_RISK, ...(state?.tuning?.ENCOUNTER_RISK || {}) };
   let mult = Number(tuning.BASE) || 1;
 
   const onRoad = Boolean(movementCtx?.onRoad);
