@@ -73,6 +73,49 @@ function clamp01(v) {
   return Math.max(0, Math.min(1, v));
 }
 
+function pickWeightedLossMode(rand, weights) {
+  const entries = Object.entries(weights || {}).filter(([, w]) => Number(w) > 0);
+  if (!entries.length) return 'food';
+  const total = entries.reduce((sum, [, w]) => sum + Number(w), 0);
+  let t = rand() * total;
+  for (const [mode, weight] of entries) {
+    t -= Number(weight);
+    if (t <= 0) return mode;
+  }
+  return entries[entries.length - 1][0];
+}
+
+function pickAmbushLoss(rand) {
+  const mode = pickWeightedLossMode(rand, CONST.POI.AMBUSH_LOSS_MODE_WEIGHTS);
+  if (mode === 'gold') {
+    const [min, max] = CONST.POI.AMBUSH_LOSS_GOLD_RANGE;
+    return { mode, amount: randInt(rand, min, max) };
+  }
+  if (mode === 'morale') {
+    const [min, max] = CONST.POI.AMBUSH_MORALE_PENALTY_RANGE;
+    return { mode, amount: randInt(rand, min, max) };
+  }
+  const [min, max] = CONST.POI.AMBUSH_LOSS_FOOD_RANGE;
+  return { mode: 'food', amount: randInt(rand, min, max) };
+}
+
+function maybeBuildClueOpportunity(rand, clueTarget, day) {
+  if (clueTarget?.targetType !== 'settlement') return null;
+  if (rand() >= CONST.POI.OPPORTUNITY_CHANCE_FROM_CLUE) return null;
+  const items = Array.isArray(CONST.TRADE_ITEMS) ? CONST.TRADE_ITEMS : [];
+  if (!items.length) return null;
+  const item = items[Math.floor(rand() * items.length)];
+  const [minBonus, maxBonus] = CONST.POI.OPPORTUNITY_BONUS_PCT_RANGE;
+  const bonusPct = randInt(rand, minBonus, maxBonus);
+  const durationDays = Math.max(1, Math.floor(CONST.POI.OPPORTUNITY_DURATION_DAYS));
+  return {
+    settlementKey: String(clueTarget.settlementKey || `${clueTarget.x},${clueTarget.y}`),
+    itemId: item.id,
+    bonusPct,
+    expiresDay: Number(day ?? 1) + durationDays,
+  };
+}
+
 function pickClueTarget(poi, context) {
   const map = context?.map;
   if (!map) return null;
@@ -122,6 +165,8 @@ function pickClueTarget(poi, context) {
   const targetY = Number.isFinite(nearestSettlement.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement.y ?? 0) / CONST.WORLD.TILE_SIZE);
   return {
     targetType: 'settlement',
+    settlementId: nearestSettlement.id || null,
+    settlementKey: nearestSettlement.id || `${targetX},${targetY}`,
     x: targetX,
     y: targetY,
     label: nearestSettlement.name || nearestSettlement.id || 'Yakın yerleşim',
@@ -153,7 +198,7 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
   const roll = rand();
   if (roll < ambushFinal) {
     const enemyId = `poi-ambush-${normalizedPoi.type}-${normalizedPoi?.x ?? 0}-${normalizedPoi?.y ?? 0}-${day ?? 0}`;
-    return { kind: CONST.POI.OUTCOME.AMBUSH, enemyId };
+    return { kind: CONST.POI.OUTCOME.AMBUSH, enemyId, loss: pickAmbushLoss(rand) };
   }
 
   if (roll < ambushFinal + clueFinal) {
@@ -166,6 +211,7 @@ export function rollOutcome({ seed, day, poi, context } = {}) {
     return {
       kind: CONST.POI.OUTCOME.CLUE,
       clue: clueTarget,
+      opportunity: maybeBuildClueOpportunity(rand, clueTarget, day),
       reward: {
         gold: randInt(rand, clueGoldMin, clueGoldMax),
         food: randInt(rand, clueFoodMin, clueFoodMax),

@@ -353,9 +353,16 @@ export const POI = Object.freeze({
   LOOT_FOOD_RANGE: Object.freeze([1, 4]),
   CLUE_REWARD_GOLD_RANGE: Object.freeze([3, 9]),
   CLUE_REWARD_FOOD_RANGE: Object.freeze([0, 2]),
+  OPPORTUNITY_CHANCE_FROM_CLUE: 0.55,
+  OPPORTUNITY_BONUS_PCT_RANGE: Object.freeze([15, 35]),
+  OPPORTUNITY_DURATION_DAYS: 3,
   RARE_BONUS_CHANCE: 0.08,
   RARE_BONUS_GOLD_RANGE: Object.freeze([25, 60]),
   RARE_BONUS_ITEM_QTY_RANGE: Object.freeze([2, 5]),
+  AMBUSH_LOSS_FOOD_RANGE: Object.freeze([1, 4]),
+  AMBUSH_LOSS_GOLD_RANGE: Object.freeze([5, 20]),
+  AMBUSH_MORALE_PENALTY_RANGE: Object.freeze([2, 6]),
+  AMBUSH_LOSS_MODE_WEIGHTS: Object.freeze({ food: 0.45, gold: 0.30, morale: 0.25 }),
   AMBUSH_TEMPORARY: true,
 });
 

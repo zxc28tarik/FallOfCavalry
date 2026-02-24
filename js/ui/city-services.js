@@ -112,17 +112,34 @@ export default class CityServicesUI {
       return;
     }
 
+    const day = Number(this.state?.day ?? 1);
+    const settlementKey = this.currentSettlement?.id || `${this.currentSettlement?.tx},${this.currentSettlement?.ty}`;
+    const activeOpportunity = this.state?.marketOpportunities?.[settlementKey];
+    const opportunityDaysLeft = activeOpportunity
+      ? Math.max(0, Number(activeOpportunity.expiresDay ?? day) - day)
+      : 0;
+
     this.dom.cityList.innerHTML = items.map((item) => {
       const stock = Math.max(0, Math.floor(market.stocks?.[item.id] ?? 0));
-      const buyPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'buy');
-      const sellPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'sell');
+      const priceOpts = {
+        day,
+        settlementKey,
+        marketOpportunities: this.state?.marketOpportunities,
+      };
+      const buyPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'buy', priceOpts);
+      const sellPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'sell', priceOpts);
       const invQty = Math.max(0, Math.floor((this.party?.inventory?.items || []).find((i) => i.id === item.id)?.qty ?? 0));
+      const hasOpportunity = activeOpportunity && activeOpportunity.itemId === item.id && opportunityDaysLeft > 0;
+      const opportunityBadge = hasOpportunity
+        ? `<div class="text-xs text-amber-300">Fırsat: +%${Math.round(activeOpportunity.bonusPct)} (${opportunityDaysLeft} gün)</div>`
+        : '';
       return `
         <div class="frame-dark p-3 mb-2">
           <div class="flex items-center justify-between gap-2">
             <div>
               <div class="font-bold text-sm">${item.name}</div>
               <div class="text-xs opacity-80">Stok: ${stock} · Envanter: ${invQty} · Al: ${buyPrice}g · Sat: ${sellPrice}g</div>
+              ${opportunityBadge}
             </div>
             <div class="flex items-center gap-2">
               <input data-qty-for="${item.id}" type="number" value="1" min="1" class="select-dark text-xs w-16" />
@@ -133,5 +150,12 @@ export default class CityServicesUI {
         </div>
       `;
     }).join('');
+
+    if (activeOpportunity && opportunityDaysLeft > 0) {
+      const header = document.createElement('div');
+      header.className = 'text-xs text-amber-300 mb-2';
+      header.textContent = 'Pazar fırsatı var.';
+      this.dom.cityList.prepend(header);
+    }
   }
 }
