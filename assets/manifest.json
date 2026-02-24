@@ -1,0 +1,18 @@
+{
+  "images": {
+    "units": "units.png",
+    "icons": "icons.png"
+  },
+  "atlases": {
+    "units": { "image": "units", "frames": "units.frames.json" }
+  },
+  "sprites": {
+    "settlement": { "atlas": "units", "frame": "settlement" },
+    "poi_ruin": { "atlas": "icons", "x": 0, "y": 0, "w": 16, "h": 16 },
+    "poi_camp": { "atlas": "icons", "x": 16, "y": 0, "w": 16, "h": 16 }
+  },
+  "anims": {
+    "infantry_idle": { "atlas": "units", "frames": ["inf_idle_0", "inf_idle_1"], "fps": 6, "loop": true },
+    "infantry_walk": { "atlas": "units", "frames": ["inf_walk_0", "inf_walk_1", "inf_walk_2"], "fps": 10, "loop": true }
+  }
+}
