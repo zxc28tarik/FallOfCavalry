@@ -200,7 +200,7 @@ class FallOfCavalry {
     this.initialized = false;
     this.listenersBound = false;
     this.warnedKeys = new Set();
-    console.log('🎮 FallOfCavalry - Initializing...');
+    utils.devLog(isDevMode(), '🎮 FallOfCavalry - Initializing...');
     this.init();
   }
 
@@ -329,7 +329,7 @@ class FallOfCavalry {
 
 
   applyDevOnlyDomLock() {
-    const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel'];
+    const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel', 'fpsOverlay', 'perfOverlay', 'debugStats'];
     if (typeof document === 'undefined') return;
     for (const id of devOnlyIds) {
       const el = document.getElementById(id);
@@ -422,7 +422,7 @@ class FallOfCavalry {
     }
 
     this.initialized = true;
-    console.log('✅ FallOfCavalry - Ready!');
+    utils.devLog(this.state, '✅ FallOfCavalry - Ready!');
     return true;
   }
 
@@ -433,7 +433,7 @@ class FallOfCavalry {
     const resize = () => {
       this.canvas.width = typeof window.innerWidth === 'number' ? window.innerWidth : this.canvas.width;
       this.canvas.height = typeof window.innerHeight === 'number' ? window.innerHeight : this.canvas.height;
-      console.log(`[Canvas] Resized to ${this.canvas.width}x${this.canvas.height}`);
+      utils.devLog(this.state, `[Canvas] Resized to ${this.canvas.width}x${this.canvas.height}`);
     };
 
     this.resizeHandler = resize;
@@ -447,10 +447,10 @@ class FallOfCavalry {
     this.state.on('mode:changed', ({ old, new: newMode }) => this.onModeChanged(old, newMode));
     this.state.on('day:advanced', (day) => {
       this.state.dailyLedger = { tradePL: 0 };
-      console.log(`[Game] Day ${day} started`);
+      utils.devLog(this.state, `[Game] Day ${day} started`);
     });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
-      console.log(`[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
+      utils.devLog(this.state, `[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
     });
 
     this.state.on('render:start', () => this.renderStart());
@@ -3489,6 +3489,7 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   async runSmokeScenarios() {
+    if (!this.state?.devMode) return [];
     const out = [];
     const push = (name, ok, msg) => out.push({ name, ok: Boolean(ok), msg: msg || (ok ? 'PASS' : 'FAIL') });
 
@@ -3627,7 +3628,7 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   onModeChanged(oldMode, newMode) {
-    console.log(`[Game] Mode changed: ${oldMode} → ${newMode}`);
+    utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
     if (newMode !== 'map') {
       this.poiUI?.hide?.();
       this.activePoi = null;

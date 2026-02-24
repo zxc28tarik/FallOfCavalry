@@ -12,7 +12,7 @@ export class DebugOverlay {
   
   update() {
     if (!this.element) return;
-    if (!this.state.debug.enabled) {
+    if (!this.state?.devMode || !this.state?.debug?.enabled) {
       this.hide();
       return;
     }
@@ -78,6 +78,7 @@ export class DebugOverlay {
   }
   
   toggle() {
+    if (!this.state?.devMode || !this.state?.debug) return;
     this.state.debug.enabled = !this.state.debug.enabled;
     
     if (this.state.debug.enabled) {
