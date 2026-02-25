@@ -31,6 +31,8 @@ import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
 import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
 import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
+import SpriteLoader from './rendering/sprite-loader.js';
+import AnimationPlayer from './rendering/animation.js';
 
 import * as utils from './utils.js';
 
@@ -205,6 +207,10 @@ class FallOfCavalry {
     this._tuningPauseMode = null;
 
     this.minimapRenderer = null;
+    this.spriteLoader = null;
+    this.assetsReady = false;
+    this.battleAnimPlayers = new Map();
+    this.lastBattleDt = 1 / 60;
     this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2 }), (p) => { p.ttl = 0; });
     this.floatingTextPool = new ObjectPool(CONST.PERF.FLOATTEXT_POOL, () => ({ x: 0, y: 0, text: '', color: '#fff', ttl: 0, vy: -18 }), (t) => { t.ttl = 0; t.text = ''; });
     this.smokeResults = [];
@@ -429,6 +435,15 @@ class FallOfCavalry {
     this.hudManager = this.hudManager || new HUDManager(this.state);
     this.saveSystem = this.saveSystem || new SaveSystem();
     this.audioSystem = this.audioSystem || new AudioSystem();
+    const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
+      ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
+      : '';
+    const manifestUrl = manifestOverride || 'assets/manifest.json';
+    this.spriteLoader = this.spriteLoader || new SpriteLoader(manifestUrl, {
+      devMode: this.state?.devMode,
+      warnOnce: utils.warnOnce,
+      devLog: utils.devLog,
+    });
 
     this.setupCanvas();
     this.setupEventListeners();
@@ -448,6 +463,7 @@ class FallOfCavalry {
     this.setupPoiUI();
     this.enterStart();
     this.onModeChanged(this.state.mode, this.state.mode);
+    this.loadSpriteAssets();
 
     if (typeof window !== 'undefined') {
       window.game = this;
@@ -457,6 +473,52 @@ class FallOfCavalry {
     this.initialized = true;
     utils.devLog(this.state, '✅ FallOfCavalry - Ready!');
     return true;
+  }
+
+  async loadSpriteAssets() {
+    if (!this.spriteLoader) return false;
+    try {
+      await this.spriteLoader.loadAll();
+      this.assetsReady = true;
+    } catch {
+      if (this.state?.devMode) utils.devLog(this.state, '[Assets] Sprite pipeline disabled; using fallback rendering.');
+      this.assetsReady = false;
+    }
+    return this.assetsReady;
+  }
+
+  async reloadSpriteAssets() {
+    this.assetsReady = false;
+    this.battleAnimPlayers.clear();
+    return this.loadSpriteAssets();
+  }
+
+  getPoiSpriteKey(poiType) {
+    if (poiType === 'camp') return 'poi_camp';
+    return 'poi_ruin';
+  }
+
+  getUnitAnimationKey(unit) {
+    if (!unit) return null;
+    const cmd = unit.command;
+    if (cmd === CONST.BATTLE_COMMANDS.ATTACK) return 'infantry_walk';
+    return 'infantry_idle';
+  }
+
+  drawBattleUnitSprite(unit, dt) {
+    if (!this.assetsReady || !this.spriteLoader || !unit || unit.dead || unit.hp <= 0) return false;
+    const animKey = this.getUnitAnimationKey(unit);
+    if (!animKey) return false;
+    const id = unit.unitId || `${unit.side}:${unit.id || `${unit.x}:${unit.y}`}`;
+    let player = this.battleAnimPlayers.get(id);
+    if (!player) {
+      player = new AnimationPlayer(this.spriteLoader, animKey);
+      this.battleAnimPlayers.set(id, player);
+    }
+    player.set(animKey);
+    player.update(dt);
+    const scale = (Number(unit.radius) || 9) / 8 * CONST.SPRITES.BATTLE_UNIT_SCALE;
+    return player.draw(this.ctx, unit.x, unit.y, { scale, anchor: 'center' });
   }
 
   setupCanvas() {
@@ -1192,6 +1254,7 @@ class FallOfCavalry {
       return;
     }
 
+    this.lastBattleDt = Math.max(1 / 120, dt);
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
 
@@ -3033,6 +3096,12 @@ Up/Down select, Enter heal, Esc back`,
         return;
       }
 
+      if (this.state?.devMode && !e.shiftKey && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault?.();
+        this.reloadSpriteAssets();
+        return;
+      }
+
       if (e.key === 'Enter' && this.mode === 'menu') {
         e.preventDefault?.();
         this.enterStart();
@@ -4551,6 +4620,13 @@ Esc close`,
       ctx.fillStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
       ctx.lineWidth = Math.max(1, 1.6 / camera.zoom);
 
+      const poiSpriteKey = this.getPoiSpriteKey(poi.type);
+      const poiScale = Math.max(0.65, (1 / camera.zoom) * CONST.SPRITES.MAP_MARKER_SCALE);
+      if (this.assetsReady) {
+        const drawn = this.spriteLoader?.drawSprite(ctx, poiSpriteKey, px, py, { scale: poiScale, anchor: 'center' });
+        if (drawn) return;
+      }
+
       if (poi.type === 'camp') {
         const s = Math.max(4, 8 / camera.zoom);
         ctx.beginPath();
@@ -4578,6 +4654,11 @@ Esc close`,
       if (fogLevel === 0) return;
       const sx = Number.isFinite(settlement.x) ? settlement.x : (tx + 0.5) * tileSize;
       const sy = Number.isFinite(settlement.y) ? settlement.y : (ty + 0.5) * tileSize;
+      const settlementScale = Math.max(0.75, (1 / camera.zoom) * CONST.SPRITES.MAP_MARKER_SCALE);
+      if (this.assetsReady) {
+        const drawn = this.spriteLoader?.drawSprite(ctx, 'settlement', sx, sy, { scale: settlementScale, anchor: 'center' });
+        if (drawn) return;
+      }
       ctx.fillStyle = fogLevel === 1 ? 'rgba(232,196,76,0.65)' : '#e8c44c';
       ctx.beginPath();
       ctx.arc(sx, sy, Math.max(3, 7 / camera.zoom), 0, Math.PI * 2);
@@ -4774,18 +4855,15 @@ Esc close`,
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R Commands`, this.canvas.width / 2, 30);
 
+    const frameDt = this.lastBattleDt || (1 / 60);
     for (const unit of [...playerUnits, ...enemyUnits]) {
       if (unit.dead || unit.hp <= 0) continue;
-      this.ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
-      this.ctx.beginPath();
-      this.ctx.arc(unit.x, unit.y, unit.radius || 9, 0, Math.PI * 2);
-      this.ctx.fill();
-
-      if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
-        const retreatStep = Math.min(dist, stepSpeed * dt);
-        unit.x -= (dx / dist) * retreatStep;
-        unit.y -= (dy / dist) * retreatStep;
-        continue;
+      const spriteDrawn = this.drawBattleUnitSprite(unit, frameDt);
+      if (!spriteDrawn) {
+        this.ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
+        this.ctx.beginPath();
+        this.ctx.arc(unit.x, unit.y, unit.radius || 9, 0, Math.PI * 2);
+        this.ctx.fill();
       }
 
       if (unit.isRanged) {

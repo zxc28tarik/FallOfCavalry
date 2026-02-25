@@ -75,6 +75,11 @@ export const GAME = Object.freeze({
   RIVER_BLOCK_NON_CROSSING: true,
 });
 
+export const SPRITES = Object.freeze({
+  MAP_MARKER_SCALE: 1,
+  BATTLE_UNIT_SCALE: 1,
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
