@@ -503,6 +503,18 @@ export const DEPLOY = Object.freeze({
   DEFAULT_FORMATION: FORMATION.LINE,
 });
 
+export const BATTLE_FORMATION = Object.freeze({
+  COHESION_RADIUS: 55,
+  COHESION_ALLY_CAP: 3,
+  LINE_DEF_BONUS: 0.15,
+  COLUMN_SPEED_BONUS: 0.10,
+  WEDGE_FRONT_ATK_BONUS: 0.20,
+  WEDGE_REAR_ATK_BONUS: 0.08,
+  WEDGE_FRONT_SLOTS: 3,
+  SCATTER_RANGED_TAKEN_REDUCTION: 0.15,
+  SCATTER_ALLY_DEATH_SHOCK_REDUCTION: 0.35,
+});
+
 // =============================================================================
 // SAVAŞ SİSTEMİ
 // =============================================================================
@@ -762,5 +774,6 @@ export default {
   BATTLE_COMMANDS,
   FORMATION,
   DEPLOY,
+  BATTLE_FORMATION,
   BATTLE_MORALE,
 };

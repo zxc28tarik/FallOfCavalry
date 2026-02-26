@@ -44,6 +44,18 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_FORMATION',
+    title: 'Battle Formation',
+    fields: [
+      { key: 'COHESION_RADIUS', label: 'Cohesion Radius', step: 1 },
+      { key: 'COHESION_ALLY_CAP', label: 'Cohesion Ally Cap', step: 1 },
+      { key: 'LINE_DEF_BONUS', label: 'Line Def Bonus', step: 0.01 },
+      { key: 'COLUMN_SPEED_BONUS', label: 'Column Speed Bonus', step: 0.01 },
+      { key: 'WEDGE_FRONT_ATK_BONUS', label: 'Wedge Front Atk Bonus', step: 0.01 },
+      { key: 'WEDGE_REAR_ATK_BONUS', label: 'Wedge Rear Atk Bonus', step: 0.01 },
+      { key: 'WEDGE_FRONT_SLOTS', label: 'Wedge Front Slots', step: 1 },
+      { key: 'SCATTER_RANGED_TAKEN_REDUCTION', label: 'Scatter Ranged Taken Reduction', step: 0.01 },
+      { key: 'SCATTER_ALLY_DEATH_SHOCK_REDUCTION', label: 'Scatter Ally Death Shock Reduction', step: 0.01 },
     key: 'BATTLE_MORALE',
     title: 'Battle Morale',
     fields: [
@@ -109,7 +121,7 @@ export default class TuningUI {
 
   render() {
     if (!this.dom?.body) return;
-    const draft = deepClone(this.localDraft?.ENCOUNTER_RISK ? this.localDraft : (this.getCurrent?.() || {}));
+    const draft = deepClone(this.localDraft?.ENCOUNTER_RISK ? this.localDraft : (this.getCurrent?.() || this.getDefaults?.() || {}));
     this.localDraft = draft;
 
     const chunks = [];

@@ -40,6 +40,7 @@ import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
 import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from './systems/flank.js';
 import SpriteLoader from './rendering/sprite-loader.js';
 import AnimationPlayer from './rendering/animation.js';
+import { computeUnitCohesion, getFormationMultipliers } from './systems/formation.js';
 
 import * as utils from './utils.js';
 
@@ -271,6 +272,16 @@ class FallOfCavalry {
         DAILY_PER_UNIT_CONSUMPTION: Number(CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION),
         STARVATION_MORALE_PENALTY: Number(CONST.SUPPLIES.STARVATION_MORALE_PENALTY),
       },
+      BATTLE_FORMATION: {
+        COHESION_RADIUS: Number(CONST.BATTLE_FORMATION.COHESION_RADIUS),
+        COHESION_ALLY_CAP: Number(CONST.BATTLE_FORMATION.COHESION_ALLY_CAP),
+        LINE_DEF_BONUS: Number(CONST.BATTLE_FORMATION.LINE_DEF_BONUS),
+        COLUMN_SPEED_BONUS: Number(CONST.BATTLE_FORMATION.COLUMN_SPEED_BONUS),
+        WEDGE_FRONT_ATK_BONUS: Number(CONST.BATTLE_FORMATION.WEDGE_FRONT_ATK_BONUS),
+        WEDGE_REAR_ATK_BONUS: Number(CONST.BATTLE_FORMATION.WEDGE_REAR_ATK_BONUS),
+        WEDGE_FRONT_SLOTS: Number(CONST.BATTLE_FORMATION.WEDGE_FRONT_SLOTS),
+        SCATTER_RANGED_TAKEN_REDUCTION: Number(CONST.BATTLE_FORMATION.SCATTER_RANGED_TAKEN_REDUCTION),
+        SCATTER_ALLY_DEATH_SHOCK_REDUCTION: Number(CONST.BATTLE_FORMATION.SCATTER_ALLY_DEATH_SHOCK_REDUCTION),
       BATTLE_FLANK: {
         FLANK_MULT: Number(CONST.BATTLE_FLANK.FLANK_MULT),
         REAR_MULT: Number(CONST.BATTLE_FLANK.REAR_MULT),
@@ -304,6 +315,7 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FLANK'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_MORALE'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
@@ -1337,6 +1349,8 @@ class FallOfCavalry {
     battle.enemyUnits = (battle.enemyUnits || []).filter((u) => !u?._remove);
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
+    const tuning = this.getEffectiveTuning();
+    const formationTuning = tuning.BATTLE_FORMATION || CONST.BATTLE_FORMATION;
 
     if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
       const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
@@ -1358,6 +1372,12 @@ class FallOfCavalry {
       this.ctx.restore();
     }
     const allUnits = [...playerUnits, ...enemyUnits];
+    for (const unit of allUnits) {
+      const allies = unit?.side === 'enemy' ? enemyUnits : playerUnits;
+      const cohesion = computeUnitCohesion(unit, allies, formationTuning.COHESION_RADIUS, formationTuning.COHESION_ALLY_CAP);
+      unit.formationCohesion = cohesion;
+      Object.assign(unit, getFormationMultipliers(unit, cohesion, formationTuning));
+    }
     const moraleCfg = getBattleMoraleConfig(this);
     battle.timeSec = Number(battle.timeSec || 0) + dt;
 
@@ -1394,7 +1414,8 @@ class FallOfCavalry {
       const dist = Math.hypot(dx, dy) || 0.001;
       const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
       const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
-      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed);
+      const formationSpeed = Number(unit.formationSpeedMult ?? 1);
+      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed * formationSpeed);
       const prevX = unit.x;
       const prevY = unit.y;
 
@@ -1501,6 +1522,18 @@ class FallOfCavalry {
     const variance = 0.9 + (Math.random() * 0.2);
     const type = attacker?.damageType || (attacker?.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT);
     const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+    const defMult = Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1) / Math.max(0.01, Number(target?.formationDefMult ?? 1));
+    const cmdCtx = { defMult, retreating: Boolean(target?.retreating) };
+    const atkMult = Math.max(0.01, Number(attacker?.formationAtkMult ?? 1));
+    const adjustedBase = (baseDamage ?? 1) * atkMult;
+    const base = Math.max(1, (adjustedBase - (target.def ?? 0)));
+    let damage = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
+    if (attacker?.isRanged) damage *= Math.max(0.01, Number(target?.formationRangedTakenMult ?? 1));
+    const finalDamage = Math.max(1, Math.round(damage));
+    this.ensureBattleUnitFx(target);
+    target.hp -= finalDamage;
+    target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
+    this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
     const cmdCtx = { defMult: Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1), retreating: Boolean(target?.retreating) };
     const base = Math.max(1, ((baseDamage ?? 1) - (target.def ?? 0)));
     const damageRaw = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
@@ -1521,7 +1554,7 @@ class FallOfCavalry {
       applyAllyDeathShock(target, allUnits, moraleCfg);
       allUnits.forEach((unit) => this.updateUnitMoraleState(unit, moraleCfg));
     }
-    return damage;
+    return finalDamage;
   }
 
   spawnProjectile(shooter, target, list) {
@@ -1541,6 +1574,8 @@ class FallOfCavalry {
     projectile.vx = nx * speed;
     projectile.vy = ny * speed;
     projectile.side = shooter.side;
+    projectile.isRanged = true;
+    projectile.damageType = shooter.damageType || CONST.DAMAGE_TYPE.PIERCE;
     projectile.damage = Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8));
     projectile.attackDirX = nx;
     projectile.attackDirY = ny;
@@ -1884,6 +1919,14 @@ class FallOfCavalry {
       command: null,
       commandSpeedMult: 1,
       commandDefMult: 1,
+      formation: CONST.DEPLOY.DEFAULT_FORMATION,
+      formSlot: idx,
+      formationCohesion: 0,
+      formationAtkMult: 1,
+      formationDefMult: 1,
+      formationSpeedMult: 1,
+      formationRangedTakenMult: 1,
+      formationMoraleShockMult: 1,
       focusTargetId: null,
       retreating: false,
       morale: Math.max(0, Math.floor(entry.morale ?? 100)),
@@ -1979,6 +2022,10 @@ class FallOfCavalry {
     sideUnits.forEach((unit, idx) => {
       unit.x = xBase + ((idx % 2) * (side === 'player' ? -22 : 22));
       unit.y = Math.max(minY, Math.min(maxY, minY + (spacing * idx)));
+      unit.formSlot = idx;
+      unit.formation = unit.formation || CONST.DEPLOY.DEFAULT_FORMATION;
+      unit.facing = side === 'enemy' ? 180 : (Number(unit.facing) || 0);
+      if (side === 'enemy') unit.formation = CONST.FORMATION.LINE;
     });
   }
 
