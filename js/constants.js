@@ -542,6 +542,24 @@ export const BATTLE = Object.freeze({
   },
 });
 
+export const BATTLE_MORALE = Object.freeze({
+  MORALE_MAX: 100,
+  DAMAGE_TO_MORALE: 0.35,
+  ALLY_DEATH_SHOCK: 10,
+  SHOCK_RADIUS: 90,
+  OUTNUMBERED_RADIUS: 140,
+  OUTNUMBERED_DRAIN_PER_SEC: 6,
+  REGEN_PER_SEC: 4,
+  REGEN_DAMAGE_GRACE_SEC: 2,
+  REGEN_ALLY_RADIUS: 80,
+  FLEE_THRESHOLD: 35,
+  ROUT_THRESHOLD: 15,
+  SHAKEN_ATTACK_COOLDOWN_MULT: 1.2,
+  SHAKEN_ATTACK_MULT: 0.9,
+  ROUT_SPEED_MULT: 1.2,
+  ROUT_DEF_MULT: 0.75,
+});
+
 // =============================================================================
 // TUŞ ATAMA VARSAYILANLARI
 // =============================================================================
@@ -736,4 +754,5 @@ export default {
   BATTLE_COMMANDS,
   FORMATION,
   DEPLOY,
+  BATTLE_MORALE,
 };

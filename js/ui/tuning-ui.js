@@ -33,6 +33,22 @@ const GROUPS = [
       { key: 'STARVATION_MORALE_PENALTY', label: 'Starvation Morale Penalty', step: 1 },
     ],
   },
+  {
+    key: 'BATTLE_MORALE',
+    title: 'Battle Morale',
+    fields: [
+      { key: 'MORALE_MAX', label: 'Morale Max', step: 1 },
+      { key: 'DAMAGE_TO_MORALE', label: 'Damage To Morale', step: 0.01 },
+      { key: 'ALLY_DEATH_SHOCK', label: 'Ally Death Shock', step: 0.5 },
+      { key: 'OUTNUMBERED_DRAIN_PER_SEC', label: 'Outnumbered Drain / sec', step: 0.1 },
+      { key: 'REGEN_PER_SEC', label: 'Regen / sec', step: 0.1 },
+      { key: 'FLEE_THRESHOLD', label: 'Flee Threshold', step: 1 },
+      { key: 'ROUT_THRESHOLD', label: 'Rout Threshold', step: 1 },
+      { key: 'SHAKEN_ATTACK_MULT', label: 'Shaken Attack Mult', step: 0.01 },
+      { key: 'ROUT_SPEED_MULT', label: 'Rout Speed Mult', step: 0.01 },
+      { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
+    ],
+  },
 ];
 
 function deepClone(obj) {
