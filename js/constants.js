@@ -87,6 +87,13 @@ export const BATTLE_FX = Object.freeze({
   HIT_FLASH_COLOR: 'rgba(255,255,255,0.8)',
 });
 
+export const BATTLE_FLANK = Object.freeze({
+  FLANK_MULT: 1.15,
+  REAR_MULT: 1.30,
+  FLANK_MORALE_BONUS: 4,
+  REAR_MORALE_BONUS: 8,
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
@@ -716,6 +723,7 @@ export default {
   ENCOUNTER,
   TERRAIN,
   BATTLE,
+  BATTLE_FLANK,
   DEFAULT_KEYBINDS,
   SAVE,
   UI,

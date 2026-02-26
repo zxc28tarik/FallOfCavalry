@@ -31,6 +31,7 @@ import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
 import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
 import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
+import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from './systems/flank.js';
 import SpriteLoader from './rendering/sprite-loader.js';
 import AnimationPlayer from './rendering/animation.js';
 
@@ -211,7 +212,7 @@ class FallOfCavalry {
     this.assetsReady = false;
     this.battleAnimPlayers = new Map();
     this.lastBattleDt = 1 / 60;
-    this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2 }), (p) => { p.ttl = 0; });
+    this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2, attackDirX: 0, attackDirY: 0 }), (p) => { p.ttl = 0; p.attackDirX = 0; p.attackDirY = 0; });
     this.floatingTextPool = new ObjectPool(CONST.PERF.FLOATTEXT_POOL, () => ({ x: 0, y: 0, text: '', color: '#fff', ttl: 0, vy: -18 }), (t) => { t.ttl = 0; t.text = ''; });
     this.smokeResults = [];
     this.started = false;
@@ -264,6 +265,12 @@ class FallOfCavalry {
         DAILY_PER_UNIT_CONSUMPTION: Number(CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION),
         STARVATION_MORALE_PENALTY: Number(CONST.SUPPLIES.STARVATION_MORALE_PENALTY),
       },
+      BATTLE_FLANK: {
+        FLANK_MULT: Number(CONST.BATTLE_FLANK.FLANK_MULT),
+        REAR_MULT: Number(CONST.BATTLE_FLANK.REAR_MULT),
+        FLANK_MORALE_BONUS: Number(CONST.BATTLE_FLANK.FLANK_MORALE_BONUS),
+        REAR_MORALE_BONUS: Number(CONST.BATTLE_FLANK.REAR_MORALE_BONUS),
+      },
     };
   }
 
@@ -280,7 +287,7 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES'].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FLANK'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -1397,6 +1404,12 @@ class FallOfCavalry {
 
       unit.vx = (unit.x - prevX) / dt;
       unit.vy = (unit.y - prevY) / dt;
+      const moveDx = unit.x - prevX;
+      const moveDy = unit.y - prevY;
+      const moveDist = Math.hypot(moveDx, moveDy);
+      if (moveDist > 0.01) unit.facing = Math.atan2(moveDy, moveDx);
+      else if (Math.hypot(dx, dy) > 0.001) unit.facing = Math.atan2(dy, dx);
+      if (!Number.isFinite(unit.facing)) unit.facing = unit.side === 'player' ? 0 : Math.PI;
       unit.animKey = this.getUnitAnimationKey(unit) || 'infantry_idle';
       if (this.assetsReady && this.spriteLoader) {
         const player = this.getBattleAnimPlayer(unit);
@@ -1447,16 +1460,24 @@ class FallOfCavalry {
 
   applyUnitDamage(attacker, target, baseDamage) {
     if (!target || target.dead || target.hp <= 0) return 0;
+    const tuning = this.getEffectiveTuning();
+    const flankTuning = tuning?.BATTLE_FLANK || CONST.BATTLE_FLANK;
+    const attackDirVec = getAttackDirectionAgainstDefender(attacker, target);
+    const attackSide = classifyAttackSide(Number(target.facing || 0), attackDirVec);
+    const flank = resolveFlankBonuses(attackSide, flankTuning);
     const variance = 0.9 + (Math.random() * 0.2);
     const type = attacker?.damageType || (attacker?.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT);
     const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
     const cmdCtx = { defMult: Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1), retreating: Boolean(target?.retreating) };
     const base = Math.max(1, ((baseDamage ?? 1) - (target.def ?? 0)));
-    const damage = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
+    const damageRaw = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
+    const damage = Math.max(1, Math.floor(damageRaw * Math.max(0.1, Number(flank.damageMult || 1))));
     this.ensureBattleUnitFx(target);
     target.hp -= damage;
+    if (Number.isFinite(target.morale)) target.morale = Math.max(0, Number(target.morale) - Math.max(0, Number(flank.moraleBonus || 0)));
     target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
-    this.spawnFloatingText(target.x || 0, target.y || 0, `-${damage}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
+    const marker = this.state?.devMode && attackSide !== ATTACK_SIDE.FRONT ? ` ${String(attackSide).toUpperCase()}` : '';
+    this.spawnFloatingText(target.x || 0, target.y || 0, `-${damage}${marker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
@@ -1483,6 +1504,8 @@ class FallOfCavalry {
     projectile.vy = ny * speed;
     projectile.side = shooter.side;
     projectile.damage = Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8));
+    projectile.attackDirX = nx;
+    projectile.attackDirY = ny;
     projectile.ttl = 1.5;
     projectile.radius = 2;
     list.push(projectile);
@@ -1824,6 +1847,8 @@ class FallOfCavalry {
       commandDefMult: 1,
       focusTargetId: null,
       retreating: false,
+      morale: Math.max(0, Math.floor(entry.morale ?? 100)),
+      facing: side === 'player' ? 0 : Math.PI,
       attackTimer: 0,
       radius: 9,
       dead: false,
