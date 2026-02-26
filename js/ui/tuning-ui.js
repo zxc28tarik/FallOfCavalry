@@ -56,6 +56,9 @@ const GROUPS = [
       { key: 'WEDGE_FRONT_SLOTS', label: 'Wedge Front Slots', step: 1 },
       { key: 'SCATTER_RANGED_TAKEN_REDUCTION', label: 'Scatter Ranged Taken Reduction', step: 0.01 },
       { key: 'SCATTER_ALLY_DEATH_SHOCK_REDUCTION', label: 'Scatter Ally Death Shock Reduction', step: 0.01 },
+    ],
+  },
+  {
     key: 'BATTLE_MORALE',
     title: 'Battle Morale',
     fields: [
@@ -69,6 +72,17 @@ const GROUPS = [
       { key: 'SHAKEN_ATTACK_MULT', label: 'Shaken Attack Mult', step: 0.01 },
       { key: 'ROUT_SPEED_MULT', label: 'Rout Speed Mult', step: 0.01 },
       { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
+    ],
+  },
+  {
+    key: 'BATTLE_RANGED',
+    title: 'Battle Ranged',
+    fields: [
+      { key: 'SUPPRESS_DURATION_SEC', label: 'Suppress Duration (sec)', step: 0.1 },
+      { key: 'SUPPRESS_SPEED_MULT', label: 'Suppress Speed Mult', step: 0.01 },
+      { key: 'SUPPRESS_MORALE_DRAIN_PER_SEC', label: 'Suppress Morale Drain / sec', step: 0.1 },
+      { key: 'MELEE_EMERGENCY_RANGE_MULT', label: 'Melee Emergency Range Mult', step: 0.01 },
+      { key: 'AMMO_PER_SHOT', label: 'Ammo Per Shot', step: 1 },
     ],
   },
 ];
@@ -90,8 +104,7 @@ export default class TuningUI {
 
   bind({ modal, body, btnClose, btnSave, btnReset }) {
     this.dom = { modal, body, btnClose, btnSave, btnReset };
-    if (!body) return;
-    if (body.dataset.tuningBound === '1') return;
+    if (!body || body.dataset.tuningBound === '1') return;
 
     body.dataset.tuningBound = '1';
     this.render();
@@ -134,7 +147,7 @@ export default class TuningUI {
           `<div class="tuning-row">`
           + `<label class="tuning-label" for="tune-${group.key}-${field.key}">${field.label}</label>`
           + `<input id="tune-${group.key}-${field.key}" class="tuning-input" type="number" step="${field.step}" value="${safeVal}">`
-          + `</div>`,
+          + '</div>',
         );
       }
       chunks.push('</div>');

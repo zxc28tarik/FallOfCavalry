@@ -1,8 +1,9 @@
 import * as CONST from '../constants.js';
 
 export default class BattleCommandsUI {
-  constructor({ onCommand } = {}) {
+  constructor({ onCommand, onToggle } = {}) {
     this.onCommand = typeof onCommand === 'function' ? onCommand : null;
+    this.onToggle = typeof onToggle === 'function' ? onToggle : null;
     this.bound = false;
     this.activeCommand = null;
     this.dom = {};
@@ -17,9 +18,15 @@ export default class BattleCommandsUI {
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.HOLD}">[H] Hold</button>
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.FOCUS}">[F] Focus</button>
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.RETREAT}">[R] Retreat</button>
+      <button class="action-btn btn-dark text-xs" data-toggle="hold-fire">[X] Hold Fire</button>
     `;
 
     this.dom.root.addEventListener('click', (e) => {
+      const toggleBtn = e.target?.closest?.('[data-toggle]');
+      if (toggleBtn) {
+        this.onToggle?.(toggleBtn.dataset.toggle);
+        return;
+      }
       const btn = e.target?.closest?.('[data-cmd]');
       if (!btn) return;
       const cmd = btn.dataset.cmd;
