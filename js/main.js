@@ -498,27 +498,79 @@ class FallOfCavalry {
     return 'poi_ruin';
   }
 
-  getUnitAnimationKey(unit) {
-    if (!unit) return null;
-    const cmd = unit.command;
-    if (cmd === CONST.BATTLE_COMMANDS.ATTACK) return 'infantry_walk';
-    return 'infantry_idle';
+  ensureBattleUnitFx(unit) {
+    if (!unit) return;
+    if (!unit.fx) unit.fx = { hitUntil: 0, deathStartedAt: null };
+    if (!Number.isFinite(unit.fx.hitUntil)) unit.fx.hitUntil = 0;
+    if (unit.fx.deathStartedAt !== null && !Number.isFinite(unit.fx.deathStartedAt)) unit.fx.deathStartedAt = null;
   }
 
-  drawBattleUnitSprite(unit, dt) {
-    if (!this.assetsReady || !this.spriteLoader || !unit || unit.dead || unit.hp <= 0) return false;
-    const animKey = this.getUnitAnimationKey(unit);
-    if (!animKey) return false;
+  getUnitAnimationKey(unit) {
+    if (!unit) return null;
+    if (unit.command === CONST.BATTLE_COMMANDS.ATTACK) return 'infantry_attack';
+    const moving = Math.hypot(Number(unit.vx) || 0, Number(unit.vy) || 0) > 0.01;
+    return moving ? 'infantry_walk' : 'infantry_idle';
+  }
+
+  getBattleAnimPlayer(unit) {
+    if (!unit) return null;
     const id = unit.unitId || `${unit.side}:${unit.id || `${unit.x}:${unit.y}`}`;
     let player = this.battleAnimPlayers.get(id);
     if (!player) {
-      player = new AnimationPlayer(this.spriteLoader, animKey);
+      player = new AnimationPlayer(this.spriteLoader, 'infantry_idle');
       this.battleAnimPlayers.set(id, player);
     }
-    player.set(animKey);
-    player.update(dt);
-    const scale = (Number(unit.radius) || 9) / 8 * CONST.SPRITES.BATTLE_UNIT_SCALE;
-    return player.draw(this.ctx, unit.x, unit.y, { scale, anchor: 'center' });
+    return player;
+  }
+
+  drawBattleUnitFallback(ctx, unit, x, y, size) {
+    ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawUnitSpriteOrFallback(ctx, unit, x, y, size, now) {
+    if (!ctx || !unit) return;
+    this.ensureBattleUnitFx(unit);
+
+    if (unit.fx.deathStartedAt) {
+      const t = (now - unit.fx.deathStartedAt) / CONST.BATTLE_FX.DEATH_FADE_DURATION;
+      if (t >= 1) {
+        unit._remove = true;
+        return;
+      }
+      const scale = 1 - (t * (1 - CONST.BATTLE_FX.DEATH_SHRINK_FACTOR));
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.translate(-x, -y);
+      this.drawUnitSpriteOrFallback(ctx, { ...unit, fx: { ...unit.fx, deathStartedAt: null } }, x, y, size, now);
+      ctx.restore();
+      return;
+    }
+
+    let spriteDrawn = false;
+    if (this.assetsReady && this.spriteLoader) {
+      const player = this.getBattleAnimPlayer(unit);
+      const spriteKey = unit.animKey || 'infantry_idle';
+      if (player?.hasAnimation?.(spriteKey)) {
+        spriteDrawn = player.drawFrame(ctx, spriteKey, x, y, size * 2 * CONST.SPRITES.BATTLE_UNIT_SCALE, { anchor: 'center' });
+      }
+    }
+
+    if (!spriteDrawn) this.drawBattleUnitFallback(ctx, unit, x, y, size);
+
+    if (unit.fx.hitUntil > now) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = CONST.BATTLE_FX.HIT_FLASH_COLOR;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   setupCanvas() {
@@ -1255,6 +1307,9 @@ class FallOfCavalry {
     }
 
     this.lastBattleDt = Math.max(1 / 120, dt);
+    const deltaMs = (typeof dt === 'number' && dt < 5) ? (dt * 1000) : dt;
+    battle.playerUnits = (battle.playerUnits || []).filter((u) => !u?._remove);
+    battle.enemyUnits = (battle.enemyUnits || []).filter((u) => !u?._remove);
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
 
@@ -1285,7 +1340,11 @@ class FallOfCavalry {
     if (alivePlayer.length === 0) { this.resolveBattle('defeat'); return; }
 
     for (const unit of allUnits) {
-      if (unit.dead || unit.hp <= 0) continue;
+      this.ensureBattleUnitFx(unit);
+      if (unit.dead || unit.hp <= 0) {
+        if (!unit.fx.deathStartedAt) unit.fx.deathStartedAt = performance.now();
+        continue;
+      }
       const enemies = unit.side === 'player' ? aliveEnemy : alivePlayer;
       unit.attackTimer = Math.max(0, (unit.attackTimer || 0) - dt);
       unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
@@ -1307,15 +1366,14 @@ class FallOfCavalry {
       const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
       const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
       const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed);
+      const prevX = unit.x;
+      const prevY = unit.y;
 
       if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
         const retreatStep = Math.min(dist, stepSpeed * dt);
         unit.x -= (dx / dist) * retreatStep;
         unit.y -= (dy / dist) * retreatStep;
-        continue;
-      }
-
-      if (unit.isRanged) {
+      } else if (unit.isRanged) {
         if (dist <= unit.rangedRange) {
           if (unit.rangedTimer <= 0 && (battle.projectiles?.length ?? 0) < 200) {
             this.spawnProjectile(unit, target, battle.projectiles);
@@ -1335,6 +1393,15 @@ class FallOfCavalry {
         const step = Math.min(dist, stepSpeed * dt);
         unit.x += (dx / dist) * step;
         unit.y += (dy / dist) * step;
+      }
+
+      unit.vx = (unit.x - prevX) / dt;
+      unit.vy = (unit.y - prevY) / dt;
+      unit.animKey = this.getUnitAnimationKey(unit) || 'infantry_idle';
+      if (this.assetsReady && this.spriteLoader) {
+        const player = this.getBattleAnimPlayer(unit);
+        player?.set?.(unit.animKey);
+        player?.update?.(deltaMs);
       }
     }
 
@@ -1386,11 +1453,14 @@ class FallOfCavalry {
     const cmdCtx = { defMult: Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1), retreating: Boolean(target?.retreating) };
     const base = Math.max(1, ((baseDamage ?? 1) - (target.def ?? 0)));
     const damage = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
+    this.ensureBattleUnitFx(target);
     target.hp -= damage;
+    target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
     this.spawnFloatingText(target.x || 0, target.y || 0, `-${damage}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
+      if (!target.fx.deathStartedAt) target.fx.deathStartedAt = performance.now();
     }
     return damage;
   }
@@ -1757,6 +1827,7 @@ class FallOfCavalry {
       attackTimer: 0,
       radius: 9,
       dead: false,
+      fx: { hitUntil: 0, deathStartedAt: null },
     }));
   }
 
@@ -4855,29 +4926,28 @@ Esc close`,
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R Commands`, this.canvas.width / 2, 30);
 
-    const frameDt = this.lastBattleDt || (1 / 60);
+    const now = performance.now();
     for (const unit of [...playerUnits, ...enemyUnits]) {
-      if (unit.dead || unit.hp <= 0) continue;
-      const spriteDrawn = this.drawBattleUnitSprite(unit, frameDt);
-      if (!spriteDrawn) {
-        this.ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
-        this.ctx.beginPath();
-        this.ctx.arc(unit.x, unit.y, unit.radius || 9, 0, Math.PI * 2);
-        this.ctx.fill();
-      }
+      this.ensureBattleUnitFx(unit);
+      if (unit.hp <= 0 && !unit.fx.deathStartedAt) unit.fx.deathStartedAt = now;
+      const isRenderable = !unit._remove && (!unit.dead || unit.fx.deathStartedAt);
+      if (!isRenderable) continue;
+      this.drawUnitSpriteOrFallback(this.ctx, unit, unit.x, unit.y, unit.radius || 9, now);
 
-      if (unit.isRanged) {
+      if (unit.isRanged && !unit._remove) {
         this.ctx.fillStyle = '#f2c94c';
         this.ctx.beginPath();
         this.ctx.arc(unit.x, unit.y, 3, 0, Math.PI * 2);
         this.ctx.fill();
       }
 
-      const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
-      this.ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      this.ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
-      this.ctx.fillStyle = '#89d38d';
-      this.ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
+      if (!unit.dead && unit.hp > 0) {
+        const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
+        this.ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        this.ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
+        this.ctx.fillStyle = '#89d38d';
+        this.ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
+      }
     }
 
     for (const projectile of (battle.projectiles || [])) {
