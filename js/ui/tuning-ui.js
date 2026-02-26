@@ -26,6 +26,16 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_FLANK',
+    title: 'Battle Flank',
+    fields: [
+      { key: 'FLANK_MULT', label: 'Flank Damage Mult', step: 0.01 },
+      { key: 'REAR_MULT', label: 'Rear Damage Mult', step: 0.01 },
+      { key: 'FLANK_MORALE_BONUS', label: 'Flank Morale Bonus', step: 1 },
+      { key: 'REAR_MORALE_BONUS', label: 'Rear Morale Bonus', step: 1 },
+    ],
+  },
+  {
     key: 'SUPPLIES',
     title: 'Supplies',
     fields: [
@@ -46,6 +56,19 @@ const GROUPS = [
       { key: 'WEDGE_FRONT_SLOTS', label: 'Wedge Front Slots', step: 1 },
       { key: 'SCATTER_RANGED_TAKEN_REDUCTION', label: 'Scatter Ranged Taken Reduction', step: 0.01 },
       { key: 'SCATTER_ALLY_DEATH_SHOCK_REDUCTION', label: 'Scatter Ally Death Shock Reduction', step: 0.01 },
+    key: 'BATTLE_MORALE',
+    title: 'Battle Morale',
+    fields: [
+      { key: 'MORALE_MAX', label: 'Morale Max', step: 1 },
+      { key: 'DAMAGE_TO_MORALE', label: 'Damage To Morale', step: 0.01 },
+      { key: 'ALLY_DEATH_SHOCK', label: 'Ally Death Shock', step: 0.5 },
+      { key: 'OUTNUMBERED_DRAIN_PER_SEC', label: 'Outnumbered Drain / sec', step: 0.1 },
+      { key: 'REGEN_PER_SEC', label: 'Regen / sec', step: 0.1 },
+      { key: 'FLEE_THRESHOLD', label: 'Flee Threshold', step: 1 },
+      { key: 'ROUT_THRESHOLD', label: 'Rout Threshold', step: 1 },
+      { key: 'SHAKEN_ATTACK_MULT', label: 'Shaken Attack Mult', step: 0.01 },
+      { key: 'ROUT_SPEED_MULT', label: 'Rout Speed Mult', step: 0.01 },
+      { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
     ],
   },
 ];
