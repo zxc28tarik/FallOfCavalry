@@ -26,6 +26,16 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_FLANK',
+    title: 'Battle Flank',
+    fields: [
+      { key: 'FLANK_MULT', label: 'Flank Damage Mult', step: 0.01 },
+      { key: 'REAR_MULT', label: 'Rear Damage Mult', step: 0.01 },
+      { key: 'FLANK_MORALE_BONUS', label: 'Flank Morale Bonus', step: 1 },
+      { key: 'REAR_MORALE_BONUS', label: 'Rear Morale Bonus', step: 1 },
+    ],
+  },
+  {
     key: 'SUPPLIES',
     title: 'Supplies',
     fields: [
