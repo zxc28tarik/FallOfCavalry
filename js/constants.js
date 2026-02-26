@@ -80,6 +80,13 @@ export const SPRITES = Object.freeze({
   BATTLE_UNIT_SCALE: 1,
 });
 
+export const BATTLE_FX = Object.freeze({
+  HIT_FLASH_DURATION: 180,
+  DEATH_FADE_DURATION: 600,
+  DEATH_SHRINK_FACTOR: 0.6,
+  HIT_FLASH_COLOR: 'rgba(255,255,255,0.8)',
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
