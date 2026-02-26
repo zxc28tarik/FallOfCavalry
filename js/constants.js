@@ -484,8 +484,22 @@ export const TERRAIN_MODS = Object.freeze({
 
 export const BATTLE_COMMANDS = Object.freeze({
   HOLD: 'hold',
+  SKIRMISH: 'skirmish',
   FOCUS: 'focus',
   RETREAT: 'retreat',
+});
+
+export const BATTLE_AI = Object.freeze({
+  AI_RETARGET_SEC: 1.2,
+  AI_TARGET_LOWHP_WEIGHT: 65,
+  AI_TARGET_ROUTING_BONUS: 26,
+  AI_RETREAT_MORALE: 22,
+  AI_RETREAT_HP_PCT: 0.24,
+  AI_LOCAL_RADIUS: 180,
+  AI_OUTNUMBERED_RATIO: 1.75,
+  SKIRMISH_DESIRED_RANGE_MULT: 0.9,
+  SKIRMISH_MIN_RANGE_MULT: 0.7,
+  SKIRMISH_KITE_SPEED_MULT: 1.12,
 });
 
 
@@ -772,6 +786,7 @@ export default {
   DAMAGE_VS_ARMOR,
   TERRAIN_MODS,
   BATTLE_COMMANDS,
+  BATTLE_AI,
   FORMATION,
   DEPLOY,
   BATTLE_FORMATION,
