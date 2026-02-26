@@ -36,6 +36,32 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_COUNTERS',
+    title: 'Battle Counters',
+    fields: [
+      { key: 'SPEAR_VS_CAV_MULT', label: 'Spear vs Cavalry Mult', step: 0.01 },
+      { key: 'CAV_VS_ARCHER_MULT', label: 'Cavalry vs Archer Mult', step: 0.01 },
+      { key: 'INF_VS_SPEAR_MULT', label: 'Infantry vs Spear Mult', step: 0.01 },
+      { key: 'COUNTER_MORALE_BONUS', label: 'Counter Morale Bonus', step: 1 },
+    ],
+  },
+  {
+    key: 'BATTLE_CHARGE',
+    title: 'Battle Charge/Brace',
+    fields: [
+      { key: 'CHARGE_BUILD_PER_SEC', label: 'Charge Build / sec', step: 0.01 },
+      { key: 'CHARGE_MOVE_SPEED_THRESHOLD', label: 'Charge Speed Threshold', step: 1 },
+      { key: 'CHARGE_DECAY_PER_SEC', label: 'Charge Decay / sec', step: 0.01 },
+      { key: 'CHARGE_READY_THRESHOLD', label: 'Charge Ready Threshold', step: 0.01 },
+      { key: 'CHARGE_DMG_MULT', label: 'Charge Damage Mult', step: 0.01 },
+      { key: 'CHARGE_MORALE_SHOCK', label: 'Charge Morale Shock', step: 1 },
+      { key: 'CHARGE_COOLDOWN_SEC', label: 'Charge Cooldown Sec', step: 0.1 },
+      { key: 'BRACE_CHARGE_REDUCTION_MULT', label: 'Brace Charge Reduction', step: 0.01 },
+      { key: 'BRACE_THORNS_DMG', label: 'Brace Thorns Damage', step: 1 },
+      { key: 'BRACE_SPEED_MAX', label: 'Brace Max Speed', step: 1 },
+    ],
+  },
+  {
     key: 'SUPPLIES',
     title: 'Supplies',
     fields: [
@@ -56,6 +82,9 @@ const GROUPS = [
       { key: 'WEDGE_FRONT_SLOTS', label: 'Wedge Front Slots', step: 1 },
       { key: 'SCATTER_RANGED_TAKEN_REDUCTION', label: 'Scatter Ranged Taken Reduction', step: 0.01 },
       { key: 'SCATTER_ALLY_DEATH_SHOCK_REDUCTION', label: 'Scatter Ally Death Shock Reduction', step: 0.01 },
+    ],
+  },
+  {
     key: 'BATTLE_MORALE',
     title: 'Battle Morale',
     fields: [

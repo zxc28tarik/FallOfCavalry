@@ -94,6 +94,26 @@ export const BATTLE_FLANK = Object.freeze({
   REAR_MORALE_BONUS: 8,
 });
 
+export const BATTLE_COUNTERS = Object.freeze({
+  SPEAR_VS_CAV_MULT: 1.35,
+  CAV_VS_ARCHER_MULT: 1.30,
+  INF_VS_SPEAR_MULT: 1.08,
+  COUNTER_MORALE_BONUS: 8,
+});
+
+export const BATTLE_CHARGE = Object.freeze({
+  CHARGE_BUILD_PER_SEC: 0.75,
+  CHARGE_MOVE_SPEED_THRESHOLD: 28,
+  CHARGE_DECAY_PER_SEC: 0.35,
+  CHARGE_READY_THRESHOLD: 1,
+  CHARGE_DMG_MULT: 1.55,
+  CHARGE_MORALE_SHOCK: 12,
+  CHARGE_COOLDOWN_SEC: 4,
+  BRACE_CHARGE_REDUCTION_MULT: 0.55,
+  BRACE_THORNS_DMG: 3,
+  BRACE_SPEED_MAX: 8,
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
@@ -309,10 +329,12 @@ export const RECRUIT_POOL_BY_TIER = Object.freeze({
   ]),
   2: Object.freeze([
     { id: 'militia_sword', label: 'Militia Sword', class: 'infantry', cost: 13, hp: 98, maxHp: 98, atk: 13, def: 7, wage: 2, speed: 72 },
+    { id: 'town_spearman', label: 'Town Spearman', class: 'spearman', cost: 14, hp: 102, maxHp: 102, atk: 13, def: 8, wage: 2, speed: 68 },
     { id: 'crossbow', label: 'Crossbow', class: 'archer', cost: 15, hp: 82, maxHp: 82, atk: 12, def: 5, wage: 2, speed: 68, isRanged: true, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.25 },
   ]),
   3: Object.freeze([
     { id: 'men_at_arms', label: 'Men-at-Arms', class: 'infantry', cost: 18, hp: 112, maxHp: 112, atk: 15, def: 9, wage: 3, speed: 70 },
+    { id: 'light_cav_raider', label: 'Light Cavalry', class: 'cavalry', cost: 21, hp: 106, maxHp: 106, atk: 17, def: 8, wage: 3, speed: 88 },
     { id: 'veteran_archer', label: 'Veteran Archer', class: 'archer', cost: 20, hp: 88, maxHp: 88, atk: 14, def: 6, wage: 3, speed: 70, isRanged: true, rangedRange: 230, rangedDamage: 14, rangedCooldown: 1.15 },
   ]),
 });
@@ -754,6 +776,8 @@ export default {
   TERRAIN,
   BATTLE,
   BATTLE_FLANK,
+  BATTLE_COUNTERS,
+  BATTLE_CHARGE,
   DEFAULT_KEYBINDS,
   SAVE,
   UI,
