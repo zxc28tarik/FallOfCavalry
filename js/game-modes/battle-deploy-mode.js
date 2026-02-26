@@ -105,6 +105,8 @@ export default class BattleDeployMode {
       u.x = p.x;
       u.y = p.y;
       u.facing = this.angleDeg;
+      u.formation = this.formation;
+      u.formSlot = i;
     });
     this.active = false;
     return positions;
