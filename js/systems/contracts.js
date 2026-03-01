@@ -7,6 +7,8 @@ const runtime = {
   offersByCity: new Map(),
 };
 
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE']);
+
 function hashString(input) {
   const text = String(input || '');
   let hash = 2166136261;
@@ -35,6 +37,46 @@ function clampInt(v, min, max) {
   return Math.max(min, Math.min(max, Math.floor(v)));
 }
 
+function isAtWarForFaction({ ownerFactionId, warState, factions } = {}) {
+  if (!ownerFactionId) return false;
+
+  const wars = Array.isArray(warState?.wars) ? warState.wars : (Array.isArray(warState?.activeWars) ? warState.activeWars : []);
+  if (wars.some((war) => {
+    const a = war?.a || war?.attacker || war?.left || war?.factionA;
+    const b = war?.b || war?.defender || war?.right || war?.factionB;
+    const active = war?.active !== false;
+    return active && (a === ownerFactionId || b === ownerFactionId);
+  })) return true;
+
+  const rels = factions?.relations;
+  if (rels && typeof rels === 'object') {
+    return Object.entries(rels).some(([key, value]) => {
+      if (!Number.isFinite(Number(value)) || Number(value) > Number(CONST.DIPLOMACY_RELATIONS?.WAR_THRESHOLD ?? -35)) return false;
+      return String(key).split(/[:|]/).includes(ownerFactionId);
+    });
+  }
+
+  return false;
+}
+
+function buildContractBase({ id, type, cityId, title, desc, rewardGold, rewardRenown, ownerFactionId, isWarContract = false }) {
+  return {
+    id,
+    type,
+    cityId,
+    title,
+    desc,
+    ownerFactionId: ownerFactionId || null,
+    factionId: ownerFactionId || null,
+    isWarContract,
+    progress: 0,
+    accepted: false,
+    completed: false,
+    rewardGold: Math.floor(rewardGold),
+    rewardRenown: Math.floor(rewardRenown),
+  };
+}
+
 export function setContractsRuntimeContext({ party, map, worldSeed } = {}) {
   if (party && typeof party === 'object') runtime.party = party;
   if (map && typeof map === 'object') runtime.map = map;
@@ -49,69 +91,200 @@ function getPois(map) {
   return Array.isArray(map?.pois) ? map.pois : [];
 }
 
-function createBanditContract({ cityId, day, seed, rng }) {
+function getSettlementById(map, cityId) {
+  return getSettlements(map).find((s) => s.id === cityId) || null;
+}
+
+function settlementName(settlement, fallbackId = 'Unknown') {
+  return settlement?.name || settlement?.label || settlement?.id || fallbackId;
+}
+
+function distanceBetweenSettlements(a, b) {
+  const ax = Number(a?.tx ?? a?.x ?? 0);
+  const ay = Number(a?.ty ?? a?.y ?? 0);
+  const bx = Number(b?.tx ?? b?.x ?? 0);
+  const by = Number(b?.ty ?? b?.y ?? 0);
+  return Math.hypot(ax - bx, ay - by);
+}
+
+function createBanditContract({ cityId, day, seed, rng, ownerFactionId, cityName }) {
+  const factionFlavor = ownerFactionId && ownerFactionId !== CONST.FACTION.ID.BANDITS
+    ? ` for ${ownerFactionId}`
+    : '';
   return {
-    id: `ct-bandit-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
-    type: 'BANDIT',
-    cityId,
+    ...buildContractBase({
+      id: `ct-bandit-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'BANDIT',
+      cityId,
+      title: `Clear Bandit Patrol${factionFlavor}`,
+      desc: `Suppress raiders threatening ${cityName}.`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.1,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE,
+      ownerFactionId,
+    }),
     targetRegionId: `region-${hashString(`${seed}:${cityId}:${day}:bandit`) % 16}`,
-    progress: 0,
     requiredCount: Math.max(1, Number(CONST.CONTRACTS.BANDIT_BATTLE_COUNT || 1)),
-    rewardGold: Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE * 1.1),
-    rewardRenown: Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE),
-    accepted: false,
-    completed: false,
   };
 }
 
-function createDeliveryContract({ cityId, day, seed, rng, map }) {
+function createDeliveryContract({ cityId, day, rng, map, ownerFactionId, cityName }) {
   const settlements = getSettlements(map).filter((s) => s.id !== cityId);
   const target = pickOne(settlements, rng, null);
   const minFood = Math.floor(CONST.CONTRACTS.DELIVERY_FOOD_MIN);
   const maxFood = Math.floor(CONST.CONTRACTS.DELIVERY_FOOD_MAX);
   const amount = clampInt(minFood + Math.floor(rng() * (Math.max(minFood + 1, maxFood + 1) - minFood)), minFood, maxFood);
   return {
-    id: `ct-deliver-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
-    type: 'DELIVER',
-    cityId,
+    ...buildContractBase({
+      id: `ct-deliver-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'DELIVER',
+      cityId,
+      title: 'Deliver Food Caravan',
+      desc: `Move grain from ${cityName} to ${settlementName(target, 'target city')}.`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.35,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 0.9,
+      ownerFactionId,
+    }),
     targetCityId: target?.id || cityId,
     requiredAmount: amount,
-    progress: 0,
     requiredCount: amount,
-    rewardGold: Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE * 1.35),
-    rewardRenown: Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE * 0.9),
-    accepted: false,
-    completed: false,
   };
 }
 
-function createScoutContract({ cityId, day, seed, rng, map }) {
+function createScoutContract({ cityId, day, rng, map, ownerFactionId }) {
   const ruins = getPois(map).filter((poi) => poi?.id && poi.type === 'ruin');
   const targetPoi = pickOne(ruins, rng, null);
   return {
-    id: `ct-scout-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
-    type: 'SCOUT',
-    cityId,
+    ...buildContractBase({
+      id: `ct-scout-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'SCOUT',
+      cityId,
+      title: 'Scout Nearby Ruin',
+      desc: `Explore ruin ${targetPoi?.id || 'target'} and report back.`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 1.25,
+      ownerFactionId,
+    }),
     targetPoiId: targetPoi?.id || null,
-    progress: 0,
     requiredCount: Math.max(1, Number(CONST.CONTRACTS.SCOUT_POI_COUNT || 1)),
-    rewardGold: Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE),
-    rewardRenown: Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE * 1.25),
-    accepted: false,
-    completed: false,
   };
 }
 
-export function generateContractsForCity({ cityId, day, seed, map } = {}) {
-  const chosenMap = map || runtime.map || { settlements: [], pois: [] };
-  const worldSeed = Number.isFinite(seed) ? seed : runtime.worldSeed;
+function createDefendContract({ cityId, day, rng, ownerFactionId, cityName }) {
+  const requiredCount = Math.max(1, Number(CONST.CONTRACTS.DEFEND_WAVE_COUNT ?? 2));
+  const windowDays = Math.max(1, Number(CONST.CONTRACTS.DEFEND_WINDOW_DAYS ?? 3));
+  return {
+    ...buildContractBase({
+      id: `ct-defend-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'DEFEND',
+      cityId,
+      title: `Defend ${cityName}`,
+      desc: `Defend ${cityName} against raids (${requiredCount} battles in ${windowDays} days).`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.45,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 1.5,
+      ownerFactionId,
+      isWarContract: true,
+    }),
+    requiredCount,
+    windowDays,
+  };
+}
+
+function createEscortContract({ cityId, day, rng, map, ownerFactionId, cityName }) {
+  const from = getSettlementById(map, cityId);
+  const others = getSettlements(map).filter((s) => s.id !== cityId);
+  const minDistance = Number(CONST.CONTRACTS.ESCORT_DISTANCE_MIN ?? 10);
+  const maxDistance = Number(CONST.CONTRACTS.ESCORT_DISTANCE_MAX ?? 25);
+  const candidates = others.filter((target) => {
+    const d = distanceBetweenSettlements(from, target);
+    return d >= minDistance && d <= maxDistance;
+  });
+  const target = pickOne(candidates.length ? candidates : others, rng, null);
+  return {
+    ...buildContractBase({
+      id: `ct-escort-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'ESCORT',
+      cityId,
+      title: `Escort caravan from ${cityName}`,
+      desc: `Escort caravan from ${cityName} to ${settlementName(target, 'target city')}.`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.2,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 1.1,
+      ownerFactionId,
+    }),
+    targetCityId: target?.id || cityId,
+    routeFromName: cityName,
+    routeToName: settlementName(target, target?.id || cityId),
+    maxBanditEncounters: 1,
+    escortBanditEncounters: 0,
+    requiredCount: 1,
+  };
+}
+
+function createAssassinateContract({ cityId, day, rng, seed, ownerFactionId }) {
+  const targetRegionId = `region-${hashString(`${seed}:${cityId}:${day}:leader`) % 16}`;
+  return {
+    ...buildContractBase({
+      id: `ct-assassinate-${cityId}-${day}-${Math.floor(rng() * 10000)}`,
+      type: 'ASSASSINATE',
+      cityId,
+      title: 'Eliminate Bandit Leader',
+      desc: `Eliminate a notorious bandit leader near ${targetRegionId}.`,
+      rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.6,
+      rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 1.65,
+      ownerFactionId,
+      isWarContract: true,
+    }),
+    targetFactionId: CONST.FACTION.ID.BANDITS,
+    targetRegionId,
+    targetPower: Number(CONST.CONTRACTS.ASSASSINATE_TARGET_POWER ?? 1.5),
+    requiredCount: 1,
+  };
+}
+
+export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
+  const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
+  const worldSeed = Number.isFinite(seed)
+    ? seed
+    : (Number.isFinite(worldState?.seed) ? worldState.seed : runtime.worldSeed);
   const key = `${cityId || 'city'}:${Number(day || 1)}:${worldSeed}`;
   const rng = makeRng(hashString(key));
-  const contracts = [
-    createBanditContract({ cityId, day, seed: worldSeed, rng }),
-    createDeliveryContract({ cityId, day, seed: worldSeed, rng, map: chosenMap }),
-    createScoutContract({ cityId, day, seed: worldSeed, rng, map: chosenMap }),
-  ];
+  const settlement = getSettlementById(chosenMap, cityId);
+  const ownerFactionId = settlement?.ownerFactionId || settlement?.owner || null;
+  const cityName = settlementName(settlement, cityId);
+  const warActive = isAtWarForFaction({ ownerFactionId, warState, factions: factions || worldState?.factions });
+
+  const pool = warActive
+    ? ['DEFEND', 'ASSASSINATE', 'BANDIT', 'ESCORT', 'DELIVER', 'DEFEND', 'ASSASSINATE']
+    : ['BANDIT', 'DELIVER', 'SCOUT', 'ESCORT', 'BANDIT', 'SCOUT'];
+  const selected = [];
+  while (selected.length < 3 && pool.length) {
+    const picked = pickOne(pool, rng);
+    if (!picked) break;
+    if (!selected.includes(picked)) selected.push(picked);
+    if (selected.length < 3 && selected.includes('SCOUT') && !pool.includes('ESCORT')) pool.push('ESCORT');
+  }
+
+  if (!selected.includes('BANDIT')) selected[0] = 'BANDIT';
+  if (!warActive && !selected.includes('SCOUT')) selected[1] = 'SCOUT';
+  if (!selected.includes('ESCORT')) selected[2] = 'ESCORT';
+
+  if (warActive && !selected.some((type) => type === 'DEFEND' || type === 'ASSASSINATE')) {
+    const warType = pickOne(['DEFEND', 'ASSASSINATE'], rng, 'DEFEND');
+    const replaceCandidates = [0, 1, 2].filter((idx) => selected[idx] !== 'ESCORT');
+    const replaceIndex = pickOne(replaceCandidates, rng, 1);
+    selected[replaceIndex] = warType;
+  }
+
+  const contracts = selected.slice(0, 3).map((type) => {
+    if (!CONTRACT_TYPES.includes(type)) return null;
+    if (type === 'BANDIT') return createBanditContract({ cityId, day, seed: worldSeed, rng, ownerFactionId, cityName });
+    if (type === 'DELIVER') return createDeliveryContract({ cityId, day, rng, map: chosenMap, ownerFactionId, cityName });
+    if (type === 'SCOUT') return createScoutContract({ cityId, day, rng, map: chosenMap, ownerFactionId });
+    if (type === 'DEFEND') return createDefendContract({ cityId, day, rng, ownerFactionId, cityName });
+    if (type === 'ESCORT') return createEscortContract({ cityId, day, rng, map: chosenMap, ownerFactionId, cityName });
+    if (type === 'ASSASSINATE') return createAssassinateContract({ cityId, day, rng, seed: worldSeed, ownerFactionId });
+    return null;
+  }).filter(Boolean);
+
   runtime.offersByCity.set(String(cityId || ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -144,6 +317,27 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = prev + 1;
       }
     }
+    if (contract.type === 'DEFEND' && event.type === 'BATTLE_WON') {
+      if (event.enemyFaction === 'bandits' && event.locationCityId === contract.cityId) {
+        contract.progress = prev + 1;
+      }
+    }
+    if (contract.type === 'ASSASSINATE' && event.type === 'BATTLE_WON') {
+      if (event.enemyFaction === 'bandits' && event.isTargetLeader) {
+        contract.progress = prev + 1;
+      }
+    }
+    if (contract.type === 'ESCORT' && event.type === 'BATTLE_WON') {
+      if (event.enemyFaction === 'bandits' && !contract.completed) {
+        contract.escortBanditEncounters = Number(contract.escortBanditEncounters ?? 0) + 1;
+      }
+    }
+    if (contract.type === 'ESCORT' && event.type === 'ESCORT_COMPLETE') {
+      const success = Boolean(event.success);
+      if (event.fromCityId === contract.cityId && event.toCityId === contract.targetCityId && success) {
+        contract.progress = 1;
+      }
+    }
     if (contract.type === 'DELIVER' && event.type === 'DELIVERED') {
       if (event.itemId === 'food' && event.cityId === contract.targetCityId) {
         contract.progress = prev + Math.max(0, Number(event.qty ?? 0));
@@ -170,17 +364,31 @@ export function updateContractProgress(event, party = runtime.party) {
   return changed;
 }
 
-export function completeContract(contractId, party = runtime.party) {
+export function completeContract(contractId, party = runtime.party, options = {}) {
   if (!party || !Array.isArray(party.contracts) || !contractId) return null;
   const idx = party.contracts.findIndex((c) => c?.id === contractId);
   if (idx < 0) return null;
   const contract = party.contracts[idx];
   if (!contract.completed) return null;
 
+  const resolvedWarState = options?.warState || null;
+  const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
+  const warContractTypes = new Set(['DEFEND', 'ASSASSINATE']);
+  const warBonus = warContractTypes.has(contract.type) && isWarNow
+    ? Number(CONST.CONTRACTS.WAR_CONTRACT_BONUS_RENOWN ?? 0)
+    : 0;
+
   party.gold = Math.floor(Number(party.gold ?? 0) + Number(contract.rewardGold ?? 0));
-  party.renown = Math.floor(Number(party.renown ?? 0) + Number(contract.rewardRenown ?? 0));
+  party.renown = Math.floor(Number(party.renown ?? 0) + Number(contract.rewardRenown ?? 0) + warBonus);
+
+  const completed = { ...contract, bonusRenown: warBonus };
   party.contracts.splice(idx, 1);
-  return contract;
+
+  if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
+    options.onRelationBonus(completed);
+  }
+
+  return completed;
 }
 
 export function emitContractEvent(event, party = runtime.party) {

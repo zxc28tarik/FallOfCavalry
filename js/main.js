@@ -3007,18 +3007,35 @@ Renown
       },
       onAcceptContract: (contractId) => {
         const accepted = acceptContract(contractId, this.playerParty);
+        if (accepted?.type === 'ESCORT') {
+          this.state.escortState = {
+            contractId: accepted.id,
+            fromCityId: accepted.cityId,
+            toCityId: accepted.targetCityId,
+            maxBanditEncounters: Number(accepted.maxBanditEncounters ?? 1),
+            banditEncounters: 0,
+            active: true,
+          };
+        }
         if (accepted) this.setLastEventLog('Contract accepted.');
       },
       onCompleteContract: (contractId) => {
-        const completed = completeContract(contractId, this.playerParty);
+        const completed = completeContract(contractId, this.playerParty, {
+          warState: this.state?.warState,
+          factions: this.state?.factions,
+          onRelationBonus: (contract) => {
+            const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
+            applyContractRelationBonus({
+              factions: this.state?.factions,
+              contract: { ...contract, factionId: contract.factionId || currentCityFactionId },
+              cfg: CONST.DIPLOMACY_ACTIONS,
+            });
+          },
+        });
         if (completed) {
-          const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
-          applyContractRelationBonus({
-            factions: this.state?.factions,
-            contract: { ...completed, factionId: completed.factionId || currentCityFactionId },
-            cfg: CONST.DIPLOMACY_ACTIONS,
-          });
-          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown} renown`);
+          const bonus = Number(completed?.bonusRenown ?? 0);
+          const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
+          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown + bonus} renown${bonusText}`);
         }
       },
       onDiplomacyAction: (summary) => {
@@ -3070,8 +3087,28 @@ Renown
     settlement.recruitPool = recruitPool;
     const market = this.getOrCreateMarketForSettlement(settlement);
     setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
-    const contracts = generateContractsForCity({ cityId: settlement.id, day: this.state?.day, seed: this.state?.seed, map: this.state?.map })
+    const contracts = generateContractsForCity({
+      cityId: settlement.id,
+      day: this.state?.day,
+      seed: this.state?.seed,
+      map: this.state?.map,
+      worldState: this.state,
+      factions: this.state?.factions,
+      warState: this.state?.warState,
+    })
       .map((contract) => ({ ...contract, factionId: settlement.ownerFactionId || settlement.owner || null }));
+
+    if (this.state?.escortState?.active && this.state.escortState.toCityId === settlement.id) {
+      const escortSuccess = Number(this.state.escortState.banditEncounters ?? 0) <= Number(this.state.escortState.maxBanditEncounters ?? 1);
+      emitContractEvent({
+        type: 'ESCORT_COMPLETE',
+        fromCityId: this.state.escortState.fromCityId,
+        toCityId: this.state.escortState.toCityId,
+        success: escortSuccess,
+      }, this.playerParty);
+      this.state.escortState.active = false;
+      this.setLastEventLog(escortSuccess ? 'Escort route completed successfully.' : 'Escort failed: too many bandit encounters.');
+    }
     this.state.setMode('city');
     this.cityUI?.show?.(settlement, { recruitPool, market, contracts });
     this.updateTransientUIState();
@@ -4027,7 +4064,23 @@ Up/Down select, Enter heal, Esc back`,
 
     if (result === 'victory') {
       const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
-      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: enemy?.factionId || 'bandits', regionId }, this.playerParty);
+      const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
+      const locationCity = settlements.reduce((best, settlement) => {
+        if (!settlement) return best;
+        const sx = Number(settlement.tx ?? settlement.x ?? 0);
+        const sy = Number(settlement.ty ?? settlement.y ?? 0);
+        const px = Number(this.playerParty?.x ?? 0);
+        const py = Number(this.playerParty?.y ?? 0);
+        const dist = Math.hypot(sx - px, sy - py);
+        if (!best || dist < best.dist) return { dist, settlement };
+        return best;
+      }, null);
+      const locationCityId = locationCity?.settlement?.id || null;
+      const isTargetLeader = Boolean(enemy?.isTargetLeader || enemy?.type === 'bandit_leader');
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: enemy?.factionId || 'bandits', regionId, locationCityId, isTargetLeader }, this.playerParty);
+      if (this.state?.escortState?.active && (enemy?.factionId || 'bandits') === 'bandits') {
+        this.state.escortState.banditEncounters = Number(this.state.escortState.banditEncounters ?? 0) + 1;
+      }
       if (enemy?.type === 'caravan') {
         applyTradeCaravanAttackPenalty({
           factions: this.state?.factions,
@@ -4036,7 +4089,7 @@ Up/Down select, Enter heal, Esc back`,
         });
       }
       const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
-      emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId }, this.playerParty);
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, this.playerParty);
       this.cleanupTemporaryEnemy(enemyId, { force: true });
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     } else if (result === 'defeat') {

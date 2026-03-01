@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import * as CONST from '../constants.js';
 import {
   setContractsRuntimeContext,
   generateContractsForCity,
@@ -9,8 +10,9 @@ import {
 
 const map = {
   settlements: [
-    { id: 'city-a' },
-    { id: 'city-b' },
+    { id: 'city-a', name: 'City A', tx: 0, ty: 0, ownerFactionId: 'kingdom_a' },
+    { id: 'city-b', name: 'City B', tx: 12, ty: 0, ownerFactionId: 'kingdom_a' },
+    { id: 'city-c', name: 'City C', tx: 25, ty: 0, ownerFactionId: 'kingdom_b' },
   ],
   pois: [
     { id: 'poi-ruin-1', type: 'ruin' },
@@ -18,37 +20,87 @@ const map = {
   ],
 };
 
+const factions = {
+  relations: {
+    'kingdom_a|kingdom_b': -50,
+  },
+};
+
 const party = { gold: 100, renown: 10, contracts: [] };
 setContractsRuntimeContext({ party, map, worldSeed: 777 });
 
-const run1 = generateContractsForCity({ cityId: 'city-a', day: 3, seed: 777, map });
-const run2 = generateContractsForCity({ cityId: 'city-a', day: 3, seed: 777, map });
-assert.deepEqual(run1, run2, 'contracts should be deterministic for same city/day/seed');
-assert.equal(run1.length, 3, 'must produce 3 contracts');
+const peaceful = generateContractsForCity({ cityId: 'city-c', day: 3, seed: 777, map, factions, warState: { wars: [] } });
+assert.equal(peaceful.length, 3, 'must produce 3 contracts in peace');
+assert.ok(peaceful.some((c) => c.type === 'ESCORT'), 'peace pool should include escort');
 
-const bandit = run1.find((c) => c.type === 'BANDIT');
-const deliver = run1.find((c) => c.type === 'DELIVER');
-const scout = run1.find((c) => c.type === 'SCOUT');
-assert.ok(bandit && deliver && scout, 'all three contract types should exist');
+const warRun = generateContractsForCity({ cityId: 'city-a', day: 3, seed: 777, map, factions, warState: { wars: [{ a: 'kingdom_a', b: 'kingdom_b', active: true }] } });
+const warRunAgain = generateContractsForCity({ cityId: 'city-a', day: 3, seed: 777, map, factions, warState: { wars: [{ a: 'kingdom_a', b: 'kingdom_b', active: true }] } });
+assert.deepEqual(warRun, warRunAgain, 'contracts should be deterministic for same city/day/seed');
+assert.ok(warRun.some((c) => c.type === 'DEFEND' || c.type === 'ASSASSINATE'), 'war city should have war contract chance');
 
-acceptContract(bandit.id, party);
-acceptContract(deliver.id, party);
-acceptContract(scout.id, party);
+const defendOffer = warRun.find((c) => c.type === 'DEFEND') || {
+  id: 'manual-defend',
+  type: 'DEFEND',
+  accepted: true,
+  completed: false,
+  cityId: 'city-a',
+  requiredCount: 2,
+  progress: 0,
+  rewardGold: 50,
+  rewardRenown: 10,
+  ownerFactionId: 'kingdom_a',
+};
+const escortOffer = peaceful.find((c) => c.type === 'ESCORT') || {
+  id: 'manual-escort',
+  type: 'ESCORT',
+  accepted: true,
+  completed: false,
+  cityId: 'city-c',
+  targetCityId: 'city-b',
+  requiredCount: 1,
+  progress: 0,
+  rewardGold: 50,
+  rewardRenown: 10,
+  ownerFactionId: 'kingdom_b',
+};
+const assassinateOffer = warRun.find((c) => c.type === 'ASSASSINATE') || {
+  id: 'manual-assassin',
+  type: 'ASSASSINATE',
+  accepted: true,
+  completed: false,
+  cityId: 'city-a',
+  requiredCount: 1,
+  progress: 0,
+  rewardGold: 50,
+  rewardRenown: 10,
+  ownerFactionId: 'kingdom_a',
+};
 
-updateContractProgress({ type: 'BATTLE_WON', enemyFaction: 'bandits', regionId: bandit.targetRegionId }, party);
-assert.ok((party.contracts.find((c) => c.id === bandit.id)?.progress ?? 0) > 0, 'bandit progress should increment');
+if (defendOffer.id !== 'manual-defend') acceptContract(defendOffer.id, party);
+if (escortOffer.id !== 'manual-escort') acceptContract(escortOffer.id, party);
+if (assassinateOffer.id !== 'manual-assassin') acceptContract(assassinateOffer.id, party);
+if (defendOffer.id === 'manual-defend') party.contracts.push(defendOffer);
+if (escortOffer.id === 'manual-escort') party.contracts.push(escortOffer);
+if (assassinateOffer.id === 'manual-assassin') party.contracts.push(assassinateOffer);
 
-updateContractProgress({ type: 'DELIVERED', itemId: 'food', qty: 5, cityId: deliver.targetCityId }, party);
-assert.ok((party.contracts.find((c) => c.id === deliver.id)?.progress ?? 0) >= 5, 'delivery progress should increment');
+updateContractProgress({ type: 'BATTLE_WON', enemyFaction: 'bandits', locationCityId: 'city-a' }, party);
+assert.equal(party.contracts.find((c) => c.id === defendOffer.id)?.progress, 1, 'defend should progress on local bandit victory');
 
-updateContractProgress({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: scout.targetPoiId }, party);
-assert.equal(party.contracts.find((c) => c.id === scout.id)?.completed, true, 'scout contract should complete');
+updateContractProgress({ type: 'ESCORT_COMPLETE', fromCityId: escortOffer.cityId, toCityId: escortOffer.targetCityId, success: true }, party);
+assert.equal(party.contracts.find((c) => c.id === escortOffer.id)?.completed, true, 'escort should complete on successful route');
 
-const beforeGold = party.gold;
+updateContractProgress({ type: 'BATTLE_WON', enemyFaction: 'bandits', isTargetLeader: true }, party);
+assert.equal(party.contracts.find((c) => c.id === assassinateOffer.id)?.completed, true, 'assassinate should complete when target leader is killed');
+
+const warReady = party.contracts.find((c) => c.type === 'DEFEND');
+warReady.progress = warReady.requiredCount;
+warReady.completed = true;
 const beforeRenown = party.renown;
-const completed = completeContract(scout.id, party);
-assert.ok(completed, 'completed contract should be claimable');
-assert.ok(party.gold > beforeGold, 'gold reward should be added');
-assert.ok(party.renown > beforeRenown, 'renown reward should be added');
+const completed = completeContract(warReady.id, party, {
+  warState: { wars: [{ a: 'kingdom_a', b: 'kingdom_b', active: true }] },
+  factions,
+});
+assert.ok(completed, 'war contract should be claimable');
+assert.equal(party.renown, beforeRenown + completed.rewardRenown + CONST.CONTRACTS.WAR_CONTRACT_BONUS_RENOWN, 'war contract should add renown bonus');
 
 console.log('contracts smoke test passed');

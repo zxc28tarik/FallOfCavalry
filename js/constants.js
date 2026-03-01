@@ -262,6 +262,25 @@ export const FACTIONS = Object.freeze([
   { id: FACTION.ID.KINGDOM_B, name: 'Valen Court', color: '#9b59b6', doctrine: 'Courtly Maneuver', desc: 'Agile armies with opportunistic tactics.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Mobile force composition.' },
   { id: FACTION.ID.BANDITS, name: 'Broken Banner', color: '#95a5a6', doctrine: 'Raid and Scatter', desc: 'Unreliable but dangerous raiders.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Low resources, high risk.' },
 ]);
+
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN_REL: -100,
+  MAX_REL: 100,
+  MIN: -100,
+  MAX: 100,
+  DEFAULT: 0,
+  ALLY_THRESHOLD: 50,
+  WAR_THRESHOLD: -30,
+  START_RELATIONS: Object.freeze({
+    'player:kingdom_a': 20,
+    'player:kingdom_b': 0,
+    'player:bandits': -60,
+    'kingdom_a:kingdom_b': -10,
+    'kingdom_a:bandits': -80,
+    'kingdom_b:bandits': -70,
+  }),
+});
+
 // =============================================================================
 // KARŞILAŞMA TİPLERİ
 // =============================================================================
@@ -532,6 +551,12 @@ export const CONTRACTS = Object.freeze({
   DELIVERY_FOOD_MAX: 60,
   BANDIT_BATTLE_COUNT: 1,
   SCOUT_POI_COUNT: 1,
+  DEFEND_WINDOW_DAYS: 3,
+  DEFEND_WAVE_COUNT: 2,
+  ESCORT_DISTANCE_MIN: 10,
+  ESCORT_DISTANCE_MAX: 25,
+  ASSASSINATE_TARGET_POWER: 1.5,
+  WAR_CONTRACT_BONUS_RENOWN: 5,
 });
 
 
