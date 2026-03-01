@@ -222,6 +222,8 @@ export default class CityServicesUI {
         ownerFactionId: this.currentSettlement?.ownerFactionId || this.currentSettlement?.owner || null,
         diplomacyCfg: this.state?.tuning?.DIPLOMACY_ACTIONS || CONST.DIPLOMACY_ACTIONS,
         diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+        worldEvents: this.state?.events?.activeEvents || [],
+        eventsCfg: this.state?.tuning?.EVENTS || CONST.EVENTS,
       };
       const buyPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'buy', priceOpts);
       const sellPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'sell', priceOpts);
