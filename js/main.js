@@ -76,6 +76,12 @@ import {
   updateWorldParties,
   removeWorldParty,
 } from './systems/world-ai.js';
+  createInitialFactionState,
+  getRelation,
+  getStance,
+  applyBattleOutcomeToRelations,
+  assignInitialSettlementOwners,
+} from './systems/factions.js';
 
 import * as utils from './utils.js';
 
@@ -290,6 +296,44 @@ class FallOfCavalry {
     if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
   }
 
+  ensureFactionState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    const loaded = this.state.factions && typeof this.state.factions === 'object' && !Array.isArray(this.state.factions)
+      ? this.state.factions
+      : null;
+    const knownIds = Array.isArray(loaded?.knownFactions) && loaded.knownFactions.length > 0
+      ? loaded.knownFactions
+      : CONST.FACTIONS.map((f) => f.id);
+    const next = createInitialFactionState({
+      factions: knownIds.map((id) => ({ id })),
+      cfg: this.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
+    });
+    if (loaded?.relations && typeof loaded.relations === 'object') {
+      Object.entries(loaded.relations).forEach(([key, value]) => {
+        if (Number.isFinite(value)) next.relations[key] = value;
+      });
+    }
+    this.state.factions = next;
+  }
+
+  getFactionName(factionId) {
+    return CONST.FACTIONS.find((f) => f.id === factionId)?.name || factionId || 'Unknown';
+  }
+
+  getCityFactionContext(settlement) {
+    const ownerFactionId = settlement?.ownerFactionId || null;
+    if (!ownerFactionId || !this.state?.factions) return null;
+    const dipCfg = this.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS;
+    const relation = getRelation(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId);
+    const stance = getStance(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId, dipCfg);
+    return {
+      ownerFactionId,
+      ownerFactionName: this.getFactionName(ownerFactionId),
+      relation,
+      stance,
+    };
+  }
+
   getTuningDefaults() {
     return {
       ENCOUNTER_RISK: {
@@ -345,6 +389,11 @@ class FallOfCavalry {
         PATROL_AGGRO_RADIUS: Number(CONST.WORLD_AI.PATROL_AGGRO_RADIUS),
         DESPAWN_DISTANCE: Number(CONST.WORLD_AI.DESPAWN_DISTANCE),
         RESPAWN_INTERVAL_DAYS: Number(CONST.WORLD_AI.RESPAWN_INTERVAL_DAYS),
+      DIPLOMACY_RELATIONS: {
+        MIN_REL: Number(CONST.DIPLOMACY_RELATIONS.MIN_REL),
+        MAX_REL: Number(CONST.DIPLOMACY_RELATIONS.MAX_REL),
+        ALLY_THRESHOLD: Number(CONST.DIPLOMACY_RELATIONS.ALLY_THRESHOLD),
+        WAR_THRESHOLD: Number(CONST.DIPLOMACY_RELATIONS.WAR_THRESHOLD),
       },
       BATTLE_FORMATION: {
         COHESION_RADIUS: Number(CONST.BATTLE_FORMATION.COHESION_RADIUS),
@@ -484,6 +533,7 @@ class FallOfCavalry {
       'WEATHER',
       'CAMPAIGN_OBJECTIVES',
       'CONTRACTS',
+      'DIPLOMACY_RELATIONS',
       'BATTLE_FORMATION',
       'BATTLE_FLANK',
       'BATTLE_MORALE',
@@ -494,6 +544,7 @@ class FallOfCavalry {
       'BATTLE_FX',
       'BATTLE_REWARDS',
       'BATTLE_CASUALTIES',
+      'BATTLE_CAMERA',
     ].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'WORLD_AI', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES', 'BATTLE_CAMERA'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
@@ -658,6 +709,7 @@ class FallOfCavalry {
     if (this.state) PoiSystem.ensurePoiState(this.state);
     this.ensureTutorialState();
     this.ensureTuningState();
+    this.ensureFactionState();
     this.state.devMode = isDevMode();
     this.applyDevOnlyDomLock();
     const storageTuning = loadTuningFromStorage();
@@ -1154,6 +1206,7 @@ class FallOfCavalry {
     if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = 0;
     if (!Number.isFinite(this.playerParty.starveDays)) this.playerParty.starveDays = 0;
     if (!Array.isArray(this.playerParty.contracts)) this.playerParty.contracts = [];
+    if (typeof this.playerParty.factionId !== 'string' || !this.playerParty.factionId) this.playerParty.factionId = CONST.FACTION.ID.PLAYER;
     if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = Number(CONST.GAME.STARTING_RENOWN ?? 0);
     if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
       const roster = [];
@@ -1295,6 +1348,26 @@ class FallOfCavalry {
     });
 
     this.enemyParties = [];
+    if (Array.isArray(this.state.aiParties) && this.state.aiParties.length > 0) {
+      this.enemyParties = this.state.aiParties.map((party) => ({
+        ...party,
+        factionId: party?.factionId || CONST.FACTION.ID.BANDITS,
+      }));
+      this.state.aiParties = this.enemyParties;
+      return;
+    }
+
+    const bounds = this.getWorldBounds();
+    const mapSpanX = Math.max(200, bounds.maxX - bounds.minX);
+    const mapSpanY = Math.max(200, bounds.maxY - bounds.minY);
+    const baseX = bounds.minX + mapSpanX * 0.35;
+    const baseY = bounds.minY + mapSpanY * 0.35;
+
+    this.enemyParties = [
+      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDITS },
+      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
+      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
+    ];
     this.state.aiParties = this.enemyParties;
     this.state.worldAi = this.worldAi;
   }
@@ -1355,6 +1428,8 @@ class FallOfCavalry {
     const normalizedSeed = Number.isFinite(seed) ? seed : parseInt(String(seed || this.state.seed || 1337), 10) || 1337;
     const hasExistingTiles = Array.isArray(this.state?.map?.tiles) && this.state.map.tiles.length > 0;
     if (hasExistingTiles && this._worldSeedCache === normalizedSeed) {
+      this.ensureFactionState();
+      assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
       if (this.state.map.fog instanceof Uint8Array) {
         this.fogOfWar = new FogOfWar(this.state.map.width, this.state.map.height, this.state.map.fog);
       }
@@ -1396,6 +1471,9 @@ class FallOfCavalry {
       pois: Array.isArray(world.pois) ? world.pois : [],
       fog,
     };
+
+    this.ensureFactionState();
+    assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
 
     if (!(this.state.map.biomes instanceof Uint8Array) || this.state.map.biomes.length !== this.state.map.width * this.state.map.height) {
       const fallbackBiomes = new Uint8Array(this.state.map.width * this.state.map.height);
@@ -1610,8 +1688,10 @@ class FallOfCavalry {
     if (this.state.mode === 'city') {
       this.state.uiPanel = this.buildCityPanelData();
       const settlement = this.state.city;
+      this.state.currentCityFactionContext = this.getCityFactionContext(settlement);
       if (settlement?.id) {
         this.cityUI?.setData?.({
+          settlement,
           recruitPool: settlement.recruitPool || [],
           market: this.state?.markets?.[settlement.id] || null,
         });
@@ -1621,6 +1701,8 @@ class FallOfCavalry {
     if (this.state.mode === 'aftermath') {
       this.state.uiPanel = this.buildAftermathPanelData();
     }
+    if (this.state.mode !== 'city') this.state.currentCityFactionContext = null;
+
 
     if (this.state?.camp?.active) {
       const { weight, cap } = this.getLogisticsSpeedMult();
@@ -2360,6 +2442,8 @@ class FallOfCavalry {
     }
 
     const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
+    const enemyParty = (this.enemyParties || []).find((party) => party?.id === enemyId) || null;
+    const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
     const playerUnits = this.createBattleUnitsFromRoster(selected, 'player');
     const enemyUnits = this.createBattleUnitsFromRoster(this.enemyRoster, 'enemy');
     this.placeBattleUnits(enemyUnits, 'enemy');
@@ -2372,6 +2456,7 @@ class FallOfCavalry {
     initBattleFx(this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX);
     this.state.battle = {
       enemyId,
+      enemyFactionId,
       startedAt: Date.now(),
       result: null,
       resolvedAt: null,
@@ -2775,6 +2860,7 @@ Renown
         const completed = completeContract(contractId, this.playerParty);
         if (completed) this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown} renown`);
       },
+      getFactionContext: (settlement) => this.getCityFactionContext(settlement),
       onClose: () => this.exitCityServices(),
     });
 
@@ -2785,6 +2871,9 @@ Renown
       btnContracts: utils.getEl('btnContracts'),
       cityClose: utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
       cityList: utils.getEl('settlementLore'),
+      cityTitle: utils.getEl('settlementTitle'),
+      citySubtitle: utils.getEl('settlementSubtitle'),
+      cityRelation: utils.getEl('settlementRelation'),
     });
   }
 
@@ -3208,6 +3297,7 @@ Renown
         vx: 0,
         vy: 0,
         temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
+        factionId: CONST.FACTION.ID.BANDITS,
       });
       this.state.aiParties = this.enemyParties;
     }
@@ -3369,9 +3459,11 @@ Renown
     const day = this.state?.day ?? 1;
 
     if (submode === 'menu') {
+      const factionCtx = this.getCityFactionContext(city);
+      const ownerLine = factionCtx ? `Owner: ${factionCtx.ownerFactionName} (REL ${Math.floor(factionCtx.relation)}, ${factionCtx.stance})\n\n` : '';
       return {
         title: `${city.name || 'Settlement'} (${String(city.type || 'town').toUpperCase()})`,
-        body: `Gold: ${Math.floor(this.playerParty?.gold ?? 0)}
+        body: `${ownerLine}Gold: ${Math.floor(this.playerParty?.gold ?? 0)}
 
 1 = Recruit
 2 = Market
@@ -3642,40 +3734,29 @@ Up/Down select, Enter heal, Esc back`,
       && this.playerParty.inventory.items.some((item) => item?.id === 'arrows');
     if (arrowsExists && usedAmmo > 0) this.removeItem('arrows', usedAmmo);
 
-    const outcome = this.applyRosterOutcomeFromBattle(battle);
     const tuning = this.getEffectiveTuning();
     const rewardCfg = tuning.BATTLE_REWARDS || CONST.BATTLE_REWARDS;
     const encounterId = `${enemyId}:${Math.floor(battle.startedAt ?? battle.resolvedAt ?? 0)}`;
-    const battleRng = createBattleRng({
+    const rewardRng = createBattleRng({
       worldSeed: this.state?.seed,
       encounterId,
       day: this.state?.day,
     });
     const enemyPower = computeEnemyPower({ battle });
     const lootReward = result === 'victory'
-      ? generateRewardLoot({ cfg: rewardCfg, rng: battleRng, enemyPower })
+      ? generateRewardLoot({ cfg: rewardCfg, rng: rewardRng, enemyPower })
       : { gold: 0, items: [] };
-    const routingCount = (battle.playerUnits || []).filter((unit) => unit?.moraleState === 'routing').length;
-    const manyRouted = routingCount >= Math.ceil(Math.max(1, (battle.playerUnits || []).length) * 0.5);
-    const renownDelta = result === 'victory'
-      ? computeRenownDelta({
-        cfg: rewardCfg,
-        enemyPower,
-        casualtiesInfo: { deadCount: outcome.dead.length },
-        routingInfo: { manyRouted },
-      })
-      : 0;
 
     this.playerParty.gold = (this.playerParty.gold ?? 0) + Number(lootReward.gold ?? 0);
     for (const item of lootReward.items || []) {
       const id = item?.id === 'food' ? 'grain' : item?.id;
       this.addItem(id, this.getItemName(id), Math.max(1, Math.floor(item?.qty ?? 1)));
     }
-    this.playerParty.renown = (this.playerParty.renown ?? 0) + renownDelta;
+
     const rosterBefore = new Map((this.playerParty?.roster || []).map((u) => [u.id, { ...u }]));
     const casualtyCfg = this.getEffectiveTuning().BATTLE_CASUALTIES;
-    const battleRng = () => Math.random();
-    applyBattleOutcomes({ battle, party: this.playerParty, cfg: casualtyCfg, rng: battleRng });
+    applyBattleOutcomes({ battle, party: this.playerParty, cfg: casualtyCfg, rng: Math.random });
+
     const dead = [];
     const wounded = [];
     for (const [id, unitBefore] of rosterBefore.entries()) {
@@ -3683,17 +3764,35 @@ Up/Down select, Enter heal, Esc back`,
       if (!after) dead.push({ id: unitBefore.id, name: unitBefore.name });
       else if (after.status === 'wounded') wounded.push({ id: after.id, name: after.name });
     }
-    const outcome = { dead, wounded };
-    const loot = this.generateBattleLoot(result, battle);
-    const goldDelta = result === 'victory' ? 8 + Math.floor(Math.random() * 8) : result === 'retreat' ? 2 + Math.floor(Math.random() * 3) : 0;
-    const xpDelta = result === 'victory' ? 10 + Math.floor(Math.random() * 7) : result === 'retreat' ? 3 : 0;
+
+    const routingCount = (battle.playerUnits || []).filter((unit) => unit?.moraleState === 'routing').length;
+    const manyRouted = routingCount >= Math.ceil(Math.max(1, (battle.playerUnits || []).length) * 0.5);
+    const renownDelta = result === 'victory'
+      ? computeRenownDelta({
+        cfg: rewardCfg,
+        enemyPower,
+        casualtiesInfo: { deadCount: dead.length },
+        routingInfo: { manyRouted },
+      })
+      : 0;
+    this.playerParty.renown = (this.playerParty.renown ?? 0) + renownDelta;
+
+    applyBattleOutcomeToRelations({
+      state: this.state.factions,
+      playerFactionId: this.playerParty?.factionId || CONST.FACTION.ID.PLAYER,
+      enemyFactionId: battle.enemyFactionId || CONST.FACTION.ID.BANDITS,
+      result,
+      casualties: { dead: dead.length, wounded: wounded.length },
+      cfg: this.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
+    });
 
     this.state.aftermath = {
       result,
       enemyId,
-      dead: outcome.dead,
-      wounded: outcome.wounded,
-      casualties: { dead: outcome.dead.length, wounded: outcome.wounded.length, survivors: Math.max(0, (this.playerParty?.roster || []).length) },
+      enemyFactionId: battle.enemyFactionId || CONST.FACTION.ID.BANDITS,
+      dead,
+      wounded,
+      casualties: { dead: dead.length, wounded: wounded.length, survivors: Math.max(0, (this.playerParty?.roster || []).length) },
       loot: lootReward.items || [],
       goldDelta: lootReward.gold || 0,
       renownDelta,
@@ -3729,7 +3828,8 @@ Up/Down select, Enter heal, Esc back`,
 
     if (result === 'victory') {
       const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
-      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: 'bandits', regionId }, this.playerParty);
+      const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId }, this.playerParty);
       this.cleanupTemporaryEnemy(enemyId, { force: true });
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     } else if (result === 'defeat') {
@@ -5059,6 +5159,7 @@ Up/Down select, Enter heal, Esc back`,
           renown: Number.isFinite(this.playerParty?.renown) ? this.playerParty.renown : 0,
           starveDays: Number.isFinite(this.playerParty?.starveDays) ? this.playerParty.starveDays : 0,
           contracts: Array.isArray(this.playerParty?.contracts) ? this.playerParty.contracts : [],
+          factionId: this.playerParty?.factionId || CONST.FACTION.ID.PLAYER,
           renown: Number.isFinite(this.playerParty?.renown) ? this.playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
         },
         roster,
@@ -5071,6 +5172,7 @@ Up/Down select, Enter heal, Esc back`,
           vx: Number.isFinite(e.vx) ? e.vx : 0,
           vy: Number.isFinite(e.vy) ? e.vy : 0,
           temporary: Boolean(e.temporary),
+          factionId: e.factionId || CONST.FACTION.ID.BANDITS,
         })),
         enemyCooldowns: this.lastEncounterEndTimeByEnemyId || {},
         worldAi: {
@@ -5094,6 +5196,10 @@ Up/Down select, Enter heal, Esc back`,
           marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
           priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
         })),
+        settlementsOwners: settlements.filter((st) => st?.id).map((st) => ({
+          settlementId: st.id,
+          ownerFactionId: st.ownerFactionId || null,
+        })),
         markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
@@ -5109,6 +5215,7 @@ Up/Down select, Enter heal, Esc back`,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
         tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
+        factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : null,
       },
     };
   }
@@ -5140,6 +5247,7 @@ Up/Down select, Enter heal, Esc back`,
     this.playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     this.playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     this.playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    this.playerParty.factionId = typeof p.factionId === 'string' ? p.factionId : CONST.FACTION.ID.PLAYER;
     this.playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
 
     const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null };
@@ -5185,6 +5293,7 @@ Up/Down select, Enter heal, Esc back`,
       vx: Number.isFinite(e.vx) ? e.vx : 0,
       vy: Number.isFinite(e.vy) ? e.vy : 0,
       temporary: false,
+      factionId: e.factionId || CONST.FACTION.ID.BANDITS,
     }));
     this.state.aiParties = this.enemyParties;
 
@@ -5231,6 +5340,13 @@ Up/Down select, Enter heal, Esc back`,
       s.priceMultiplier = market.priceMultiplier && typeof market.priceMultiplier === 'object' ? market.priceMultiplier : {};
     });
 
+    const ownerBySettlement = new Map((Array.isArray(game.settlementsOwners) ? game.settlementsOwners : []).map((entry) => [entry.settlementId, entry]));
+    settlements.forEach((s) => {
+      const owner = ownerBySettlement.get(s.id);
+      if (!owner) return;
+      s.ownerFactionId = typeof owner.ownerFactionId === 'string' ? owner.ownerFactionId : s.ownerFactionId;
+    });
+
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
     Object.values(this.state.markets).forEach((market) => {
       if (!market || typeof market !== 'object') return;
@@ -5254,6 +5370,9 @@ Up/Down select, Enter heal, Esc back`,
       ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
       : { tradePL: 0 };
     this.state.tuning = game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {};
+    this.state.factions = game.factions && typeof game.factions === 'object' && !Array.isArray(game.factions) ? game.factions : null;
+    this.ensureFactionState();
+    assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
