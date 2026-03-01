@@ -94,6 +94,25 @@ export const BATTLE_FLANK = Object.freeze({
   REAR_MORALE_BONUS: 8,
 });
 
+export const BATTLE_COUNTERS = Object.freeze({
+  SPEAR_VS_CAV_DMG_MULT: 1.35,
+  SPEAR_VS_CAV_MORALE_BONUS: 6,
+  CAV_VS_ARCHER_DMG_MULT: 1.25,
+  CAV_VS_ARCHER_MORALE_BONUS: 5,
+  INFANTRY_VS_SPEAR_DMG_MULT: 1.05,
+  COUNTER_BASE_MORALE_BONUS: 0,
+});
+
+export const BATTLE_CHARGE = Object.freeze({
+  CHARGE_BUILD_PER_SEC: 28,
+  CHARGE_READY_THRESHOLD: 100,
+  CHARGE_DMG_MULT: 1.45,
+  CHARGE_MORALE_BONUS: 8,
+  CHARGE_COOLDOWN_SEC: 5,
+  BRACE_CHARGE_REDUCTION_MULT: 0.55,
+  BRACE_THORNS_DMG_FRACTION: 0.3,
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
@@ -309,6 +328,7 @@ export const RECRUIT_POOL_BY_TIER = Object.freeze({
   ]),
   2: Object.freeze([
     { id: 'militia_sword', label: 'Militia Sword', class: 'infantry', cost: 13, hp: 98, maxHp: 98, atk: 13, def: 7, wage: 2, speed: 72 },
+    { id: 'light_cav', label: 'Light Cavalry', class: 'cavalry', cost: 19, hp: 96, maxHp: 96, atk: 14, def: 6, wage: 3, speed: 88, isRanged: false },
     { id: 'crossbow', label: 'Crossbow', class: 'archer', cost: 15, hp: 82, maxHp: 82, atk: 12, def: 5, wage: 2, speed: 68, isRanged: true, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.25 },
   ]),
   3: Object.freeze([
@@ -754,6 +774,8 @@ export default {
   TERRAIN,
   BATTLE,
   BATTLE_FLANK,
+  BATTLE_COUNTERS,
+  BATTLE_CHARGE,
   DEFAULT_KEYBINDS,
   SAVE,
   UI,
