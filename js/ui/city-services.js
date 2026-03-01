@@ -1,7 +1,7 @@
 import * as CONST from '../constants.js';
 
 export default class CityServicesUI {
-  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onClose }) {
+  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, getFactionContext, onClose }) {
     this.state = state;
     this.party = party;
     this.recruitmentSystem = recruitmentSystem;
@@ -12,6 +12,7 @@ export default class CityServicesUI {
     this.onSell = onSell;
     this.onAcceptContract = onAcceptContract;
     this.onCompleteContract = onCompleteContract;
+    this.getFactionContext = getFactionContext;
     this.onClose = onClose;
 
     this.dom = {};
@@ -92,7 +93,8 @@ export default class CityServicesUI {
     this.dom.cityRoot?.classList.add('hidden');
   }
 
-  setData({ recruitPool, market, contracts }) {
+  setData({ settlement, recruitPool, market, contracts }) {
+    if (settlement) this.currentSettlement = settlement;
     if (Array.isArray(recruitPool)) this.currentRecruitPool = recruitPool;
     if (market) this.currentMarket = market;
     if (Array.isArray(contracts)) this.currentContracts = contracts;
@@ -101,6 +103,7 @@ export default class CityServicesUI {
 
   render() {
     if (!this.dom.cityList) return;
+    this.renderHeader();
     if (this.currentTab === 'trade') {
       this.renderTrade();
       return;
@@ -110,6 +113,25 @@ export default class CityServicesUI {
       return;
     }
     this.renderRecruit();
+  }
+
+
+  renderHeader() {
+    const settlement = this.currentSettlement || {};
+    if (this.dom.cityTitle) this.dom.cityTitle.textContent = settlement.name || 'Settlement';
+    if (this.dom.citySubtitle) this.dom.citySubtitle.textContent = String(settlement.type || 'town').toUpperCase();
+
+    const factionCtx = typeof this.getFactionContext === 'function' ? this.getFactionContext(settlement) : null;
+    if (this.dom.cityRelation) {
+      if (factionCtx) {
+        this.dom.cityRelation.textContent = `${factionCtx.ownerFactionName} · REL ${Math.floor(factionCtx.relation)} · ${factionCtx.stance}`;
+      } else {
+        this.dom.cityRelation.textContent = '-';
+      }
+    }
+    if (this.dom.citySubtitle && factionCtx) {
+      this.dom.citySubtitle.textContent = `${String(settlement.type || 'town').toUpperCase()} · Owner: ${factionCtx.ownerFactionName}`;
+    }
   }
 
   renderRecruit() {
