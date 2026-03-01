@@ -97,7 +97,7 @@ export class HUDManager {
   update() {
     this.updateGold(this.state?.player?.gold);
     this.updateArmy(this.state?.player?.army);
-    this.updateRenown(this.state?.player?.renown);
+    this.updateRenown(this.state?.playerParty?.renown ?? this.state?.player?.renown);
     this.updateDay(this.state?.day);
 
     if (this.state?.selectedFaction) {
@@ -121,6 +121,7 @@ export class HUDManager {
     const gold = Math.floor(this.state?.playerParty?.gold ?? 0);
     const xp = Math.floor(this.state?.playerParty?.xp ?? 0);
     const morale = Math.floor(this.state?.playerParty?.morale ?? 0);
+    const renown = Math.floor(this.state?.playerParty?.renown ?? this.state?.player?.renown ?? 0);
     const units = this.state?.playerParty?.roster ?? [];
     const totalUnits = units.filter((unit) => Math.floor(unit?.hp ?? 0) > 0 && unit?.status !== 'dead').length;
     const wounded = units.filter((unit) => unit?.status === 'wounded').length;
@@ -131,7 +132,7 @@ export class HUDManager {
     const minsAgo = saveMeta?.at ? Math.max(0, Math.floor((Date.now() - saveMeta.at) / 60000)) : null;
     const saveText = saveMeta?.slot ? `  Save:${saveMeta.slot}${minsAgo !== null ? ` (${minsAgo}m)` : ''}` : '';
     const riskText = this.state?.encounterRisk?.label ? `  Risk: ${this.state.encounterRisk.label}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${saveText}`);
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${saveText}`);
   }
 
   updateEventLine() {

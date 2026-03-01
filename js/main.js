@@ -51,6 +51,12 @@ import {
   tickSuppression,
   shouldUseMeleeFallback,
 } from './systems/battle-ranged.js';
+import {
+  createBattleRng,
+  computeEnemyPower,
+  generateBattleLoot as generateRewardLoot,
+  computeRenownDelta,
+} from './systems/battle-rewards.js';
 import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
 
 import * as utils from './utils.js';
@@ -354,6 +360,14 @@ class FallOfCavalry {
         MELEE_EMERGENCY_RANGE_MULT: Number(CONST.BATTLE_RANGED.MELEE_EMERGENCY_RANGE_MULT),
         AMMO_PER_SHOT: Number(CONST.BATTLE_RANGED.AMMO_PER_SHOT),
       },
+      BATTLE_REWARDS: {
+        LOOT_GOLD_MIN: Number(CONST.BATTLE_REWARDS.LOOT_GOLD_MIN),
+        LOOT_GOLD_MAX: Number(CONST.BATTLE_REWARDS.LOOT_GOLD_MAX),
+        LOOT_ITEM_CHANCE: Number(CONST.BATTLE_REWARDS.LOOT_ITEM_CHANCE),
+        RENOWN_BASE: Number(CONST.BATTLE_REWARDS.RENOWN_BASE),
+        RENOWN_PER_ENEMY_POWER: Number(CONST.BATTLE_REWARDS.RENOWN_PER_ENEMY_POWER),
+        RENOWN_CASUALTY_PENALTY: Number(CONST.BATTLE_REWARDS.RENOWN_CASUALTY_PENALTY),
+        RENOWN_ROUTING_PENALTY: Number(CONST.BATTLE_REWARDS.RENOWN_ROUTING_PENALTY),
       BATTLE_CASUALTIES: {
         WOUNDED_HP_THRESHOLD_PCT: Number(CONST.BATTLE_CASUALTIES.WOUNDED_HP_THRESHOLD_PCT),
         WOUNDED_BASE_CHANCE: Number(CONST.BATTLE_CASUALTIES.WOUNDED_BASE_CHANCE),
@@ -380,6 +394,20 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
+    [
+      'ENCOUNTER_RISK',
+      'POI',
+      'MARKET',
+      'SUPPLIES',
+      'BATTLE_FORMATION',
+      'BATTLE_FLANK',
+      'BATTLE_MORALE',
+      'BATTLE_AI',
+      'BATTLE_COUNTERS',
+      'BATTLE_CHARGE',
+      'BATTLE_RANGED',
+      'BATTLE_REWARDS',
+    ].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
@@ -956,6 +984,7 @@ class FallOfCavalry {
     if (!Number.isFinite(this.playerParty.gold)) this.playerParty.gold = 0;
     if (!Number.isFinite(this.playerParty.xp)) this.playerParty.xp = 0;
     if (!Number.isFinite(this.playerParty.morale)) this.playerParty.morale = 64;
+    if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = Number(CONST.GAME.STARTING_RENOWN ?? 0);
     if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
       const roster = [];
       for (let i = 0; i < 6; i += 1) {
@@ -2367,16 +2396,28 @@ class FallOfCavalry {
 
   buildAftermathPanelData() {
     const a = this.state?.aftermath;
-    if (!a) return { title: 'Aftermath', body: 'No aftermath data', footer: 'Enter to continue' };
-    const deadLines = (a.dead || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
-    const woundedLines = (a.wounded || []).slice(0, 6).map((u) => `- ${u.name}`).join('\n') || 'None';
-    const lootLines = (a.loot || []).map((l) => `+ ${l.name || this.getItemName(l.id)} x${l.qty}`).join('\n') || 'No loot';
-    const lootValue = (a.loot || []).reduce((sum, l) => sum + ((l.unitValue ?? 0) * (l.qty ?? 0)), 0);
-    const survivors = Math.max(0, (this.playerParty?.roster || []).length);
+    if (!a) return { title: 'Battle Aftermath', body: 'No aftermath data', footer: 'Enter = Continue' };
+
+    const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
+    const lootLines = (a.loot || []).map((l) => `- ${this.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('
+') || '- None';
+
     return {
-      title: `Aftermath: ${String(a.result || '').toUpperCase()}`,
-      body: `Dead (${a.dead?.length ?? 0})\n${deadLines}\n\nWounded (${a.wounded?.length ?? 0})\n${woundedLines}\n\nSurvivors: ${survivors}\n\nLoot\n${lootLines}\nTotal Loot Value: ${lootValue}\nGold: ${a.goldDelta >= 0 ? '+' : ''}${a.goldDelta}\nXP: ${a.xpDelta >= 0 ? '+' : ''}${a.xpDelta}`,
-      footer: 'T / Enter = Take Loot   |   L / Esc = Leave Loot',
+      title: 'Battle Aftermath',
+      body: `Outcome: ${outcomeText}
+
+Casualties
+- Dead: ${a.casualties?.dead ?? 0}
+- Wounded: ${a.casualties?.wounded ?? 0}
+
+Loot
+- Gold gained: +${Math.max(0, Math.floor(a.goldDelta ?? 0))}
+${lootLines}
+
+Renown
+- +${Math.max(0, Math.floor(a.renownDelta ?? 0))} renown
+- New total: ${Math.max(0, Math.floor(a.renownTotal ?? this.playerParty?.renown ?? 0))}`,
+      footer: 'Continue: Enter / Esc / T / L',
     };
   }
 
@@ -3303,6 +3344,36 @@ Up/Down select, Enter heal, Esc back`,
       && this.playerParty.inventory.items.some((item) => item?.id === 'arrows');
     if (arrowsExists && usedAmmo > 0) this.removeItem('arrows', usedAmmo);
 
+    const outcome = this.applyRosterOutcomeFromBattle(battle);
+    const tuning = this.getEffectiveTuning();
+    const rewardCfg = tuning.BATTLE_REWARDS || CONST.BATTLE_REWARDS;
+    const encounterId = `${enemyId}:${Math.floor(battle.startedAt ?? battle.resolvedAt ?? 0)}`;
+    const battleRng = createBattleRng({
+      worldSeed: this.state?.seed,
+      encounterId,
+      day: this.state?.day,
+    });
+    const enemyPower = computeEnemyPower({ battle });
+    const lootReward = result === 'victory'
+      ? generateRewardLoot({ cfg: rewardCfg, rng: battleRng, enemyPower })
+      : { gold: 0, items: [] };
+    const routingCount = (battle.playerUnits || []).filter((unit) => unit?.moraleState === 'routing').length;
+    const manyRouted = routingCount >= Math.ceil(Math.max(1, (battle.playerUnits || []).length) * 0.5);
+    const renownDelta = result === 'victory'
+      ? computeRenownDelta({
+        cfg: rewardCfg,
+        enemyPower,
+        casualtiesInfo: { deadCount: outcome.dead.length },
+        routingInfo: { manyRouted },
+      })
+      : 0;
+
+    this.playerParty.gold = (this.playerParty.gold ?? 0) + Number(lootReward.gold ?? 0);
+    for (const item of lootReward.items || []) {
+      const id = item?.id === 'food' ? 'grain' : item?.id;
+      this.addItem(id, this.getItemName(id), Math.max(1, Math.floor(item?.qty ?? 1)));
+    }
+    this.playerParty.renown = (this.playerParty.renown ?? 0) + renownDelta;
     const rosterBefore = new Map((this.playerParty?.roster || []).map((u) => [u.id, { ...u }]));
     const casualtyCfg = this.getEffectiveTuning().BATTLE_CASUALTIES;
     const battleRng = () => Math.random();
@@ -3325,9 +3396,12 @@ Up/Down select, Enter heal, Esc back`,
       dead: outcome.dead,
       wounded: outcome.wounded,
       casualties: { dead: outcome.dead.length, wounded: outcome.wounded.length, survivors: Math.max(0, (this.playerParty?.roster || []).length) },
-      loot,
-      goldDelta,
-      xpDelta,
+      loot: lootReward.items || [],
+      goldDelta: lootReward.gold || 0,
+      renownDelta,
+      renownTotal: this.playerParty.renown ?? 0,
+      enemyPower,
+      routing: { manyRouted, routedCount: routingCount, totalUnits: (battle.playerUnits || []).length },
       timestamp: Date.now(),
     };
     this.state.uiPanel = this.buildAftermathPanelData();
@@ -3344,16 +3418,9 @@ Up/Down select, Enter heal, Esc back`,
     const enemy = this.enemyParties.find((party) => party?.id === enemyId) || null;
 
     if (takeLoot) {
-      for (const entry of aftermath.loot || []) {
-        this.addItem(entry.id, entry.name, entry.qty, entry.unitValue);
-      }
-      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
-      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
-      this.setLastEventLog(`Aftermath claimed: +${aftermath.goldDelta ?? 0}g, +${aftermath.xpDelta ?? 0}xp`);
+      this.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
     } else {
-      this.playerParty.gold = (this.playerParty.gold ?? 0) + (aftermath.goldDelta ?? 0);
-      this.playerParty.xp = (this.playerParty.xp ?? 0) + (aftermath.xpDelta ?? 0);
-      this.setLastEventLog('Aftermath continued (loot discarded)');
+      this.setLastEventLog('Aftermath continued');
     }
 
     if (result === 'victory') {
@@ -4683,6 +4750,7 @@ Up/Down select, Enter heal, Esc back`,
           gold: Number.isFinite(this.playerParty?.gold) ? this.playerParty.gold : 0,
           xp: Number.isFinite(this.playerParty?.xp) ? this.playerParty.xp : 0,
           morale: Number.isFinite(this.playerParty?.morale) ? this.playerParty.morale : 50,
+          renown: Number.isFinite(this.playerParty?.renown) ? this.playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
         },
         roster,
         enemies: (this.enemyParties || []).map((e) => ({
@@ -4745,6 +4813,7 @@ Up/Down select, Enter heal, Esc back`,
     this.playerParty.gold = Number.isFinite(p.gold) ? p.gold : 0;
     this.playerParty.xp = Number.isFinite(p.xp) ? p.xp : 0;
     this.playerParty.morale = Number.isFinite(p.morale) ? p.morale : 50;
+    this.playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
 
     const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null };
     this.playerParty.inventory = {
