@@ -84,6 +84,16 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_FLANK',
+    title: 'Battle Flank',
+    fields: [
+      { key: 'FLANK_MULT', label: 'Flank Damage Mult', step: 0.01 },
+      { key: 'REAR_MULT', label: 'Rear Damage Mult', step: 0.01 },
+      { key: 'FLANK_MORALE_BONUS', label: 'Flank Morale Bonus', step: 1 },
+      { key: 'REAR_MORALE_BONUS', label: 'Rear Morale Bonus', step: 1 },
+    ],
+  },
+  {
     key: 'BATTLE_MORALE',
     title: 'Battle Morale',
     fields: [
@@ -97,6 +107,17 @@ const GROUPS = [
       { key: 'SHAKEN_ATTACK_MULT', label: 'Shaken Attack Mult', step: 0.01 },
       { key: 'ROUT_SPEED_MULT', label: 'Rout Speed Mult', step: 0.01 },
       { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
+    ],
+  },
+  {
+    key: 'BATTLE_RANGED',
+    title: 'Battle Ranged',
+    fields: [
+      { key: 'SUPPRESS_DURATION_SEC', label: 'Suppress Duration (sec)', step: 0.1 },
+      { key: 'SUPPRESS_SPEED_MULT', label: 'Suppress Speed Mult', step: 0.01 },
+      { key: 'SUPPRESS_MORALE_DRAIN_PER_SEC', label: 'Suppress Morale Drain / sec', step: 0.1 },
+      { key: 'MELEE_EMERGENCY_RANGE_MULT', label: 'Melee Emergency Range Mult', step: 0.01 },
+      { key: 'AMMO_PER_SHOT', label: 'Ammo Per Shot', step: 1 },
     ],
   },
 ];

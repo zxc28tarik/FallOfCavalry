@@ -42,6 +42,14 @@ import SpriteLoader from './rendering/sprite-loader.js';
 import AnimationPlayer from './rendering/animation.js';
 import { computeUnitCohesion, getFormationMultipliers } from './systems/formation.js';
 import { inferUnitRole, getCounterEffect, computeChargeState, isBracedSpearman } from './systems/battle-counters.js';
+import {
+  initBattleAmmoFromParty,
+  consumeAmmo,
+  canUnitFireRanged,
+  applySuppressionOnHit,
+  tickSuppression,
+  shouldUseMeleeFallback,
+} from './systems/battle-ranged.js';
 
 import * as utils from './utils.js';
 
@@ -318,6 +326,12 @@ class FallOfCavalry {
         CHARGE_COOLDOWN_SEC: Number(CONST.BATTLE_CHARGE.CHARGE_COOLDOWN_SEC),
         BRACE_CHARGE_REDUCTION_MULT: Number(CONST.BATTLE_CHARGE.BRACE_CHARGE_REDUCTION_MULT),
         BRACE_THORNS_DMG_FRACTION: Number(CONST.BATTLE_CHARGE.BRACE_THORNS_DMG_FRACTION),
+      BATTLE_RANGED: {
+        SUPPRESS_DURATION_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_DURATION_SEC),
+        SUPPRESS_SPEED_MULT: Number(CONST.BATTLE_RANGED.SUPPRESS_SPEED_MULT),
+        SUPPRESS_MORALE_DRAIN_PER_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_MORALE_DRAIN_PER_SEC),
+        MELEE_EMERGENCY_RANGE_MULT: Number(CONST.BATTLE_RANGED.MELEE_EMERGENCY_RANGE_MULT),
+        AMMO_PER_SHOT: Number(CONST.BATTLE_RANGED.AMMO_PER_SHOT),
       },
     };
   }
@@ -336,6 +350,7 @@ class FallOfCavalry {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -1398,6 +1413,7 @@ class FallOfCavalry {
       Object.assign(unit, getFormationMultipliers(unit, cohesion, formationTuning));
     }
     const moraleCfg = getBattleMoraleConfig(this);
+    const rangedCfg = tuning.BATTLE_RANGED || CONST.BATTLE_RANGED;
     battle.timeSec = Number(battle.timeSec || 0) + dt;
 
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
@@ -1436,7 +1452,9 @@ class FallOfCavalry {
       const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
       const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
       const formationSpeed = Number(unit.formationSpeedMult ?? 1);
-      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed * formationSpeed);
+      tickSuppression({ unit, dtMs: deltaMs, battleTimeSec: battle.timeSec, cfg: rangedCfg });
+      const suppressionSpeed = Number(unit.suppressionSpeedMult ?? 1);
+      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed * formationSpeed * suppressionSpeed);
       const prevX = unit.x;
       const prevY = unit.y;
       unit.lastPosX = prevX;
@@ -1447,13 +1465,34 @@ class FallOfCavalry {
         unit.x -= (dx / dist) * retreatStep;
         unit.y -= (dy / dist) * retreatStep;
       } else if (unit.isRanged) {
-        if (dist <= unit.rangedRange) {
+        const canFire = canUnitFireRanged(unit, battle, rangedCfg, dist);
+        const fallbackToMelee = shouldUseMeleeFallback({ unit, distToTarget: dist, cfg: rangedCfg, battle });
+
+        if (canFire && dist <= unit.rangedRange) {
           if (unit.rangedTimer <= 0 && (battle.projectiles?.length ?? 0) < 200) {
-            this.spawnProjectile(unit, target, battle.projectiles);
+            const ammoOk = consumeAmmo({
+              battle,
+              side: unit.side,
+              amount: Math.max(1, Math.floor(Number(rangedCfg.AMMO_PER_SHOT ?? 1))),
+            });
+            if (ammoOk) {
+              this.spawnProjectile(unit, target, battle.projectiles);
+              const shakenTimerMult = unit.moraleState === 'shaken'
+                ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
+                : 1;
+              unit.rangedTimer = unit.rangedCooldown * shakenTimerMult;
+            }
+          }
+        } else if (fallbackToMelee && dist <= unit.meleeRange) {
+          if (unit.attackTimer <= 0) {
+            const atkMult = unit.moraleState === 'shaken'
+              ? Number(moraleCfg.SHAKEN_ATTACK_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_MULT)
+              : 1;
+            this.applyUnitDamage(unit, target, unit.atk * atkMult);
             const shakenTimerMult = unit.moraleState === 'shaken'
               ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
               : 1;
-            unit.rangedTimer = unit.rangedCooldown * shakenTimerMult;
+            unit.attackTimer = 0.9 * shakenTimerMult;
           }
         } else {
           const step = Math.min(dist, stepSpeed * dt);
@@ -1477,8 +1516,9 @@ class FallOfCavalry {
         unit.y += (dy / dist) * step;
       }
 
-      unit.vx = (unit.x - prevX) / dt;
-      unit.vy = (unit.y - prevY) / dt;
+      const safeDt = dt > 0 ? dt : (1 / 60);
+      unit.vx = (unit.x - prevX) / safeDt;
+      unit.vy = (unit.y - prevY) / safeDt;
       const moveDx = unit.x - prevX;
       const moveDy = unit.y - prevY;
       const moveDist = Math.hypot(moveDx, moveDy);
@@ -1506,6 +1546,8 @@ class FallOfCavalry {
         const hitDist = Math.hypot(unit.x - projectile.x, unit.y - projectile.y);
         if (hitDist <= (unit.radius || 9)) {
           this.applyUnitDamage(projectile, unit, projectile.damage, { isMelee: false });
+          this.applyUnitDamage(projectile, unit, projectile.damage);
+          applySuppressionOnHit({ target: unit, battleTimeSec: Number(battle.timeSec || 0), cfg: rangedCfg });
           hit = true;
           this.projectilePool.release(projectile);
           break;
@@ -1924,6 +1966,8 @@ class FallOfCavalry {
     const enemyUnits = this.createBattleUnitsFromRoster(this.enemyRoster, 'enemy');
     this.placeBattleUnits(enemyUnits, 'enemy');
 
+    const battleAmmo = initBattleAmmoFromParty({ party: this.playerParty, cfg: this.getEffectiveTuning().BATTLE_RANGED });
+
     this.cancelPlayerDestination();
     this.state.encounter = null;
     this.state.roster.warning = '';
@@ -1935,6 +1979,8 @@ class FallOfCavalry {
       playerUnits,
       enemyUnits,
       projectiles: [],
+      playerAmmoStart: battleAmmo.startAmmo,
+      playerAmmo: battleAmmo.ammo,
       targetRetargetTimer: 0,
       settlement: this.getActiveSettlementForCity(),
       phase: 'deploy',
@@ -1999,6 +2045,9 @@ class FallOfCavalry {
       moraleState: 'steady',
       lastDamageAt: -999,
       attackTimer: 0,
+      holdFire: false,
+      suppressedUntil: 0,
+      suppressionSpeedMult: 1,
       radius: 9,
       dead: false,
       fx: { hitUntil: 0, deathStartedAt: null },
@@ -2435,6 +2484,9 @@ class FallOfCavalry {
     if (this.battleCommandsUI) return;
     this.battleCommandsUI = new BattleCommandsUI({
       onCommand: (cmd) => this.applyBattleCommand(cmd),
+      onToggle: (toggle, active) => {
+        if (toggle === 'hold-fire') this.toggleBattleHoldFire(active);
+      },
     });
     this.battleCommandsUI.bind({ root: this.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
   }
@@ -2459,6 +2511,30 @@ class FallOfCavalry {
     this.battleCommandsUI?.setActiveCommand?.(cmd);
     return true;
   }
+
+  toggleBattleHoldFire(forceValue = null) {
+    const battle = this.state?.battle;
+    if (!battle || this.state?.mode !== 'battle') return false;
+    const playerUnits = battle.playerUnits || [];
+    const selectedId = this.state?.battle?.selection?.unitId || null;
+    const selectedUnit = selectedId ? playerUnits.find((u) => u.unitId === selectedId) : null;
+
+    if (selectedUnit) {
+      if (!selectedUnit.isRanged) return false;
+      const next = forceValue == null ? !Boolean(selectedUnit.holdFire) : Boolean(forceValue);
+      selectedUnit.holdFire = next;
+      this.battleCommandsUI?.setToggleState?.('hold-fire', next);
+      return true;
+    }
+
+    const rangedUnits = playerUnits.filter((u) => u?.isRanged);
+    if (rangedUnits.length === 0) return false;
+    const next = forceValue == null ? !rangedUnits.every((u) => Boolean(u.holdFire)) : Boolean(forceValue);
+    rangedUnits.forEach((u) => { u.holdFire = next; });
+    this.battleCommandsUI?.setToggleState?.('hold-fire', next);
+    return true;
+  }
+
 
 
   setupAccountingUI() {
@@ -3106,6 +3182,15 @@ Up/Down select, Enter heal, Esc back`,
     battle.result = result;
     battle.resolvedAt = Date.now();
 
+    let usedAmmo = 0;
+    if (Number.isFinite(battle.playerAmmoStart)) {
+      usedAmmo = Math.max(0, Math.floor(Number(battle.playerAmmoStart) - Math.max(0, Number(battle.playerAmmo ?? 0))));
+    }
+    if (!Number.isFinite(usedAmmo)) usedAmmo = 0;
+    const arrowsExists = Array.isArray(this.playerParty?.inventory?.items)
+      && this.playerParty.inventory.items.some((item) => item?.id === 'arrows');
+    if (arrowsExists && usedAmmo > 0) this.removeItem('arrows', usedAmmo);
+
     const outcome = this.applyRosterOutcomeFromBattle(battle);
     const loot = this.generateBattleLoot(result, battle);
     const goldDelta = result === 'victory' ? 8 + Math.floor(Math.random() * 8) : result === 'retreat' ? 2 + Math.floor(Math.random() * 3) : 0;
@@ -3616,6 +3701,7 @@ Up/Down select, Enter heal, Esc back`,
         if (e.key === 'h' || e.key === 'H') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.HOLD); return; }
         if (e.key === 'f' || e.key === 'F') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.FOCUS); return; }
         if (e.key === 'r' || e.key === 'R') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.RETREAT); return; }
+        if (e.key === 'x' || e.key === 'X') { e.preventDefault?.(); this.toggleBattleHoldFire(); return; }
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault?.();
           this.resolveBattle('victory');
@@ -5168,7 +5254,11 @@ Esc close`,
     this.ctx.fillStyle = '#ffffff';
     this.ctx.font = '20px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R Commands`, this.canvas.width / 2, 30);
+    this.ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R/X Commands`, this.canvas.width / 2, 30);
+    const ammoNow = Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)));
+    const ammoStart = Math.max(0, Math.floor(Number(battle.playerAmmoStart ?? 0)));
+    this.ctx.font = '14px Arial';
+    this.ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, this.canvas.width / 2, 50);
 
     const now = performance.now();
     for (const unit of [...playerUnits, ...enemyUnits]) {
@@ -5196,6 +5286,16 @@ Esc close`,
         this.ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
         this.ctx.fillStyle = '#89d38d';
         this.ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
+
+        if (unit.isRanged) {
+          this.ctx.fillStyle = '#e6e6e6';
+          this.ctx.font = '10px Arial';
+          this.ctx.textAlign = 'left';
+          const ammoText = unit.side === 'player' ? `A: ${Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)))}` : 'A: ∞';
+          this.ctx.fillText(ammoText, unit.x + 10, unit.y - 10);
+          if (this.state?.devMode && unit.holdFire === true) this.ctx.fillText('X', unit.x + 10, unit.y + 2);
+          this.ctx.textAlign = 'center';
+        }
       }
     }
 
