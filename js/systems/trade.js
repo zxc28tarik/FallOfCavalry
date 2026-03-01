@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { getStance } from './factions.js';
 
 function hashSeed(input) {
   const str = String(input || 'seed');
@@ -46,6 +47,19 @@ function resolveMarketCfg(ctx) {
   return { ...CONST.MARKET, ...(ctx?.tuning?.MARKET || {}) };
 }
 
+function getDiplomacyTradeMultiplier(options) {
+  const ownerFactionId = options?.ownerFactionId;
+  const playerFactionId = options?.playerFactionId || 'player';
+  const factions = options?.factions;
+  if (!ownerFactionId || !factions) return 1;
+  const relationsCfg = options?.diplomacyRelations || CONST.DIPLOMACY_RELATIONS;
+  const stance = getStance(factions, playerFactionId, ownerFactionId, relationsCfg);
+  const dipCfg = options?.diplomacyCfg || CONST.DIPLOMACY_ACTIONS;
+  if (stance === 'WAR') return Number(dipCfg.WAR_TRADE_PENALTY_MULT ?? 1);
+  if (stance === 'ALLY') return Number(dipCfg.ALLY_TRADE_DISCOUNT_MULT ?? 1);
+  return 1;
+}
+
 function clampMomentum(raw, cfg = CONST.MARKET) {
   return clamp(raw, -Number(cfg.MOMENTUM_MAX_ABS), Number(cfg.MOMENTUM_MAX_ABS));
 }
@@ -82,6 +96,7 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   const cfg = resolveMarketCfg(options);
   const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0), cfg);
   price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
+  price *= getDiplomacyTradeMultiplier(options);
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
     const opportunity = getActiveOpportunity(settlement, itemId, options);

@@ -4,7 +4,8 @@
  */
 
 import { safeClass, safeText, getEl } from '../utils.js';
-import { TUTORIAL_HINTS } from '../constants.js';
+import { TUTORIAL_HINTS, FACTIONS, DIPLOMACY_RELATIONS } from '../constants.js';
+import { getRelation, getStance } from '../systems/factions.js';
 
 export class HUDManager {
   constructor(state) {
@@ -134,7 +135,13 @@ export class HUDManager {
     const riskText = this.state?.encounterRisk?.label ? `  Risk: ${this.state.encounterRisk.label}` : '';
     const weather = this.state?.weatherState || {};
     const weatherText = weather.type ? `  Weather: ${weather.type} / ${weather.timeOfDay || 'DAY'}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${saveText}`);
+    const diplomacySummary = (Array.isArray(FACTIONS) ? FACTIONS : [])
+      .filter((f) => f?.id && f.id !== 'bandit')
+      .slice(0, 2)
+      .map((f) => `${f.name}: ${getStance(this.state?.factions, 'player', f.id, DIPLOMACY_RELATIONS)} (${getRelation(this.state?.factions, 'player', f.id, DIPLOMACY_RELATIONS)})`)
+      .join('  ');
+    const diplomacyText = diplomacySummary ? `  Dip: ${diplomacySummary}` : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${diplomacyText}${saveText}`);
   }
 
   updateEventLine() {

@@ -1,7 +1,8 @@
 import * as CONST from '../constants.js';
+import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 
 export default class CityServicesUI {
-  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onClose }) {
+  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onDiplomacyAction, onClose }) {
     this.state = state;
     this.party = party;
     this.recruitmentSystem = recruitmentSystem;
@@ -12,6 +13,7 @@ export default class CityServicesUI {
     this.onSell = onSell;
     this.onAcceptContract = onAcceptContract;
     this.onCompleteContract = onCompleteContract;
+    this.onDiplomacyAction = onDiplomacyAction;
     this.onClose = onClose;
 
     this.dom = {};
@@ -51,6 +53,20 @@ export default class CityServicesUI {
       this.render();
     });
 
+    if (!this.dom.btnDiplomacy && this.dom.btnTrade?.parentElement) {
+      const btn = document.createElement('button');
+      btn.id = 'btnDiplomacy';
+      btn.className = 'action-btn btn-dark';
+      btn.textContent = 'Diplomacy';
+      this.dom.btnTrade.parentElement.appendChild(btn);
+      this.dom.btnDiplomacy = btn;
+    }
+
+    this.dom.btnDiplomacy?.addEventListener('click', () => {
+      this.currentTab = 'diplomacy';
+      this.render();
+    });
+
     this.dom.cityClose?.addEventListener('click', () => this.onClose?.());
 
     this.dom.cityList?.addEventListener('click', (event) => {
@@ -73,6 +89,15 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'diplomacy-truce') {
+        const ok = this.applyDiplomacyAction('truce', id);
+        this.onDiplomacyAction?.({ ok, message: ok ? `Truce bought with ${id}.` : 'Cannot buy truce.' });
+      } else if (action === 'diplomacy-improve') {
+        const ok = this.applyDiplomacyAction('improve', id);
+        this.onDiplomacyAction?.({ ok, message: ok ? `Relations improved with ${id}.` : 'Cannot improve relations.' });
+      } else if (action === 'diplomacy-war') {
+        this.applyDiplomacyAction('war', id);
+        this.onDiplomacyAction?.({ ok: true, message: `War declared on ${id}.` });
       }
       this.render();
     });
@@ -107,6 +132,10 @@ export default class CityServicesUI {
     }
     if (this.currentTab === 'contracts') {
       this.renderContracts();
+      return;
+    }
+    if (this.currentTab === 'diplomacy') {
+      this.renderDiplomacy();
       return;
     }
     this.renderRecruit();
@@ -155,6 +184,11 @@ export default class CityServicesUI {
         settlementKey,
         marketOpportunities: this.state?.marketOpportunities,
         tuning: this.state?.tuning,
+        factions: this.state?.factions,
+        playerFactionId: 'player',
+        ownerFactionId: this.currentSettlement?.ownerFactionId || this.currentSettlement?.owner || null,
+        diplomacyCfg: this.state?.tuning?.DIPLOMACY_ACTIONS || CONST.DIPLOMACY_ACTIONS,
+        diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
       };
       const buyPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'buy', priceOpts);
       const sellPrice = this.tradeSystem.getPrice(this.currentSettlement, market, item.id, 'sell', priceOpts);
@@ -229,6 +263,56 @@ export default class CityServicesUI {
       <div class="text-xs opacity-75 mt-4 mb-2">Accepted Contracts</div>
       ${activeMarkup || '<div class="text-sm opacity-80">Aktif kontrat yok.</div>'}
     `;
+  }
+
+
+  applyDiplomacyAction(action, factionId) {
+    if (!this.state?.factions || !factionId) return false;
+    const cfg = this.state?.tuning?.DIPLOMACY_ACTIONS || CONST.DIPLOMACY_ACTIONS;
+    if (action === 'truce') {
+      return this.state?.diplomacyOps?.buyTruce
+        ? Boolean(this.state.diplomacyOps.buyTruce({ factions: this.state.factions, targetFactionId: factionId, party: this.party, cfg }))
+        : false;
+    }
+    if (action === 'improve') {
+      return this.state?.diplomacyOps?.improveRelations
+        ? Boolean(this.state.diplomacyOps.improveRelations({ factions: this.state.factions, targetFactionId: factionId, party: this.party, cfg }))
+        : false;
+    }
+    if (action === 'war') {
+      if (this.state?.diplomacyOps?.declareWar) this.state.diplomacyOps.declareWar({ factions: this.state.factions, targetFactionId: factionId, cfg });
+      return true;
+    }
+    return false;
+  }
+
+  renderDiplomacy() {
+    const factions = Array.isArray(CONST.FACTIONS) ? CONST.FACTIONS.filter((f) => f?.id && f.id !== 'bandit') : [];
+    if (!factions.length) {
+      this.dom.cityList.innerHTML = '<div class="text-sm opacity-80">Faction data unavailable.</div>';
+      return;
+    }
+
+    const cfg = this.state?.tuning?.DIPLOMACY_ACTIONS || CONST.DIPLOMACY_ACTIONS;
+    this.dom.cityList.innerHTML = factions.map((faction) => {
+      const stanceData = getPlayerStanceToFaction(this.state?.factions, faction.id, CONST.DIPLOMACY_RELATIONS);
+      const truceEnabled = canBuyTruce({ factions: this.state?.factions, targetFactionId: faction.id, party: this.party, cfg });
+      const canImprove = stanceData.stance === 'NEUTRAL' || stanceData.stance === 'WAR';
+      const canWar = stanceData.stance === 'NEUTRAL' || stanceData.stance === 'ALLY';
+      return `
+        <div class="frame-dark p-3 mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div class="font-bold text-sm">${faction.name}</div>
+            <div class="text-xs opacity-80">Relation: ${stanceData.relation} · Stance: ${stanceData.stance}</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="action-btn btn-dark text-xs" data-action="diplomacy-truce" data-id="${faction.id}" ${truceEnabled ? '' : 'disabled'}>Buy Truce (${cfg.TRUCE_COST_GOLD}g)</button>
+            <button class="action-btn btn-gold text-xs" data-action="diplomacy-improve" data-id="${faction.id}" ${canImprove ? '' : 'disabled'}>Improve (${cfg.IMPROVE_RELATION_COST_GOLD}g)</button>
+            <button class="action-btn btn-dark text-xs" data-action="diplomacy-war" data-id="${faction.id}" ${canWar ? '' : 'disabled'}>Declare War</button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   describeContract(contract) {
