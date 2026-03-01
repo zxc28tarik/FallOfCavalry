@@ -644,6 +644,25 @@ export const BATTLE_RANGED = Object.freeze({
   AMMO_PER_SHOT: 1,
 });
 
+export const BATTLE_REWARDS = Object.freeze({
+  LOOT_GOLD_MIN: 10,
+  LOOT_GOLD_MAX: 60,
+  LOOT_ITEM_CHANCE: 0.3,
+  RENOWN_BASE: 5,
+  RENOWN_PER_ENEMY_POWER: 0.5,
+  RENOWN_CASUALTY_PENALTY: 2,
+  RENOWN_ROUTING_PENALTY: 2,
+export const BATTLE_CASUALTIES = Object.freeze({
+  WOUNDED_HP_THRESHOLD_PCT: 0.35,
+  WOUNDED_BASE_CHANCE: 0.4,
+  WOUNDED_ROUTE_BONUS_CHANCE: 0.2,
+  WOUNDED_HP_MAX_MULT: 0.8,
+  WOUNDED_ATK_MULT: 0.9,
+  HEAL_PER_DAY: 0.4,
+  HEAL_CAMP_MULT: 1.5,
+  HEAL_STARVING_MULT: 0.3,
+});
+
 // =============================================================================
 // TUŞ ATAMA VARSAYILANLARI
 // =============================================================================
@@ -845,4 +864,6 @@ export default {
   BATTLE_FORMATION,
   BATTLE_MORALE,
   BATTLE_RANGED,
+  BATTLE_REWARDS,
+  BATTLE_CASUALTIES,
 };
