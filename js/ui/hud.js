@@ -134,7 +134,15 @@ export class HUDManager {
     const riskText = this.state?.encounterRisk?.label ? `  Risk: ${this.state.encounterRisk.label}` : '';
     const weather = this.state?.weatherState || {};
     const weatherText = weather.type ? `  Weather: ${weather.type} / ${weather.timeOfDay || 'DAY'}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${saveText}`);
+    const factions = this.state?.factions;
+    const warCount = factions?.relations && typeof factions.relations === 'object'
+      ? Math.floor(Object.entries(factions.relations).filter(([key, val]) => key.startsWith('player:') && Number(val) <= -30).length)
+      : 0;
+    const cityCtx = this.state?.currentCityFactionContext;
+    const cityLine = cityCtx
+      ? `  Owner: ${cityCtx.ownerFactionName} (REL:${Math.floor(cityCtx.relation)}, ${cityCtx.stance})`
+      : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Factions at War:${warCount}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${cityLine}${saveText}`);
   }
 
   updateEventLine() {
