@@ -80,6 +80,18 @@ export const SPRITES = Object.freeze({
   BATTLE_UNIT_SCALE: 1,
 });
 
+export const WEATHER = Object.freeze({
+  ENABLED: true,
+  DAY_LENGTH_DAYS: 1,
+  RAIN_CHANCE: 0.25,
+  SNOW_CHANCE: 0.15,
+  FOG_CHANCE: 0.2,
+  RAIN_PARTICLES: 120,
+  SNOW_PARTICLES: 80,
+  FOG_ALPHA: 0.18,
+  NIGHT_TINT_ALPHA: 0.35,
+});
+
 export const BATTLE_FX = Object.freeze({
   HIT_FLASH_DURATION: 180,
   DEATH_FADE_DURATION: 600,
@@ -675,6 +687,8 @@ export const BATTLE_REWARDS = Object.freeze({
   RENOWN_PER_ENEMY_POWER: 0.5,
   RENOWN_CASUALTY_PENALTY: 2,
   RENOWN_ROUTING_PENALTY: 2,
+});
+
 export const BATTLE_CASUALTIES = Object.freeze({
   WOUNDED_HP_THRESHOLD_PCT: 0.35,
   WOUNDED_BASE_CHANCE: 0.4,
@@ -890,4 +904,5 @@ export default {
   BATTLE_RANGED,
   BATTLE_REWARDS,
   BATTLE_CASUALTIES,
+  WEATHER,
 };

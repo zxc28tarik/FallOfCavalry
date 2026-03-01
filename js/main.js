@@ -66,6 +66,8 @@ import {
   computeRenownDelta,
 } from './systems/battle-rewards.js';
 import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
+import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
+import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverlay } from './rendering/weather-layer.js';
 import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
 
@@ -183,6 +185,7 @@ class FallOfCavalry {
     this._encounterRollByEnemyId = {};
     this.currentTerrainStatus = 'Arazi: normal';
     this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
+    this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
 
     this.mode = 'menu'; // menu | playing | paused
     this.dom = {};
@@ -298,6 +301,15 @@ class FallOfCavalry {
       SUPPLIES: {
         DAILY_PER_UNIT_CONSUMPTION: Number(CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION),
         STARVATION_MORALE_PENALTY: Number(CONST.SUPPLIES.STARVATION_MORALE_PENALTY),
+      },
+      WEATHER: {
+        RAIN_CHANCE: Number(CONST.WEATHER.RAIN_CHANCE),
+        SNOW_CHANCE: Number(CONST.WEATHER.SNOW_CHANCE),
+        FOG_CHANCE: Number(CONST.WEATHER.FOG_CHANCE),
+        RAIN_PARTICLES: Number(CONST.WEATHER.RAIN_PARTICLES),
+        SNOW_PARTICLES: Number(CONST.WEATHER.SNOW_PARTICLES),
+        FOG_ALPHA: Number(CONST.WEATHER.FOG_ALPHA),
+        NIGHT_TINT_ALPHA: Number(CONST.WEATHER.NIGHT_TINT_ALPHA),
       },
       CAMPAIGN_OBJECTIVES: {
         WIN_RENOWN: Number(CONST.CAMPAIGN_OBJECTIVES.WIN_RENOWN),
@@ -448,6 +460,7 @@ class FallOfCavalry {
       'POI',
       'MARKET',
       'SUPPLIES',
+      'WEATHER',
       'CAMPAIGN_OBJECTIVES',
       'CONTRACTS',
       'BATTLE_FORMATION',
@@ -578,6 +591,25 @@ class FallOfCavalry {
     return true;
   }
 
+  getWeatherRegionId() {
+    const tilePos = this.getTilePosition(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
+    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    if (nearestSettlement?.id) return String(nearestSettlement.id);
+    return `${tilePos.tx}:${tilePos.ty}`;
+  }
+
+  refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) {
+    if (!CONST.WEATHER?.ENABLED) return;
+    const weather = computeWeatherForDay({
+      worldSeed: this.state?.seed ?? 1337,
+      dayIndex,
+      regionId: this.getWeatherRegionId(),
+    });
+    this.weatherState = weather;
+    this.state.weatherState = weather;
+    setWeatherState(weather);
+  }
+
   init() {
     if (this.initialized) {
       this.warnOnce('game:init-duplicate', '[Game] init() already completed');
@@ -627,8 +659,10 @@ class FallOfCavalry {
     });
 
     this.setupCanvas();
+    initWeatherLayer(CONST.WEATHER);
     this.setupEventListeners();
     this.initPlayerParty();
+    this.refreshWeatherState(this.state?.day ?? 1);
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
     this.updateBuildInfoBadge();
@@ -775,6 +809,7 @@ class FallOfCavalry {
     this.state.on('mode:changed', ({ old, new: newMode }) => this.onModeChanged(old, newMode));
     this.state.on('day:advanced', (day) => {
       this.state.dailyLedger = { tradePL: 0 };
+      this.refreshWeatherState(day);
       utils.devLog(this.state, `[Game] Day ${day} started`);
     });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
@@ -1250,6 +1285,7 @@ class FallOfCavalry {
     });
 
     this.updateFogFromPlayer();
+    tickWeatherLayer(dt, this.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
   }
 
   ensureWorldGenerated(seed) {
@@ -1592,6 +1628,7 @@ class FallOfCavalry {
     }
     const allUnits = [...playerUnits, ...enemyUnits];
     const dtSec = deltaMs / 1000;
+    tickWeatherLayer(dtSec, this.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
     for (const unit of allUnits) {
       const allies = unit?.side === 'enemy' ? enemyUnits : playerUnits;
       const cohesion = computeUnitCohesion(unit, allies, formationTuning.COHESION_RADIUS, formationTuning.COHESION_ALLY_CAP);
@@ -5288,6 +5325,9 @@ Esc close`,
 
     this.ctx.restore();
 
+    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);
+    renderWeatherOverlay(this.ctx, this.canvas.width, this.canvas.height, weatherTint);
+
     if (this.followParty) {
       this.ctx.font = '12px Arial';
       this.ctx.textAlign = 'left';
@@ -5695,6 +5735,9 @@ Esc close`,
     }
     this.ctx.restore();
     this.ctx.restore();
+
+    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);
+    renderWeatherOverlay(this.ctx, this.canvas.width, this.canvas.height, weatherTint);
 
     this.hudManager?.update?.();
   }
