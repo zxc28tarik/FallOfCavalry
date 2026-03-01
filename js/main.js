@@ -70,6 +70,12 @@ import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
 import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverlay } from './rendering/weather-layer.js';
 import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
+import {
+  createInitialWorldAiState,
+  ensureWorldParties,
+  updateWorldParties,
+  removeWorldParty,
+} from './systems/world-ai.js';
 
 import * as utils from './utils.js';
 
@@ -206,6 +212,8 @@ class FallOfCavalry {
 
     this.playerParty = null;
     this.enemyParties = [];
+    this.worldAi = createInitialWorldAiState();
+    this.worldEncounterPartyByEnemyId = {};
     this.lastEncounterEndTimeByEnemyId = {};
     this.encounterMargin = 10;
     this.encounterCooldownMs = 3000;
@@ -324,6 +332,19 @@ class FallOfCavalry {
         DELIVERY_FOOD_MAX: Number(CONST.CONTRACTS.DELIVERY_FOOD_MAX),
         BANDIT_BATTLE_COUNT: Number(CONST.CONTRACTS.BANDIT_BATTLE_COUNT),
         SCOUT_POI_COUNT: Number(CONST.CONTRACTS.SCOUT_POI_COUNT),
+      },
+      WORLD_AI: {
+        ENABLED: Number(Boolean(CONST.WORLD_AI.ENABLED)),
+        MAX_BANDIT_PARTIES: Number(CONST.WORLD_AI.MAX_BANDIT_PARTIES),
+        MAX_PATROL_PARTIES: Number(CONST.WORLD_AI.MAX_PATROL_PARTIES),
+        MAX_CARAVAN_PARTIES: Number(CONST.WORLD_AI.MAX_CARAVAN_PARTIES),
+        BANDIT_SPEED: Number(CONST.WORLD_AI.BANDIT_SPEED),
+        PATROL_SPEED: Number(CONST.WORLD_AI.PATROL_SPEED),
+        CARAVAN_SPEED: Number(CONST.WORLD_AI.CARAVAN_SPEED),
+        BANDIT_AGGRO_RADIUS: Number(CONST.WORLD_AI.BANDIT_AGGRO_RADIUS),
+        PATROL_AGGRO_RADIUS: Number(CONST.WORLD_AI.PATROL_AGGRO_RADIUS),
+        DESPAWN_DISTANCE: Number(CONST.WORLD_AI.DESPAWN_DISTANCE),
+        RESPAWN_INTERVAL_DAYS: Number(CONST.WORLD_AI.RESPAWN_INTERVAL_DAYS),
       },
       BATTLE_FORMATION: {
         COHESION_RADIUS: Number(CONST.BATTLE_FORMATION.COHESION_RADIUS),
@@ -474,7 +495,7 @@ class FallOfCavalry {
       'BATTLE_REWARDS',
       'BATTLE_CASUALTIES',
     ].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES', 'BATTLE_CAMERA'].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'WORLD_AI', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES', 'BATTLE_CAMERA'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -810,6 +831,15 @@ class FallOfCavalry {
     this.state.on('day:advanced', (day) => {
       this.state.dailyLedger = { tradePL: 0 };
       this.refreshWeatherState(day);
+      if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
+        ensureWorldParties({
+          aiState: this.worldAi,
+          worldState: this.state?.map || {},
+          factions: this.state?.factions || CONST.FACTIONS,
+          cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+          currentDay: day,
+        });
+      }
       utils.devLog(this.state, `[Game] Day ${day} started`);
     });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
@@ -1196,9 +1226,21 @@ class FallOfCavalry {
 
   getEnemyUnits(enemyId) {
     if (Array.isArray(this.enemyUnitsById[enemyId])) return this.enemyUnitsById[enemyId];
+    const enemyParty = this.enemyParties.find((party) => party.id === enemyId);
     const seedBase = enemyId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 17);
-    const total = 4 + (seedBase % 5);
-    const archers = 1 + (seedBase % 3);
+    let total = 4 + (seedBase % 5);
+    let archers = 1 + (seedBase % 3);
+    if (enemyParty?.worldPartyKind === 'bandit') {
+      total = 5 + (seedBase % 4);
+      archers = 2 + (seedBase % 2);
+    } else if (enemyParty?.worldPartyKind === 'patrol') {
+      total = 6 + (seedBase % 3);
+      archers = 1 + (seedBase % 2);
+    } else if (enemyParty?.worldPartyKind === 'caravan') {
+      total = 3 + (seedBase % 3);
+      archers = 1;
+    }
+
     const units = [];
     for (let i = 0; i < total; i += 1) {
       const isRanged = i < archers;
@@ -1218,13 +1260,14 @@ class FallOfCavalry {
         isRanged,
       });
     }
+
     this.enemyUnitsById[enemyId] = units;
-    const enemyParty = this.enemyParties.find((party) => party.id === enemyId);
     if (enemyParty && !Array.isArray(enemyParty.roster)) {
       enemyParty.roster = units.map((u) => ({ ...u }));
     }
     return units;
   }
+
 
 
   getEffectiveCount(entry) {
@@ -1239,33 +1282,51 @@ class FallOfCavalry {
 
   initEnemyParties() {
     if (!this.state) return;
+    if (!this.worldAi || typeof this.worldAi !== 'object') this.worldAi = createInitialWorldAiState();
+    if (!Array.isArray(this.worldAi.parties)) this.worldAi.parties = [];
 
-    if (Array.isArray(this.state.aiParties) && this.state.aiParties.length > 0) {
-      this.enemyParties = this.state.aiParties;
-      return;
-    }
+    const worldState = this.state?.map || {};
+    ensureWorldParties({
+      aiState: this.worldAi,
+      worldState,
+      factions: this.state?.factions || CONST.FACTIONS,
+      cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+      currentDay: this.state?.day ?? 1,
+    });
 
-    const bounds = this.getWorldBounds();
-    const mapSpanX = Math.max(200, bounds.maxX - bounds.minX);
-    const mapSpanY = Math.max(200, bounds.maxY - bounds.minY);
-    const baseX = bounds.minX + mapSpanX * 0.35;
-    const baseY = bounds.minY + mapSpanY * 0.35;
-
-    this.enemyParties = [
-      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3 },
-      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38 },
-      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4 },
-    ];
+    this.enemyParties = [];
     this.state.aiParties = this.enemyParties;
+    this.state.worldAi = this.worldAi;
   }
 
   updateMapSimulation(dt) {
     this.updatePoiInteractHint();
     this.updateTransientUIState();
+    if (this.state) this.state.worldAi = this.worldAi;
     if (this.state?.paused || this.state?.accounting) return;
     this.updatePlayerParty(dt);
-    this.updateEnemyParties(dt);
-    this.tryTriggerEncounter();
+    if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
+      const worldState = this.state?.map || {};
+      ensureWorldParties({
+        aiState: this.worldAi,
+        worldState,
+        factions: this.state?.factions || CONST.FACTIONS,
+        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        currentDay: this.state?.day ?? 1,
+      });
+      const encounters = updateWorldParties({
+        aiState: this.worldAi,
+        worldState,
+        playerParty: this.playerParty,
+        factions: this.state?.factions || CONST.FACTIONS,
+        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        dtSec: dt,
+      });
+      this.processWorldAiEncounters(encounters);
+    } else {
+      this.updateEnemyParties(dt);
+      this.tryTriggerEncounter();
+    }
 
     const party = this.playerParty;
     const tilePos = this.getTilePosition(party?.x ?? 0, party?.y ?? 0);
@@ -2121,6 +2182,36 @@ class FallOfCavalry {
         enemy.y = Math.max(bounds.minY + radius, Math.min(bounds.maxY - radius, enemy.y));
       }
     });
+  }
+
+  processWorldAiEncounters(encounters = []) {
+    if (!Array.isArray(encounters) || encounters.length === 0) return false;
+    if (this.state?.mode !== 'map' || this.state?.encounter) return false;
+
+    const first = encounters.find((entry) => entry?.partyId);
+    if (!first) return false;
+    const party = (this.worldAi?.parties || []).find((p) => p?.id === first.partyId);
+    if (!party) return false;
+
+    const enemyId = `wai-${party.id}`;
+    const existing = this.enemyParties.find((e) => e?.id === enemyId);
+    if (!existing) {
+      this.enemyParties.push({
+        id: enemyId,
+        x: Number(party.x ?? first.x ?? 0),
+        y: Number(party.y ?? first.y ?? 0),
+        radius: 12,
+        speed: 30,
+        vx: 0,
+        vy: 0,
+        temporary: true,
+        factionId: party.factionId,
+        worldPartyKind: party.kind,
+      });
+    }
+
+    this.worldEncounterPartyByEnemyId[enemyId] = party.id;
+    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12 });
   }
 
   tryTriggerEncounter() {
@@ -3493,6 +3584,7 @@ Up/Down select, Enter heal, Esc back`,
       loot.push({ id: item.id, name: item.name, qty: Math.floor(qty), unitValue: item.unitValue ?? item.baseBuy ?? 1 });
     };
 
+
     if (result === 'victory') {
       push('grain', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
       push('leather', Math.max(1, Math.floor(infantryCount / 2)));
@@ -3622,11 +3714,17 @@ Up/Down select, Enter heal, Esc back`,
     const enemyId = aftermath.enemyId;
     const result = aftermath.result;
     const enemy = this.enemyParties.find((party) => party?.id === enemyId) || null;
+    const linkedWorldPartyId = this.worldEncounterPartyByEnemyId?.[enemyId] || null;
 
     if (takeLoot) {
       this.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
     } else {
       this.setLastEventLog('Aftermath continued');
+    }
+
+    if (linkedWorldPartyId) {
+      removeWorldParty(this.worldAi, linkedWorldPartyId);
+      delete this.worldEncounterPartyByEnemyId[enemyId];
     }
 
     if (result === 'victory') {
@@ -4975,6 +5073,21 @@ Up/Down select, Enter heal, Esc back`,
           temporary: Boolean(e.temporary),
         })),
         enemyCooldowns: this.lastEncounterEndTimeByEnemyId || {},
+        worldAi: {
+          lastRespawnDay: Number.isFinite(this.worldAi?.lastRespawnDay) ? this.worldAi.lastRespawnDay : 0,
+          parties: Array.isArray(this.worldAi?.parties) ? this.worldAi.parties.map((party) => ({
+            id: party.id,
+            factionId: party.factionId,
+            kind: party.kind,
+            x: Number.isFinite(party.x) ? party.x : 0,
+            y: Number.isFinite(party.y) ? party.y : 0,
+            targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+            targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+            speed: Number.isFinite(party.speed) ? party.speed : 1,
+            alive: party.alive !== false,
+            homeCityId: party.homeCityId || null,
+          })) : [],
+        },
         settlementsRecruit,
         settlementsMarkets: settlements.filter((st) => st?.id).map((st) => ({
           settlementId: st.id,
@@ -5079,6 +5192,25 @@ Up/Down select, Enter heal, Esc back`,
       ? game.enemyCooldowns
       : {};
 
+    const savedWorldAi = game.worldAi && typeof game.worldAi === 'object' ? game.worldAi : {};
+    this.worldAi = {
+      lastRespawnDay: Number.isFinite(savedWorldAi.lastRespawnDay) ? savedWorldAi.lastRespawnDay : 0,
+      parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties.map((party) => ({
+        id: party.id,
+        factionId: party.factionId,
+        kind: party.kind,
+        x: Number.isFinite(party.x) ? party.x : 0,
+        y: Number.isFinite(party.y) ? party.y : 0,
+        targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+        targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+        speed: Number.isFinite(party.speed) ? party.speed : 1,
+        alive: party.alive !== false,
+        homeCityId: party.homeCityId || null,
+      })) : [],
+    };
+    this.worldEncounterPartyByEnemyId = {};
+    this.state.worldAi = this.worldAi;
+
     const recruitBySettlement = new Map((Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : []).map((r) => [r.settlementId, r]));
     const settlements = this.state.map?.settlements || [];
     settlements.forEach((s) => {
@@ -5126,6 +5258,15 @@ Up/Down select, Enter heal, Esc back`,
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
     this.cleanupExpiredMarketOpportunities(this.state.day);
+    if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
+      ensureWorldParties({
+        aiState: this.worldAi,
+        worldState: this.state?.map || {},
+        factions: this.state?.factions || CONST.FACTIONS,
+        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        currentDay: this.state?.day ?? 1,
+      });
+    }
 
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
@@ -5580,6 +5721,43 @@ Esc close`,
       ctx.beginPath();
       ctx.arc(party.x, party.y, party.radius + 4, 0, Math.PI * 2);
       ctx.stroke();
+    }
+
+    if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(this.worldAi?.parties)) {
+      const iconSize = Math.max(6, 10 / camera.zoom);
+      this.worldAi.parties.forEach((party) => {
+        if (!party || !Number.isFinite(party.x) || !Number.isFinite(party.y)) return;
+        if (party.kind === 'bandit') {
+          ctx.strokeStyle = '#ff4d4d';
+          ctx.lineWidth = Math.max(1.5, 2 / camera.zoom);
+          ctx.beginPath();
+          ctx.moveTo(party.x - iconSize, party.y - iconSize);
+          ctx.lineTo(party.x + iconSize, party.y + iconSize);
+          ctx.moveTo(party.x + iconSize, party.y - iconSize);
+          ctx.lineTo(party.x - iconSize, party.y + iconSize);
+          ctx.stroke();
+          return;
+        }
+
+        if (party.kind === 'patrol') {
+          ctx.strokeStyle = '#8fd3ff';
+          ctx.lineWidth = Math.max(1.2, 1.6 / camera.zoom);
+          ctx.beginPath();
+          ctx.moveTo(party.x, party.y - iconSize * 1.2);
+          ctx.lineTo(party.x, party.y + iconSize * 1.2);
+          ctx.lineTo(party.x - iconSize * 0.7, party.y + iconSize * 0.6);
+          ctx.moveTo(party.x, party.y - iconSize * 0.5);
+          ctx.lineTo(party.x + iconSize * 0.9, party.y - iconSize * 0.1);
+          ctx.stroke();
+          return;
+        }
+
+        ctx.fillStyle = '#d9b36a';
+        ctx.fillRect(party.x - iconSize, party.y - iconSize * 0.6, iconSize * 2, iconSize * 1.2);
+        ctx.strokeStyle = '#8a6b32';
+        ctx.lineWidth = Math.max(1, 1.4 / camera.zoom);
+        ctx.strokeRect(party.x - iconSize, party.y - iconSize * 0.6, iconSize * 2, iconSize * 1.2);
+      });
     }
 
     if (Array.isArray(this.enemyParties)) {
