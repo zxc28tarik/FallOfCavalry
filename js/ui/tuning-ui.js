@@ -109,6 +109,22 @@ const GROUPS = [
       { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
     ],
   },
+
+  {
+    key: 'BATTLE_FX',
+    title: 'Battle FX',
+    fields: [
+      { key: 'ENABLED', label: 'Enabled (0/1)', step: 1 },
+      { key: 'MAX_PARTICLES', label: 'Max Particles', step: 1 },
+      { key: 'HIT_PARTICLES', label: 'Hit Particles', step: 1 },
+      { key: 'BLOOD_PARTICLES', label: 'Blood Particles', step: 1 },
+      { key: 'DUST_PARTICLES', label: 'Dust Particles', step: 1 },
+      { key: 'TRAIL_PARTICLES_PER_SEC', label: 'Trail Particles / sec', step: 1 },
+      { key: 'PARTICLE_LIFETIME_SEC', label: 'Particle Lifetime (sec)', step: 0.01 },
+      { key: 'PARTICLE_GRAVITY', label: 'Particle Gravity', step: 1 },
+      { key: 'PARTICLE_FRICTION', label: 'Particle Friction', step: 0.01 },
+    ],
+  },
   {
     key: 'BATTLE_RANGED',
     title: 'Battle Ranged',

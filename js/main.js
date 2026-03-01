@@ -66,6 +66,7 @@ import {
   computeRenownDelta,
 } from './systems/battle-rewards.js';
 import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
+import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 
 import * as utils from './utils.js';
 
@@ -382,6 +383,17 @@ class FallOfCavalry {
         MELEE_EMERGENCY_RANGE_MULT: Number(CONST.BATTLE_RANGED.MELEE_EMERGENCY_RANGE_MULT),
         AMMO_PER_SHOT: Number(CONST.BATTLE_RANGED.AMMO_PER_SHOT),
       },
+      BATTLE_FX: {
+        ENABLED: Number(Boolean(CONST.BATTLE_FX.ENABLED)),
+        MAX_PARTICLES: Number(CONST.BATTLE_FX.MAX_PARTICLES),
+        HIT_PARTICLES: Number(CONST.BATTLE_FX.HIT_PARTICLES),
+        BLOOD_PARTICLES: Number(CONST.BATTLE_FX.BLOOD_PARTICLES),
+        DUST_PARTICLES: Number(CONST.BATTLE_FX.DUST_PARTICLES),
+        TRAIL_PARTICLES_PER_SEC: Number(CONST.BATTLE_FX.TRAIL_PARTICLES_PER_SEC),
+        PARTICLE_LIFETIME_SEC: Number(CONST.BATTLE_FX.PARTICLE_LIFETIME_SEC),
+        PARTICLE_GRAVITY: Number(CONST.BATTLE_FX.PARTICLE_GRAVITY),
+        PARTICLE_FRICTION: Number(CONST.BATTLE_FX.PARTICLE_FRICTION),
+      },
       BATTLE_REWARDS: {
         LOOT_GOLD_MIN: Number(CONST.BATTLE_REWARDS.LOOT_GOLD_MIN),
         LOOT_GOLD_MAX: Number(CONST.BATTLE_REWARDS.LOOT_GOLD_MAX),
@@ -390,6 +402,7 @@ class FallOfCavalry {
         RENOWN_PER_ENEMY_POWER: Number(CONST.BATTLE_REWARDS.RENOWN_PER_ENEMY_POWER),
         RENOWN_CASUALTY_PENALTY: Number(CONST.BATTLE_REWARDS.RENOWN_CASUALTY_PENALTY),
         RENOWN_ROUTING_PENALTY: Number(CONST.BATTLE_REWARDS.RENOWN_ROUTING_PENALTY),
+      },
       BATTLE_CASUALTIES: {
         WOUNDED_HP_THRESHOLD_PCT: Number(CONST.BATTLE_CASUALTIES.WOUNDED_HP_THRESHOLD_PCT),
         WOUNDED_BASE_CHANCE: Number(CONST.BATTLE_CASUALTIES.WOUNDED_BASE_CHANCE),
@@ -416,14 +429,13 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI'].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'CAMPAIGN_OBJECTIVES', 'CONTRACTS', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
     [
       'ENCOUNTER_RISK',
       'POI',
       'MARKET',
       'SUPPLIES',
+      'CAMPAIGN_OBJECTIVES',
+      'CONTRACTS',
       'BATTLE_FORMATION',
       'BATTLE_FLANK',
       'BATTLE_MORALE',
@@ -431,9 +443,10 @@ class FallOfCavalry {
       'BATTLE_COUNTERS',
       'BATTLE_CHARGE',
       'BATTLE_RANGED',
+      'BATTLE_FX',
       'BATTLE_REWARDS',
+      'BATTLE_CASUALTIES',
     ].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -1572,7 +1585,9 @@ class FallOfCavalry {
     }
     const moraleCfg = getBattleMoraleConfig(this);
     const rangedCfg = tuning.BATTLE_RANGED || CONST.BATTLE_RANGED;
+    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
     battle.timeSec = Number(battle.timeSec || 0) + dt;
+    if (battleFxCfg.ENABLED) tickBattleFx(dtSec, battleFxCfg);
 
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
     const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0);
@@ -1723,6 +1738,18 @@ class FallOfCavalry {
       if (moveDist > 0.01) unit.facing = Math.atan2(moveDy, moveDx);
       else if (Math.hypot(dx, dy) > 0.001) unit.facing = Math.atan2(dy, dx);
       if (!Number.isFinite(unit.facing)) unit.facing = unit.side === 'player' ? 0 : Math.PI;
+      const shouldTrail = battleFxCfg.ENABLED && (unit.role === 'cavalry' || moveDist > Math.max(12, (unit.speed || 0) * dt * 0.8));
+      if (shouldTrail) {
+        const perSec = Math.max(1, Number(battleFxCfg.TRAIL_PARTICLES_PER_SEC || 1));
+        const stepSec = 1 / perSec;
+        unit.trailAccumSec = Number(unit.trailAccumSec || 0) + dtSec;
+        while (unit.trailAccumSec >= stepSec) {
+          spawnFx({ type: 'trail', x: unit.x, y: unit.y, dirX: unit.vx, dirY: unit.vy, cfg: battleFxCfg });
+          unit.trailAccumSec -= stepSec;
+        }
+      } else {
+        unit.trailAccumSec = 0;
+      }
       unit.animKey = this.getUnitAnimationKey(unit) || 'infantry_idle';
       if (this.assetsReady && this.spriteLoader) {
         const player = this.getBattleAnimPlayer(unit);
@@ -1840,6 +1867,15 @@ class FallOfCavalry {
     this.updateUnitMoraleState(target, moraleCfg);
 
     target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
+    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
+    const hitX = Number(target.x || 0);
+    const hitY = Number(target.y || 0);
+    if (battleFxCfg.ENABLED) {
+      spawnFx({ type: 'hit', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+      const dmgRatio = Math.max(0, finalDamage / Math.max(1, Number(target.maxHp || 1)));
+      if (dmgRatio >= 0.12 && target.hp > 0) spawnFx({ type: 'blood', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+      if (isChargeHit) spawnFx({ type: 'dust', x: hitX, y: hitY + 3, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+    }
     const marker = this.state?.devMode && attackSide !== ATTACK_SIDE.FRONT ? ` ${String(attackSide).toUpperCase()}` : '';
     const chargeMarker = isChargeHit ? ' CHARGE' : '';
     this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}${marker}${chargeMarker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
@@ -1847,6 +1883,9 @@ class FallOfCavalry {
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
+      if (battleFxCfg.ENABLED) {
+        spawnFx({ type: 'blood', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: { ...battleFxCfg, BLOOD_PARTICLES: Math.max(Number(battleFxCfg.BLOOD_PARTICLES || 0), Math.floor(Number(battleFxCfg.BLOOD_PARTICLES || 0) * 1.6)) } });
+      }
       if (!target.fx.deathStartedAt) target.fx.deathStartedAt = performance.now();
       const allUnits = [...(battle?.playerUnits || []), ...(battle?.enemyUnits || [])];
       applyAllyDeathShock(target, allUnits, moraleCfg);
@@ -2170,6 +2209,7 @@ class FallOfCavalry {
     this.cancelPlayerDestination();
     this.state.encounter = null;
     this.state.roster.warning = '';
+    initBattleFx(this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX);
     this.state.battle = {
       enemyId,
       startedAt: Date.now(),
@@ -5603,6 +5643,9 @@ Esc close`,
       this.ctx.arc(projectile.x, projectile.y, projectile.radius || 2, 0, Math.PI * 2);
       this.ctx.fill();
     }
+
+    const battleFxCfg = this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX;
+    if (battleFxCfg.ENABLED) renderBattleFx(this.ctx);
 
     this.ctx.save();
     this.ctx.textAlign = 'center';
