@@ -13,6 +13,9 @@ function toRoleToken(entry) {
 export function inferUnitRole(entry) {
   if (entry?.isRanged) return 'archer';
   const token = toRoleToken(entry);
+  if (token.includes('heavy') || token.includes('guard') || token.includes('legion')) return 'heavy_inf';
+  if (token.includes('elite_cav') || token.includes('elite cav') || token.includes('knight')) return 'elite_cav';
+  if (token.includes('siege') || token.includes('breaker') || token.includes('shock')) return 'siege';
   if (token.includes('cav')) return 'cavalry';
   if (token.includes('spear') || token.includes('pike')) return 'spearman';
   return 'infantry';
@@ -36,6 +39,36 @@ export function getCounterEffect({ attackerRole, defenderRole, cfg } = {}) {
   if (attackerRole === 'infantry' && defenderRole === 'spearman') {
     return {
       dmgMult: Number(counters.INFANTRY_VS_SPEAR_DMG_MULT ?? 1),
+      moraleBonus: baseMorale,
+    };
+  }
+  if (attackerRole === 'heavy_inf' && defenderRole === 'infantry') {
+    return {
+      dmgMult: Number(counters.HEAVY_INF_VS_INF_DMG_MULT ?? 1),
+      moraleBonus: baseMorale,
+    };
+  }
+  if (attackerRole === 'elite_cav' && defenderRole === 'infantry') {
+    return {
+      dmgMult: Number(counters.ELITE_CAV_VS_INF_DMG_MULT ?? counters.CAV_VS_ARCHER_DMG_MULT ?? 1),
+      moraleBonus: Number(counters.CAV_VS_ARCHER_MORALE_BONUS ?? 0) + baseMorale,
+    };
+  }
+  if (attackerRole === 'elite_cav' && defenderRole === 'archer') {
+    return {
+      dmgMult: Number(counters.ELITE_CAV_VS_ARCHER_DMG_MULT ?? counters.CAV_VS_ARCHER_DMG_MULT ?? 1),
+      moraleBonus: Number(counters.CAV_VS_ARCHER_MORALE_BONUS ?? 0) + 2 + baseMorale,
+    };
+  }
+  if (attackerRole === 'siege' && (defenderRole === 'heavy_inf' || defenderRole === 'siege')) {
+    return {
+      dmgMult: Number(counters.SIEGE_VS_HEAVY_DMG_MULT ?? 1),
+      moraleBonus: baseMorale,
+    };
+  }
+  if (attackerRole === 'siege' && defenderRole === 'infantry') {
+    return {
+      dmgMult: Number(counters.SIEGE_VS_INF_DMG_MULT ?? 1),
       moraleBonus: baseMorale,
     };
   }

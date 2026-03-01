@@ -171,13 +171,21 @@ export default class CityServicesUI {
       return;
     }
 
+    const classDescriptions = {
+      heavy_inf: 'Heavy Infantry — durable frontline, slow.',
+      elite_cav: 'Elite Cavalry — fast, expensive shock cavalry.',
+      siege: 'Siege Breaker — slow unit with huge impact on enemy lines.',
+    };
+
     this.dom.cityList.innerHTML = pool.map((unit) => {
       const canHire = this.recruitmentSystem.canHire(this.party?.gold || 0, unit);
+      const desc = classDescriptions[String(unit.class || '').toLowerCase()] || '';
       return `
         <div class="frame-dark p-3 mb-2 flex items-center justify-between gap-2">
           <div>
             <div class="font-bold text-sm">${unit.label || unit.name}</div>
             <div class="text-xs opacity-80">Sınıf: ${unit.class} · Maliyet: ${unit.cost}g</div>
+            ${desc ? `<div class="text-xs opacity-70">${desc}</div>` : ''}
           </div>
           <button class="action-btn ${canHire ? 'btn-gold' : 'btn-dark'} text-xs" data-action="hire" data-id="${unit.uid}" ${canHire ? '' : 'disabled'}>Kirala</button>
         </div>
