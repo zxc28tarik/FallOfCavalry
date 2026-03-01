@@ -95,6 +95,51 @@ function getAggroRadius(kind, cfg) {
   return 0;
 }
 
+
+function getRoadPoints(worldState) {
+  const roads = Array.isArray(worldState?.roads) ? worldState.roads : [];
+  const points = [];
+  roads.forEach((road) => {
+    (road?.path || []).forEach((pt) => {
+      if (Number.isFinite(pt?.x) && Number.isFinite(pt?.y)) points.push({ x: Number(pt.x), y: Number(pt.y) });
+    });
+  });
+  return points;
+}
+
+function nearestRoadPoint(points, x, y) {
+  let best = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  points.forEach((pt) => {
+    const dist = Math.hypot(pt.x - x, pt.y - y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = pt;
+    }
+  });
+  return best;
+}
+
+export function findRoadPath(worldState, fromX, fromY, toX, toY) {
+  const roadPoints = getRoadPoints(worldState);
+  if (!roadPoints.length) return [];
+  const startRoad = nearestRoadPoint(roadPoints, fromX, fromY);
+  const endRoad = nearestRoadPoint(roadPoints, toX, toY);
+  if (!startRoad || !endRoad) return [];
+  const waypoints = [];
+  if (Math.hypot(fromX - startRoad.x, fromY - startRoad.y) > 1) waypoints.push({ x: startRoad.x, y: startRoad.y });
+  const steps = Math.max(1, Math.floor(Math.hypot(endRoad.x - startRoad.x, endRoad.y - startRoad.y) / Math.max(8, getWorldBounds(worldState).tileSize * 0.8)));
+  for (let i = 1; i <= steps; i += 1) {
+    const t = i / steps;
+    waypoints.push({
+      x: startRoad.x + ((endRoad.x - startRoad.x) * t),
+      y: startRoad.y + ((endRoad.y - startRoad.y) * t),
+    });
+  }
+  waypoints.push({ x: toX, y: toY });
+  return waypoints;
+}
+
 export function createInitialWorldAiState() {
   return { parties: [], lastRespawnDay: 0 };
 }
@@ -121,6 +166,8 @@ export function spawnPartyBandit(worldState, factions, cfg = {}) {
     targetY: target.y,
     speed: getSpeedByKind('bandit', cfg),
     alive: true,
+    path: null,
+    pathIndex: 0,
   };
 }
 
@@ -142,6 +189,8 @@ export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {})
     speed: getSpeedByKind('patrol', cfg),
     alive: true,
     homeCityId: home?.id,
+    path: null,
+    pathIndex: 0,
   };
 }
 
@@ -163,6 +212,8 @@ export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {}
     speed: getSpeedByKind('caravan', cfg),
     alive: true,
     homeCityId: fromCity?.id,
+    path: null,
+    pathIndex: 0,
   };
 }
 
@@ -220,21 +271,33 @@ export function updateWorldParties({ aiState, worldState, playerParty, factions,
   aiState.parties.forEach((party) => {
     if (!party || party.alive === false) return;
 
-    const dx = Number(party.targetX ?? party.x) - Number(party.x ?? 0);
-    const dy = Number(party.targetY ?? party.y) - Number(party.y ?? 0);
+    if (!Array.isArray(party.path) || party.path.length === 0 || party.pathIndex >= party.path.length) {
+      const path = findRoadPath(worldState, party.x, party.y, party.targetX, party.targetY);
+      party.path = path.length ? path : [{ x: Number(party.targetX ?? party.x), y: Number(party.targetY ?? party.y) }];
+      party.pathIndex = 0;
+    }
+
+    const waypoint = party.path[party.pathIndex] || { x: Number(party.targetX ?? party.x), y: Number(party.targetY ?? party.y) };
+    const dx = Number(waypoint.x) - Number(party.x ?? 0);
+    const dy = Number(waypoint.y) - Number(party.y ?? 0);
     const dist = Math.hypot(dx, dy);
     const speed = Math.max(0.01, Number(party.speed ?? getSpeedByKind(party.kind, cfg))) * tileSize;
     const step = speed * dt;
 
     if (dist <= Math.max(step, tileSize * 0.2)) {
-      party.x = Number(party.targetX ?? party.x);
-      party.y = Number(party.targetY ?? party.y);
-      const next = pickNextTarget(party, worldState);
-      party.targetX = next.x;
-      party.targetY = next.y;
+      party.x = Number(waypoint.x ?? party.x);
+      party.y = Number(waypoint.y ?? party.y);
+      party.pathIndex += 1;
+      if (party.pathIndex >= party.path.length) {
+        const next = pickNextTarget(party, worldState);
+        party.targetX = next.x;
+        party.targetY = next.y;
+        party.path = null;
+        party.pathIndex = 0;
+      }
     } else {
-      party.x += (dx / dist) * step;
-      party.y += (dy / dist) * step;
+      party.x += (dx / Math.max(0.0001, dist)) * step;
+      party.y += (dy / Math.max(0.0001, dist)) * step;
     }
 
     if (playerParty && Number.isFinite(playerParty.x) && Number.isFinite(playerParty.y)) {

@@ -262,22 +262,6 @@ export const FACTIONS = Object.freeze([
   { id: FACTION.ID.KINGDOM_B, name: 'Valen Court', color: '#9b59b6', doctrine: 'Courtly Maneuver', desc: 'Agile armies with opportunistic tactics.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Mobile force composition.' },
   { id: FACTION.ID.BANDITS, name: 'Broken Banner', color: '#95a5a6', doctrine: 'Raid and Scatter', desc: 'Unreliable but dangerous raiders.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Low resources, high risk.' },
 ]);
-
-export const DIPLOMACY_RELATIONS = Object.freeze({
-  MIN_REL: -100,
-  MAX_REL: 100,
-  ALLY_THRESHOLD: 50,
-  WAR_THRESHOLD: -30,
-  START_RELATIONS: Object.freeze({
-    'player:kingdom_a': 20,
-    'player:kingdom_b': 0,
-    'player:bandits': -60,
-    'kingdom_a:kingdom_b': -10,
-    'kingdom_a:bandits': -80,
-    'kingdom_b:bandits': -70,
-  }),
-});
-
 // =============================================================================
 // KARŞILAŞMA TİPLERİ
 // =============================================================================
@@ -882,6 +866,24 @@ export const ECONOMY = Object.freeze({
 // =============================================================================
 
 
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN: -100,
+  MAX: 100,
+  MIN_REL: -100,
+  MAX_REL: 100,
+  DEFAULT: 0,
+  ALLY_THRESHOLD: 45,
+  WAR_THRESHOLD: -35,
+  START_RELATIONS: Object.freeze({
+    'player:kingdom_a': 20,
+    'player:kingdom_b': 0,
+    'player:bandits': -60,
+    'kingdom_a:kingdom_b': -10,
+    'kingdom_a:bandits': -80,
+    'kingdom_b:bandits': -70,
+  }),
+});
+
 export const DIPLOMACY_ACTIONS = Object.freeze({
   TRUCE_COST_GOLD: 150,
   IMPROVE_RELATION_COST_GOLD: 80,
@@ -891,6 +893,19 @@ export const DIPLOMACY_ACTIONS = Object.freeze({
   ALLY_TRADE_DISCOUNT_MULT: 0.85,
   CONTRACT_REWARD_RELATION_BONUS: 4,
   KILLING_NEUTRAL_CARAVAN_PENALTY: -25,
+});
+
+
+export const FACTION_WAR = Object.freeze({
+  WAR_DECL_THRESHOLD: -40,
+  PEACE_TRUCE_THRESHOLD: -5,
+  CITY_CAPTURE_WARSCORE: 20,
+  BATTLE_WIN_WARSCORE: 5,
+  BATTLE_LOSS_WARSCORE: -4,
+  WARSCORE_TO_FORCE_PEACE: 60,
+  WARSCORE_TO_FORCE_LOSS: -60,
+  FRONTLINE_RADIUS: 10,
+  CRISIS_WAR_COUNT_THRESHOLD: 2,
 });
 
 export const DIPLOMACY = Object.freeze({
@@ -939,6 +954,7 @@ export default {
   DIPLOMACY,
   DIPLOMACY_RELATIONS,
   DIPLOMACY_ACTIONS,
+  FACTION_WAR,
   ACCOUNTING,
   PERF,
   MARKET,

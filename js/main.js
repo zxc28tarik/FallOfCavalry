@@ -16,8 +16,16 @@ import WorldGenerator from './world/world-generator.js';
 import FogOfWar from './world/fog-of-war.js';
 import * as recruitmentSystem from './systems/recruitment.js';
 import * as tradeSystem from './systems/trade.js';
-import { ensureFactionState, getStance, getRelation } from './systems/factions.js';
 import { buyTruce, canBuyTruce, improveRelations, declareWar, applyContractRelationBonus, applyTradeCaravanAttackPenalty } from './systems/diplomacy.js';
+import {
+  createInitialFactionState,
+  ensureFactionState,
+  getRelation,
+  getStance,
+  applyBattleOutcomeToRelations,
+  assignInitialSettlementOwners,
+  setRelation,
+} from './systems/factions.js';
 import CityServicesUI from './ui/city-services.js';
 import { showWinScreen, showLoseScreen } from './ui/modals.js';
 import {
@@ -78,12 +86,15 @@ import {
   updateWorldParties,
   removeWorldParty,
 } from './systems/world-ai.js';
-  createInitialFactionState,
-  getRelation,
-  getStance,
-  applyBattleOutcomeToRelations,
-  assignInitialSettlementOwners,
-} from './systems/factions.js';
+import {
+  createInitialWarState,
+  ensureWar,
+  markPeace,
+  updateCrisisFlag,
+  onBattleResolved,
+  captureCity,
+  findWar,
+} from './systems/faction-wars.js';
 
 import * as utils from './utils.js';
 
@@ -297,21 +308,6 @@ class FallOfCavalry {
     if (!this.state || typeof this.state !== 'object') return;
     if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
   }
-
-
-  ensureFactionState() {
-    if (!this.state || typeof this.state !== 'object') return;
-    this.state.factions = ensureFactionState(this.state.factions, CONST.DIPLOMACY_RELATIONS);
-    this.state.diplomacyOps = {
-      buyTruce,
-      canBuyTruce,
-      improveRelations,
-      declareWar,
-    };
-    if (!this.playerParty || typeof this.playerParty !== 'object') return;
-    if (!this.playerParty.factionId) {
-      this.playerParty.factionId = this.state?.selectedFaction?.id || 'player';
-    }
   ensureFactionState() {
     if (!this.state || typeof this.state !== 'object') return;
     const loaded = this.state.factions && typeof this.state.factions === 'object' && !Array.isArray(this.state.factions)
@@ -330,6 +326,36 @@ class FallOfCavalry {
       });
     }
     this.state.factions = next;
+    this.state.warState = this.state.warState && typeof this.state.warState === 'object' ? this.state.warState : createInitialWarState();
+    this.state.diplomacyOps = {
+      buyTruce: (args = {}) => {
+        const ok = buyTruce(args);
+        if (ok) {
+          const floor = Number(this.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
+          setRelation(this.state.factions, 'player', args.targetFactionId, floor, CONST.DIPLOMACY_RELATIONS);
+          markPeace(this.state.warState, 'player', args.targetFactionId);
+        }
+        return ok;
+      },
+      canBuyTruce,
+      improveRelations: (args = {}) => {
+        const ok = improveRelations(args);
+        if (ok) {
+          const rel = getRelation(this.state.factions, 'player', args.targetFactionId, CONST.DIPLOMACY_RELATIONS);
+          const floor = Number(this.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
+          if (rel >= floor) markPeace(this.state.warState, 'player', args.targetFactionId);
+        }
+        return ok;
+      },
+      declareWar: (args = {}) => {
+        declareWar(args);
+        ensureWar(this.state.warState, 'player', args.targetFactionId, this.state?.day ?? 1);
+      },
+    };
+    if (this.playerParty && typeof this.playerParty === 'object' && !this.playerParty.factionId) {
+      this.playerParty.factionId = this.state?.selectedFaction?.id || 'player';
+    }
+    updateCrisisFlag(this.state.warState, this.state.factions, this.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR);
   }
 
   getFactionName(factionId) {
@@ -342,12 +368,50 @@ class FallOfCavalry {
     const dipCfg = this.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS;
     const relation = getRelation(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId);
     const stance = getStance(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId, dipCfg);
+    const war = findWar(this.state?.warState, CONST.FACTION.ID.PLAYER, ownerFactionId);
     return {
       ownerFactionId,
       ownerFactionName: this.getFactionName(ownerFactionId),
       relation,
       stance,
+      atWar: Boolean(war?.active),
+      warscore: Number(war?.warscore ?? 0),
     };
+  }
+
+
+  findNearestCityId(x, y, radiusTiles = null) {
+    const settlements = this.state?.map?.settlements || [];
+    if (!settlements.length || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const tile = Number(CONST.WORLD.TILE_SIZE || 60);
+    const maxTiles = Number(radiusTiles ?? (this.getEffectiveTuning().FACTION_WAR?.FRONTLINE_RADIUS ?? CONST.FACTION_WAR.FRONTLINE_RADIUS));
+    const maxDist = Math.max(1, maxTiles) * tile;
+    let best = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    settlements.forEach((city) => {
+      const dist = Math.hypot(Number(city?.x ?? 0) - x, Number(city?.y ?? 0) - y);
+      if (dist <= maxDist && dist < bestDist) {
+        best = city;
+        bestDist = dist;
+      }
+    });
+    return best?.id || null;
+  }
+
+  syncWarStateFromRelations() {
+    if (!this.state?.factions) return;
+    this.state.warState = this.state.warState && typeof this.state.warState === 'object' ? this.state.warState : createInitialWarState();
+    const cfg = this.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR;
+    const warThreshold = Number(cfg.WAR_DECL_THRESHOLD ?? -40);
+    const peaceThreshold = Number(cfg.PEACE_TRUCE_THRESHOLD ?? -5);
+    const known = this.state?.factions?.knownFactions || CONST.FACTIONS.map((f) => f.id);
+    known.forEach((factionId) => {
+      if (!factionId || factionId === 'player') return;
+      const rel = getRelation(this.state.factions, 'player', factionId, CONST.DIPLOMACY_RELATIONS);
+      if (rel <= warThreshold) ensureWar(this.state.warState, 'player', factionId, this.state?.day ?? 1);
+      if (rel >= peaceThreshold) markPeace(this.state.warState, 'player', factionId);
+    });
+    updateCrisisFlag(this.state.warState, this.state.factions, cfg);
   }
 
   getTuningDefaults() {
@@ -398,6 +462,7 @@ class FallOfCavalry {
         IMPROVE_RELATION_COST_GOLD: Number(CONST.DIPLOMACY_ACTIONS.IMPROVE_RELATION_COST_GOLD),
         IMPROVE_RELATION_DELTA: Number(CONST.DIPLOMACY_ACTIONS.IMPROVE_RELATION_DELTA),
         DECLARE_WAR_RELATION_DELTA: Number(CONST.DIPLOMACY_ACTIONS.DECLARE_WAR_RELATION_DELTA),
+      },
       WORLD_AI: {
         ENABLED: Number(Boolean(CONST.WORLD_AI.ENABLED)),
         MAX_BANDIT_PARTIES: Number(CONST.WORLD_AI.MAX_BANDIT_PARTIES),
@@ -410,11 +475,23 @@ class FallOfCavalry {
         PATROL_AGGRO_RADIUS: Number(CONST.WORLD_AI.PATROL_AGGRO_RADIUS),
         DESPAWN_DISTANCE: Number(CONST.WORLD_AI.DESPAWN_DISTANCE),
         RESPAWN_INTERVAL_DAYS: Number(CONST.WORLD_AI.RESPAWN_INTERVAL_DAYS),
+      },
       DIPLOMACY_RELATIONS: {
-        MIN_REL: Number(CONST.DIPLOMACY_RELATIONS.MIN_REL),
-        MAX_REL: Number(CONST.DIPLOMACY_RELATIONS.MAX_REL),
+        MIN_REL: Number(CONST.DIPLOMACY_RELATIONS.MIN_REL ?? CONST.DIPLOMACY_RELATIONS.MIN),
+        MAX_REL: Number(CONST.DIPLOMACY_RELATIONS.MAX_REL ?? CONST.DIPLOMACY_RELATIONS.MAX),
         ALLY_THRESHOLD: Number(CONST.DIPLOMACY_RELATIONS.ALLY_THRESHOLD),
         WAR_THRESHOLD: Number(CONST.DIPLOMACY_RELATIONS.WAR_THRESHOLD),
+      },
+      FACTION_WAR: {
+        WAR_DECL_THRESHOLD: Number(CONST.FACTION_WAR.WAR_DECL_THRESHOLD),
+        PEACE_TRUCE_THRESHOLD: Number(CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD),
+        CITY_CAPTURE_WARSCORE: Number(CONST.FACTION_WAR.CITY_CAPTURE_WARSCORE),
+        BATTLE_WIN_WARSCORE: Number(CONST.FACTION_WAR.BATTLE_WIN_WARSCORE),
+        BATTLE_LOSS_WARSCORE: Number(CONST.FACTION_WAR.BATTLE_LOSS_WARSCORE),
+        WARSCORE_TO_FORCE_PEACE: Number(CONST.FACTION_WAR.WARSCORE_TO_FORCE_PEACE),
+        WARSCORE_TO_FORCE_LOSS: Number(CONST.FACTION_WAR.WARSCORE_TO_FORCE_LOSS),
+        FRONTLINE_RADIUS: Number(CONST.FACTION_WAR.FRONTLINE_RADIUS),
+        CRISIS_WAR_COUNT_THRESHOLD: Number(CONST.FACTION_WAR.CRISIS_WAR_COUNT_THRESHOLD),
       },
       BATTLE_FORMATION: {
         COHESION_RADIUS: Number(CONST.BATTLE_FORMATION.COHESION_RADIUS),
@@ -1423,6 +1500,7 @@ class FallOfCavalry {
         cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
         currentDay: this.state?.day ?? 1,
       });
+      this.syncWarStateFromRelations();
       const encounters = updateWorldParties({
         aiState: this.worldAi,
         worldState,
@@ -2524,6 +2602,7 @@ class FallOfCavalry {
       playerAmmo: battleAmmo.ammo,
       targetRetargetTimer: 0,
       settlement: this.getActiveSettlementForCity(),
+      context: { nearCityId: this.findNearestCityId(this.playerParty?.x, this.playerParty?.y) },
       phase: 'deploy',
       camera: createCamera(),
     };
@@ -3878,6 +3957,33 @@ Up/Down select, Enter heal, Esc back`,
       casualties: { dead: dead.length, wounded: wounded.length },
       cfg: this.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
     });
+
+    const warCfg = this.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR;
+    const playerFactionId = this.playerParty?.factionId || CONST.FACTION.ID.PLAYER;
+    const enemyFactionId = battle.enemyFactionId || CONST.FACTION.ID.BANDITS;
+    const nearCityId = battle?.context?.nearCityId || null;
+    const nearCity = (this.state?.map?.settlements || []).find((s) => s?.id === nearCityId) || null;
+    const isCityBattle = Boolean(nearCity);
+    onBattleResolved({
+      warState: this.state.warState,
+      factionsState: this.state.factions,
+      cfg: warCfg,
+      playerFactionId,
+      enemyFactionId,
+      result,
+      isCityBattle,
+    });
+    if (result === 'victory' && nearCity && nearCity.ownerFactionId === enemyFactionId) {
+      const taken = captureCity({
+        city: nearCity,
+        newOwnerFactionId: playerFactionId,
+        warState: this.state.warState,
+        factionsState: this.state.factions,
+        cfg: warCfg,
+        currentDay: this.state?.day ?? 1,
+      });
+      if (taken) this.setLastEventLog(`City captured: ${nearCity.name || nearCity.id}`);
+    }
 
     this.state.aftermath = {
       result,

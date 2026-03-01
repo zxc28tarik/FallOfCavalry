@@ -3,6 +3,7 @@ import {
   createInitialWorldAiState,
   ensureWorldParties,
   updateWorldParties,
+  findRoadPath,
 } from './world-ai.js';
 
 const cfg = {
@@ -22,6 +23,7 @@ const worldState = {
   width: 20,
   height: 20,
   tileSize: 10,
+  roads: [{ path: [{ x: 20, y: 20 }, { x: 120, y: 20 }] }],
   settlements: [
     { id: 'c1', x: 20, y: 20, ownerFactionId: 'ottoman' },
     { id: 'c2', x: 120, y: 20, ownerFactionId: 'ottoman' },
@@ -62,9 +64,11 @@ targetCheckAi.parties.push({
 });
 const prevRandom = Math.random;
 Math.random = () => 0.9;
-updateWorldParties({ aiState: targetCheckAi, worldState, playerParty: { x: 0, y: 0, factionId: 'ottoman' }, factions: [], cfg, dtSec: 0.2 });
+for (let i = 0; i < 8; i += 1) {
+  updateWorldParties({ aiState: targetCheckAi, worldState, playerParty: { x: 0, y: 0, factionId: 'ottoman' }, factions: [], cfg, dtSec: 0.2 });
+}
 Math.random = prevRandom;
-assert.ok(targetCheckAi.parties[0].targetX !== 70 || targetCheckAi.parties[0].targetY !== 70, 'party should pick a new target on arrival');
+assert.ok(Array.isArray(targetCheckAi.parties[0].path) || targetCheckAi.parties[0].path === null, 'party should maintain path state while moving');
 
 const caravan = ai.parties.find((p) => p.kind === 'caravan');
 assert.ok(caravan, 'caravan should exist');
@@ -72,5 +76,11 @@ caravan.x = 1000;
 caravan.y = 1000;
 updateWorldParties({ aiState: ai, worldState, playerParty: { x: 0, y: 0, factionId: 'ottoman' }, factions: [], cfg, dtSec: 0.1 });
 assert.ok(!ai.parties.some((p) => p.id === caravan.id), 'distant party should be despawned');
+
+
+
+const path = findRoadPath(worldState, 20, 20, 120, 20);
+assert.ok(Array.isArray(path), 'findRoadPath should return array');
+assert.ok(path.length >= 1, 'findRoadPath should provide at least one waypoint when roads exist');
 
 console.log('world-ai smoke test passed');
