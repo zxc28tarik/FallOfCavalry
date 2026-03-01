@@ -68,6 +68,8 @@ import {
 import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
 import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
 import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverlay } from './rendering/weather-layer.js';
+import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
+import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
 
 import * as utils from './utils.js';
 
@@ -387,12 +389,36 @@ class FallOfCavalry {
         BRACE_CHARGE_REDUCTION_MULT: Number(CONST.BATTLE_CHARGE.BRACE_CHARGE_REDUCTION_MULT),
         BRACE_THORNS_DMG_FRACTION: Number(CONST.BATTLE_CHARGE.BRACE_THORNS_DMG_FRACTION),
       },
+      BATTLE_CAMERA: {
+        ENABLED: Boolean(CONST.BATTLE_CAMERA.ENABLED),
+        BASE_ZOOM: Number(CONST.BATTLE_CAMERA.BASE_ZOOM),
+        MAX_ZOOM_IN: Number(CONST.BATTLE_CAMERA.MAX_ZOOM_IN),
+        MAX_ZOOM_OUT: Number(CONST.BATTLE_CAMERA.MAX_ZOOM_OUT),
+        SMOOTHING_SEC: Number(CONST.BATTLE_CAMERA.SMOOTHING_SEC),
+        SHAKE_ENABLED: Boolean(CONST.BATTLE_CAMERA.SHAKE_ENABLED),
+        SHAKE_HIT_MAG: Number(CONST.BATTLE_CAMERA.SHAKE_HIT_MAG),
+        SHAKE_CHARGE_MAG: Number(CONST.BATTLE_CAMERA.SHAKE_CHARGE_MAG),
+        SHAKE_DURATION_SEC: Number(CONST.BATTLE_CAMERA.SHAKE_DURATION_SEC),
+        SHAKE_FALLOFF: Number(CONST.BATTLE_CAMERA.SHAKE_FALLOFF),
+        FOLLOW_STRENGTH: Number(CONST.BATTLE_CAMERA.FOLLOW_STRENGTH),
+      },
       BATTLE_RANGED: {
         SUPPRESS_DURATION_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_DURATION_SEC),
         SUPPRESS_SPEED_MULT: Number(CONST.BATTLE_RANGED.SUPPRESS_SPEED_MULT),
         SUPPRESS_MORALE_DRAIN_PER_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_MORALE_DRAIN_PER_SEC),
         MELEE_EMERGENCY_RANGE_MULT: Number(CONST.BATTLE_RANGED.MELEE_EMERGENCY_RANGE_MULT),
         AMMO_PER_SHOT: Number(CONST.BATTLE_RANGED.AMMO_PER_SHOT),
+      },
+      BATTLE_FX: {
+        ENABLED: Number(Boolean(CONST.BATTLE_FX.ENABLED)),
+        MAX_PARTICLES: Number(CONST.BATTLE_FX.MAX_PARTICLES),
+        HIT_PARTICLES: Number(CONST.BATTLE_FX.HIT_PARTICLES),
+        BLOOD_PARTICLES: Number(CONST.BATTLE_FX.BLOOD_PARTICLES),
+        DUST_PARTICLES: Number(CONST.BATTLE_FX.DUST_PARTICLES),
+        TRAIL_PARTICLES_PER_SEC: Number(CONST.BATTLE_FX.TRAIL_PARTICLES_PER_SEC),
+        PARTICLE_LIFETIME_SEC: Number(CONST.BATTLE_FX.PARTICLE_LIFETIME_SEC),
+        PARTICLE_GRAVITY: Number(CONST.BATTLE_FX.PARTICLE_GRAVITY),
+        PARTICLE_FRICTION: Number(CONST.BATTLE_FX.PARTICLE_FRICTION),
       },
       BATTLE_REWARDS: {
         LOOT_GOLD_MIN: Number(CONST.BATTLE_REWARDS.LOOT_GOLD_MIN),
@@ -444,9 +470,11 @@ class FallOfCavalry {
       'BATTLE_COUNTERS',
       'BATTLE_CHARGE',
       'BATTLE_RANGED',
+      'BATTLE_FX',
       'BATTLE_REWARDS',
       'BATTLE_CASUALTIES',
     ].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES', 'BATTLE_CAMERA'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -1609,12 +1637,24 @@ class FallOfCavalry {
     }
     const moraleCfg = getBattleMoraleConfig(this);
     const rangedCfg = tuning.BATTLE_RANGED || CONST.BATTLE_RANGED;
+    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
+    const cameraCfg = tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
     battle.timeSec = Number(battle.timeSec || 0) + dt;
+    if (battleFxCfg.ENABLED) tickBattleFx(dtSec, battleFxCfg);
 
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
     const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0);
     if (aliveEnemy.length === 0) { this.resolveBattle('victory'); return; }
     if (alivePlayer.length === 0) { this.resolveBattle('defeat'); return; }
+
+    if (cameraCfg.ENABLED && battle.camera) {
+      const focusUnits = [...alivePlayer, ...aliveEnemy];
+      if (focusUnits.length > 0) {
+        const center = focusUnits.reduce((acc, unit) => ({ x: acc.x + Number(unit.x || 0), y: acc.y + Number(unit.y || 0) }), { x: 0, y: 0 });
+        setCameraTarget(battle.camera, center.x / focusUnits.length, center.y / focusUnits.length);
+      }
+      updateCamera(battle.camera, dtSec, cameraCfg);
+    }
 
     this.tickBattleMorale(allUnits, battle, dt, moraleCfg);
     updateEnemyAI({ battle, dtMs: deltaMs, cfg: aiTuning, bounds: battleBounds });
@@ -1760,6 +1800,18 @@ class FallOfCavalry {
       if (moveDist > 0.01) unit.facing = Math.atan2(moveDy, moveDx);
       else if (Math.hypot(dx, dy) > 0.001) unit.facing = Math.atan2(dy, dx);
       if (!Number.isFinite(unit.facing)) unit.facing = unit.side === 'player' ? 0 : Math.PI;
+      const shouldTrail = battleFxCfg.ENABLED && (unit.role === 'cavalry' || moveDist > Math.max(12, (unit.speed || 0) * dt * 0.8));
+      if (shouldTrail) {
+        const perSec = Math.max(1, Number(battleFxCfg.TRAIL_PARTICLES_PER_SEC || 1));
+        const stepSec = 1 / perSec;
+        unit.trailAccumSec = Number(unit.trailAccumSec || 0) + dtSec;
+        while (unit.trailAccumSec >= stepSec) {
+          spawnFx({ type: 'trail', x: unit.x, y: unit.y, dirX: unit.vx, dirY: unit.vy, cfg: battleFxCfg });
+          unit.trailAccumSec -= stepSec;
+        }
+      } else {
+        unit.trailAccumSec = 0;
+      }
       unit.animKey = this.getUnitAnimationKey(unit) || 'infantry_idle';
       if (this.assetsReady && this.spriteLoader) {
         const player = this.getBattleAnimPlayer(unit);
@@ -1877,13 +1929,32 @@ class FallOfCavalry {
     this.updateUnitMoraleState(target, moraleCfg);
 
     target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
+    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
+    const hitX = Number(target.x || 0);
+    const hitY = Number(target.y || 0);
+    if (battleFxCfg.ENABLED) {
+      spawnFx({ type: 'hit', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+      const dmgRatio = Math.max(0, finalDamage / Math.max(1, Number(target.maxHp || 1)));
+      if (dmgRatio >= 0.12 && target.hp > 0) spawnFx({ type: 'blood', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+      if (isChargeHit) spawnFx({ type: 'dust', x: hitX, y: hitY + 3, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: battleFxCfg });
+    }
     const marker = this.state?.devMode && attackSide !== ATTACK_SIDE.FRONT ? ` ${String(attackSide).toUpperCase()}` : '';
     const chargeMarker = isChargeHit ? ' CHARGE' : '';
     this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}${marker}${chargeMarker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
 
+    const cameraCfg = tuning?.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
+    if (cameraCfg.SHAKE_ENABLED && battle?.camera && cameraCfg.ENABLED) {
+      const damageNormalized = finalDamage / Math.max(1, Number(target.maxHp ?? target.hpMax ?? 1));
+      if (isChargeHit) addCameraShake(battle.camera, Number(cameraCfg.SHAKE_CHARGE_MAG ?? 0), Number(cameraCfg.SHAKE_DURATION_SEC ?? 0));
+      else if (damageNormalized > 0.2) addCameraShake(battle.camera, Number(cameraCfg.SHAKE_HIT_MAG ?? 0), Number(cameraCfg.SHAKE_DURATION_SEC ?? 0));
+    }
+
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
+      if (battleFxCfg.ENABLED) {
+        spawnFx({ type: 'blood', x: hitX, y: hitY, dirX: attackDirVec.x, dirY: attackDirVec.y, cfg: { ...battleFxCfg, BLOOD_PARTICLES: Math.max(Number(battleFxCfg.BLOOD_PARTICLES || 0), Math.floor(Number(battleFxCfg.BLOOD_PARTICLES || 0) * 1.6)) } });
+      }
       if (!target.fx.deathStartedAt) target.fx.deathStartedAt = performance.now();
       const allUnits = [...(battle?.playerUnits || []), ...(battle?.enemyUnits || [])];
       applyAllyDeathShock(target, allUnits, moraleCfg);
@@ -2207,6 +2278,7 @@ class FallOfCavalry {
     this.cancelPlayerDestination();
     this.state.encounter = null;
     this.state.roster.warning = '';
+    initBattleFx(this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX);
     this.state.battle = {
       enemyId,
       startedAt: Date.now(),
@@ -2220,6 +2292,7 @@ class FallOfCavalry {
       targetRetargetTimer: 0,
       settlement: this.getActiveSettlementForCity(),
       phase: 'deploy',
+      camera: createCamera(),
     };
 
     this.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
@@ -5598,6 +5671,11 @@ Esc close`,
     this.ctx.font = '14px Arial';
     this.ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, this.canvas.width / 2, 50);
 
+    const tuning = this.getEffectiveTuning();
+    const cameraCfg = tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
+    this.ctx.save();
+    if (cameraCfg.ENABLED && battle.camera) applyCameraTransform(this.ctx, battle.camera);
+
     const now = performance.now();
     for (const unit of [...playerUnits, ...enemyUnits]) {
       this.ensureBattleUnitFx(unit);
@@ -5644,6 +5722,9 @@ Esc close`,
       this.ctx.fill();
     }
 
+    const battleFxCfg = this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX;
+    if (battleFxCfg.ENABLED) renderBattleFx(this.ctx);
+
     this.ctx.save();
     this.ctx.textAlign = 'center';
     this.ctx.font = '12px Arial';
@@ -5652,6 +5733,7 @@ Esc close`,
       this.ctx.fillStyle = ft.color || '#ffffff';
       this.ctx.fillText(ft.text || '', ft.x, ft.y);
     }
+    this.ctx.restore();
     this.ctx.restore();
 
     const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);

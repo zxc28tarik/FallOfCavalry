@@ -109,6 +109,38 @@ const GROUPS = [
       { key: 'ROUT_DEF_MULT', label: 'Rout Defense Mult', step: 0.01 },
     ],
   },
+
+  {
+    key: 'BATTLE_FX',
+    title: 'Battle FX',
+    fields: [
+      { key: 'ENABLED', label: 'Enabled (0/1)', step: 1 },
+      { key: 'MAX_PARTICLES', label: 'Max Particles', step: 1 },
+      { key: 'HIT_PARTICLES', label: 'Hit Particles', step: 1 },
+      { key: 'BLOOD_PARTICLES', label: 'Blood Particles', step: 1 },
+      { key: 'DUST_PARTICLES', label: 'Dust Particles', step: 1 },
+      { key: 'TRAIL_PARTICLES_PER_SEC', label: 'Trail Particles / sec', step: 1 },
+      { key: 'PARTICLE_LIFETIME_SEC', label: 'Particle Lifetime (sec)', step: 0.01 },
+      { key: 'PARTICLE_GRAVITY', label: 'Particle Gravity', step: 1 },
+      { key: 'PARTICLE_FRICTION', label: 'Particle Friction', step: 0.01 },
+    ],
+  },
+  {
+    key: 'BATTLE_CAMERA',
+    title: 'Battle Camera',
+    fields: [
+      { key: 'ENABLED', label: 'Enabled', type: 'checkbox' },
+      { key: 'BASE_ZOOM', label: 'Base Zoom', step: 0.01 },
+      { key: 'MAX_ZOOM_IN', label: 'Max Zoom In', step: 0.01 },
+      { key: 'MAX_ZOOM_OUT', label: 'Max Zoom Out', step: 0.01 },
+      { key: 'SMOOTHING_SEC', label: 'Smoothing (sec)', step: 0.01 },
+      { key: 'SHAKE_ENABLED', label: 'Shake Enabled', type: 'checkbox' },
+      { key: 'SHAKE_HIT_MAG', label: 'Shake Hit Mag', step: 0.1 },
+      { key: 'SHAKE_CHARGE_MAG', label: 'Shake Charge Mag', step: 0.1 },
+      { key: 'SHAKE_DURATION_SEC', label: 'Shake Duration (sec)', step: 0.01 },
+      { key: 'FOLLOW_STRENGTH', label: 'Follow Strength', step: 0.01 },
+    ],
+  },
   {
     key: 'BATTLE_RANGED',
     title: 'Battle Ranged',
@@ -177,12 +209,16 @@ export default class TuningUI {
     for (const group of GROUPS) {
       chunks.push(`<div class="tuning-group-title">${group.title}</div><div class="tuning-grid">`);
       for (const field of group.fields) {
-        const value = Number(draft?.[group.key]?.[field.key]);
-        const safeVal = Number.isFinite(value) ? value : 0;
+        const rawValue = draft?.[group.key]?.[field.key];
+        const isCheckbox = field.type === 'checkbox';
+        const safeVal = isCheckbox ? Boolean(rawValue) : (Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0);
+        const inputHtml = isCheckbox
+          ? `<input id="tune-${group.key}-${field.key}" class="tuning-input" type="checkbox" ${safeVal ? 'checked' : ''}>`
+          : `<input id="tune-${group.key}-${field.key}" class="tuning-input" type="number" step="${field.step}" value="${safeVal}">`;
         chunks.push(
           `<div class="tuning-row">`
           + `<label class="tuning-label" for="tune-${group.key}-${field.key}">${field.label}</label>`
-          + `<input id="tune-${group.key}-${field.key}" class="tuning-input" type="number" step="${field.step}" value="${safeVal}">`
+          + inputHtml
           + `</div>`,
         );
       }
@@ -195,11 +231,16 @@ export default class TuningUI {
       group.fields.forEach((field) => {
         const input = this.dom.body.querySelector(`#tune-${group.key}-${field.key}`);
         if (!input) return;
-        input.addEventListener('input', () => {
-          const num = Number(input.value);
-          if (!Number.isFinite(num)) return;
+        const eventName = field.type === 'checkbox' ? 'change' : 'input';
+        input.addEventListener(eventName, () => {
           if (!this.localDraft[group.key] || typeof this.localDraft[group.key] !== 'object') this.localDraft[group.key] = {};
-          this.localDraft[group.key][field.key] = num;
+          if (field.type === 'checkbox') {
+            this.localDraft[group.key][field.key] = Boolean(input.checked);
+          } else {
+            const num = Number(input.value);
+            if (!Number.isFinite(num)) return;
+            this.localDraft[group.key][field.key] = num;
+          }
           this.onApply?.(deepClone(this.localDraft));
         });
       });

@@ -97,6 +97,15 @@ export const BATTLE_FX = Object.freeze({
   DEATH_FADE_DURATION: 600,
   DEATH_SHRINK_FACTOR: 0.6,
   HIT_FLASH_COLOR: 'rgba(255,255,255,0.8)',
+  ENABLED: true,
+  MAX_PARTICLES: 512,
+  HIT_PARTICLES: 8,
+  BLOOD_PARTICLES: 10,
+  DUST_PARTICLES: 6,
+  TRAIL_PARTICLES_PER_SEC: 12,
+  PARTICLE_LIFETIME_SEC: 0.4,
+  PARTICLE_GRAVITY: 80,
+  PARTICLE_FRICTION: 0.9,
 });
 
 export const BATTLE_FLANK = Object.freeze({
@@ -123,6 +132,20 @@ export const BATTLE_CHARGE = Object.freeze({
   CHARGE_COOLDOWN_SEC: 5,
   BRACE_CHARGE_REDUCTION_MULT: 0.55,
   BRACE_THORNS_DMG_FRACTION: 0.3,
+});
+
+export const BATTLE_CAMERA = Object.freeze({
+  ENABLED: true,
+  BASE_ZOOM: 1.0,
+  MAX_ZOOM_IN: 1.3,
+  MAX_ZOOM_OUT: 0.8,
+  SMOOTHING_SEC: 0.25,
+  SHAKE_ENABLED: true,
+  SHAKE_HIT_MAG: 6,
+  SHAKE_CHARGE_MAG: 10,
+  SHAKE_DURATION_SEC: 0.18,
+  SHAKE_FALLOFF: 4.0,
+  FOLLOW_STRENGTH: 0.2,
 });
 
 // =============================================================================
@@ -854,6 +877,7 @@ export default {
   BATTLE_FLANK,
   BATTLE_COUNTERS,
   BATTLE_CHARGE,
+  BATTLE_CAMERA,
   DEFAULT_KEYBINDS,
   SAVE,
   UI,
