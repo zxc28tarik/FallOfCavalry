@@ -259,6 +259,7 @@ export default class CityServicesUI {
           <div>
             <div class="font-bold text-sm">${label.title}</div>
             <div class="text-xs opacity-80">${label.desc}</div>
+            <div class="text-[11px] opacity-70">${this.contractTypeBadge(contract)}</div>
           </div>
           <button class="action-btn ${accepted ? 'btn-dark' : 'btn-gold'} text-xs" data-action="accept-contract" data-id="${contract.id}" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept'}</button>
         </div>
@@ -267,13 +268,13 @@ export default class CityServicesUI {
 
     const activeMarkup = activeContracts.map((contract) => {
       const label = this.describeContract(contract);
-      const goal = contract.type === 'DELIVER' ? (contract.requiredAmount ?? contract.requiredCount ?? 1) : (contract.requiredCount ?? 1);
       const ready = Boolean(contract.completed);
       return `
         <div class="frame-dark p-3 mb-2 flex items-center justify-between gap-2">
           <div>
             <div class="font-bold text-sm">${label.title}</div>
-            <div class="text-xs opacity-80">Progress: ${Math.floor(contract.progress || 0)} / ${Math.floor(goal)} · Reward: ${contract.rewardGold}g, ${contract.rewardRenown} renown</div>
+            <div class="text-xs opacity-80">${this.contractProgressText(contract)} · Reward: ${contract.rewardGold}g, ${contract.rewardRenown} renown</div>
+            <div class="text-[11px] opacity-70">${this.contractTypeBadge(contract)}</div>
           </div>
           <button class="action-btn ${ready ? 'btn-gold' : 'btn-dark'} text-xs" data-action="claim-contract" data-id="${contract.id}" ${ready ? '' : 'disabled'}>${ready ? 'Claim' : 'In Progress'}</button>
         </div>
@@ -338,6 +339,38 @@ export default class CityServicesUI {
     }).join('');
   }
 
+
+  contractTypeBadge(contract) {
+    const type = String(contract?.type || 'UNKNOWN');
+    const icons = {
+      BANDIT: '⚔️',
+      DELIVER: '📦',
+      SCOUT: '🧭',
+      DEFEND: '🛡️',
+      ESCORT: '🚚',
+      ASSASSINATE: '🗡️',
+    };
+    const war = contract?.isWarContract ? ' <span class="text-amber-300">(War)</span>' : '';
+    return `${icons[type] || '📜'} ${type}${war}`;
+  }
+
+  contractProgressText(contract) {
+    const progress = Math.floor(contract?.progress || 0);
+    if (contract?.type === 'DEFEND') {
+      const required = Math.floor(contract?.requiredCount || 1);
+      return `Battles won: ${progress}/${required}`;
+    }
+    if (contract?.type === 'ESCORT') {
+      const status = contract?.completed ? 'Completed' : 'Active';
+      return `Route: ${contract?.routeFromName || contract?.cityId || '?'} → ${contract?.routeToName || contract?.targetCityId || '?'} (${status})`;
+    }
+    if (contract?.type === 'ASSASSINATE') {
+      return `Target: Bandit Leader in ${contract?.targetRegionId || 'unknown region'}`;
+    }
+    const goal = contract?.type === 'DELIVER' ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
+    return `Progress: ${progress} / ${Math.floor(goal)}`;
+  }
+
   describeContract(contract) {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') {
@@ -350,6 +383,24 @@ export default class CityServicesUI {
       return {
         title: 'Deliver Food Caravan',
         desc: `Deliver ${contract.requiredAmount || contract.requiredCount || 1} food to ${contract.targetCityId || 'target city'}.`,
+      };
+    }
+    if (contract.type === 'DEFEND') {
+      return {
+        title: contract.title || 'Defend City',
+        desc: contract.desc || `Defend ${contract.cityId || 'city'} against raids (${contract.requiredCount || 1} battles in ${contract.windowDays || 3} days).`,
+      };
+    }
+    if (contract.type === 'ESCORT') {
+      return {
+        title: contract.title || 'Escort Caravan',
+        desc: contract.desc || `Escort caravan from ${contract.cityId || 'A'} to ${contract.targetCityId || 'B'}.`,
+      };
+    }
+    if (contract.type === 'ASSASSINATE') {
+      return {
+        title: contract.title || 'Eliminate Bandit Leader',
+        desc: contract.desc || `Eliminate a notorious bandit leader near ${contract.targetRegionId || 'region'}.`,
       };
     }
     return {

@@ -261,6 +261,9 @@ export const FACTIONS = Object.freeze([
 export const DIPLOMACY_RELATIONS = Object.freeze({
   MIN_REL: -100,
   MAX_REL: 100,
+  MIN: -100,
+  MAX: 100,
+  DEFAULT: 0,
   ALLY_THRESHOLD: 50,
   WAR_THRESHOLD: -30,
   START_RELATIONS: Object.freeze({
@@ -540,6 +543,12 @@ export const CONTRACTS = Object.freeze({
   DELIVERY_FOOD_MAX: 60,
   BANDIT_BATTLE_COUNT: 1,
   SCOUT_POI_COUNT: 1,
+  DEFEND_WINDOW_DAYS: 3,
+  DEFEND_WAVE_COUNT: 2,
+  ESCORT_DISTANCE_MIN: 10,
+  ESCORT_DISTANCE_MAX: 25,
+  ASSASSINATE_TARGET_POWER: 1.5,
+  WAR_CONTRACT_BONUS_RENOWN: 5,
 });
 
 
@@ -873,14 +882,6 @@ export const ECONOMY = Object.freeze({
 // DİPLOMASİ SİSTEMİ (İLERİDE)
 // =============================================================================
 
-
-export const DIPLOMACY_RELATIONS = Object.freeze({
-  MIN: -100,
-  MAX: 100,
-  DEFAULT: 0,
-  ALLY_THRESHOLD: 45,
-  WAR_THRESHOLD: -35,
-});
 
 export const DIPLOMACY_ACTIONS = Object.freeze({
   TRUCE_COST_GOLD: 150,
