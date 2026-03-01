@@ -122,8 +122,8 @@ export class HUDManager {
     const xp = Math.floor(this.state?.playerParty?.xp ?? 0);
     const morale = Math.floor(this.state?.playerParty?.morale ?? 0);
     const units = this.state?.playerParty?.roster ?? [];
-    const totalUnits = units.filter((unit) => Math.floor(unit?.hp ?? 0) > 0).length;
-    const wounded = units.filter((unit) => Boolean(unit?.wounded) || ((unit?.hp ?? 0) / Math.max(1, unit?.maxHp ?? 1)) <= 0.35).length;
+    const totalUnits = units.filter((unit) => Math.floor(unit?.hp ?? 0) > 0 && unit?.status !== 'dead').length;
+    const wounded = units.filter((unit) => unit?.status === 'wounded').length;
     const invItems = Array.isArray(this.state?.playerParty?.inventory?.items) ? this.state.playerParty.inventory.items : [];
     const totalInvQty = invItems.reduce((sum, item) => sum + Math.max(0, Math.floor(item?.qty ?? 0)), 0);
     const top = invItems.slice(0, 2).map((item) => `${item?.name || item?.id}:${Math.max(0, Math.floor(item?.qty ?? 0))}`).join(', ');
@@ -205,7 +205,8 @@ export class HUDManager {
         const marker = idx === cursorIndex ? '>' : ' ';
         const selected = unit?.selected ? '[x]' : '[ ]';
         const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
-        return `${marker} ${selected} ${unit?.name ?? 'Unit'} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
+        const statusTag = unit?.status === 'wounded' ? ' (W)' : '';
+        return `${marker} ${selected} ${unit?.name ?? 'Unit'}${statusTag} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
       });
       safeText(this.elements.rosterPlayerList, playerRows.join('\n'));
     }

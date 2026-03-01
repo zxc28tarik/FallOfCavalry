@@ -51,6 +51,7 @@ import {
   tickSuppression,
   shouldUseMeleeFallback,
 } from './systems/battle-ranged.js';
+import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
 
 import * as utils from './utils.js';
 
@@ -328,6 +329,7 @@ class FallOfCavalry {
         AI_STALL_MIN_PROGRESS_PX: Number(CONST.BATTLE_AI.AI_STALL_MIN_PROGRESS_PX),
         AI_STALL_ABORT_SEC: Number(CONST.BATTLE_AI.AI_STALL_ABORT_SEC),
         SKIRMISH_BOUNDS_FAIL_HOLD_SEC: Number(CONST.BATTLE_AI.SKIRMISH_BOUNDS_FAIL_HOLD_SEC),
+      },
       BATTLE_COUNTERS: {
         SPEAR_VS_CAV_DMG_MULT: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_DMG_MULT),
         SPEAR_VS_CAV_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_MORALE_BONUS),
@@ -344,12 +346,23 @@ class FallOfCavalry {
         CHARGE_COOLDOWN_SEC: Number(CONST.BATTLE_CHARGE.CHARGE_COOLDOWN_SEC),
         BRACE_CHARGE_REDUCTION_MULT: Number(CONST.BATTLE_CHARGE.BRACE_CHARGE_REDUCTION_MULT),
         BRACE_THORNS_DMG_FRACTION: Number(CONST.BATTLE_CHARGE.BRACE_THORNS_DMG_FRACTION),
+      },
       BATTLE_RANGED: {
         SUPPRESS_DURATION_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_DURATION_SEC),
         SUPPRESS_SPEED_MULT: Number(CONST.BATTLE_RANGED.SUPPRESS_SPEED_MULT),
         SUPPRESS_MORALE_DRAIN_PER_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_MORALE_DRAIN_PER_SEC),
         MELEE_EMERGENCY_RANGE_MULT: Number(CONST.BATTLE_RANGED.MELEE_EMERGENCY_RANGE_MULT),
         AMMO_PER_SHOT: Number(CONST.BATTLE_RANGED.AMMO_PER_SHOT),
+      },
+      BATTLE_CASUALTIES: {
+        WOUNDED_HP_THRESHOLD_PCT: Number(CONST.BATTLE_CASUALTIES.WOUNDED_HP_THRESHOLD_PCT),
+        WOUNDED_BASE_CHANCE: Number(CONST.BATTLE_CASUALTIES.WOUNDED_BASE_CHANCE),
+        WOUNDED_ROUTE_BONUS_CHANCE: Number(CONST.BATTLE_CASUALTIES.WOUNDED_ROUTE_BONUS_CHANCE),
+        WOUNDED_HP_MAX_MULT: Number(CONST.BATTLE_CASUALTIES.WOUNDED_HP_MAX_MULT),
+        WOUNDED_ATK_MULT: Number(CONST.BATTLE_CASUALTIES.WOUNDED_ATK_MULT),
+        HEAL_PER_DAY: Number(CONST.BATTLE_CASUALTIES.HEAL_PER_DAY),
+        HEAL_CAMP_MULT: Number(CONST.BATTLE_CASUALTIES.HEAL_CAMP_MULT),
+        HEAL_STARVING_MULT: Number(CONST.BATTLE_CASUALTIES.HEAL_STARVING_MULT),
       },
     };
   }
@@ -367,9 +380,7 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI'].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -759,6 +770,13 @@ class FallOfCavalry {
       this.setLastEventLog(`Gün ${day}: Erzak bitti! Moral ${supplyRes.moraleDelta}.`);
     }
 
+    tickHealing({
+      party: this.playerParty,
+      cfg: this.getEffectiveTuning().BATTLE_CASUALTIES,
+      isCamp: Boolean(this.state?.camp?.active),
+      isStarving: Boolean(supplyRes?.starved),
+    });
+
     if ((this.playerParty.gold ?? 0) < 0) {
       this.playerParty.morale = Math.max(0, (this.playerParty.morale ?? 50) - CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY);
       notes.push(`Altın negatif: Moral -${CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY}`);
@@ -941,13 +959,14 @@ class FallOfCavalry {
     if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
       const roster = [];
       for (let i = 0; i < 6; i += 1) {
-        roster.push({ id: `inf-${i + 1}`, name: `Infantry ${i + 1}`, class: 'infantry', hp: 100, maxHp: 100, atk: 14, def: 8, speed: 72, meleeRange: 20, isRanged: false });
+        roster.push({ id: `inf-${i + 1}`, name: `Infantry ${i + 1}`, class: 'infantry', hp: 100, maxHp: 100, atk: 14, def: 8, speed: 72, meleeRange: 20, isRanged: false, status: 'healthy', healProgress: 0 });
       }
       for (let i = 0; i < 3; i += 1) {
-        roster.push({ id: `arc-${i + 1}`, name: `Archer ${i + 1}`, class: 'archer', hp: 78, maxHp: 78, atk: 10, def: 4, speed: 68, meleeRange: 14, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.2, isRanged: true });
+        roster.push({ id: `arc-${i + 1}`, name: `Archer ${i + 1}`, class: 'archer', hp: 78, maxHp: 78, atk: 10, def: 4, speed: 68, meleeRange: 14, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.2, isRanged: true, status: 'healthy', healProgress: 0 });
       }
       this.playerParty.roster = roster;
     }
+    this.ensureRosterState();
     if (!this.playerParty.inventory || typeof this.playerParty.inventory !== 'object') {
       this.playerParty.inventory = { items: [], capacity: null };
     }
@@ -960,6 +979,23 @@ class FallOfCavalry {
 
     this.initEnemyParties();
     this.initRosters();
+  }
+
+  ensureRosterUnitState(unit) {
+    if (!unit || typeof unit !== 'object') return unit;
+    if (!Number.isFinite(unit.healProgress)) unit.healProgress = 0;
+    unit.healProgress = Math.max(0, Math.min(1, Number(unit.healProgress)));
+    const status = typeof unit.status === 'string' ? unit.status : 'healthy';
+    unit.status = ['healthy', 'wounded', 'dead'].includes(status) ? status : 'healthy';
+    if (unit.status === 'healthy') unit.healProgress = 0;
+    return unit;
+  }
+
+  ensureRosterState() {
+    const roster = this.playerParty?.roster;
+    if (!Array.isArray(roster)) return;
+    roster.forEach((unit) => this.ensureRosterUnitState(unit));
+    this.playerParty.roster = roster.filter((unit) => unit?.status !== 'dead');
   }
 
   initRosters() {
@@ -975,6 +1011,7 @@ class FallOfCavalry {
       fatigue: 10,
       injured: stack.wounded ?? 0,
       dead: (stack.count ?? 0) <= 0,
+      status: stack?.status || 'healthy',
       selected: idx < 2,
     }));
     this.enemyRoster = [];
@@ -1076,20 +1113,6 @@ class FallOfCavalry {
       inBattleFight: false,
       inEncounter: this.state?.mode === 'encounter',
     });
-
-    if (Number.isFinite(dt) && dt > 0) {
-      this.battleRecoveryTimer += dt;
-      if (this.battleRecoveryTimer >= 1) {
-        this.battleRecoveryTimer = 0;
-        (this.playerParty?.roster || []).forEach((unit) => {
-          if (!unit?.wounded) return;
-          if (Math.random() < 0.15) {
-            unit.hp = Math.min(unit.maxHp, (unit.hp ?? unit.maxHp) + 2);
-            unit.wounded = (unit.hp / Math.max(1, unit.maxHp)) <= 0.35;
-          }
-        });
-      }
-    }
 
     this.updateFogFromPlayer();
   }
@@ -1338,6 +1361,7 @@ class FallOfCavalry {
     if (this.state.mode === 'roster') {
       this.state.playerRoster = this.playerRoster.map((unit) => ({
         ...unit,
+        status: unit?.status || 'healthy',
         effectiveCount: this.getEffectiveCount(unit),
       }));
       this.state.enemyRoster = this.enemyRoster.map((unit) => ({
@@ -1956,6 +1980,7 @@ class FallOfCavalry {
     if (!this.state || this.state.mode !== 'encounter') return false;
     this.playerRoster = (this.playerParty?.roster || []).map((unit, idx) => ({
       ...unit,
+      status: unit?.status || 'healthy',
       selected: idx < this.maxUnitsToDeploy,
     }));
     this.enemyRoster = this.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
@@ -2062,9 +2087,18 @@ class FallOfCavalry {
 
   createBattleUnitsFromRoster(roster, side) {
     const moraleCfg = getBattleMoraleConfig(this);
-    return (roster || []).map((entry, idx) => ({
+    const casualtyCfg = this.getEffectiveTuning().BATTLE_CASUALTIES;
+    return (roster || []).map((entry, idx) => {
+      const wounded = entry?.status === 'wounded';
+      const maxHpBase = Math.max(1, Math.floor(entry.maxHp ?? entry.hp ?? 100));
+      const maxHp = wounded ? Math.max(1, Math.floor(maxHpBase * Number(casualtyCfg.WOUNDED_HP_MAX_MULT))) : maxHpBase;
+      const atkBase = Math.max(1, Math.floor(entry.atk ?? 10));
+      const atk = wounded ? Math.max(1, Math.floor(atkBase * Number(casualtyCfg.WOUNDED_ATK_MULT))) : atkBase;
+      const hp = Math.min(maxHp, Math.max(1, Math.floor(entry.hp ?? maxHp)));
+      return {
       unitId: `${side}-${entry.id}-${idx}`,
       sourceId: entry.id,
+      rosterId: entry.id,
       side,
       name: entry.name,
       class: entry.class || (entry.isRanged ? 'archer' : 'infantry'),
@@ -2073,9 +2107,9 @@ class FallOfCavalry {
       y: 0,
       vx: 0,
       vy: 0,
-      hp: Math.max(1, Math.floor(entry.hp ?? entry.maxHp ?? 100)),
-      maxHp: Math.max(1, Math.floor(entry.maxHp ?? entry.hp ?? 100)),
-      atk: Math.max(1, Math.floor(entry.atk ?? 10)),
+      hp,
+      maxHp,
+      atk,
       def: Math.max(0, Math.floor(entry.def ?? 0)),
       speed: Math.max(20, Math.floor(entry.speed ?? 70)),
       meleeRange: Math.max(8, Math.floor(entry.meleeRange ?? 18)),
@@ -2107,10 +2141,9 @@ class FallOfCavalry {
       aiApproachLastCheckAtSec: 0,
       aiStallSec: 0,
       aiNextRetargetAtSec: 0,
-      morale: Math.max(0, Math.floor(entry.morale ?? 100)),
       facing: side === 'player' ? 0 : Math.PI,
       moraleMax: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
-      morale: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
+      morale: Math.max(1, Number(entry.morale ?? moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
       chargeMeter: 0,
       chargeReady: false,
       chargeCooldownRemaining: 0,
@@ -2125,7 +2158,8 @@ class FallOfCavalry {
       radius: 9,
       dead: false,
       fx: { hitUntil: 0, deathStartedAt: null },
-    }));
+    };
+    });
   }
 
   updateUnitMoraleState(unit, moraleCfg) {
@@ -2987,7 +3021,7 @@ class FallOfCavalry {
   }
 
   getWoundedUnits() {
-    return (this.playerParty?.roster || []).filter((u) => Boolean(u?.wounded) || (u?.woundedDays ?? 0) > 0 || ((u?.hp ?? 0) / Math.max(1, u?.maxHp ?? 1)) <= 0.35);
+    return (this.playerParty?.roster || []).filter((u) => u?.status === 'wounded');
   }
 
   buildCityPanelData() {
@@ -3111,8 +3145,8 @@ Up/Down select, Enter heal, Esc back`,
         damageType: offer.templateStats.ranged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT,
         wagePerDay: offer.wagePerDay,
         quality: offer.quality,
-        wounded: false,
-        woundedDays: 0,
+        status: 'healthy',
+        healProgress: 0,
       });
     }
 
@@ -3175,8 +3209,8 @@ Up/Down select, Enter heal, Esc back`,
     }
     const missing = Math.max(0, (unit.maxHp ?? 0) - (unit.hp ?? 0));
     if (missing <= 0) {
-      unit.wounded = false;
-      unit.woundedDays = 0;
+      unit.status = 'healthy';
+      unit.healProgress = 0;
       return false;
     }
     const affordableHeal = Math.min(missing, Math.floor((this.playerParty?.gold ?? 0) / 0.2));
@@ -3186,8 +3220,10 @@ Up/Down select, Enter heal, Esc back`,
     }
     const cost = Math.ceil(affordableHeal * 0.2);
     unit.hp = Math.min(unit.maxHp, unit.hp + affordableHeal);
-    unit.wounded = (unit.hp / Math.max(1, unit.maxHp)) <= 0.35;
-    if (!unit.wounded) unit.woundedDays = 0;
+    if ((unit.hp / Math.max(1, unit.maxHp)) > 0.35) {
+      unit.status = 'healthy';
+      unit.healProgress = 0;
+    }
     this.playerParty.gold -= cost;
     this.setLastEventLog(`Healed ${unit.name}`);
     return true;
@@ -3267,7 +3303,18 @@ Up/Down select, Enter heal, Esc back`,
       && this.playerParty.inventory.items.some((item) => item?.id === 'arrows');
     if (arrowsExists && usedAmmo > 0) this.removeItem('arrows', usedAmmo);
 
-    const outcome = this.applyRosterOutcomeFromBattle(battle);
+    const rosterBefore = new Map((this.playerParty?.roster || []).map((u) => [u.id, { ...u }]));
+    const casualtyCfg = this.getEffectiveTuning().BATTLE_CASUALTIES;
+    const battleRng = () => Math.random();
+    applyBattleOutcomes({ battle, party: this.playerParty, cfg: casualtyCfg, rng: battleRng });
+    const dead = [];
+    const wounded = [];
+    for (const [id, unitBefore] of rosterBefore.entries()) {
+      const after = (this.playerParty?.roster || []).find((u) => u.id === id);
+      if (!after) dead.push({ id: unitBefore.id, name: unitBefore.name });
+      else if (after.status === 'wounded') wounded.push({ id: after.id, name: after.name });
+    }
+    const outcome = { dead, wounded };
     const loot = this.generateBattleLoot(result, battle);
     const goldDelta = result === 'victory' ? 8 + Math.floor(Math.random() * 8) : result === 'retreat' ? 2 + Math.floor(Math.random() * 3) : 0;
     const xpDelta = result === 'victory' ? 10 + Math.floor(Math.random() * 7) : result === 'retreat' ? 3 : 0;
@@ -4583,8 +4630,8 @@ Up/Down select, Enter heal, Esc back`,
       ranged: Boolean(unit.isRanged),
       wagePerDay: Math.max(0, Math.floor(unit.wagePerDay ?? 0)),
       quality: Math.max(0, Math.floor(unit.quality ?? 0)),
-      wounded: Boolean(unit.wounded),
-      woundedDays: Math.max(0, Math.floor(unit.woundedDays ?? 0)),
+      status: ['healthy', 'wounded', 'dead'].includes(unit.status) ? unit.status : 'healthy',
+      healProgress: Math.max(0, Math.min(1, Number(unit.healProgress ?? 0))),
       meleeRange: Math.floor(unit.meleeRange ?? 18),
       rangedRange: Math.floor(unit.rangedRange ?? 0),
       rangedDamage: Math.floor(unit.rangedDamage ?? 0),
@@ -4728,9 +4775,10 @@ Up/Down select, Enter heal, Esc back`,
       rangedCooldown: Number(u.rangedCooldown ?? 0),
       wagePerDay: Math.max(0, Math.floor(u.wagePerDay ?? 0)),
       quality: Math.max(0, Math.floor(u.quality ?? 0)),
-      wounded: Boolean(u.wounded),
-      woundedDays: Math.max(0, Math.floor(u.woundedDays ?? 0)),
-    }));
+      status: ['healthy', 'wounded', 'dead'].includes(u.status) ? u.status : 'healthy',
+      healProgress: Math.max(0, Math.min(1, Number(u.healProgress ?? 0))),
+    })).filter((u) => u.status !== 'dead');
+    this.ensureRosterState();
 
     this.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).filter((e) => !e?.temporary).map((e) => ({
       id: e.id,
