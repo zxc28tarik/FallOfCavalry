@@ -135,6 +135,11 @@ export const BATTLE_COUNTERS = Object.freeze({
   CAV_VS_ARCHER_DMG_MULT: 1.25,
   CAV_VS_ARCHER_MORALE_BONUS: 5,
   INFANTRY_VS_SPEAR_DMG_MULT: 1.05,
+  HEAVY_INF_VS_INF_DMG_MULT: 1.2,
+  ELITE_CAV_VS_INF_DMG_MULT: 1.3,
+  ELITE_CAV_VS_ARCHER_DMG_MULT: 1.45,
+  SIEGE_VS_HEAVY_DMG_MULT: 1.35,
+  SIEGE_VS_INF_DMG_MULT: 1.25,
   COUNTER_BASE_MORALE_BONUS: 0,
 });
 
@@ -397,11 +402,14 @@ export const RECRUIT_POOL_BY_TIER = Object.freeze({
   ]),
   2: Object.freeze([
     { id: 'militia_sword', label: 'Militia Sword', class: 'infantry', cost: 13, hp: 98, maxHp: 98, atk: 13, def: 7, wage: 2, speed: 72 },
+    { id: 'town_heavy_guard', label: 'Heavy Infantry', class: 'heavy_inf', cost: 24, hp: 136, maxHp: 136, atk: 16, def: 13, wage: 4, speed: 60 },
     { id: 'light_cav', label: 'Light Cavalry', class: 'cavalry', cost: 19, hp: 96, maxHp: 96, atk: 14, def: 6, wage: 3, speed: 88, isRanged: false },
     { id: 'crossbow', label: 'Crossbow', class: 'archer', cost: 15, hp: 82, maxHp: 82, atk: 12, def: 5, wage: 2, speed: 68, isRanged: true, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.25 },
   ]),
   3: Object.freeze([
     { id: 'men_at_arms', label: 'Men-at-Arms', class: 'infantry', cost: 18, hp: 112, maxHp: 112, atk: 15, def: 9, wage: 3, speed: 70 },
+    { id: 'elite_cav_knight', label: 'Elite Cavalry', class: 'elite_cav', cost: 36, hp: 148, maxHp: 148, atk: 22, def: 14, wage: 7, speed: 98, isRanged: false },
+    { id: 'siege_breaker', label: 'Siege Breaker', class: 'siege', cost: 34, hp: 156, maxHp: 156, atk: 28, def: 8, wage: 6, speed: 48, isRanged: false },
     { id: 'veteran_archer', label: 'Veteran Archer', class: 'archer', cost: 20, hp: 88, maxHp: 88, atk: 14, def: 6, wage: 3, speed: 70, isRanged: true, rangedRange: 230, rangedDamage: 14, rangedCooldown: 1.15 },
   ]),
 });
@@ -883,6 +891,24 @@ export const ECONOMY = Object.freeze({
 // =============================================================================
 
 
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN: -100,
+  MAX: 100,
+  MIN_REL: -100,
+  MAX_REL: 100,
+  DEFAULT: 0,
+  ALLY_THRESHOLD: 45,
+  WAR_THRESHOLD: -35,
+  START_RELATIONS: Object.freeze({
+    'player:kingdom_a': 20,
+    'player:kingdom_b': 0,
+    'player:bandits': -60,
+    'kingdom_a:kingdom_b': -10,
+    'kingdom_a:bandits': -80,
+    'kingdom_b:bandits': -70,
+  }),
+});
+
 export const DIPLOMACY_ACTIONS = Object.freeze({
   TRUCE_COST_GOLD: 150,
   IMPROVE_RELATION_COST_GOLD: 80,
@@ -892,6 +918,19 @@ export const DIPLOMACY_ACTIONS = Object.freeze({
   ALLY_TRADE_DISCOUNT_MULT: 0.85,
   CONTRACT_REWARD_RELATION_BONUS: 4,
   KILLING_NEUTRAL_CARAVAN_PENALTY: -25,
+});
+
+
+export const FACTION_WAR = Object.freeze({
+  WAR_DECL_THRESHOLD: -40,
+  PEACE_TRUCE_THRESHOLD: -5,
+  CITY_CAPTURE_WARSCORE: 20,
+  BATTLE_WIN_WARSCORE: 5,
+  BATTLE_LOSS_WARSCORE: -4,
+  WARSCORE_TO_FORCE_PEACE: 60,
+  WARSCORE_TO_FORCE_LOSS: -60,
+  FRONTLINE_RADIUS: 10,
+  CRISIS_WAR_COUNT_THRESHOLD: 2,
 });
 
 export const DIPLOMACY = Object.freeze({
@@ -940,6 +979,7 @@ export default {
   DIPLOMACY,
   DIPLOMACY_RELATIONS,
   DIPLOMACY_ACTIONS,
+  FACTION_WAR,
   ACCOUNTING,
   PERF,
   MARKET,
