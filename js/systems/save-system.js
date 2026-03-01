@@ -132,6 +132,7 @@ export class SaveSystem {
           gold: Number.isFinite(game?.playerParty?.gold) ? game.playerParty.gold : 0,
           xp: Number.isFinite(game?.playerParty?.xp) ? game.playerParty.xp : 0,
           morale: Number.isFinite(game?.playerParty?.morale) ? game.playerParty.morale : 50,
+          renown: Number.isFinite(game?.playerParty?.renown) ? game.playerParty.renown : 0,
         },
         roster: Array.isArray(game.roster) ? game.roster : [],
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
