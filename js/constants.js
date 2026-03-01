@@ -135,6 +135,11 @@ export const BATTLE_COUNTERS = Object.freeze({
   CAV_VS_ARCHER_DMG_MULT: 1.25,
   CAV_VS_ARCHER_MORALE_BONUS: 5,
   INFANTRY_VS_SPEAR_DMG_MULT: 1.05,
+  HEAVY_INF_VS_INF_DMG_MULT: 1.2,
+  ELITE_CAV_VS_INF_DMG_MULT: 1.3,
+  ELITE_CAV_VS_ARCHER_DMG_MULT: 1.45,
+  SIEGE_VS_HEAVY_DMG_MULT: 1.35,
+  SIEGE_VS_INF_DMG_MULT: 1.25,
   COUNTER_BASE_MORALE_BONUS: 0,
 });
 
@@ -378,11 +383,14 @@ export const RECRUIT_POOL_BY_TIER = Object.freeze({
   ]),
   2: Object.freeze([
     { id: 'militia_sword', label: 'Militia Sword', class: 'infantry', cost: 13, hp: 98, maxHp: 98, atk: 13, def: 7, wage: 2, speed: 72 },
+    { id: 'town_heavy_guard', label: 'Heavy Infantry', class: 'heavy_inf', cost: 24, hp: 136, maxHp: 136, atk: 16, def: 13, wage: 4, speed: 60 },
     { id: 'light_cav', label: 'Light Cavalry', class: 'cavalry', cost: 19, hp: 96, maxHp: 96, atk: 14, def: 6, wage: 3, speed: 88, isRanged: false },
     { id: 'crossbow', label: 'Crossbow', class: 'archer', cost: 15, hp: 82, maxHp: 82, atk: 12, def: 5, wage: 2, speed: 68, isRanged: true, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.25 },
   ]),
   3: Object.freeze([
     { id: 'men_at_arms', label: 'Men-at-Arms', class: 'infantry', cost: 18, hp: 112, maxHp: 112, atk: 15, def: 9, wage: 3, speed: 70 },
+    { id: 'elite_cav_knight', label: 'Elite Cavalry', class: 'elite_cav', cost: 36, hp: 148, maxHp: 148, atk: 22, def: 14, wage: 7, speed: 98, isRanged: false },
+    { id: 'siege_breaker', label: 'Siege Breaker', class: 'siege', cost: 34, hp: 156, maxHp: 156, atk: 28, def: 8, wage: 6, speed: 48, isRanged: false },
     { id: 'veteran_archer', label: 'Veteran Archer', class: 'archer', cost: 20, hp: 88, maxHp: 88, atk: 14, def: 6, wage: 3, speed: 70, isRanged: true, rangedRange: 230, rangedDamage: 14, rangedCooldown: 1.15 },
   ]),
 });

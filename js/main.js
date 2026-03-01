@@ -546,6 +546,11 @@ class FallOfCavalry {
         CAV_VS_ARCHER_DMG_MULT: Number(CONST.BATTLE_COUNTERS.CAV_VS_ARCHER_DMG_MULT),
         CAV_VS_ARCHER_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.CAV_VS_ARCHER_MORALE_BONUS),
         INFANTRY_VS_SPEAR_DMG_MULT: Number(CONST.BATTLE_COUNTERS.INFANTRY_VS_SPEAR_DMG_MULT),
+        HEAVY_INF_VS_INF_DMG_MULT: Number(CONST.BATTLE_COUNTERS.HEAVY_INF_VS_INF_DMG_MULT),
+        ELITE_CAV_VS_INF_DMG_MULT: Number(CONST.BATTLE_COUNTERS.ELITE_CAV_VS_INF_DMG_MULT),
+        ELITE_CAV_VS_ARCHER_DMG_MULT: Number(CONST.BATTLE_COUNTERS.ELITE_CAV_VS_ARCHER_DMG_MULT),
+        SIEGE_VS_HEAVY_DMG_MULT: Number(CONST.BATTLE_COUNTERS.SIEGE_VS_HEAVY_DMG_MULT),
+        SIEGE_VS_INF_DMG_MULT: Number(CONST.BATTLE_COUNTERS.SIEGE_VS_INF_DMG_MULT),
         COUNTER_BASE_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.COUNTER_BASE_MORALE_BONUS),
       },
       BATTLE_CHARGE: {
@@ -2620,6 +2625,11 @@ class FallOfCavalry {
       const atkBase = Math.max(1, Math.floor(entry.atk ?? 10));
       const atk = wounded ? Math.max(1, Math.floor(atkBase * Number(casualtyCfg.WOUNDED_ATK_MULT))) : atkBase;
       const hp = Math.min(maxHp, Math.max(1, Math.floor(entry.hp ?? maxHp)));
+      const role = inferUnitRole(entry);
+      const lineRole = role === 'elite_cav'
+        ? 'flanker'
+        : (role === 'archer' ? 'reserve' : ((role === 'siege' || role === 'heavy_inf' || role === 'spearman') ? 'frontline' : ((idx % 3) === 0 ? 'reserve' : 'frontline')));
+      const isHighValueTarget = role === 'siege' || role === 'elite_cav' || /champion|hero|captain/i.test(String(entry.name || entry.label || entry.id || ''));
       return {
       unitId: `${side}-${entry.id}-${idx}`,
       sourceId: entry.id,
@@ -2627,7 +2637,7 @@ class FallOfCavalry {
       side,
       name: entry.name,
       class: entry.class || (entry.isRanged ? 'archer' : 'infantry'),
-      role: inferUnitRole(entry),
+      role,
       x: 0,
       y: 0,
       vx: 0,
@@ -2658,6 +2668,8 @@ class FallOfCavalry {
       formationRangedTakenMult: 1,
       formationMoraleShockMult: 1,
       focusTargetId: null,
+      lineRole,
+      isHighValueTarget,
       retreating: false,
       skirmish: false,
       aiApproachPoint: null,
