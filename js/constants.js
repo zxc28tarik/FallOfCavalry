@@ -113,6 +113,20 @@ export const BATTLE_CHARGE = Object.freeze({
   BRACE_THORNS_DMG_FRACTION: 0.3,
 });
 
+export const BATTLE_CAMERA = Object.freeze({
+  ENABLED: true,
+  BASE_ZOOM: 1.0,
+  MAX_ZOOM_IN: 1.3,
+  MAX_ZOOM_OUT: 0.8,
+  SMOOTHING_SEC: 0.25,
+  SHAKE_ENABLED: true,
+  SHAKE_HIT_MAG: 6,
+  SHAKE_CHARGE_MAG: 10,
+  SHAKE_DURATION_SEC: 0.18,
+  SHAKE_FALLOFF: 4.0,
+  FOLLOW_STRENGTH: 0.2,
+});
+
 // =============================================================================
 // YERLEŞİM TİPLERİ VE ÖZELLİKLERİ
 // =============================================================================
@@ -840,6 +854,7 @@ export default {
   BATTLE_FLANK,
   BATTLE_COUNTERS,
   BATTLE_CHARGE,
+  BATTLE_CAMERA,
   DEFAULT_KEYBINDS,
   SAVE,
   UI,
