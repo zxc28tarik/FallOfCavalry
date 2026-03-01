@@ -460,6 +460,23 @@ export const ACCOUNTING = Object.freeze({
 });
 
 
+export const CAMPAIGN_OBJECTIVES = Object.freeze({
+  WIN_RENOWN: 200,
+  WIN_GOLD: 5000,
+  LOSE_GOLD: -50,
+  LOSE_STARVE_DAYS: 5,
+});
+
+export const CONTRACTS = Object.freeze({
+  REWARD_GOLD_BASE: 40,
+  REWARD_RENOWN_BASE: 8,
+  DELIVERY_FOOD_MIN: 20,
+  DELIVERY_FOOD_MAX: 60,
+  BANDIT_BATTLE_COUNT: 1,
+  SCOUT_POI_COUNT: 1,
+});
+
+
 export const PERF = Object.freeze({
   PROJECTILE_POOL: 128,
   FLOATTEXT_POOL: 64,

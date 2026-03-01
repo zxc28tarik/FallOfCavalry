@@ -1,14 +1,17 @@
 import * as CONST from '../constants.js';
 
 export default class CityServicesUI {
-  constructor({ state, party, recruitmentSystem, tradeSystem, onRecruit, onBuy, onSell, onClose }) {
+  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onClose }) {
     this.state = state;
     this.party = party;
     this.recruitmentSystem = recruitmentSystem;
     this.tradeSystem = tradeSystem;
+    this.contractsSystem = contractsSystem;
     this.onRecruit = onRecruit;
     this.onBuy = onBuy;
     this.onSell = onSell;
+    this.onAcceptContract = onAcceptContract;
+    this.onCompleteContract = onCompleteContract;
     this.onClose = onClose;
 
     this.dom = {};
@@ -17,6 +20,7 @@ export default class CityServicesUI {
     this.currentSettlement = null;
     this.currentRecruitPool = [];
     this.currentMarket = null;
+    this.currentContracts = [];
   }
 
   bind(dom) {
@@ -32,6 +36,21 @@ export default class CityServicesUI {
       this.currentTab = 'trade';
       this.render();
     });
+
+    if (!this.dom.btnContracts && this.dom.btnTrade?.parentElement) {
+      const btn = document.createElement('button');
+      btn.id = 'btnContracts';
+      btn.className = 'action-btn btn-dark';
+      btn.textContent = 'Contracts';
+      this.dom.btnTrade.parentElement.appendChild(btn);
+      this.dom.btnContracts = btn;
+    }
+
+    this.dom.btnContracts?.addEventListener('click', () => {
+      this.currentTab = 'contracts';
+      this.render();
+    });
+
     this.dom.cityClose?.addEventListener('click', () => this.onClose?.());
 
     this.dom.cityList?.addEventListener('click', (event) => {
@@ -50,15 +69,20 @@ export default class CityServicesUI {
         this.onBuy?.(id, qty);
       } else if (action === 'sell') {
         this.onSell?.(id, qty);
+      } else if (action === 'accept-contract') {
+        this.onAcceptContract?.(id);
+      } else if (action === 'claim-contract') {
+        this.onCompleteContract?.(id);
       }
       this.render();
     });
   }
 
-  show(settlement, { recruitPool, market } = {}) {
+  show(settlement, { recruitPool, market, contracts } = {}) {
     this.currentSettlement = settlement || null;
     this.currentRecruitPool = Array.isArray(recruitPool) ? recruitPool : [];
     this.currentMarket = market || null;
+    this.currentContracts = Array.isArray(contracts) ? contracts : [];
     this.currentTab = 'recruit';
     this.dom.cityRoot?.classList.remove('hidden');
     this.render();
@@ -68,9 +92,10 @@ export default class CityServicesUI {
     this.dom.cityRoot?.classList.add('hidden');
   }
 
-  setData({ recruitPool, market }) {
+  setData({ recruitPool, market, contracts }) {
     if (Array.isArray(recruitPool)) this.currentRecruitPool = recruitPool;
     if (market) this.currentMarket = market;
+    if (Array.isArray(contracts)) this.currentContracts = contracts;
     this.render();
   }
 
@@ -78,6 +103,10 @@ export default class CityServicesUI {
     if (!this.dom.cityList) return;
     if (this.currentTab === 'trade') {
       this.renderTrade();
+      return;
+    }
+    if (this.currentTab === 'contracts') {
+      this.renderContracts();
       return;
     }
     this.renderRecruit();
@@ -158,5 +187,67 @@ export default class CityServicesUI {
       header.textContent = 'Pazar fırsatı var.';
       this.dom.cityList.prepend(header);
     }
+  }
+
+  renderContracts() {
+    const offers = Array.isArray(this.currentContracts) ? this.currentContracts : [];
+    const activeContracts = Array.isArray(this.party?.contracts) ? this.party.contracts : [];
+    const acceptedIds = new Set(activeContracts.map((c) => c.id));
+
+    const offerMarkup = offers.map((contract) => {
+      const accepted = acceptedIds.has(contract.id);
+      const label = this.describeContract(contract);
+      return `
+        <div class="frame-dark p-3 mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div class="font-bold text-sm">${label.title}</div>
+            <div class="text-xs opacity-80">${label.desc}</div>
+          </div>
+          <button class="action-btn ${accepted ? 'btn-dark' : 'btn-gold'} text-xs" data-action="accept-contract" data-id="${contract.id}" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept'}</button>
+        </div>
+      `;
+    }).join('');
+
+    const activeMarkup = activeContracts.map((contract) => {
+      const label = this.describeContract(contract);
+      const goal = contract.type === 'DELIVER' ? (contract.requiredAmount ?? contract.requiredCount ?? 1) : (contract.requiredCount ?? 1);
+      const ready = Boolean(contract.completed);
+      return `
+        <div class="frame-dark p-3 mb-2 flex items-center justify-between gap-2">
+          <div>
+            <div class="font-bold text-sm">${label.title}</div>
+            <div class="text-xs opacity-80">Progress: ${Math.floor(contract.progress || 0)} / ${Math.floor(goal)} · Reward: ${contract.rewardGold}g, ${contract.rewardRenown} renown</div>
+          </div>
+          <button class="action-btn ${ready ? 'btn-gold' : 'btn-dark'} text-xs" data-action="claim-contract" data-id="${contract.id}" ${ready ? '' : 'disabled'}>${ready ? 'Claim' : 'In Progress'}</button>
+        </div>
+      `;
+    }).join('');
+
+    this.dom.cityList.innerHTML = `
+      <div class="text-xs opacity-75 mb-2">Board Contracts</div>
+      ${offerMarkup || '<div class="text-sm opacity-80 mb-3">Bugün için kontrat bulunmuyor.</div>'}
+      <div class="text-xs opacity-75 mt-4 mb-2">Accepted Contracts</div>
+      ${activeMarkup || '<div class="text-sm opacity-80">Aktif kontrat yok.</div>'}
+    `;
+  }
+
+  describeContract(contract) {
+    if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
+    if (contract.type === 'BANDIT') {
+      return {
+        title: 'Clear Bandit Patrol',
+        desc: `Win ${contract.requiredCount || 1} battle(s) against bandits.`,
+      };
+    }
+    if (contract.type === 'DELIVER') {
+      return {
+        title: 'Deliver Food Caravan',
+        desc: `Deliver ${contract.requiredAmount || contract.requiredCount || 1} food to ${contract.targetCityId || 'target city'}.`,
+      };
+    }
+    return {
+      title: 'Scout Nearby Ruin',
+      desc: `Explore ruin ${contract.targetPoiId || 'target'} and report back.`,
+    };
   }
 }

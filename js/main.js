@@ -17,6 +17,14 @@ import FogOfWar from './world/fog-of-war.js';
 import * as recruitmentSystem from './systems/recruitment.js';
 import * as tradeSystem from './systems/trade.js';
 import CityServicesUI from './ui/city-services.js';
+import { showWinScreen, showLoseScreen } from './ui/modals.js';
+import {
+  setContractsRuntimeContext,
+  generateContractsForCity,
+  acceptContract,
+  completeContract,
+  emitContractEvent,
+} from './systems/contracts.js';
 import * as suppliesSystem from './systems/supplies.js';
 import * as capacitySystem from './systems/capacity.js';
 import * as campSystem from './systems/camp.js';
@@ -282,6 +290,20 @@ class FallOfCavalry {
         DAILY_PER_UNIT_CONSUMPTION: Number(CONST.SUPPLIES.DAILY_PER_UNIT_CONSUMPTION),
         STARVATION_MORALE_PENALTY: Number(CONST.SUPPLIES.STARVATION_MORALE_PENALTY),
       },
+      CAMPAIGN_OBJECTIVES: {
+        WIN_RENOWN: Number(CONST.CAMPAIGN_OBJECTIVES.WIN_RENOWN),
+        WIN_GOLD: Number(CONST.CAMPAIGN_OBJECTIVES.WIN_GOLD),
+        LOSE_GOLD: Number(CONST.CAMPAIGN_OBJECTIVES.LOSE_GOLD),
+        LOSE_STARVE_DAYS: Number(CONST.CAMPAIGN_OBJECTIVES.LOSE_STARVE_DAYS),
+      },
+      CONTRACTS: {
+        REWARD_GOLD_BASE: Number(CONST.CONTRACTS.REWARD_GOLD_BASE),
+        REWARD_RENOWN_BASE: Number(CONST.CONTRACTS.REWARD_RENOWN_BASE),
+        DELIVERY_FOOD_MIN: Number(CONST.CONTRACTS.DELIVERY_FOOD_MIN),
+        DELIVERY_FOOD_MAX: Number(CONST.CONTRACTS.DELIVERY_FOOD_MAX),
+        BANDIT_BATTLE_COUNT: Number(CONST.CONTRACTS.BANDIT_BATTLE_COUNT),
+        SCOUT_POI_COUNT: Number(CONST.CONTRACTS.SCOUT_POI_COUNT),
+      },
       BATTLE_FORMATION: {
         COHESION_RADIUS: Number(CONST.BATTLE_FORMATION.COHESION_RADIUS),
         COHESION_ALLY_CAP: Number(CONST.BATTLE_FORMATION.COHESION_ALLY_CAP),
@@ -369,7 +391,7 @@ class FallOfCavalry {
     this.ensureTuningState();
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'CAMPAIGN_OBJECTIVES', 'CONTRACTS', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -782,6 +804,9 @@ class FallOfCavalry {
       });
     }
 
+    if (supplyRes?.starved) this.playerParty.starveDays = Math.max(0, Math.floor((this.playerParty.starveDays || 0) + 1));
+    else this.playerParty.starveDays = 0;
+
     const summary = {
       day: Number.isFinite(day) ? day : Math.floor(this.state?.day ?? 1),
       foodBefore,
@@ -809,6 +834,52 @@ class FallOfCavalry {
       this.state.paused = true;
       this.accountingUI?.show?.(summary);
     }
+
+    const outcome = this.evaluateCampaignOutcome();
+    if (outcome === 'win') this.showCampaignWin();
+    if (outcome === 'lose') this.showCampaignLose();
+  }
+
+  evaluateCampaignOutcome() {
+    if (!this.playerParty || this.state?.campaignEnded) return null;
+    if ((this.playerParty.renown ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_RENOWN) return 'win';
+    if ((this.playerParty.gold ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_GOLD) return 'win';
+
+    const livingUnits = (this.playerParty.roster || []).filter((unit) => (unit?.hp ?? 0) > 0);
+    if (livingUnits.length === 0) return 'lose';
+    if ((this.playerParty.gold ?? 0) <= CONST.CAMPAIGN_OBJECTIVES.LOSE_GOLD
+      && (this.playerParty.starveDays ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.LOSE_STARVE_DAYS) return 'lose';
+    return null;
+  }
+
+  restartRun() {
+    if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+      window.location.reload();
+      return true;
+    }
+    return false;
+  }
+
+  showCampaignWin() {
+    if (this.state?.campaignEnded) return;
+    if (this.state) this.state.campaignEnded = 'win';
+    this.setPaused(true);
+    showWinScreen({
+      party: this.playerParty,
+      day: this.state?.day ?? 1,
+      onNewRun: () => this.restartRun(),
+    });
+  }
+
+  showCampaignLose() {
+    if (this.state?.campaignEnded) return;
+    if (this.state) this.state.campaignEnded = 'lose';
+    this.setPaused(true);
+    showLoseScreen({
+      party: this.playerParty,
+      day: this.state?.day ?? 1,
+      onNewRun: () => this.restartRun(),
+    });
   }
 
   getCameraSafe() {
@@ -938,6 +1009,9 @@ class FallOfCavalry {
     if (!Number.isFinite(this.playerParty.gold)) this.playerParty.gold = 0;
     if (!Number.isFinite(this.playerParty.xp)) this.playerParty.xp = 0;
     if (!Number.isFinite(this.playerParty.morale)) this.playerParty.morale = 64;
+    if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = 0;
+    if (!Number.isFinite(this.playerParty.starveDays)) this.playerParty.starveDays = 0;
+    if (!Array.isArray(this.playerParty.contracts)) this.playerParty.contracts = [];
     if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
       const roster = [];
       for (let i = 0; i < 6; i += 1) {
@@ -954,6 +1028,7 @@ class FallOfCavalry {
     this.ensureInventoryModel();
     if (this.state) {
       this.state.playerParty = this.playerParty;
+      setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
       if (typeof this.state.lastEventLog !== 'string') this.state.lastEventLog = '';
       if (!Number.isFinite(this.state.lastEventLogUntil)) this.state.lastEventLogUntil = 0;
     }
@@ -1330,6 +1405,7 @@ class FallOfCavalry {
       this.state.clueMarker = null;
     }
     this.cleanupExpiredMarketOpportunities(this.state.day);
+    setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
     if (this.state.lastEventLog && Date.now() >= (this.state.lastEventLogUntil ?? 0)) {
       this.state.lastEventLog = '';
       this.state.lastEventLogUntil = 0;
@@ -2407,7 +2483,18 @@ class FallOfCavalry {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
         }
         this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
+        if (result?.ok && itemId === 'grain') {
+          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, this.playerParty);
+        }
         if (result?.ok) this.runAutosave('trade');
+      },
+      onAcceptContract: (contractId) => {
+        const accepted = acceptContract(contractId, this.playerParty);
+        if (accepted) this.setLastEventLog('Contract accepted.');
+      },
+      onCompleteContract: (contractId) => {
+        const completed = completeContract(contractId, this.playerParty);
+        if (completed) this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown} renown`);
       },
       onClose: () => this.exitCityServices(),
     });
@@ -2416,6 +2503,7 @@ class FallOfCavalry {
       cityRoot: utils.getEl('settlementModal'),
       btnRecruit: utils.getEl('btnRecruit'),
       btnTrade: utils.getEl('btnTrade'),
+      btnContracts: utils.getEl('btnContracts'),
       cityClose: utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
       cityList: utils.getEl('settlementLore'),
     });
@@ -2443,8 +2531,10 @@ class FallOfCavalry {
     const recruitPool = recruitmentSystem.getRecruitPool(settlement, this.state?.seed);
     settlement.recruitPool = recruitPool;
     const market = this.getOrCreateMarketForSettlement(settlement);
+    setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
+    const contracts = generateContractsForCity({ cityId: settlement.id, day: this.state?.day, seed: this.state?.seed, map: this.state?.map });
     this.state.setMode('city');
-    this.cityUI?.show?.(settlement, { recruitPool, market });
+    this.cityUI?.show?.(settlement, { recruitPool, market, contracts });
     this.updateTransientUIState();
     return true;
   }
@@ -2751,6 +2841,7 @@ class FallOfCavalry {
       const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
       this.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}`);
       this.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, this.playerParty);
       return true;
     }
 
@@ -2786,6 +2877,7 @@ class FallOfCavalry {
       }
       this.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak.`);
       this.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, this.playerParty);
       return true;
     }
 
@@ -2793,6 +2885,7 @@ class FallOfCavalry {
       const msg = outcome?.message || 'Burada kayda değer bir şey yok...';
       this.setLastEventLog(msg);
       this.poiUI?.showResult?.({ kind: 'nothing', lines: [msg] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, this.playerParty);
       return true;
     }
 
@@ -3310,6 +3403,8 @@ Up/Down select, Enter heal, Esc back`,
     }
 
     if (result === 'victory') {
+      const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: 'bandits', regionId }, this.playerParty);
       this.cleanupTemporaryEnemy(enemyId, { force: true });
       this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
     } else if (result === 'defeat') {
@@ -4636,6 +4731,9 @@ Up/Down select, Enter heal, Esc back`,
           gold: Number.isFinite(this.playerParty?.gold) ? this.playerParty.gold : 0,
           xp: Number.isFinite(this.playerParty?.xp) ? this.playerParty.xp : 0,
           morale: Number.isFinite(this.playerParty?.morale) ? this.playerParty.morale : 50,
+          renown: Number.isFinite(this.playerParty?.renown) ? this.playerParty.renown : 0,
+          starveDays: Number.isFinite(this.playerParty?.starveDays) ? this.playerParty.starveDays : 0,
+          contracts: Array.isArray(this.playerParty?.contracts) ? this.playerParty.contracts : [],
         },
         roster,
         enemies: (this.enemyParties || []).map((e) => ({
@@ -4698,6 +4796,9 @@ Up/Down select, Enter heal, Esc back`,
     this.playerParty.gold = Number.isFinite(p.gold) ? p.gold : 0;
     this.playerParty.xp = Number.isFinite(p.xp) ? p.xp : 0;
     this.playerParty.morale = Number.isFinite(p.morale) ? p.morale : 50;
+    this.playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
+    this.playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
+    this.playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
 
     const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null };
     this.playerParty.inventory = {
