@@ -41,6 +41,7 @@ import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefen
 import SpriteLoader from './rendering/sprite-loader.js';
 import AnimationPlayer from './rendering/animation.js';
 import { computeUnitCohesion, getFormationMultipliers } from './systems/formation.js';
+import { inferUnitRole, getCounterEffect, computeChargeState, isBracedSpearman } from './systems/battle-counters.js';
 import {
   initBattleAmmoFromParty,
   consumeAmmo,
@@ -309,6 +310,22 @@ class FallOfCavalry {
         ROUT_SPEED_MULT: Number(CONST.BATTLE_MORALE.ROUT_SPEED_MULT),
         ROUT_DEF_MULT: Number(CONST.BATTLE_MORALE.ROUT_DEF_MULT),
       },
+      BATTLE_COUNTERS: {
+        SPEAR_VS_CAV_DMG_MULT: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_DMG_MULT),
+        SPEAR_VS_CAV_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_MORALE_BONUS),
+        CAV_VS_ARCHER_DMG_MULT: Number(CONST.BATTLE_COUNTERS.CAV_VS_ARCHER_DMG_MULT),
+        CAV_VS_ARCHER_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.CAV_VS_ARCHER_MORALE_BONUS),
+        INFANTRY_VS_SPEAR_DMG_MULT: Number(CONST.BATTLE_COUNTERS.INFANTRY_VS_SPEAR_DMG_MULT),
+        COUNTER_BASE_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.COUNTER_BASE_MORALE_BONUS),
+      },
+      BATTLE_CHARGE: {
+        CHARGE_BUILD_PER_SEC: Number(CONST.BATTLE_CHARGE.CHARGE_BUILD_PER_SEC),
+        CHARGE_READY_THRESHOLD: Number(CONST.BATTLE_CHARGE.CHARGE_READY_THRESHOLD),
+        CHARGE_DMG_MULT: Number(CONST.BATTLE_CHARGE.CHARGE_DMG_MULT),
+        CHARGE_MORALE_BONUS: Number(CONST.BATTLE_CHARGE.CHARGE_MORALE_BONUS),
+        CHARGE_COOLDOWN_SEC: Number(CONST.BATTLE_CHARGE.CHARGE_COOLDOWN_SEC),
+        BRACE_CHARGE_REDUCTION_MULT: Number(CONST.BATTLE_CHARGE.BRACE_CHARGE_REDUCTION_MULT),
+        BRACE_THORNS_DMG_FRACTION: Number(CONST.BATTLE_CHARGE.BRACE_THORNS_DMG_FRACTION),
       BATTLE_RANGED: {
         SUPPRESS_DURATION_SEC: Number(CONST.BATTLE_RANGED.SUPPRESS_DURATION_SEC),
         SUPPRESS_SPEED_MULT: Number(CONST.BATTLE_RANGED.SUPPRESS_SPEED_MULT),
@@ -332,6 +349,7 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
@@ -1387,6 +1405,7 @@ class FallOfCavalry {
       this.ctx.restore();
     }
     const allUnits = [...playerUnits, ...enemyUnits];
+    const dtSec = deltaMs / 1000;
     for (const unit of allUnits) {
       const allies = unit?.side === 'enemy' ? enemyUnits : playerUnits;
       const cohesion = computeUnitCohesion(unit, allies, formationTuning.COHESION_RADIUS, formationTuning.COHESION_ALLY_CAP);
@@ -1411,6 +1430,8 @@ class FallOfCavalry {
         continue;
       }
       const enemies = unit.side === 'player' ? aliveEnemy : alivePlayer;
+      unit.chargeCooldownRemaining = Math.max(0, Number(unit.chargeCooldownRemaining || 0) - dtSec);
+      if (unit.role === 'cavalry') computeChargeState({ unit, dtSec, cfg: tuning });
       unit.attackTimer = Math.max(0, (unit.attackTimer || 0) - dt);
       unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
 
@@ -1436,6 +1457,8 @@ class FallOfCavalry {
       const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed * formationSpeed * suppressionSpeed);
       const prevX = unit.x;
       const prevY = unit.y;
+      unit.lastPosX = prevX;
+      unit.lastPosY = prevY;
 
       if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
         const retreatStep = Math.min(dist, stepSpeed * dt);
@@ -1481,7 +1504,7 @@ class FallOfCavalry {
           const atkMult = unit.moraleState === 'shaken'
             ? Number(moraleCfg.SHAKEN_ATTACK_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_MULT)
             : 1;
-          this.applyUnitDamage(unit, target, unit.atk * atkMult);
+          this.applyUnitDamage(unit, target, unit.atk * atkMult, { isMelee: true });
           const shakenTimerMult = unit.moraleState === 'shaken'
             ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
             : 1;
@@ -1522,6 +1545,7 @@ class FallOfCavalry {
         if (unit.dead || unit.hp <= 0) continue;
         const hitDist = Math.hypot(unit.x - projectile.x, unit.y - projectile.y);
         if (hitDist <= (unit.radius || 9)) {
+          this.applyUnitDamage(projectile, unit, projectile.damage, { isMelee: false });
           this.applyUnitDamage(projectile, unit, projectile.damage);
           applySuppressionOnHit({ target: unit, battleTimeSec: Number(battle.timeSec || 0), cfg: rangedCfg });
           hit = true;
@@ -1551,15 +1575,18 @@ class FallOfCavalry {
     return best;
   }
 
-  applyUnitDamage(attacker, target, baseDamage) {
+  applyUnitDamage(attacker, target, baseDamage, context = {}) {
     if (!target || target.dead || target.hp <= 0) return 0;
     const tuning = this.getEffectiveTuning();
     const flankTuning = tuning?.BATTLE_FLANK || CONST.BATTLE_FLANK;
+    const moraleCfg = getBattleMoraleConfig(this);
+    const battle = this.state?.battle;
+    const isMelee = context.isMelee !== false && !attacker?.isRanged;
+
     const attackDirVec = getAttackDirectionAgainstDefender(attacker, target);
     const attackSide = classifyAttackSide(Number(target.facing || 0), attackDirVec);
     const flank = resolveFlankBonuses(attackSide, flankTuning);
-    const battle = this.state?.battle;
-    const moraleCfg = getBattleMoraleConfig(this);
+
     const variance = 0.9 + (Math.random() * 0.2);
     const type = attacker?.damageType || (attacker?.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT);
     const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
@@ -1569,24 +1596,56 @@ class FallOfCavalry {
     const adjustedBase = (baseDamage ?? 1) * atkMult;
     const base = Math.max(1, (adjustedBase - (target.def ?? 0)));
     let damage = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
+
+    let moraleBonus = Math.max(0, Number(flank.moraleBonus || 0));
+    let isChargeHit = false;
+
+    if (isMelee) {
+      const counter = getCounterEffect({ attackerRole: attacker?.role, defenderRole: target?.role, cfg: tuning });
+      damage *= Math.max(0.01, Number(counter.dmgMult || 1));
+      moraleBonus += Math.max(0, Number(counter.moraleBonus || 0));
+
+      if (attacker?.role === 'cavalry' && attacker.chargeReady) {
+        const chargeCfg = tuning?.BATTLE_CHARGE || CONST.BATTLE_CHARGE;
+        isChargeHit = true;
+        damage *= Math.max(0.01, Number(chargeCfg.CHARGE_DMG_MULT ?? 1));
+        moraleBonus += Math.max(0, Number(chargeCfg.CHARGE_MORALE_BONUS ?? 0));
+
+        attacker.chargeMeter = 0;
+        attacker.chargeReady = false;
+        attacker.chargeCooldownRemaining = Math.max(0, Number(chargeCfg.CHARGE_COOLDOWN_SEC ?? 0));
+
+        if (isBracedSpearman(target, tuning)) {
+          const reducedMult = Math.max(0.01, Number(chargeCfg.BRACE_CHARGE_REDUCTION_MULT ?? 1));
+          damage *= reducedMult;
+          moraleBonus += 2;
+          const thornDamage = Math.max(1, Math.round(damage * Math.max(0, Number(chargeCfg.BRACE_THORNS_DMG_FRACTION ?? 0))));
+          attacker.hp = Math.max(0, Number(attacker.hp || 0) - thornDamage);
+          this.spawnFloatingText(attacker.x || 0, attacker.y || 0, `-${thornDamage} BRACED`, attacker.side === 'player' ? '#ffd0d0' : '#fff2a8');
+          if (attacker.hp <= 0) {
+            attacker.dead = true;
+            this.ensureBattleUnitFx(attacker);
+            if (!attacker.fx.deathStartedAt) attacker.fx.deathStartedAt = performance.now();
+          }
+        }
+      }
+    }
+
     if (attacker?.isRanged) damage *= Math.max(0.01, Number(target?.formationRangedTakenMult ?? 1));
+    damage = Math.max(1, damage * Math.max(0.1, Number(flank.damageMult || 1)));
     const finalDamage = Math.max(1, Math.round(damage));
+
     this.ensureBattleUnitFx(target);
     target.hp -= finalDamage;
-    target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
-    this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
-    const cmdCtx = { defMult: Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1), retreating: Boolean(target?.retreating) };
-    const base = Math.max(1, ((baseDamage ?? 1) - (target.def ?? 0)));
-    const damageRaw = computeDamage({ attacker, defender: target, base: base * variance, damageType: type, terrainMods, commandCtx: cmdCtx });
-    const damage = Math.max(1, Math.floor(damageRaw * Math.max(0.1, Number(flank.damageMult || 1))));
-    this.ensureBattleUnitFx(target);
-    target.hp -= damage;
-    if (Number.isFinite(target.morale)) target.morale = Math.max(0, Number(target.morale) - Math.max(0, Number(flank.moraleBonus || 0)));
-    applyMoraleDamage(target, damage, moraleCfg, Number(battle?.timeSec || 0));
+    if (Number.isFinite(target.morale)) target.morale = Math.max(0, Number(target.morale) - moraleBonus);
+    applyMoraleDamage(target, finalDamage, moraleCfg, Number(battle?.timeSec || 0));
     this.updateUnitMoraleState(target, moraleCfg);
+
     target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
     const marker = this.state?.devMode && attackSide !== ATTACK_SIDE.FRONT ? ` ${String(attackSide).toUpperCase()}` : '';
-    this.spawnFloatingText(target.x || 0, target.y || 0, `-${damage}${marker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
+    const chargeMarker = isChargeHit ? ' CHARGE' : '';
+    this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}${marker}${chargeMarker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
+
     if (target.hp <= 0) {
       target.hp = 0;
       target.dead = true;
@@ -1943,6 +2002,7 @@ class FallOfCavalry {
       side,
       name: entry.name,
       class: entry.class || (entry.isRanged ? 'archer' : 'infantry'),
+      role: inferUnitRole(entry),
       x: 0,
       y: 0,
       vx: 0,
@@ -1974,10 +2034,14 @@ class FallOfCavalry {
       formationMoraleShockMult: 1,
       focusTargetId: null,
       retreating: false,
-      morale: Math.max(0, Math.floor(entry.morale ?? 100)),
       facing: side === 'player' ? 0 : Math.PI,
       moraleMax: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
       morale: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
+      chargeMeter: 0,
+      chargeReady: false,
+      chargeCooldownRemaining: 0,
+      lastPosX: 0,
+      lastPosY: 0,
       moraleState: 'steady',
       lastDamageAt: -999,
       attackTimer: 0,

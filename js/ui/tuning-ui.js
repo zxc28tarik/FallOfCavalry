@@ -26,6 +26,41 @@ const GROUPS = [
     ],
   },
   {
+    key: 'BATTLE_FLANK',
+    title: 'Battle Flank',
+    fields: [
+      { key: 'FLANK_MULT', label: 'Flank Damage Mult', step: 0.01 },
+      { key: 'REAR_MULT', label: 'Rear Damage Mult', step: 0.01 },
+      { key: 'FLANK_MORALE_BONUS', label: 'Flank Morale Bonus', step: 1 },
+      { key: 'REAR_MORALE_BONUS', label: 'Rear Morale Bonus', step: 1 },
+    ],
+  },
+  {
+    key: 'BATTLE_COUNTERS',
+    title: 'Battle Counters',
+    fields: [
+      { key: 'SPEAR_VS_CAV_DMG_MULT', label: 'Spear vs Cav Dmg Mult', step: 0.01 },
+      { key: 'SPEAR_VS_CAV_MORALE_BONUS', label: 'Spear vs Cav Morale Bonus', step: 1 },
+      { key: 'CAV_VS_ARCHER_DMG_MULT', label: 'Cav vs Archer Dmg Mult', step: 0.01 },
+      { key: 'CAV_VS_ARCHER_MORALE_BONUS', label: 'Cav vs Archer Morale Bonus', step: 1 },
+      { key: 'INFANTRY_VS_SPEAR_DMG_MULT', label: 'Inf vs Spear Dmg Mult', step: 0.01 },
+      { key: 'COUNTER_BASE_MORALE_BONUS', label: 'Counter Base Morale Bonus', step: 1 },
+    ],
+  },
+  {
+    key: 'BATTLE_CHARGE',
+    title: 'Battle Charge',
+    fields: [
+      { key: 'CHARGE_BUILD_PER_SEC', label: 'Charge Build / sec', step: 1 },
+      { key: 'CHARGE_READY_THRESHOLD', label: 'Charge Ready Threshold', step: 1 },
+      { key: 'CHARGE_DMG_MULT', label: 'Charge Dmg Mult', step: 0.01 },
+      { key: 'CHARGE_MORALE_BONUS', label: 'Charge Morale Bonus', step: 1 },
+      { key: 'CHARGE_COOLDOWN_SEC', label: 'Charge Cooldown Sec', step: 0.1 },
+      { key: 'BRACE_CHARGE_REDUCTION_MULT', label: 'Brace Charge Reduction', step: 0.01 },
+      { key: 'BRACE_THORNS_DMG_FRACTION', label: 'Brace Thorns Fraction', step: 0.01 },
+    ],
+  },
+  {
     key: 'SUPPLIES',
     title: 'Supplies',
     fields: [
