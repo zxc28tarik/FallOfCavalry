@@ -126,36 +126,23 @@ export class HUDManager {
     const units = this.state?.playerParty?.roster ?? [];
     const totalUnits = units.filter((unit) => Math.floor(unit?.hp ?? 0) > 0 && unit?.status !== 'dead').length;
     const wounded = units.filter((unit) => unit?.status === 'wounded').length;
-    const invItems = Array.isArray(this.state?.playerParty?.inventory?.items) ? this.state.playerParty.inventory.items : [];
-    const totalInvQty = invItems.reduce((sum, item) => sum + Math.max(0, Math.floor(item?.qty ?? 0)), 0);
-    const top = invItems.slice(0, 2).map((item) => `${item?.name || item?.id}:${Math.max(0, Math.floor(item?.qty ?? 0))}`).join(', ');
-    const saveMeta = this.state?.lastSaveMeta;
-    const minsAgo = saveMeta?.at ? Math.max(0, Math.floor((Date.now() - saveMeta.at) / 60000)) : null;
-    const saveText = saveMeta?.slot ? `  Save:${saveMeta.slot}${minsAgo !== null ? ` (${minsAgo}m)` : ''}` : '';
-    const riskText = this.state?.encounterRisk?.label ? `  Risk: ${this.state.encounterRisk.label}` : '';
     const weather = this.state?.weatherState || {};
     const weatherText = weather.type ? `  Weather: ${weather.type} / ${weather.timeOfDay || 'DAY'}` : '';
-    const diplomacySummary = (Array.isArray(FACTIONS) ? FACTIONS : [])
-      .filter((f) => f?.id && f.id !== 'bandit')
-      .slice(0, 2)
-      .map((f) => `${f.name}: ${getStance(this.state?.factions, 'player', f.id, DIPLOMACY_RELATIONS)} (${getRelation(this.state?.factions, 'player', f.id, DIPLOMACY_RELATIONS)})`)
-      .join('  ');
-    const diplomacyText = diplomacySummary ? `  Dip: ${diplomacySummary}` : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${diplomacyText}${saveText}`);
-    const aiParties = Array.isArray(this.state?.worldAi?.parties) ? this.state.worldAi.parties : [];
-    const aiDebugText = this.state?.devMode
-      ? `  AI Parties: B=${aiParties.filter((p) => p?.kind === 'bandit').length}, P=${aiParties.filter((p) => p?.kind === 'patrol').length}, C=${aiParties.filter((p) => p?.kind === 'caravan').length}`
-      : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${saveText}${aiDebugText}`);
-    const factions = this.state?.factions;
-    const warCount = factions?.relations && typeof factions.relations === 'object'
-      ? Math.floor(Object.entries(factions.relations).filter(([key, val]) => key.startsWith('player:') && Number(val) <= -30).length)
-      : 0;
+    const warState = this.state?.warState;
+    const activeWars = Array.isArray(warState?.wars) ? warState.wars.filter((w) => w?.active !== false) : [];
+    const playerWars = activeWars.filter((w) => w?.aId === 'player' || w?.bId === 'player')
+      .map((w) => {
+        const enemy = w.aId === 'player' ? w.bId : w.aId;
+        const faction = (FACTIONS || []).find((f) => f.id === enemy);
+        return `${faction?.name || enemy}`;
+      });
+    const warsText = `  Wars: ${activeWars.length}${playerWars.length ? ` (Player vs ${playerWars.join(', ')})` : ''}`;
+    const crisisText = `  Global Crisis: ${warState?.crisisActive ? 'Active' : 'Calm'}`;
     const cityCtx = this.state?.currentCityFactionContext;
     const cityLine = cityCtx
       ? `  Owner: ${cityCtx.ownerFactionName} (REL:${Math.floor(cityCtx.relation)}, ${cityCtx.stance})`
       : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Factions at War:${warCount}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${cityLine}${saveText}`);
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}${weatherText}${warsText}${crisisText}${cityLine}`);
   }
 
   updateEventLine() {

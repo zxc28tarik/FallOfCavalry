@@ -2,8 +2,7 @@ import * as CONST from '../constants.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 
 export default class CityServicesUI {
-  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onDiplomacyAction, onClose }) {
-  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, getFactionContext, onClose }) {
+  constructor({ state, party, recruitmentSystem, tradeSystem, contractsSystem, onRecruit, onBuy, onSell, onAcceptContract, onCompleteContract, onDiplomacyAction, getFactionContext, onClose }) {
     this.state = state;
     this.party = party;
     this.recruitmentSystem = recruitmentSystem;
@@ -154,7 +153,10 @@ export default class CityServicesUI {
     const factionCtx = typeof this.getFactionContext === 'function' ? this.getFactionContext(settlement) : null;
     if (this.dom.cityRelation) {
       if (factionCtx) {
-        this.dom.cityRelation.textContent = `${factionCtx.ownerFactionName} · REL ${Math.floor(factionCtx.relation)} · ${factionCtx.stance}`;
+        const warLine = factionCtx.atWar
+          ? ` · At War with ${factionCtx.ownerFactionName} — Warscore: ${Math.floor(factionCtx.warscore ?? 0)}`
+          : '';
+        this.dom.cityRelation.textContent = `${factionCtx.ownerFactionName} · REL ${Math.floor(factionCtx.relation)} · ${factionCtx.stance}${warLine}`;
       } else {
         this.dom.cityRelation.textContent = '-';
       }
