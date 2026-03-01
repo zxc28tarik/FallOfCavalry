@@ -16,6 +16,8 @@ import WorldGenerator from './world/world-generator.js';
 import FogOfWar from './world/fog-of-war.js';
 import * as recruitmentSystem from './systems/recruitment.js';
 import * as tradeSystem from './systems/trade.js';
+import { ensureFactionState, getStance, getRelation } from './systems/factions.js';
+import { buyTruce, canBuyTruce, improveRelations, declareWar, applyContractRelationBonus, applyTradeCaravanAttackPenalty } from './systems/diplomacy.js';
 import CityServicesUI from './ui/city-services.js';
 import { showWinScreen, showLoseScreen } from './ui/modals.js';
 import {
@@ -296,6 +298,20 @@ class FallOfCavalry {
     if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
   }
 
+
+  ensureFactionState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    this.state.factions = ensureFactionState(this.state.factions, CONST.DIPLOMACY_RELATIONS);
+    this.state.diplomacyOps = {
+      buyTruce,
+      canBuyTruce,
+      improveRelations,
+      declareWar,
+    };
+    if (!this.playerParty || typeof this.playerParty !== 'object') return;
+    if (!this.playerParty.factionId) {
+      this.playerParty.factionId = this.state?.selectedFaction?.id || 'player';
+    }
   ensureFactionState() {
     if (!this.state || typeof this.state !== 'object') return;
     const loaded = this.state.factions && typeof this.state.factions === 'object' && !Array.isArray(this.state.factions)
@@ -377,6 +393,11 @@ class FallOfCavalry {
         BANDIT_BATTLE_COUNT: Number(CONST.CONTRACTS.BANDIT_BATTLE_COUNT),
         SCOUT_POI_COUNT: Number(CONST.CONTRACTS.SCOUT_POI_COUNT),
       },
+      DIPLOMACY_ACTIONS: {
+        TRUCE_COST_GOLD: Number(CONST.DIPLOMACY_ACTIONS.TRUCE_COST_GOLD),
+        IMPROVE_RELATION_COST_GOLD: Number(CONST.DIPLOMACY_ACTIONS.IMPROVE_RELATION_COST_GOLD),
+        IMPROVE_RELATION_DELTA: Number(CONST.DIPLOMACY_ACTIONS.IMPROVE_RELATION_DELTA),
+        DECLARE_WAR_RELATION_DELTA: Number(CONST.DIPLOMACY_ACTIONS.DECLARE_WAR_RELATION_DELTA),
       WORLD_AI: {
         ENABLED: Number(Boolean(CONST.WORLD_AI.ENABLED)),
         MAX_BANDIT_PARTIES: Number(CONST.WORLD_AI.MAX_BANDIT_PARTIES),
@@ -533,6 +554,7 @@ class FallOfCavalry {
       'WEATHER',
       'CAMPAIGN_OBJECTIVES',
       'CONTRACTS',
+      'DIPLOMACY_ACTIONS',
       'DIPLOMACY_RELATIONS',
       'BATTLE_FORMATION',
       'BATTLE_FLANK',
@@ -994,6 +1016,11 @@ class FallOfCavalry {
           settlementKey,
           biomeKey,
           tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
         });
       });
     }
@@ -1200,6 +1227,7 @@ class FallOfCavalry {
     }
 
     this.playerParty = fallback;
+    this.ensureFactionState();
     if (!Number.isFinite(this.playerParty.gold)) this.playerParty.gold = 0;
     if (!Number.isFinite(this.playerParty.xp)) this.playerParty.xp = 0;
     if (!Number.isFinite(this.playerParty.morale)) this.playerParty.morale = 64;
@@ -1364,6 +1392,9 @@ class FallOfCavalry {
     const baseY = bounds.minY + mapSpanY * 0.35;
 
     this.enemyParties = [
+      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDIT },
+      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.HRE },
+      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.OTTOMAN },
       { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDITS },
       { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
       { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
@@ -1658,6 +1689,7 @@ class FallOfCavalry {
 
   updateTransientUIState() {
     if (!this.state) return;
+    this.ensureFactionState();
     this.state.encounterRisk = this.computeEncounterRiskContext();
     if (this.state.clueMarker && Number(this.state.day ?? 1) > Number(this.state.clueMarker.expiresDay ?? 0)) {
       this.state.clueMarker = null;
@@ -2228,6 +2260,8 @@ class FallOfCavalry {
 
     const bounds = this.getWorldBounds();
     const driftRate = 0.15;
+    const playerX = Number(this.playerParty?.x ?? 0);
+    const playerY = Number(this.playerParty?.y ?? 0);
 
     this.enemyParties.forEach((enemy, index) => {
       if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
@@ -2235,6 +2269,24 @@ class FallOfCavalry {
       const wobble = (this.state.timeSec * 0.65) + (index * 1.37);
       enemy.vx = (enemy.vx ?? 0) + Math.sin(wobble) * driftRate * dt;
       enemy.vy = (enemy.vy ?? 0) + Math.cos(wobble * 1.11) * driftRate * dt;
+
+      const enemyFactionId = enemy.factionId || CONST.FACTION.ID.BANDIT;
+      const stance = getStance(this.state?.factions, enemyFactionId, 'player', CONST.DIPLOMACY_RELATIONS);
+      const dxToPlayer = playerX - enemy.x;
+      const dyToPlayer = playerY - enemy.y;
+      const playerDist = Math.hypot(dxToPlayer, dyToPlayer) || 1;
+      const playerDirX = dxToPlayer / playerDist;
+      const playerDirY = dyToPlayer / playerDist;
+      const aggroRadius = stance === 'WAR' ? 260 : (stance === 'NEUTRAL' ? 140 : 0);
+      if (aggroRadius > 0 && playerDist <= aggroRadius) {
+        const aggroStrength = stance === 'WAR' ? 0.85 : 0.25;
+        enemy.vx += playerDirX * aggroStrength * dt;
+        enemy.vy += playerDirY * aggroStrength * dt;
+      }
+      if (stance === 'ALLY' && playerDist < 140) {
+        enemy.vx -= playerDirX * 0.5 * dt;
+        enemy.vy -= playerDirY * 0.5 * dt;
+      }
 
       const speedLen = Math.hypot(enemy.vx, enemy.vy) || 1;
       enemy.vx /= speedLen;
@@ -2816,6 +2868,11 @@ Renown
           settlementKey: this.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
           tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -2837,6 +2894,11 @@ Renown
           settlementKey: this.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
           tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -2858,7 +2920,24 @@ Renown
       },
       onCompleteContract: (contractId) => {
         const completed = completeContract(contractId, this.playerParty);
-        if (completed) this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown} renown`);
+        if (completed) {
+          const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
+          applyContractRelationBonus({
+            factions: this.state?.factions,
+            contract: { ...completed, factionId: completed.factionId || currentCityFactionId },
+            cfg: CONST.DIPLOMACY_ACTIONS,
+          });
+          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown} renown`);
+        }
+      },
+      onDiplomacyAction: (summary) => {
+        this.ensureFactionState();
+        if (summary?.ok) {
+          this.setLastEventLog(summary.message || 'Diplomacy action completed.');
+          this.runAutosave('diplomacy');
+        } else if (summary?.message) {
+          this.setLastEventLog(summary.message);
+        }
       },
       getFactionContext: (settlement) => this.getCityFactionContext(settlement),
       onClose: () => this.exitCityServices(),
@@ -2900,7 +2979,8 @@ Renown
     settlement.recruitPool = recruitPool;
     const market = this.getOrCreateMarketForSettlement(settlement);
     setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
-    const contracts = generateContractsForCity({ cityId: settlement.id, day: this.state?.day, seed: this.state?.seed, map: this.state?.map });
+    const contracts = generateContractsForCity({ cityId: settlement.id, day: this.state?.day, seed: this.state?.seed, map: this.state?.map })
+      .map((contract) => ({ ...contract, factionId: settlement.ownerFactionId || settlement.owner || null }));
     this.state.setMode('city');
     this.cityUI?.show?.(settlement, { recruitPool, market, contracts });
     this.updateTransientUIState();
@@ -3348,6 +3428,7 @@ Renown
     let nearest = settlements[0] || null;
     let nearestDist = Number.POSITIVE_INFINITY;
     for (const s of settlements) {
+      if (s && !s.ownerFactionId && s.owner) s.ownerFactionId = s.owner;
       const dx = (s?.x ?? 0) - px;
       const dy = (s?.y ?? 0) - py;
       const dist = Math.hypot(dx, dy);
@@ -3828,6 +3909,14 @@ Up/Down select, Enter heal, Esc back`,
 
     if (result === 'victory') {
       const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: enemy?.factionId || 'bandits', regionId }, this.playerParty);
+      if (enemy?.type === 'caravan') {
+        applyTradeCaravanAttackPenalty({
+          factions: this.state?.factions,
+          caravanFactionId: enemy.factionId,
+          cfg: CONST.DIPLOMACY_ACTIONS,
+        });
+      }
       const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
       emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId }, this.playerParty);
       this.cleanupTemporaryEnemy(enemyId, { force: true });
@@ -4679,6 +4768,11 @@ Up/Down select, Enter heal, Esc back`,
           settlementKey,
           marketOpportunities: {},
           tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
         });
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
         const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
@@ -4686,6 +4780,11 @@ Up/Down select, Enter heal, Esc back`,
           settlementKey,
           marketOpportunities: this.state.marketOpportunities,
           tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
         });
         push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
 
@@ -4775,6 +4874,7 @@ Up/Down select, Enter heal, Esc back`,
           }
           if (this.playerParty) {
             this.playerParty.gold = faction.startingGold;
+            this.playerParty.factionId = faction.id;
           }
 
           this.ensureWorldGenerated(seed);
@@ -5172,6 +5272,7 @@ Up/Down select, Enter heal, Esc back`,
           vx: Number.isFinite(e.vx) ? e.vx : 0,
           vy: Number.isFinite(e.vy) ? e.vy : 0,
           temporary: Boolean(e.temporary),
+          factionId: e.factionId || CONST.FACTION.ID.BANDIT,
           factionId: e.factionId || CONST.FACTION.ID.BANDITS,
         })),
         enemyCooldowns: this.lastEncounterEndTimeByEnemyId || {},
@@ -5215,6 +5316,7 @@ Up/Down select, Enter heal, Esc back`,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
         tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
+        factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : { relations: {} },
         factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : null,
       },
     };
@@ -5293,6 +5395,7 @@ Up/Down select, Enter heal, Esc back`,
       vx: Number.isFinite(e.vx) ? e.vx : 0,
       vy: Number.isFinite(e.vy) ? e.vy : 0,
       temporary: false,
+      factionId: e.factionId || CONST.FACTION.ID.BANDIT,
       factionId: e.factionId || CONST.FACTION.ID.BANDITS,
     }));
     this.state.aiParties = this.enemyParties;
@@ -5370,6 +5473,7 @@ Up/Down select, Enter heal, Esc back`,
       ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
       : { tradePL: 0 };
     this.state.tuning = game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {};
+    this.state.factions = ensureFactionState(game.factions, CONST.DIPLOMACY_RELATIONS);
     this.state.factions = game.factions && typeof game.factions === 'object' && !Array.isArray(game.factions) ? game.factions : null;
     this.ensureFactionState();
     assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });

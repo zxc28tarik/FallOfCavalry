@@ -873,6 +873,26 @@ export const ECONOMY = Object.freeze({
 // DİPLOMASİ SİSTEMİ (İLERİDE)
 // =============================================================================
 
+
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN: -100,
+  MAX: 100,
+  DEFAULT: 0,
+  ALLY_THRESHOLD: 45,
+  WAR_THRESHOLD: -35,
+});
+
+export const DIPLOMACY_ACTIONS = Object.freeze({
+  TRUCE_COST_GOLD: 150,
+  IMPROVE_RELATION_COST_GOLD: 80,
+  IMPROVE_RELATION_DELTA: 15,
+  DECLARE_WAR_RELATION_DELTA: -40,
+  WAR_TRADE_PENALTY_MULT: 1.3,
+  ALLY_TRADE_DISCOUNT_MULT: 0.85,
+  CONTRACT_REWARD_RELATION_BONUS: 4,
+  KILLING_NEUTRAL_CARAVAN_PENALTY: -25,
+});
+
 export const DIPLOMACY = Object.freeze({
   RELATION: {
     MIN: -100,
@@ -918,6 +938,7 @@ export default {
   ECONOMY,
   DIPLOMACY,
   DIPLOMACY_RELATIONS,
+  DIPLOMACY_ACTIONS,
   ACCOUNTING,
   PERF,
   MARKET,

@@ -1,118 +1,114 @@
-/**
- * FallOfCavalry - Diplomacy System
- * İleride genişletilecek
- */
-
 import * as CONST from '../constants.js';
+import {
+  getRelation,
+  setRelation,
+  adjustRelation,
+  getStance,
+} from './factions.js';
 
-export class DiplomacySystem {
-  constructor(state) {
-    this.state = state;
-    this.relations = new Map(); // faction -> faction -> value
-    this.treaties = [];
-    
-    this.initRelations();
-  }
-  
-  initRelations() {
-    const factions = Object.values(CONST.FACTION.ID).filter(f => f !== 'bandit');
-    
-    // Initialize neutral relations
-    for (const f1 of factions) {
-      for (const f2 of factions) {
-        if (f1 !== f2) {
-          this.setRelation(f1, f2, CONST.DIPLOMACY.RELATION.NEUTRAL);
-        }
-      }
-    }
-  }
-  
-  getRelation(faction1, faction2) {
-    const key = `${faction1}_${faction2}`;
-    return this.relations.get(key) || CONST.DIPLOMACY.RELATION.NEUTRAL;
-  }
-  
-  setRelation(faction1, faction2, value) {
-    const key1 = `${faction1}_${faction2}`;
-    const key2 = `${faction2}_${faction1}`;
-    
-    const clamped = Math.max(
-      CONST.DIPLOMACY.RELATION.MIN,
-      Math.min(CONST.DIPLOMACY.RELATION.MAX, value)
-    );
-    
-    this.relations.set(key1, clamped);
-    this.relations.set(key2, clamped);
-  }
-  
-  modifyRelation(faction1, faction2, delta, reason) {
-    const current = this.getRelation(faction1, faction2);
-    const newValue = current + delta;
-    
-    this.setRelation(faction1, faction2, newValue);
-    
-    console.log(`[Diplomacy] ${faction1} -> ${faction2}: ${current} -> ${newValue} (${reason})`);
-    
-    // Check for automatic state changes
-    if (newValue < CONST.DIPLOMACY.RELATION.WAR && current >= CONST.DIPLOMACY.RELATION.WAR) {
-      this.declareWar(faction1, faction2);
-    } else if (newValue > CONST.DIPLOMACY.RELATION.ALLIED && current <= CONST.DIPLOMACY.RELATION.ALLIED) {
-      this.proposeAlliance(faction1, faction2);
-    }
-  }
-  
-  declareWar(faction1, faction2) {
-    console.log(`[Diplomacy] WAR: ${faction1} vs ${faction2}`);
-    
-    this.treaties = this.treaties.filter(t =>
-      !(t.factions.includes(faction1) && t.factions.includes(faction2))
-    );
-    
-    this.treaties.push({
-      type: CONST.DIPLOMACY.TREATY_TYPE.WAR,
-      factions: [faction1, faction2],
-      startDay: this.state.day,
-    });
-    
-    this.state.emit('diplomacy:war', { faction1, faction2 });
-  }
-  
-  proposeAlliance(faction1, faction2) {
-    console.log(`[Diplomacy] ALLIANCE proposed: ${faction1} <-> ${faction2}`);
-    
-    // Auto-accept if relations high enough
-    if (this.getRelation(faction1, faction2) >= CONST.DIPLOMACY.RELATION.ALLIED) {
-      this.formAlliance(faction1, faction2);
-    }
-  }
-  
-  formAlliance(faction1, faction2) {
-    console.log(`[Diplomacy] ALLIANCE formed: ${faction1} <-> ${faction2}`);
-    
-    this.treaties.push({
-      type: CONST.DIPLOMACY.TREATY_TYPE.ALLIANCE,
-      factions: [faction1, faction2],
-      startDay: this.state.day,
-    });
-    
-    this.state.emit('diplomacy:alliance', { faction1, faction2 });
-  }
-  
-  isAtWar(faction1, faction2) {
-    return this.treaties.some(t =>
-      t.type === CONST.DIPLOMACY.TREATY_TYPE.WAR &&
-      t.factions.includes(faction1) &&
-      t.factions.includes(faction2)
-    );
-  }
-  
-  areAllied(faction1, faction2) {
-    return this.treaties.some(t =>
-      t.type === CONST.DIPLOMACY.TREATY_TYPE.ALLIANCE &&
-      t.factions.includes(faction1) &&
-      t.factions.includes(faction2)
-    );
+function resolveCfg(cfg, fallback) {
+  return (cfg && typeof cfg === 'object') ? cfg : fallback;
+}
+
+export function getPlayerStanceToFaction(factionState, factionId, cfg = CONST.DIPLOMACY_RELATIONS) {
+  const relationCfg = resolveCfg(cfg, CONST.DIPLOMACY_RELATIONS);
+  const relation = getRelation(factionState, 'player', factionId, relationCfg);
+  return {
+    relation,
+    stance: getStance(factionState, 'player', factionId, relationCfg),
+  };
+}
+
+export function canBuyTruce({ factions, targetFactionId, party, cfg } = {}) {
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  const stance = getStance(factions, 'player', targetFactionId, CONST.DIPLOMACY_RELATIONS);
+  const gold = Number(party?.gold ?? 0);
+  return stance === 'WAR' && gold >= Number(actionCfg.TRUCE_COST_GOLD ?? 0);
+}
+
+export function buyTruce({ factions, targetFactionId, party, cfg } = {}) {
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  if (!canBuyTruce({ factions, targetFactionId, party, cfg: actionCfg })) return false;
+
+  party.gold = Math.max(0, Math.floor(Number(party.gold ?? 0) - Number(actionCfg.TRUCE_COST_GOLD ?? 0)));
+  const neutralFloor = Math.max(
+    Number(CONST.DIPLOMACY_RELATIONS.WAR_THRESHOLD ?? -35) + 1,
+    -5,
+  );
+  setRelation(factions, 'player', targetFactionId, neutralFloor, CONST.DIPLOMACY_RELATIONS);
+  return true;
+}
+
+export function improveRelations({ factions, targetFactionId, party, cfg } = {}) {
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  const stance = getStance(factions, 'player', targetFactionId, CONST.DIPLOMACY_RELATIONS);
+  if (!(stance === 'NEUTRAL' || stance === 'WAR')) return false;
+
+  const cost = Number(actionCfg.IMPROVE_RELATION_COST_GOLD ?? 0);
+  if (Number(party?.gold ?? 0) < cost) return false;
+  party.gold = Math.max(0, Math.floor(Number(party.gold ?? 0) - cost));
+  adjustRelation(
+    factions,
+    'player',
+    targetFactionId,
+    Number(actionCfg.IMPROVE_RELATION_DELTA ?? 0),
+    CONST.DIPLOMACY_RELATIONS,
+  );
+  return true;
+}
+
+export function declareWar({ factions, targetFactionId, cfg } = {}) {
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  const next = adjustRelation(
+    factions,
+    'player',
+    targetFactionId,
+    Number(actionCfg.DECLARE_WAR_RELATION_DELTA ?? 0),
+    CONST.DIPLOMACY_RELATIONS,
+  );
+
+  const warThreshold = Number(CONST.DIPLOMACY_RELATIONS.WAR_THRESHOLD ?? -35);
+  if (next > warThreshold) {
+    setRelation(factions, 'player', targetFactionId, warThreshold, CONST.DIPLOMACY_RELATIONS);
   }
 }
 
-export default DiplomacySystem;
+function resolveContractFactionId(contract) {
+  if (!contract || typeof contract !== 'object') return null;
+  return contract.factionId || contract.ownerFactionId || contract.issuerFactionId || null;
+}
+
+export function applyContractRelationBonus({ factions, contract, cfg } = {}) {
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  const targetFactionId = resolveContractFactionId(contract);
+  if (!targetFactionId) return;
+  adjustRelation(
+    factions,
+    'player',
+    targetFactionId,
+    Number(actionCfg.CONTRACT_REWARD_RELATION_BONUS ?? 0),
+    CONST.DIPLOMACY_RELATIONS,
+  );
+}
+
+export function applyTradeCaravanAttackPenalty({ factions, caravanFactionId, cfg } = {}) {
+  if (!caravanFactionId) return;
+  const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
+  adjustRelation(
+    factions,
+    'player',
+    caravanFactionId,
+    Number(actionCfg.KILLING_NEUTRAL_CARAVAN_PENALTY ?? 0),
+    CONST.DIPLOMACY_RELATIONS,
+  );
+}
+
+export default {
+  getPlayerStanceToFaction,
+  canBuyTruce,
+  buyTruce,
+  improveRelations,
+  declareWar,
+  applyContractRelationBonus,
+  applyTradeCaravanAttackPenalty,
+};
