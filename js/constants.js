@@ -92,6 +92,20 @@ export const WEATHER = Object.freeze({
   NIGHT_TINT_ALPHA: 0.35,
 });
 
+export const WORLD_AI = Object.freeze({
+  ENABLED: true,
+  MAX_BANDIT_PARTIES: 4,
+  MAX_PATROL_PARTIES: 3,
+  MAX_CARAVAN_PARTIES: 3,
+  BANDIT_SPEED: 1.0,
+  PATROL_SPEED: 1.1,
+  CARAVAN_SPEED: 0.8,
+  BANDIT_AGGRO_RADIUS: 4,
+  PATROL_AGGRO_RADIUS: 4,
+  DESPAWN_DISTANCE: 40,
+  RESPAWN_INTERVAL_DAYS: 3,
+});
+
 export const BATTLE_FX = Object.freeze({
   HIT_FLASH_DURATION: 180,
   DEATH_FADE_DURATION: 600,
@@ -219,6 +233,10 @@ export const UNIT = Object.freeze({
 
 export const FACTION = Object.freeze({
   ID: {
+    PLAYER: 'player',
+    KINGDOM_A: 'kingdom_a',
+    KINGDOM_B: 'kingdom_b',
+    BANDITS: 'bandits',
     OTTOMAN: 'ottoman',
     HRE: 'hre',
     POLISH: 'polish',
@@ -234,13 +252,26 @@ export const FACTION = Object.freeze({
 
 
 export const FACTIONS = Object.freeze([
-  { id: FACTION.ID.OTTOMAN, name: 'Osmanlı', color: '#c0392b', doctrine: 'Sipahi Hücumu', desc: 'Hızlı taarruz ve çeviklik.', startingGold: 120, startingArmy: 0, startingRenown: 10, armyHint: 'Sipahi ağırlıklı başlangıç.' },
-  { id: FACTION.ID.HRE, name: 'Kutsal Roma', color: '#f1c40f', doctrine: 'İmparatorluk Disiplini', desc: 'Düzenli birlikler ve dayanıklılık.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Dengeli düzenli kuvvet.' },
-  { id: FACTION.ID.POLISH, name: 'Lehistan', color: '#ffffff', doctrine: 'Kanat Süvarisi', desc: 'Şok hücum ve moral.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Husaria etkisi (tematik).' },
-  { id: FACTION.ID.SPANISH, name: 'İspanya', color: '#e74c3c', doctrine: 'Tercio Duvarı', desc: 'Denge ve sürdürülebilirlik.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Piyade çekirdeği (tematik).' },
-  { id: FACTION.ID.VENICE, name: 'Venedik', color: '#16a085', doctrine: 'Ticaret Prensliği', desc: 'Ekonomi ve esneklik.', startingGold: 130, startingArmy: 0, startingRenown: 6, armyHint: 'Paralı asker esnekliği.' },
-  { id: FACTION.ID.BANDIT, name: 'Haydutlar', color: '#95a5a6', doctrine: 'Dağınık Baskın', desc: 'Riskli ama hızlı başlangıç.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Düşük şöhret, düşük kaynak.' },
+  { id: FACTION.ID.PLAYER, name: 'Free Company', color: '#4aa3ff', doctrine: 'Mercenary Discipline', desc: 'An independent warband balancing coin and reputation.', startingGold: 120, startingArmy: 0, startingRenown: 10, armyHint: 'Balanced starter roster.' },
+  { id: FACTION.ID.KINGDOM_A, name: 'Aurelian League', color: '#f1c40f', doctrine: 'Legionary Order', desc: 'Reliable formations and defensive doctrine.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Stable regular forces.' },
+  { id: FACTION.ID.KINGDOM_B, name: 'Valen Court', color: '#9b59b6', doctrine: 'Courtly Maneuver', desc: 'Agile armies with opportunistic tactics.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Mobile force composition.' },
+  { id: FACTION.ID.BANDITS, name: 'Broken Banner', color: '#95a5a6', doctrine: 'Raid and Scatter', desc: 'Unreliable but dangerous raiders.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Low resources, high risk.' },
 ]);
+
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN_REL: -100,
+  MAX_REL: 100,
+  ALLY_THRESHOLD: 50,
+  WAR_THRESHOLD: -30,
+  START_RELATIONS: Object.freeze({
+    'player:kingdom_a': 20,
+    'player:kingdom_b': 0,
+    'player:bandits': -60,
+    'kingdom_a:kingdom_b': -10,
+    'kingdom_a:bandits': -80,
+    'kingdom_b:bandits': -70,
+  }),
+});
 
 // =============================================================================
 // KARŞILAŞMA TİPLERİ

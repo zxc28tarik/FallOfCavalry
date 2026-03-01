@@ -142,6 +142,20 @@ export class HUDManager {
       .join('  ');
     const diplomacyText = diplomacySummary ? `  Dip: ${diplomacySummary}` : '';
     safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${diplomacyText}${saveText}`);
+    const aiParties = Array.isArray(this.state?.worldAi?.parties) ? this.state.worldAi.parties : [];
+    const aiDebugText = this.state?.devMode
+      ? `  AI Parties: B=${aiParties.filter((p) => p?.kind === 'bandit').length}, P=${aiParties.filter((p) => p?.kind === 'patrol').length}, C=${aiParties.filter((p) => p?.kind === 'caravan').length}`
+      : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${saveText}${aiDebugText}`);
+    const factions = this.state?.factions;
+    const warCount = factions?.relations && typeof factions.relations === 'object'
+      ? Math.floor(Object.entries(factions.relations).filter(([key, val]) => key.startsWith('player:') && Number(val) <= -30).length)
+      : 0;
+    const cityCtx = this.state?.currentCityFactionContext;
+    const cityLine = cityCtx
+      ? `  Owner: ${cityCtx.ownerFactionName} (REL:${Math.floor(cityCtx.relation)}, ${cityCtx.stance})`
+      : '';
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Factions at War:${warCount}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}  Inv:${totalInvQty}${top ? ` (${top})` : ''}${riskText}${weatherText}${cityLine}${saveText}`);
   }
 
   updateEventLine() {
