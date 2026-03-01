@@ -41,6 +41,7 @@ import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefen
 import SpriteLoader from './rendering/sprite-loader.js';
 import AnimationPlayer from './rendering/animation.js';
 import { computeUnitCohesion, getFormationMultipliers } from './systems/formation.js';
+import { updateEnemyAI, clampToBattleBounds, computeSkirmishKiteStep } from './systems/battle-ai.js';
 import { inferUnitRole, getCounterEffect, computeChargeState, isBracedSpearman } from './systems/battle-counters.js';
 import {
   initBattleAmmoFromParty,
@@ -310,6 +311,23 @@ class FallOfCavalry {
         ROUT_SPEED_MULT: Number(CONST.BATTLE_MORALE.ROUT_SPEED_MULT),
         ROUT_DEF_MULT: Number(CONST.BATTLE_MORALE.ROUT_DEF_MULT),
       },
+      BATTLE_AI: {
+        AI_RETARGET_SEC: Number(CONST.BATTLE_AI.AI_RETARGET_SEC),
+        AI_TARGET_LOWHP_WEIGHT: Number(CONST.BATTLE_AI.AI_TARGET_LOWHP_WEIGHT),
+        AI_TARGET_ROUTING_BONUS: Number(CONST.BATTLE_AI.AI_TARGET_ROUTING_BONUS),
+        AI_LOCAL_RADIUS: Number(CONST.BATTLE_AI.AI_LOCAL_RADIUS),
+        AI_OUTNUMBERED_RATIO: Number(CONST.BATTLE_AI.AI_OUTNUMBERED_RATIO),
+        AI_RETREAT_MORALE: Number(CONST.BATTLE_AI.AI_RETREAT_MORALE),
+        AI_RETREAT_HP_PCT: Number(CONST.BATTLE_AI.AI_RETREAT_HP_PCT),
+        SKIRMISH_DESIRED_RANGE_MULT: Number(CONST.BATTLE_AI.SKIRMISH_DESIRED_RANGE_MULT),
+        SKIRMISH_MIN_RANGE_MULT: Number(CONST.BATTLE_AI.SKIRMISH_MIN_RANGE_MULT),
+        SKIRMISH_KITE_SPEED_MULT: Number(CONST.BATTLE_AI.SKIRMISH_KITE_SPEED_MULT),
+        AI_BOUNDS_PAD_PX: Number(CONST.BATTLE_AI.AI_BOUNDS_PAD_PX),
+        AI_MAX_APPROACH_TIME_SEC: Number(CONST.BATTLE_AI.AI_MAX_APPROACH_TIME_SEC),
+        AI_STALL_WINDOW_SEC: Number(CONST.BATTLE_AI.AI_STALL_WINDOW_SEC),
+        AI_STALL_MIN_PROGRESS_PX: Number(CONST.BATTLE_AI.AI_STALL_MIN_PROGRESS_PX),
+        AI_STALL_ABORT_SEC: Number(CONST.BATTLE_AI.AI_STALL_ABORT_SEC),
+        SKIRMISH_BOUNDS_FAIL_HOLD_SEC: Number(CONST.BATTLE_AI.SKIRMISH_BOUNDS_FAIL_HOLD_SEC),
       BATTLE_COUNTERS: {
         SPEAR_VS_CAV_DMG_MULT: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_DMG_MULT),
         SPEAR_VS_CAV_MORALE_BONUS: Number(CONST.BATTLE_COUNTERS.SPEAR_VS_CAV_MORALE_BONUS),
@@ -349,6 +367,7 @@ class FallOfCavalry {
   applyTuningDraft(draft) {
     if (!draft || typeof draft !== 'object') return;
     this.ensureTuningState();
+    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_COUNTERS', 'BATTLE_CHARGE'].forEach((group) => {
     ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_RANGED'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
@@ -1384,6 +1403,13 @@ class FallOfCavalry {
     const enemyUnits = battle.enemyUnits || [];
     const tuning = this.getEffectiveTuning();
     const formationTuning = tuning.BATTLE_FORMATION || CONST.BATTLE_FORMATION;
+    const aiTuning = tuning.BATTLE_AI || CONST.BATTLE_AI;
+    const battleBounds = {
+      xMin: 0,
+      xMax: Number(this.canvas?.width || CONST.BATTLE.BATTLEFIELD_WIDTH),
+      yMin: 0,
+      yMax: Number(this.canvas?.height || CONST.BATTLE.BATTLEFIELD_HEIGHT),
+    };
 
     if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
       const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
@@ -1422,6 +1448,7 @@ class FallOfCavalry {
     if (alivePlayer.length === 0) { this.resolveBattle('defeat'); return; }
 
     this.tickBattleMorale(allUnits, battle, dt, moraleCfg);
+    updateEnemyAI({ battle, dtMs: deltaMs, cfg: aiTuning, bounds: battleBounds });
 
     for (const unit of allUnits) {
       this.ensureBattleUnitFx(unit);
@@ -1436,7 +1463,7 @@ class FallOfCavalry {
       unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
 
       let target = enemies.find((e) => e.unitId === unit.targetId && !e.dead && e.hp > 0);
-      if (unit.command === CONST.BATTLE_COMMANDS.FOCUS && unit.focusTargetId) {
+      if ((unit.command === CONST.BATTLE_COMMANDS.FOCUS || unit.command === CONST.BATTLE_COMMANDS.SKIRMISH) && unit.focusTargetId) {
         const focused = enemies.find((e) => e.unitId === unit.focusTargetId && !e.dead && e.hp > 0);
         if (focused) target = focused;
       }
@@ -1464,7 +1491,38 @@ class FallOfCavalry {
         const retreatStep = Math.min(dist, stepSpeed * dt);
         unit.x -= (dx / dist) * retreatStep;
         unit.y -= (dy / dist) * retreatStep;
+      } else if (unit.aiApproachPoint) {
+        const adx = unit.aiApproachPoint.x - unit.x;
+        const ady = unit.aiApproachPoint.y - unit.y;
+        const adist = Math.hypot(adx, ady) || 0.001;
+        if (adist <= Math.max(10, unit.meleeRange || 16)) {
+          unit.aiApproachPoint = null;
+        } else {
+          const step = Math.min(adist, stepSpeed * dt);
+          unit.x += (adx / adist) * step;
+          unit.y += (ady / adist) * step;
+        }
       } else if (unit.isRanged) {
+        const inSkirmish = unit.command === CONST.BATTLE_COMMANDS.SKIRMISH || unit.skirmish;
+        const desiredRange = unit.rangedRange * Number(aiTuning.SKIRMISH_DESIRED_RANGE_MULT ?? 0.9);
+        const minRange = unit.rangedRange * Number(aiTuning.SKIRMISH_MIN_RANGE_MULT ?? 0.6);
+        if (inSkirmish && dist < minRange) {
+          const kite = computeSkirmishKiteStep(unit, target, stepSpeed, dt, battleBounds, aiTuning);
+          unit.x = kite.x;
+          unit.y = kite.y;
+          if (kite.hitBounds && !kite.movedAway) {
+            unit.skirmishBoundsFailSec = Number(unit.skirmishBoundsFailSec || 0) + dt;
+            if (unit.skirmishBoundsFailSec >= Number(aiTuning.SKIRMISH_BOUNDS_FAIL_HOLD_SEC ?? 0.5)) {
+              applyCommandEffects(unit, CONST.BATTLE_COMMANDS.HOLD);
+              unit.skirmishHoldUntil = Number(battle.timeSec || 0) + Number(aiTuning.SKIRMISH_BOUNDS_FAIL_HOLD_SEC ?? 0.5);
+              unit.skirmishBoundsFailSec = 0;
+            }
+          } else {
+            unit.skirmishBoundsFailSec = 0;
+          }
+        } else if (Number(unit.skirmishHoldUntil || 0) > Number(battle.timeSec || 0)) {
+          // temporary hold near edge
+        } else if (dist <= unit.rangedRange) {
         const canFire = canUnitFireRanged(unit, battle, rangedCfg, dist);
         const fallbackToMelee = shouldUseMeleeFallback({ unit, distToTarget: dist, cfg: rangedCfg, battle });
 
@@ -1495,9 +1553,12 @@ class FallOfCavalry {
             unit.attackTimer = 0.9 * shakenTimerMult;
           }
         } else {
-          const step = Math.min(dist, stepSpeed * dt);
-          unit.x += (dx / dist) * step;
-          unit.y += (dy / dist) * step;
+          const engageRange = inSkirmish ? desiredRange : 0;
+          if (dist > engageRange) {
+            const step = Math.min(dist, stepSpeed * dt);
+            unit.x += (dx / dist) * step;
+            unit.y += (dy / dist) * step;
+          }
         }
       } else if (dist <= unit.meleeRange) {
         if (unit.attackTimer <= 0) {
@@ -1516,6 +1577,11 @@ class FallOfCavalry {
         unit.y += (dy / dist) * step;
       }
 
+      const clampedPos = clampToBattleBounds(unit, battleBounds, Number(aiTuning.AI_BOUNDS_PAD_PX ?? 0));
+      unit.x = clampedPos.x;
+      unit.y = clampedPos.y;
+      unit.vx = (unit.x - prevX) / dt;
+      unit.vy = (unit.y - prevY) / dt;
       const safeDt = dt > 0 ? dt : (1 / 60);
       unit.vx = (unit.x - prevX) / safeDt;
       unit.vy = (unit.y - prevY) / safeDt;
@@ -2034,6 +2100,14 @@ class FallOfCavalry {
       formationMoraleShockMult: 1,
       focusTargetId: null,
       retreating: false,
+      skirmish: false,
+      aiApproachPoint: null,
+      aiApproachSetAtSec: 0,
+      aiLastApproachDist: 0,
+      aiApproachLastCheckAtSec: 0,
+      aiStallSec: 0,
+      aiNextRetargetAtSec: 0,
+      morale: Math.max(0, Math.floor(entry.morale ?? 100)),
       facing: side === 'player' ? 0 : Math.PI,
       moraleMax: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
       morale: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
@@ -2502,9 +2576,11 @@ class FallOfCavalry {
 
     targets.forEach((unit) => {
       applyCommandEffects(unit, cmd);
-      if (cmd === CONST.BATTLE_COMMANDS.FOCUS) {
+      if (cmd === CONST.BATTLE_COMMANDS.FOCUS || cmd === CONST.BATTLE_COMMANDS.SKIRMISH) {
         const enemy = this.findNearestEnemy(unit, battle.enemyUnits || []);
         unit.focusTargetId = enemy?.unitId || null;
+      } else if (cmd !== CONST.BATTLE_COMMANDS.HOLD) {
+        unit.focusTargetId = null;
       }
     });
 
@@ -3701,6 +3777,7 @@ Up/Down select, Enter heal, Esc back`,
         if (e.key === 'h' || e.key === 'H') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.HOLD); return; }
         if (e.key === 'f' || e.key === 'F') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.FOCUS); return; }
         if (e.key === 'r' || e.key === 'R') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.RETREAT); return; }
+        if (e.key === 'k' || e.key === 'K') { e.preventDefault?.(); this.applyBattleCommand(CONST.BATTLE_COMMANDS.SKIRMISH); return; }
         if (e.key === 'x' || e.key === 'X') { e.preventDefault?.(); this.toggleBattleHoldFire(); return; }
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault?.();

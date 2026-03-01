@@ -505,7 +505,27 @@ export const TERRAIN_MODS = Object.freeze({
 export const BATTLE_COMMANDS = Object.freeze({
   HOLD: 'hold',
   FOCUS: 'focus',
+  SKIRMISH: 'skirmish',
   RETREAT: 'retreat',
+});
+
+export const BATTLE_AI = Object.freeze({
+  AI_RETARGET_SEC: 1.25,
+  AI_TARGET_LOWHP_WEIGHT: 0.5,
+  AI_TARGET_ROUTING_BONUS: 180,
+  AI_LOCAL_RADIUS: 190,
+  AI_OUTNUMBERED_RATIO: 1.6,
+  AI_RETREAT_MORALE: 26,
+  AI_RETREAT_HP_PCT: 0.22,
+  SKIRMISH_DESIRED_RANGE_MULT: 0.88,
+  SKIRMISH_MIN_RANGE_MULT: 0.58,
+  SKIRMISH_KITE_SPEED_MULT: 1.2,
+  AI_BOUNDS_PAD_PX: 16,
+  AI_MAX_APPROACH_TIME_SEC: 5,
+  AI_STALL_WINDOW_SEC: 0.5,
+  AI_STALL_MIN_PROGRESS_PX: 8,
+  AI_STALL_ABORT_SEC: 1.8,
+  SKIRMISH_BOUNDS_FAIL_HOLD_SEC: 0.6,
 });
 
 
@@ -702,7 +722,7 @@ export const HINT_TEXT = Object.freeze({
   poi: 'İpucu: POI yakınında E ile incele (ganimet/pusu/ipucu).',
   camp: 'İpucu: K ile kamp kur, nöbet seç; erzak tüketimi düşer.',
   battleDeploy: 'İpucu: Deploy: 1-4 formasyon, Q/E dön, tıkla yerleştir, Enter başlat.',
-  battleCmd: 'İpucu: Komutlar: H Hold, F Focus, R Retreat.',
+  battleCmd: 'İpucu: Komutlar: H Hold, F Focus, K Skirmish, R Retreat.',
 });
 
 // =============================================================================
@@ -802,6 +822,7 @@ export default {
   DAMAGE_VS_ARMOR,
   TERRAIN_MODS,
   BATTLE_COMMANDS,
+  BATTLE_AI,
   FORMATION,
   DEPLOY,
   BATTLE_FORMATION,

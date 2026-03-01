@@ -27,6 +27,7 @@ export function applyCommandEffects(unit, command) {
     unit.commandSpeedMult = 0.85;
     unit.commandDefMult = 1.10;
     unit.retreating = false;
+    unit.skirmish = false;
     return unit;
   }
 
@@ -34,6 +35,15 @@ export function applyCommandEffects(unit, command) {
     unit.commandSpeedMult = 1.0;
     unit.commandDefMult = 1.0;
     unit.retreating = false;
+    unit.skirmish = false;
+    return unit;
+  }
+
+  if (cmd === CONST.BATTLE_COMMANDS.SKIRMISH) {
+    unit.commandSpeedMult = 1.1;
+    unit.commandDefMult = 0.9;
+    unit.retreating = false;
+    unit.skirmish = true;
     return unit;
   }
 
@@ -41,6 +51,7 @@ export function applyCommandEffects(unit, command) {
     unit.commandSpeedMult = 1.2;
     unit.commandDefMult = 0.95;
     unit.retreating = true;
+    unit.skirmish = false;
     unit.morale = Math.max(0, Number(unit.morale ?? 50) - 2);
     return unit;
   }

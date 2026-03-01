@@ -18,6 +18,7 @@ export default class BattleCommandsUI {
     this.dom.root.innerHTML = `
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.HOLD}">[H] Hold</button>
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.FOCUS}">[F] Focus</button>
+      <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.SKIRMISH}">[K] Skirmish</button>
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.RETREAT}">[R] Retreat</button>
       <button class="action-btn btn-dark text-xs" data-toggle="hold-fire">[X] Hold Fire</button>
     `;
