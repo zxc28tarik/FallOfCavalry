@@ -579,6 +579,14 @@ export const BATTLE_MORALE = Object.freeze({
   ROUT_DEF_MULT: 0.75,
 });
 
+export const BATTLE_RANGED = Object.freeze({
+  SUPPRESS_DURATION_SEC: 2.5,
+  SUPPRESS_SPEED_MULT: 0.75,
+  SUPPRESS_MORALE_DRAIN_PER_SEC: 5,
+  MELEE_EMERGENCY_RANGE_MULT: 0.2,
+  AMMO_PER_SHOT: 1,
+});
+
 // =============================================================================
 // TUŞ ATAMA VARSAYILANLARI
 // =============================================================================
@@ -776,4 +784,5 @@ export default {
   DEPLOY,
   BATTLE_FORMATION,
   BATTLE_MORALE,
+  BATTLE_RANGED,
 };
