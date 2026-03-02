@@ -92,6 +92,17 @@ export const WEATHER = Object.freeze({
   NIGHT_TINT_ALPHA: 0.35,
 });
 
+
+
+export const SETTINGS = Object.freeze({
+  DEFAULT_FX_ENABLED: true,
+  DEFAULT_CAMERA_SHAKE_ENABLED: true,
+  DEFAULT_WEATHER_ENABLED: true,
+  DEFAULT_DIFFICULTY_MULT: 1.0,
+  DIFFICULTY_MIN: 0.7,
+  DIFFICULTY_MAX: 1.5,
+  DIFFICULTY_STEP: 0.1,
+});
 export const WORLD_AI = Object.freeze({
   ENABLED: true,
   MAX_BANDIT_PARTIES: 4,
@@ -917,6 +928,7 @@ export const ECONOMY = Object.freeze({
 // =============================================================================
 // DİPLOMASİ SİSTEMİ (İLERİDE)
 // =============================================================================
+
 
 
 export const DIPLOMACY_ACTIONS = Object.freeze({
