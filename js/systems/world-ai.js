@@ -217,7 +217,16 @@ export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {}
   };
 }
 
-export function ensureWorldParties({ aiState, worldState, factions, cfg, currentDay }) {
+
+export function getBanditCap(worldEvents, defaultCap, eventsCfg = null) {
+  const base = Math.max(0, Number(defaultCap ?? 0));
+  const spikeMult = Number(eventsCfg?.BANDIT_SPIKE_MULT ?? 1.5);
+  const hasSpike = Array.isArray(worldEvents) && worldEvents.some((ev) => ev?.type === 'BANDIT_SPIKE');
+  if (!hasSpike) return base;
+  return Math.max(base, Math.ceil(base * spikeMult));
+}
+
+export function ensureWorldParties({ aiState, worldState, factions, cfg, currentDay, banditCapOverride }) {
   if (!aiState || !Array.isArray(aiState.parties)) return;
   const respawnDays = Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3);
   const dayNow = Number(currentDay ?? 0);
@@ -229,7 +238,8 @@ export function ensureWorldParties({ aiState, worldState, factions, cfg, current
   const hasRoomByType = (kind, max) => aiState.parties.filter((p) => p?.alive !== false && p?.kind === kind).length < max;
   if (elapsed < respawnDays && aiState.parties.length > 0) return;
 
-  while (hasRoomByType('bandit', Number(cfg?.MAX_BANDIT_PARTIES ?? 0))) {
+  const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
+  while (hasRoomByType('bandit', banditCap)) {
     aiState.parties.push(spawnPartyBandit(worldState, factions, cfg));
   }
   while (hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {

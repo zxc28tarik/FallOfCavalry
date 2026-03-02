@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
 import { getStance } from './factions.js';
+import { getWarTradeTariffMultiplier } from './events.js';
 
 function hashSeed(input) {
   const str = String(input || 'seed');
@@ -97,6 +98,7 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0), cfg);
   price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
   price *= getDiplomacyTradeMultiplier(options);
+  price *= getWarTradeTariffMultiplier(options?.worldEvents, settlement, options?.ownerFactionId, options?.eventsCfg || CONST.EVENTS);
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
     const opportunity = getActiveOpportunity(settlement, itemId, options);
