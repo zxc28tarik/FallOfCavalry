@@ -1,3 +1,5 @@
+import { getEventTypeLabel, getEventDescription } from '../systems/events.js';
+
 function ensureOutcomeModal() {
   if (typeof document === 'undefined') return null;
   let root = document.getElementById('campaignOutcomeModal');
@@ -16,6 +18,29 @@ function ensureOutcomeModal() {
     </div>
   `;
   document.body.appendChild(root);
+  return root;
+}
+
+function ensureCurrentEventsModal() {
+  if (typeof document === 'undefined') return null;
+  let root = document.getElementById('currentEventsModal');
+  if (root) return root;
+
+  root = document.createElement('div');
+  root.id = 'currentEventsModal';
+  root.className = 'hidden fixed inset-0 z-[115] bg-black/80 text-white flex items-center justify-center p-6';
+  root.innerHTML = `
+    <div class="frame-dark max-w-2xl w-full p-5 max-h-[80vh] overflow-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-2xl font-bold">Current Events</h2>
+        <button id="currentEventsClose" class="action-btn btn-dark text-xs">Close</button>
+      </div>
+      <div id="currentEventsBody" class="space-y-2 text-sm"></div>
+    </div>
+  `;
+  document.body.appendChild(root);
+  const close = root.querySelector('#currentEventsClose');
+  close?.addEventListener('click', () => root.classList.add('hidden'));
   return root;
 }
 
@@ -40,10 +65,68 @@ function showOutcome({ title, party, day, onNewRun }) {
   return true;
 }
 
+export function renderCurrentEventsModal({ events = [], currentDay = 1 } = {}) {
+  const root = ensureCurrentEventsModal();
+  if (!root) return false;
+  const body = root.querySelector('#currentEventsBody');
+  if (!body) return false;
+
+  const rows = Array.isArray(events) ? events : [];
+  if (!rows.length) {
+    body.innerHTML = '<div class="opacity-80">No active world events.</div>';
+    return true;
+  }
+
+  body.innerHTML = rows.map((event) => {
+    const daysLeft = Math.max(0, Number(event?.endDay ?? currentDay) - Number(currentDay ?? 1));
+    const target = event?.cityId || event?.regionId || 'global';
+    return `
+      <div class="frame-dark p-3">
+        <div class="font-bold">${getEventTypeLabel(event?.type)} · ${target}</div>
+        <div class="text-xs opacity-80">${getEventDescription(event)}</div>
+        <div class="text-xs opacity-70">Remaining: ${daysLeft} day(s)</div>
+      </div>
+    `;
+  }).join('');
+  return true;
+}
+
+export function toggleCurrentEventsModal({ events = [], currentDay = 1 } = {}) {
+  const root = ensureCurrentEventsModal();
+  if (!root) return false;
+  const willOpen = root.classList.contains('hidden');
+  if (willOpen) {
+    renderCurrentEventsModal({ events, currentDay });
+    root.classList.remove('hidden');
+  } else {
+    root.classList.add('hidden');
+  }
+  return willOpen;
+}
+
+export function isCurrentEventsModalOpen() {
+  const root = typeof document !== 'undefined' ? document.getElementById('currentEventsModal') : null;
+  return Boolean(root && !root.classList.contains('hidden'));
+}
+
 export function showWinScreen({ party, day, onNewRun }) {
   return showOutcome({ title: 'Victory', party, day, onNewRun });
 }
 
 export function showLoseScreen({ party, day, onNewRun }) {
   return showOutcome({ title: 'Defeat', party, day, onNewRun });
+}
+
+
+const POI_MODAL_META = Object.freeze({
+  ruin: Object.freeze({ title: 'Harabe', tag: 'RUIN', desc: 'Yıkık duvarlar arasında ganimet veya pusucular olabilir.' }),
+  camp: Object.freeze({ title: 'Kamp', tag: 'CAMP', desc: 'Terk edilmiş çadırlarda izler hâlâ taze.' }),
+  fort: Object.freeze({ title: 'Sınır Kalesi', tag: 'FORT', desc: 'Eski garnizon kalıntısı. Çatışma ihtimali yüksek.' }),
+  shrine: Object.freeze({ title: 'Mabet', tag: 'SHRINE', desc: 'Yolcuların dua ettiği kutsal alan. Şöhret fırsatı sunar.' }),
+  battlefield: Object.freeze({ title: 'Savaş Meydanı', tag: 'BATTLEFIELD', desc: 'Kırık mızraklar ve terk edilmiş teçhizat dolu bir alan.' }),
+  caravan_site: Object.freeze({ title: 'Kervan Mevkii', tag: 'CARAVAN SITE', desc: 'Dağılmış kasalar ve ticaret rotası söylentileri var.' }),
+});
+
+export function getPoiModalMeta(poiType) {
+  return POI_MODAL_META[String(poiType || '').toLowerCase()] || POI_MODAL_META.ruin;
 }

@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
 import { getStance } from './factions.js';
+import { getWarTradeTariffMultiplier } from './events.js';
 
 function hashSeed(input) {
   const str = String(input || 'seed');
@@ -60,6 +61,18 @@ function getDiplomacyTradeMultiplier(options) {
   return 1;
 }
 
+
+function getRegionTradePriceMult(itemId, options) {
+  const mods = Array.isArray(options?.activeRegionModifiers) ? options.activeRegionModifiers : [];
+  if (!mods.length) return 1;
+  let mult = 1;
+  mods.forEach((mod) => {
+    if (mod?.id === 'famine' && (itemId === 'grain' || itemId === 'meat')) mult *= 1.4;
+    if (mod?.id === 'prosperity') mult *= 0.9;
+  });
+  return Math.max(0.5, Math.min(2.5, mult));
+}
+
 function clampMomentum(raw, cfg = CONST.MARKET) {
   return clamp(raw, -Number(cfg.MOMENTUM_MAX_ABS), Number(cfg.MOMENTUM_MAX_ABS));
 }
@@ -97,6 +110,8 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0), cfg);
   price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
   price *= getDiplomacyTradeMultiplier(options);
+  price *= getRegionTradePriceMult(itemId, options);
+  price *= getWarTradeTariffMultiplier(options?.worldEvents, settlement, options?.ownerFactionId, options?.eventsCfg || CONST.EVENTS);
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
     const opportunity = getActiveOpportunity(settlement, itemId, options);

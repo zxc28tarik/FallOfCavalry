@@ -371,7 +371,19 @@ export class WorldGenerator {
       if (tooClose) continue;
 
       taken.add(key);
-      pois.push({ x, y, type: this.rand() < 0.55 ? 'ruin' : 'camp' });
+      const poiRoll = this.rand();
+      const type = poiRoll < 0.32
+        ? CONST.POI_TYPES.RUIN
+        : poiRoll < 0.54
+          ? CONST.POI_TYPES.CAMP
+          : poiRoll < 0.68
+            ? CONST.POI_TYPES.FORT
+            : poiRoll < 0.82
+              ? CONST.POI_TYPES.SHRINE
+              : poiRoll < 0.93
+                ? CONST.POI_TYPES.BATTLEFIELD
+                : CONST.POI_TYPES.CARAVAN_SITE;
+      pois.push({ x, y, type });
     }
 
     if (pois.length < CONST.POI.MIN_COUNT) {
@@ -396,7 +408,8 @@ export class WorldGenerator {
       while (pois.length < CONST.POI.MIN_COUNT && fillQueue.length) {
         const pick = fillQueue.shift();
         taken.add(pick.key);
-        pois.push({ x: pick.x, y: pick.y, type: this.rand() < 0.55 ? 'ruin' : 'camp' });
+        const type = this.rand() < 0.55 ? CONST.POI_TYPES.RUIN : CONST.POI_TYPES.CAMP;
+        pois.push({ x: pick.x, y: pick.y, type });
       }
     }
 
