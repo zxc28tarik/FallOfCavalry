@@ -47,6 +47,7 @@ export class HUDManager {
       hudDay: getEl('hudDay'),
       hudStats: getEl('hudStats'),
       hudEvent: getEl('hudEvent'),
+      hudEventsBtn: getEl('hudEventsBtn'),
       rosterPanel: getEl('rosterPanel'),
       rosterEnemy: getEl('rosterEnemy'),
       rosterWarning: getEl('rosterWarning'),
@@ -92,6 +93,12 @@ export class HUDManager {
     this.addStateListener('day:advanced', (day) => this.updateDay(day));
     this.addStateListener('faction:selected', (faction) => this.updateFaction(faction));
     this.addStateListener('mode:changed', ({ new: mode } = {}) => this.updateVisibility(mode));
+
+    if (this.elements.hudEventsBtn && !this.uiHandlers.has('hud-events-btn')) {
+      this.addUIListener('hud-events-btn', this.elements.hudEventsBtn, 'click', () => {
+        this.state?.emit?.('ui:events:toggle');
+      });
+    }
 
     this.listenersBound = true;
   }
@@ -154,7 +161,7 @@ export class HUDManager {
   updateEventLine() {
     if (!this.elements.hudEvent) return;
     if (this.transientHintRestore) return;
-    const message = this.state?.lastEventLog || this.state?.interactHint;
+    const message = this.state?.lastEventLog || this.state?.currentEventsSummary || this.state?.interactHint;
     safeText(this.elements.hudEvent, message || '');
     safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
   }

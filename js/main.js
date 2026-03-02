@@ -27,7 +27,7 @@ import {
   setRelation,
 } from './systems/factions.js';
 import CityServicesUI from './ui/city-services.js';
-import { showWinScreen, showLoseScreen } from './ui/modals.js';
+import { showWinScreen, showLoseScreen, toggleCurrentEventsModal, isCurrentEventsModalOpen, renderCurrentEventsModal } from './ui/modals.js';
 import {
   setContractsRuntimeContext,
   generateContractsForCity,
@@ -54,6 +54,14 @@ import BattleDeployUI from './ui/battle-deploy-ui.js';
 import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
 import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
+import {
+  createInitialEventState,
+  getActiveEvents,
+  rollWarEvents,
+  EVENT_TYPES,
+  getBanditCapFromEvents,
+  getEventTypeLabel,
+} from './systems/events.js';
 import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
 import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from './systems/flank.js';
 import SpriteLoader from './rendering/sprite-loader.js';
@@ -90,6 +98,7 @@ import {
   ensureWorldParties,
   updateWorldParties,
   removeWorldParty,
+  getBanditCap,
 } from './systems/world-ai.js';
 import {
   createInitialWarState,
@@ -481,6 +490,18 @@ class FallOfCavalry {
         DESPAWN_DISTANCE: Number(CONST.WORLD_AI.DESPAWN_DISTANCE),
         RESPAWN_INTERVAL_DAYS: Number(CONST.WORLD_AI.RESPAWN_INTERVAL_DAYS),
       },
+      EVENTS: {
+        ENABLED: Number(Boolean(CONST.EVENTS.ENABLED)),
+        MAX_ACTIVE_EVENTS: Number(CONST.EVENTS.MAX_ACTIVE_EVENTS),
+        BASE_WAR_EVENT_CHANCE: Number(CONST.EVENTS.BASE_WAR_EVENT_CHANCE),
+        CRISIS_EVENT_CHANCE: Number(CONST.EVENTS.CRISIS_EVENT_CHANCE),
+        EVENT_DURATION_DAYS_MIN: Number(CONST.EVENTS.EVENT_DURATION_DAYS_MIN),
+        EVENT_DURATION_DAYS_MAX: Number(CONST.EVENTS.EVENT_DURATION_DAYS_MAX),
+        WAR_TAX_GOLD_MULT: Number(CONST.EVENTS.WAR_TAX_GOLD_MULT),
+        WAR_TRADE_TARIFF_MULT: Number(CONST.EVENTS.WAR_TRADE_TARIFF_MULT),
+        BANDIT_SPIKE_MULT: Number(CONST.EVENTS.BANDIT_SPIKE_MULT),
+        REFUGEE_RENOWN_BONUS: Number(CONST.EVENTS.REFUGEE_RENOWN_BONUS),
+      },
       DIPLOMACY_RELATIONS: {
         MIN_REL: Number(CONST.DIPLOMACY_RELATIONS.MIN_REL ?? CONST.DIPLOMACY_RELATIONS.MIN),
         MAX_REL: Number(CONST.DIPLOMACY_RELATIONS.MAX_REL ?? CONST.DIPLOMACY_RELATIONS.MAX),
@@ -642,7 +663,10 @@ class FallOfCavalry {
       'CAMPAIGN_OBJECTIVES',
       'CONTRACTS',
       'DIPLOMACY_ACTIONS',
+      'WORLD_AI',
+      'EVENTS',
       'DIPLOMACY_RELATIONS',
+      'FACTION_WAR',
       'BATTLE_FORMATION',
       'BATTLE_FLANK',
       'BATTLE_MORALE',
@@ -655,7 +679,6 @@ class FallOfCavalry {
       'BATTLE_CASUALTIES',
       'BATTLE_CAMERA',
     ].forEach((group) => {
-    ['ENCOUNTER_RISK', 'POI', 'MARKET', 'SUPPLIES', 'WORLD_AI', 'BATTLE_FORMATION', 'BATTLE_FLANK', 'BATTLE_MORALE', 'BATTLE_AI', 'BATTLE_COUNTERS', 'BATTLE_CHARGE', 'BATTLE_RANGED', 'BATTLE_CASUALTIES', 'BATTLE_CAMERA'].forEach((group) => {
       if (!draft[group] || typeof draft[group] !== 'object') return;
       this.state.tuning[group] = { ...(this.state.tuning[group] || {}), ...draft[group] };
     });
@@ -863,6 +886,7 @@ class FallOfCavalry {
     this.ensureTutorialState();
     this.ensureTuningState();
     this.ensureFactionState();
+    this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
     this.state.devMode = isDevMode();
     this.applyDevOnlyDomLock();
     const storageTuning = loadTuningFromStorage();
@@ -891,6 +915,10 @@ class FallOfCavalry {
     this.refreshWeatherState(this.state?.day ?? 1);
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
+    this.ensureHudEventsButton();
+    this.setupDOMReferences();
+    this.hudManager?.setupElements?.();
+    this.hudManager?.setupListeners?.();
     this.updateBuildInfoBadge();
     this.applyDevOnlyDomLock();
     this.setupSettingsUI();
@@ -1036,6 +1064,16 @@ class FallOfCavalry {
     this.state.on('day:advanced', (day) => {
       this.state.dailyLedger = { tradePL: 0 };
       this.refreshWeatherState(day);
+      const activeEvents = this.refreshCurrentEventsSummary(day);
+      rollWarEvents({
+        eventState: this.state.events,
+        warState: this.state.warState,
+        factionsState: this.state.factions,
+        worldState: this.state?.map || {},
+        currentDay: day,
+        cfg: this.getEffectiveTuning().EVENTS || CONST.EVENTS,
+      });
+      const rolledEvents = this.refreshCurrentEventsSummary(day);
       if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
         ensureWorldParties({
           aiState: this.worldAi,
@@ -1043,6 +1081,7 @@ class FallOfCavalry {
           factions: this.state?.factions || CONST.FACTIONS,
           cfg: this.getWorldAiCfgWithRegionMods(),
           currentDay: day,
+          banditCapOverride: this.getBanditCapWithEvents(rolledEvents.length ? rolledEvents : activeEvents),
         });
       }
       this.getCurrentRegionModifiers(day);
@@ -1064,7 +1103,60 @@ class FallOfCavalry {
 
     this.setupKeyboardShortcuts();
     this.state.on('day:tick', (day) => this.processDailyEconomy(day));
+    this.state.on('ui:events:toggle', () => {
+      const events = this.refreshCurrentEventsSummary(this.state?.day ?? 1);
+      toggleCurrentEventsModal({ events, currentDay: this.state?.day ?? 1 });
+    });
     this.listenersBound = true;
+  }
+
+
+  getCurrentEvents(day = Number(this.state?.day ?? 1)) {
+    this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
+    return getActiveEvents(this.state.events, day);
+  }
+
+  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) {
+    const activeEvents = this.getCurrentEvents(day);
+    const summary = activeEvents.slice(0, 3).map((event) => {
+      const suffix = event?.cityId || event?.regionId || 'Active';
+      return `${getEventTypeLabel(event?.type)} (${suffix})`;
+    }).join(', ');
+    this.state.currentEventsSummary = summary ? `Events: ${summary}` : 'Events: None';
+    return activeEvents;
+  }
+
+  applyDailyEventEffects(day, activeEvents) {
+    if (!this.playerParty || !Array.isArray(activeEvents) || !activeEvents.length) return;
+    const eventsCfg = this.getEffectiveTuning().EVENTS || CONST.EVENTS;
+    const warTaxActive = activeEvents.some((event) => event?.type === EVENT_TYPES.WAR_TAX);
+    if (warTaxActive) {
+      this.playerParty.gold = Math.max(0, Math.floor(Number(this.playerParty.gold ?? 0) / Number(eventsCfg.WAR_TAX_GOLD_MULT ?? 1.15)));
+    }
+
+    const refugeeEvents = activeEvents.filter((event) => event?.type === EVENT_TYPES.REFUGEE_INFLUX);
+    if (refugeeEvents.length > 0) {
+      this.playerParty.renown = Math.max(0, Math.floor(Number(this.playerParty.renown ?? 0) + (Number(eventsCfg.REFUGEE_RENOWN_BONUS ?? 5) * refugeeEvents.length)));
+      refugeeEvents.forEach((event) => {
+        const sourceFaction = Array.isArray(event?.factionsInvolved)
+          ? event.factionsInvolved.find((id) => id && id !== 'player')
+          : null;
+        if (!sourceFaction) return;
+        const rel = getRelation(this.state.factions, 'player', sourceFaction, CONST.DIPLOMACY_RELATIONS);
+        setRelation(this.state.factions, 'player', sourceFaction, rel + 2, CONST.DIPLOMACY_RELATIONS);
+      });
+    }
+
+    if (warTaxActive || refugeeEvents.length > 0) {
+      this.setLastEventLog(`Day ${day}: ${warTaxActive ? 'War tax applied. ' : ''}${refugeeEvents.length > 0 ? 'Refugees supported.' : ''}`.trim());
+    }
+  }
+
+  getBanditCapWithEvents(worldEvents) {
+    const worldCfg = this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
+    const eventsCfg = this.getEffectiveTuning().EVENTS || CONST.EVENTS;
+    const baseCap = Number(worldCfg.MAX_BANDIT_PARTIES ?? CONST.WORLD_AI.MAX_BANDIT_PARTIES);
+    return getBanditCap(worldEvents, getBanditCapFromEvents(worldEvents, baseCap, eventsCfg), eventsCfg);
   }
 
   processDailyEconomy(day) {
@@ -1083,6 +1175,8 @@ class FallOfCavalry {
     const moraleBefore = Math.floor(this.playerParty.morale ?? 50);
     const foodBefore = Number(this.state?.supplies?.food ?? 0);
     const notes = [];
+    const activeEvents = this.refreshCurrentEventsSummary(day);
+    this.applyDailyEventEffects(day, activeEvents);
 
     const roster = this.playerParty.roster || [];
     const totalWage = roster.reduce((sum, u) => sum + Math.max(0, Math.floor(u.wagePerDay ?? u.wage ?? 0)), 0);
@@ -1506,6 +1600,7 @@ class FallOfCavalry {
       factions: this.state?.factions || CONST.FACTIONS,
       cfg: this.getWorldAiCfgWithRegionMods(),
       currentDay: this.state?.day ?? 1,
+      banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
     });
 
     this.enemyParties = [];
@@ -1550,6 +1645,7 @@ class FallOfCavalry {
         factions: this.state?.factions || CONST.FACTIONS,
         cfg: this.getWorldAiCfgWithRegionMods(),
         currentDay: this.state?.day ?? 1,
+        banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
       });
       this.syncWarStateFromRelations();
       const encounters = updateWorldParties({
@@ -1829,6 +1925,7 @@ class FallOfCavalry {
       this.state.clueMarker = null;
     }
     this.cleanupExpiredMarketOpportunities(this.state.day);
+    const currentEvents = this.refreshCurrentEventsSummary(this.state.day);
     setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
     if (this.state.lastEventLog && Date.now() >= (this.state.lastEventLogUntil ?? 0)) {
       this.state.lastEventLog = '';
@@ -1880,6 +1977,7 @@ class FallOfCavalry {
     if (this.state?.accounting) this.accountingUI?.show?.(this.state.accounting);
     else this.accountingUI?.hide?.();
 
+    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     this.hudManager?.update?.();
   }
 
@@ -4710,6 +4808,13 @@ Up/Down select, Enter heal, Esc back`,
         return;
       }
 
+      if ((e.key === 'e' || e.key === 'E') && this.state?.mode === 'map' && e.shiftKey) {
+        e.preventDefault?.();
+        const events = this.refreshCurrentEventsSummary(this.state?.day ?? 1);
+        toggleCurrentEventsModal({ events, currentDay: this.state?.day ?? 1 });
+        return;
+      }
+
       if ((e.key === 'e' || e.key === 'E') && this.state?.mode === 'map') {
         e.preventDefault?.();
         const pois = this.state?.map?.pois;
@@ -4749,6 +4854,21 @@ Up/Down select, Enter heal, Esc back`,
     };
 
     document.addEventListener('keydown', this.keyboardHandler);
+  }
+
+
+  ensureHudEventsButton() {
+    if (typeof document === 'undefined') return;
+    let btn = document.getElementById('hudEventsBtn');
+    if (!btn) {
+      const anchor = document.getElementById('hudEvent');
+      if (!anchor || !anchor.parentElement) return;
+      btn = document.createElement('button');
+      btn.id = 'hudEventsBtn';
+      btn.className = 'action-btn btn-dark text-xs mt-2';
+      btn.textContent = 'Events';
+      anchor.parentElement.appendChild(btn);
+    }
   }
 
   setupDOMReferences() {
@@ -5037,6 +5157,7 @@ Up/Down select, Enter heal, Esc back`,
 
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) - 1 };
         this.cleanupExpiredMarketOpportunities(this.state.day);
+    const currentEvents = this.refreshCurrentEventsSummary(this.state.day);
         push('21) Expired opportunities are cleaned', !this.state.marketOpportunities[settlementKey], this.state.marketOpportunities[settlementKey] ? 'not cleaned' : 'cleaned');
       } else {
         push('20) Opportunity modifies sell price when active', true, 'PASS (missing settlementKey/itemId)');
@@ -5559,6 +5680,7 @@ Up/Down select, Enter heal, Esc back`,
         regionState: this.state?.regionState && typeof this.state.regionState === 'object' ? this.state.regionState : createInitialRegionState(),
         clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
         marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
+        events: this.state?.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState(),
         status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
@@ -5716,6 +5838,9 @@ Up/Down select, Enter heal, Esc back`,
     this.state.marketOpportunities = game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
       ? game.marketOpportunities
       : {};
+    this.state.events = game.events && typeof game.events === 'object' && !Array.isArray(game.events)
+      ? game.events
+      : createInitialEventState();
     this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
     this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
     this.state.dailyLedger = game.dailyLedger && typeof game.dailyLedger === 'object'
@@ -5730,6 +5855,7 @@ Up/Down select, Enter heal, Esc back`,
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
     this.cleanupExpiredMarketOpportunities(this.state.day);
+    const currentEvents = this.refreshCurrentEventsSummary(this.state.day);
     if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
       ensureWorldParties({
         aiState: this.worldAi,
@@ -5952,6 +6078,7 @@ Esc close`,
       this.renderDebugInfo();
     }
 
+    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     this.hudManager?.update?.();
     this.minimapRenderer?.render(this);
   }
@@ -6259,6 +6386,7 @@ Esc close`,
     this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
     this.ctx.font = '18px Arial';
     this.ctx.fillText('F = Battle Prep, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
+    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     this.hudManager?.update?.();
   }
 
@@ -6389,6 +6517,7 @@ Esc close`,
     const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);
     renderWeatherOverlay(this.ctx, this.canvas.width, this.canvas.height, weatherTint);
 
+    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     this.hudManager?.update?.();
   }
 
