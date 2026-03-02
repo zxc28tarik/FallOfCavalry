@@ -21,6 +21,9 @@ export class HUDManager {
       onSettings: null,
       onCloseSettings: null,
       onVolumeChange: null,
+      onHudHelp: null,
+      onHudSettings: null,
+      onHudCodex: null,
     };
     this.warnedKeys = new Set();
     this.transientHintTimer = null;
@@ -66,6 +69,9 @@ export class HUDManager {
       menuMasterVolume: getEl('menuMasterVolume'),
       menuBtnCloseSettings: getEl('menuBtnCloseSettings'),
       btnQuitToMenu: getEl('btnQuitToMenu'),
+      helpBtn: getEl('helpBtn'),
+      settingsBtn: getEl('settingsBtn'),
+      codexBtn: getEl('codexBtn'),
     };
   }
 
@@ -255,13 +261,16 @@ export class HUDManager {
     this.uiHandlers.set(key, { target, event, handler });
   }
 
-  setMenuHandlers({ onStart, onContinue, onQuitToMenu, onSettings, onCloseSettings, onVolumeChange } = {}) {
+  setMenuHandlers({ onStart, onContinue, onQuitToMenu, onSettings, onCloseSettings, onVolumeChange, onHudHelp, onHudSettings, onHudCodex } = {}) {
     this.menuActions.onStart = typeof onStart === 'function' ? onStart : null;
     this.menuActions.onContinue = typeof onContinue === 'function' ? onContinue : null;
     this.menuActions.onQuitToMenu = typeof onQuitToMenu === 'function' ? onQuitToMenu : null;
     this.menuActions.onSettings = typeof onSettings === 'function' ? onSettings : null;
     this.menuActions.onCloseSettings = typeof onCloseSettings === 'function' ? onCloseSettings : null;
     this.menuActions.onVolumeChange = typeof onVolumeChange === 'function' ? onVolumeChange : null;
+    this.menuActions.onHudHelp = typeof onHudHelp === 'function' ? onHudHelp : null;
+    this.menuActions.onHudSettings = typeof onHudSettings === 'function' ? onHudSettings : null;
+    this.menuActions.onHudCodex = typeof onHudCodex === 'function' ? onHudCodex : null;
 
     this.addUIListener('menu:start', this.elements.menuBtnStart, 'click', () => this.menuActions.onStart?.());
     this.addUIListener('menu:continue', this.elements.menuBtnContinue, 'click', () => this.menuActions.onContinue?.());
@@ -269,6 +278,10 @@ export class HUDManager {
     this.addUIListener('menu:settings-close', this.elements.menuBtnCloseSettings, 'click', () => this.menuActions.onCloseSettings?.());
     this.addUIListener('menu:volume', this.elements.menuMasterVolume, 'input', (event) => this.menuActions.onVolumeChange?.(event?.target?.value));
     this.addUIListener('pause:quit', this.elements.btnQuitToMenu, 'click', () => this.menuActions.onQuitToMenu?.());
+
+    this.addUIListener('hud:help', this.elements.helpBtn, 'click', () => this.menuActions.onHudHelp?.());
+    this.addUIListener('hud:settings', this.elements.settingsBtn, 'click', () => this.menuActions.onHudSettings?.());
+    this.addUIListener('hud:codex', this.elements.codexBtn, 'click', () => this.menuActions.onHudCodex?.());
   }
 
   setMenuVisible(isVisible) {

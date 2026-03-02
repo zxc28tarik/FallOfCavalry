@@ -92,6 +92,17 @@ export const WEATHER = Object.freeze({
   NIGHT_TINT_ALPHA: 0.35,
 });
 
+
+
+export const SETTINGS = Object.freeze({
+  DEFAULT_FX_ENABLED: true,
+  DEFAULT_CAMERA_SHAKE_ENABLED: true,
+  DEFAULT_WEATHER_ENABLED: true,
+  DEFAULT_DIFFICULTY_MULT: 1.0,
+  DIFFICULTY_MIN: 0.7,
+  DIFFICULTY_MAX: 1.5,
+  DIFFICULTY_STEP: 0.1,
+});
 export const WORLD_AI = Object.freeze({
   ENABLED: true,
   MAX_BANDIT_PARTIES: 4,
@@ -891,23 +902,6 @@ export const ECONOMY = Object.freeze({
 // =============================================================================
 
 
-export const DIPLOMACY_RELATIONS = Object.freeze({
-  MIN: -100,
-  MAX: 100,
-  MIN_REL: -100,
-  MAX_REL: 100,
-  DEFAULT: 0,
-  ALLY_THRESHOLD: 45,
-  WAR_THRESHOLD: -35,
-  START_RELATIONS: Object.freeze({
-    'player:kingdom_a': 20,
-    'player:kingdom_b': 0,
-    'player:bandits': -60,
-    'kingdom_a:kingdom_b': -10,
-    'kingdom_a:bandits': -80,
-    'kingdom_b:bandits': -70,
-  }),
-});
 
 export const DIPLOMACY_ACTIONS = Object.freeze({
   TRUCE_COST_GOLD: 150,

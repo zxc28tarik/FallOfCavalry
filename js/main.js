@@ -80,6 +80,9 @@ import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
 import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverlay } from './rendering/weather-layer.js';
 import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
+import { createDefaultSettings, applySettingsPatch, serializeSettings, deserializeSettings } from './systems/settings.js';
+import SettingsUI from './ui/settings.js';
+import CodexUI from './ui/codex.js';
 import {
   createInitialWorldAiState,
   ensureWorldParties,
@@ -199,6 +202,9 @@ class FallOfCavalry {
     this.battleDeployUI = null;
     this.poiUI = null;
     this.tuningUI = null;
+    this.settingsUI = null;
+    this.codexUI = null;
+    this.helpOverlayVisible = false;
     this.TuningUIClass = null;
     this.activePoi = null;
     this.pendingPoiAmbush = null;
@@ -775,7 +781,8 @@ class FallOfCavalry {
   }
 
   refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) {
-    if (!CONST.WEATHER?.ENABLED) return;
+    const weatherCfg = this.getWeatherConfig();
+    if (!weatherCfg?.ENABLED) return;
     const weather = computeWeatherForDay({
       worldSeed: this.state?.seed ?? 1337,
       dayIndex,
@@ -784,6 +791,34 @@ class FallOfCavalry {
     this.weatherState = weather;
     this.state.weatherState = weather;
     setWeatherState(weather);
+  }
+
+
+  getWeatherConfig() {
+    return {
+      ...CONST.WEATHER,
+      ENABLED: Boolean(CONST.WEATHER?.ENABLED) && Boolean(this.settings?.weatherEnabled),
+    };
+  }
+
+  getBattleFxConfig() {
+    const tuning = this.getEffectiveTuning();
+    const cfg = { ...(tuning.BATTLE_FX || CONST.BATTLE_FX) };
+    cfg.ENABLED = Boolean(cfg.ENABLED) && Boolean(this.settings?.fxEnabled);
+    return cfg;
+  }
+
+  getBattleCameraConfig() {
+    const tuning = this.getEffectiveTuning();
+    const cfg = { ...(tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA) };
+    cfg.SHAKE_ENABLED = Boolean(cfg.SHAKE_ENABLED) && Boolean(this.settings?.cameraShakeEnabled);
+    return cfg;
+  }
+
+  applyGameSettingsPatch(patch = {}) {
+    this.settings = applySettingsPatch(this.settings, patch, CONST.SETTINGS);
+    this.state.settings = serializeSettings(this.settings);
+    if (this.settingsUI?.visible) this.settingsUI.syncFromState();
   }
 
   init() {
@@ -813,6 +848,8 @@ class FallOfCavalry {
     if (this.state) PoiSystem.ensurePoiState(this.state);
     this.ensureTutorialState();
     this.ensureTuningState();
+    this.settings = deserializeSettings(this.state?.settings, CONST.SETTINGS);
+    this.state.settings = serializeSettings(this.settings);
     this.ensureFactionState();
     this.state.devMode = isDevMode();
     this.applyDevOnlyDomLock();
@@ -836,7 +873,7 @@ class FallOfCavalry {
     });
 
     this.setupCanvas();
-    initWeatherLayer(CONST.WEATHER);
+    initWeatherLayer(this.getWeatherConfig());
     this.setupEventListeners();
     this.initPlayerParty();
     this.refreshWeatherState(this.state?.day ?? 1);
@@ -845,6 +882,7 @@ class FallOfCavalry {
     this.updateBuildInfoBadge();
     this.applyDevOnlyDomLock();
     this.setupSettingsUI();
+    this.setupHelpOverlay();
     this.setupMenuActions();
     this.setupStartFlow();
     this.setupCityServicesUI();
@@ -1388,7 +1426,7 @@ class FallOfCavalry {
   }
 
   getEnemyUnits(enemyId) {
-    if (Array.isArray(this.enemyUnitsById[enemyId])) return this.enemyUnitsById[enemyId];
+    if (Array.isArray(this.enemyUnitsById[enemyId])) return this.enemyUnitsById[enemyId].map((u) => this.applyDifficultyToEnemyUnit(u));
     const enemyParty = this.enemyParties.find((party) => party.id === enemyId);
     const seedBase = enemyId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 17);
     let total = 4 + (seedBase % 5);
@@ -1424,14 +1462,26 @@ class FallOfCavalry {
       });
     }
 
-    this.enemyUnitsById[enemyId] = units;
+    this.enemyUnitsById[enemyId] = units.map((u) => ({ ...u }));
     if (enemyParty && !Array.isArray(enemyParty.roster)) {
       enemyParty.roster = units.map((u) => ({ ...u }));
     }
-    return units;
+    return units.map((u) => this.applyDifficultyToEnemyUnit(u));
   }
 
 
+
+
+  applyDifficultyToEnemyUnit(unit) {
+    const mult = Number(this.settings?.difficultyMult ?? 1);
+    if (!Number.isFinite(mult) || Math.abs(mult - 1) < 0.001) return unit;
+    const next = { ...unit };
+    next.maxHp = Math.max(1, Math.round(Number(next.maxHp ?? next.hp ?? 1) * mult));
+    next.hp = Math.max(1, Math.round(Number(next.hp ?? next.maxHp ?? 1) * mult));
+    next.atk = Math.max(1, Math.round(Number(next.atk ?? 1) * mult));
+    if (Number.isFinite(next.rangedDamage)) next.rangedDamage = Math.max(1, Math.round(Number(next.rangedDamage) * mult));
+    return next;
+  }
 
   getEffectiveCount(entry) {
     if (!entry) return 0;
@@ -1895,8 +1945,8 @@ class FallOfCavalry {
     }
     const moraleCfg = getBattleMoraleConfig(this);
     const rangedCfg = tuning.BATTLE_RANGED || CONST.BATTLE_RANGED;
-    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
-    const cameraCfg = tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
+    const battleFxCfg = this.getBattleFxConfig();
+    const cameraCfg = this.getBattleCameraConfig();
     battle.timeSec = Number(battle.timeSec || 0) + dt;
     if (battleFxCfg.ENABLED) tickBattleFx(dtSec, battleFxCfg);
 
@@ -2187,7 +2237,7 @@ class FallOfCavalry {
     this.updateUnitMoraleState(target, moraleCfg);
 
     target.fx.hitUntil = performance.now() + CONST.BATTLE_FX.HIT_FLASH_DURATION;
-    const battleFxCfg = tuning.BATTLE_FX || CONST.BATTLE_FX;
+    const battleFxCfg = this.getBattleFxConfig();
     const hitX = Number(target.x || 0);
     const hitY = Number(target.y || 0);
     if (battleFxCfg.ENABLED) {
@@ -2200,7 +2250,7 @@ class FallOfCavalry {
     const chargeMarker = isChargeHit ? ' CHARGE' : '';
     this.spawnFloatingText(target.x || 0, target.y || 0, `-${finalDamage}${marker}${chargeMarker}`, target.side === 'player' ? '#ffd0d0' : '#fff2a8');
 
-    const cameraCfg = tuning?.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
+    const cameraCfg = this.getBattleCameraConfig();
     if (cameraCfg.SHAKE_ENABLED && battle?.camera && cameraCfg.ENABLED) {
       const damageNormalized = finalDamage / Math.max(1, Number(target.maxHp ?? target.hpMax ?? 1));
       if (isChargeHit) addCameraShake(battle.camera, Number(cameraCfg.SHAKE_CHARGE_MAG ?? 0), Number(cameraCfg.SHAKE_DURATION_SEC ?? 0));
@@ -2588,7 +2638,7 @@ class FallOfCavalry {
     this.cancelPlayerDestination();
     this.state.encounter = null;
     this.state.roster.warning = '';
-    initBattleFx(this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX);
+    initBattleFx(this.getBattleFxConfig());
     this.state.battle = {
       enemyId,
       enemyFactionId,
@@ -4352,6 +4402,42 @@ Up/Down select, Enter heal, Esc back`,
         return;
       }
 
+      if (this.settingsUI?.visible && e.key === 'Escape') {
+        e.preventDefault?.();
+        this.settingsUI.hide();
+        return;
+      }
+
+      if (this.codexUI?.visible && e.key === 'Escape') {
+        e.preventDefault?.();
+        this.codexUI.hide();
+        return;
+      }
+
+      if (this.helpOverlayVisible && e.key === 'Escape') {
+        e.preventDefault?.();
+        this.toggleHelpOverlay(false);
+        return;
+      }
+
+      if (e.key === '?' || e.key === '/' || e.key === 'F1') {
+        e.preventDefault?.();
+        this.toggleHelpOverlay();
+        return;
+      }
+
+      if ((e.key === 'j' || e.key === 'J') && this.mode !== 'menu') {
+        e.preventDefault?.();
+        this.codexUI?.toggle?.();
+        return;
+      }
+
+      if ((e.key === 's' || e.key === 'S') && this.mode !== 'menu' && !this.state?.saveLoadOpen && this.state?.mode !== 'city' && this.state?.mode !== 'battle') {
+        e.preventDefault?.();
+        this.settingsUI?.toggle?.();
+        return;
+      }
+
       if (this.state?.devMode && !e.shiftKey && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault?.();
         this.reloadSpriteAssets();
@@ -4729,6 +4815,11 @@ Up/Down select, Enter heal, Esc back`,
       btnTuningSave: utils.getEl('btnTuningSave'),
       btnTuningReset: utils.getEl('btnTuningReset'),
       buildInfo: utils.getEl('buildInfo'),
+      helpBtn: utils.getEl('helpBtn'),
+      settingsBtn: utils.getEl('settingsBtn'),
+      codexBtn: utils.getEl('codexBtn'),
+      helpOverlay: utils.getEl('helpOverlay'),
+      helpCloseBtn: utils.getEl('helpCloseBtn'),
     };
 
     const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
@@ -4799,18 +4890,48 @@ Up/Down select, Enter heal, Esc back`,
   setupSettingsUI() {
     const toggleHints = this.dom?.toggleHints;
     this.ensureTutorialState();
-    if (!toggleHints) return;
-    toggleHints.checked = Boolean(this.state?.tutorial?.enabled);
-    if (toggleHints.dataset.boundHintToggle === '1') return;
-    toggleHints.dataset.boundHintToggle = '1';
-    toggleHints.addEventListener('change', (event) => {
-      this.ensureTutorialState();
-      const checked = Boolean(event?.target?.checked);
-      this.state.tutorial.enabled = checked;
-      if (!checked) this.state.tutorial.lastShownAt = 0;
-    });
+    if (toggleHints) {
+      toggleHints.checked = Boolean(this.state?.tutorial?.enabled);
+      if (toggleHints.dataset.boundHintToggle !== '1') {
+        toggleHints.dataset.boundHintToggle = '1';
+        toggleHints.addEventListener('change', (event) => {
+          this.ensureTutorialState();
+          const checked = Boolean(event?.target?.checked);
+          this.state.tutorial.enabled = checked;
+          if (!checked) this.state.tutorial.lastShownAt = 0;
+        });
+      }
+    }
+
+    if (!this.settingsUI) {
+      this.settingsUI = new SettingsUI({
+        getSettings: () => this.settings,
+        cfg: CONST.SETTINGS,
+        onApply: (nextSettings) => {
+          this.settings = nextSettings;
+          this.state.settings = serializeSettings(nextSettings);
+        },
+      });
+    }
+
+    if (!this.codexUI) this.codexUI = new CodexUI();
   }
 
+  setupHelpOverlay() {
+    const body = this.dom?.helpOverlay?.querySelector?.('.frame-dark');
+    if (body) {
+      body.textContent = 'Hotkeys: H Hold, F Focus/Follow, R Retreat, K Skirmish/Camp, X Hold Fire/Cancel, E POI, C City, Esc Pause, J Codex, S Settings, ? Help.';
+    }
+    if (!this.dom?.helpCloseBtn || this.dom.helpCloseBtn.dataset.boundHelpClose === '1') return;
+    this.dom.helpCloseBtn.dataset.boundHelpClose = '1';
+    this.dom.helpCloseBtn.addEventListener('click', () => this.toggleHelpOverlay(false));
+  }
+
+  toggleHelpOverlay(force = null) {
+    const next = typeof force === 'boolean' ? force : !this.helpOverlayVisible;
+    this.helpOverlayVisible = next;
+    if (this.dom?.helpOverlay) this.dom.helpOverlay.classList.toggle('hidden', !next);
+  }
 
   setupDebugSmokePanel() {
     if (!this.dom?.debugOverlay) return;
@@ -5094,6 +5215,9 @@ Up/Down select, Enter heal, Esc back`,
       onSettings: () => this.openSettings(),
       onCloseSettings: () => this.closeSettings(),
       onVolumeChange: (value) => this.applyMasterVolume(value),
+      onHudHelp: () => this.toggleHelpOverlay(),
+      onHudSettings: () => this.settingsUI?.toggle?.(),
+      onHudCodex: () => this.codexUI?.toggle?.(),
     });
 
     this.hudManager?.setRosterHandlers?.({
@@ -5169,13 +5293,17 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   openSettings() {
-    if (this.mode !== 'menu') return false;
-    this.hudManager?.setSettingsVisible?.(true);
+    if (this.mode === 'menu') {
+      this.hudManager?.setSettingsVisible?.(true);
+      return true;
+    }
+    this.settingsUI?.show?.();
     return true;
   }
 
   closeSettings() {
     this.hudManager?.setSettingsVisible?.(false);
+    this.settingsUI?.hide?.();
     return true;
   }
 
@@ -5410,6 +5538,7 @@ Up/Down select, Enter heal, Esc back`,
         day: Number.isFinite(this.state?.day) ? this.state.day : 1,
         mode: typeof this.state?.mode === 'string' ? this.state.mode : 'map',
         paused: Boolean(this.state?.paused),
+        settings: serializeSettings(this.settings),
         camera: {
           x: Number.isFinite(this.state?.camera?.x) ? this.state.camera.x : 0,
           y: Number.isFinite(this.state?.camera?.y) ? this.state.camera.y : 0,
@@ -5628,6 +5757,8 @@ Up/Down select, Enter heal, Esc back`,
     });
     this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
     this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
+    this.settings = deserializeSettings(game.settings, CONST.SETTINGS);
+    this.state.settings = serializeSettings(this.settings);
     this.state.tutorial = {
       enabled: typeof game?.tutorial?.enabled === 'boolean' ? game.tutorial.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
       shown: game?.tutorial?.shown && typeof game.tutorial.shown === 'object' && !Array.isArray(game.tutorial.shown) ? game.tutorial.shown : {},
@@ -5860,7 +5991,7 @@ Esc close`,
 
     this.ctx.restore();
 
-    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);
+    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, this.getWeatherConfig());
     renderWeatherOverlay(this.ctx, this.canvas.width, this.canvas.height, weatherTint);
 
     if (this.followParty) {
@@ -6244,7 +6375,7 @@ Esc close`,
     this.ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, this.canvas.width / 2, 50);
 
     const tuning = this.getEffectiveTuning();
-    const cameraCfg = tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA;
+    const cameraCfg = this.getBattleCameraConfig();
     this.ctx.save();
     if (cameraCfg.ENABLED && battle.camera) applyCameraTransform(this.ctx, battle.camera);
 
@@ -6294,7 +6425,7 @@ Esc close`,
       this.ctx.fill();
     }
 
-    const battleFxCfg = this.getEffectiveTuning().BATTLE_FX || CONST.BATTLE_FX;
+    const battleFxCfg = this.getBattleFxConfig();
     if (battleFxCfg.ENABLED) renderBattleFx(this.ctx);
 
     this.ctx.save();
@@ -6308,7 +6439,7 @@ Esc close`,
     this.ctx.restore();
     this.ctx.restore();
 
-    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, CONST.WEATHER);
+    const weatherTint = getWeatherTint(this.weatherState || this.state?.weatherState, this.getWeatherConfig());
     renderWeatherOverlay(this.ctx, this.canvas.width, this.canvas.height, weatherTint);
 
     this.hudManager?.update?.();

@@ -21,6 +21,7 @@ export default class BattleCommandsUI {
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.SKIRMISH}">[K] Skirmish</button>
       <button class="action-btn btn-dark text-xs" data-cmd="${CONST.BATTLE_COMMANDS.RETREAT}">[R] Retreat</button>
       <button class="action-btn btn-dark text-xs" data-toggle="hold-fire">[X] Hold Fire</button>
+      <span class="text-xs opacity-70 px-2">[?] Help</span>
     `;
 
     this.dom.root.addEventListener('click', (e) => {
