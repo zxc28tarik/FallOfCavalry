@@ -530,6 +530,38 @@ export const POI = Object.freeze({
   AMBUSH_TEMPORARY: true,
 });
 
+export const POI_TYPES = Object.freeze({
+  RUIN: 'ruin',
+  CAMP: 'camp',
+  FORT: 'fort',
+  SHRINE: 'shrine',
+  BATTLEFIELD: 'battlefield',
+  CARAVAN_SITE: 'caravan_site',
+});
+
+export const REGION_MODIFIERS = Object.freeze({
+  FAMINE: Object.freeze({
+    id: 'famine',
+    tradeFoodPriceMult: 1.4,
+    durationDays: 10,
+  }),
+  PROSPERITY: Object.freeze({
+    id: 'prosperity',
+    tradeAllPriceMult: 0.9,
+    durationDays: 12,
+  }),
+  HIGH_BANDITRY: Object.freeze({
+    id: 'high_banditry',
+    banditSpawnMult: 1.5,
+    durationDays: 8,
+  }),
+  PILGRIMAGE: Object.freeze({
+    id: 'pilgrimage',
+    renownGainMult: 1.2,
+    durationDays: 7,
+  }),
+});
+
 
 export const ACCOUNTING = Object.freeze({
   NEGATIVE_GOLD_MORALE_PENALTY: 4,
@@ -890,24 +922,6 @@ export const ECONOMY = Object.freeze({
 // DİPLOMASİ SİSTEMİ (İLERİDE)
 // =============================================================================
 
-
-export const DIPLOMACY_RELATIONS = Object.freeze({
-  MIN: -100,
-  MAX: 100,
-  MIN_REL: -100,
-  MAX_REL: 100,
-  DEFAULT: 0,
-  ALLY_THRESHOLD: 45,
-  WAR_THRESHOLD: -35,
-  START_RELATIONS: Object.freeze({
-    'player:kingdom_a': 20,
-    'player:kingdom_b': 0,
-    'player:bandits': -60,
-    'kingdom_a:kingdom_b': -10,
-    'kingdom_a:bandits': -80,
-    'kingdom_b:bandits': -70,
-  }),
-});
 
 export const DIPLOMACY_ACTIONS = Object.freeze({
   TRUCE_COST_GOLD: 150,

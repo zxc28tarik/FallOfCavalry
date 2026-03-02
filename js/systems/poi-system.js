@@ -47,7 +47,15 @@ export function canInteract(state, poi) {
 }
 
 function createDeterministicRng(seed, day, poi) {
-  const typeSalt = poi?.type === 'ruin' ? 0x9e3779b9 : 0x7f4a7c15;
+  const typeSalts = {
+    ruin: 0x9e3779b9,
+    camp: 0x7f4a7c15,
+    fort: 0x41c64e6d,
+    shrine: 0x632be59b,
+    battlefield: 0x1b873593,
+    caravan_site: 0x85ebca6b,
+  };
+  const typeSalt = typeSalts[poi?.type] || typeSalts.ruin;
   let s = (Number(seed) | 0)
     ^ (((Number(poi?.x) || 0) * 73856093) | 0)
     ^ (((Number(poi?.y) || 0) * 19349663) | 0)
@@ -175,10 +183,85 @@ function pickClueTarget(poi, context) {
 
 export function rollOutcome({ seed, day, poi, context, tuning } = {}) {
   const cfg = { ...CONST.POI, ...(tuning?.POI || {}) };
-  const normalizedType = (poi?.type === 'camp' || poi?.type === 'ruin') ? poi.type : 'ruin';
+  const knownTypes = new Set(Object.values(CONST.POI_TYPES || { RUIN: 'ruin', CAMP: 'camp' }));
+  const normalizedType = knownTypes.has(poi?.type) ? poi.type : 'ruin';
   const normalizedPoi = { ...poi, type: normalizedType };
   const rand = createDeterministicRng(seed, day, normalizedPoi);
   const isRuin = normalizedPoi.type === 'ruin';
+
+  if (normalizedType === CONST.POI_TYPES.FORT) {
+    const heavyAmbush = clamp01((cfg.AMBUSH_CHANCE_CAMP || 0.2) * 1.6);
+    if (rand() < heavyAmbush) {
+      const enemyId = `poi-fort-${normalizedPoi?.x ?? 0}-${normalizedPoi?.y ?? 0}-${day ?? 0}`;
+      return {
+        kind: cfg.OUTCOME.AMBUSH,
+        enemyId,
+        loss: pickAmbushLoss(rand),
+        rewardOnVictory: { gold: randInt(rand, 14, 36), renown: randInt(rand, 3, 7) },
+      };
+    }
+    return {
+      kind: cfg.OUTCOME.LOOT,
+      loot: { gold: randInt(rand, 18, 42), food: randInt(rand, 1, 3), items: [] },
+      renown: randInt(rand, 2, 5),
+      regionEffect: 'fort_cleared',
+    };
+  }
+
+  if (normalizedType === CONST.POI_TYPES.SHRINE) {
+    if (rand() < 0.55) {
+      return {
+        kind: cfg.OUTCOME.CLUE,
+        clue: { targetType: 'blessing', label: 'Shrine blessing spread to the region' },
+        reward: { gold: randInt(rand, 0, 3), food: randInt(rand, 0, 1) },
+        renown: randInt(rand, 2, 4),
+        relationBonus: 2,
+        donationCost: randInt(rand, 4, 12),
+        regionEffect: 'blessing',
+      };
+    }
+    return {
+      kind: cfg.OUTCOME.NOTHING,
+      message: 'Sessiz bir dua ettin. Yolcuların uğrak yeri olmaya devam ediyor.',
+      renown: 1,
+      regionEffect: 'blessing',
+    };
+  }
+
+  if (normalizedType === CONST.POI_TYPES.BATTLEFIELD) {
+    if (rand() < 0.42) {
+      return {
+        kind: cfg.OUTCOME.AMBUSH,
+        enemyId: `poi-battlefield-${normalizedPoi?.x ?? 0}-${normalizedPoi?.y ?? 0}-${day ?? 0}`,
+        loss: pickAmbushLoss(rand),
+        regionEffect: 'ambush',
+      };
+    }
+    return {
+      kind: cfg.OUTCOME.LOOT,
+      loot: { gold: randInt(rand, 12, 34), food: randInt(rand, 2, 6), items: [] },
+      renown: randInt(rand, 1, 3),
+      regionEffect: 'loot',
+    };
+  }
+
+  if (normalizedType === CONST.POI_TYPES.CARAVAN_SITE) {
+    const item = (CONST.TRADE_ITEMS || [])[Math.floor(rand() * Math.max(1, CONST.TRADE_ITEMS.length))];
+    return {
+      kind: cfg.OUTCOME.CLUE,
+      clue: { targetType: 'settlement', settlementKey: context?.nearestSettlementId || null, label: 'Ticaret rotası fırsatı' },
+      reward: { gold: randInt(rand, 8, 16), food: randInt(rand, 1, 3) },
+      opportunity: item
+        ? {
+          settlementKey: String(context?.nearestSettlementId || `${context?.settlementTx ?? 0},${context?.settlementTy ?? 0}`),
+          itemId: item.id,
+          bonusPct: randInt(rand, 18, 40),
+          expiresDay: Number(day ?? 1) + Math.max(2, Math.floor(CONST.POI.OPPORTUNITY_DURATION_DAYS || 3)),
+        }
+        : null,
+      renown: 1,
+    };
+  }
   const biomeRiskMult = Number(cfg.BIOME_RISK_MODS?.[context?.biomeKey]) || 1;
   const roadRiskMult = context?.onRoad ? cfg.AMBUSH_RISK_MULT_ON_ROAD : cfg.AMBUSH_RISK_MULT_OFFROAD;
   const settlementTier = Number(context?.settlementTier ?? 2);
