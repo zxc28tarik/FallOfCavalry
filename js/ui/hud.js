@@ -6,6 +6,7 @@
 import { safeClass, safeText, getEl } from '../utils.js';
 import { TUTORIAL_HINTS, FACTIONS, DIPLOMACY_RELATIONS } from '../constants.js';
 import { getRelation, getStance } from '../systems/factions.js';
+import { getActiveRegionModifiers } from '../systems/region-state.js';
 
 export class HUDManager {
   constructor(state) {
@@ -149,7 +150,12 @@ export class HUDManager {
     const cityLine = cityCtx
       ? `  Owner: ${cityCtx.ownerFactionName} (REL:${Math.floor(cityCtx.relation)}, ${cityCtx.stance})`
       : '';
-    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}${weatherText}${warsText}${crisisText}${cityLine}`);
+    const regionName = this.state?.currentRegionName || this.state?.currentRegionId || '-';
+    const regionMods = getActiveRegionModifiers(this.state?.regionState, this.state?.currentRegionId, this.state?.day)
+      .map((entry) => String(entry.id || '').replaceAll('_', ' '))
+      .map((label) => label.charAt(0).toUpperCase() + label.slice(1));
+    const regionLine = `  Region: ${regionName}${regionMods.length ? ` [${regionMods.join(' / ')}]` : ''}`;
+    safeText(this.elements.hudStats, `Day:${Math.floor(this.state?.day ?? 1)}  Gold: ${gold}  XP: ${xp}  Renown: ${renown}  Morale: ${morale}  Units: ${totalUnits}  Wounded: ${wounded}${weatherText}${warsText}${crisisText}${cityLine}${regionLine}`);
   }
 
   updateEventLine() {

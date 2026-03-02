@@ -89,6 +89,11 @@ import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverl
 import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
 import {
+  createInitialRegionState,
+  getActiveRegionModifiers,
+  applyPOIOutcomeToRegion,
+} from './systems/region-state.js';
+import {
   createInitialWorldAiState,
   ensureWorldParties,
   updateWorldParties,
@@ -809,6 +814,49 @@ class FallOfCavalry {
     setWeatherState(weather);
   }
 
+
+  getRegionIdAtTile(tx, ty) {
+    const nearestSettlement = this.getNearestSettlementAt(tx, ty);
+    if (nearestSettlement?.id) return String(nearestSettlement.id);
+    return `wild:${Math.floor(Number(tx) || 0)}:${Math.floor(Number(ty) || 0)}`;
+  }
+
+  getCurrentRegionContext() {
+    const tilePos = this.getTilePosition(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
+    const regionId = this.getRegionIdAtTile(tilePos.tx, tilePos.ty);
+    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    return {
+      regionId,
+      regionName: nearestSettlement?.name || regionId,
+      tilePos,
+      settlement: nearestSettlement,
+    };
+  }
+
+  getCurrentRegionModifiers(day = this.state?.day) {
+    const ctx = this.getCurrentRegionContext();
+    if (!this.state?.regionState) this.state.regionState = createInitialRegionState();
+    this.state.currentRegionId = ctx.regionId;
+    this.state.currentRegionName = ctx.regionName;
+    return getActiveRegionModifiers(this.state.regionState, ctx.regionId, day);
+  }
+
+  getWorldAiCfgWithRegionMods() {
+    const base = this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
+    const mods = this.getCurrentRegionModifiers(this.state?.day);
+    const banditMult = mods.reduce((mult, mod) => (mod?.id === 'high_banditry' ? (mult * Number(CONST.REGION_MODIFIERS.HIGH_BANDITRY.banditSpawnMult || 1.5)) : mult), 1);
+    if (banditMult === 1) return base;
+    return {
+      ...base,
+      MAX_BANDIT_PARTIES: Math.max(1, Math.floor(Number(base.MAX_BANDIT_PARTIES ?? 0) * banditMult)),
+    };
+  }
+
+  getRenownGainMultAtCurrentRegion() {
+    const mods = this.getCurrentRegionModifiers(this.state?.day);
+    return mods.reduce((mult, mod) => (mod?.id === 'pilgrimage' ? (mult * Number(CONST.REGION_MODIFIERS.PILGRIMAGE.renownGainMult || 1.2)) : mult), 1);
+  }
+
   init() {
     if (this.initialized) {
       this.warnOnce('game:init-duplicate', '[Game] init() already completed');
@@ -830,6 +878,7 @@ class FallOfCavalry {
     this.state = this.state || new GameState();
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
     if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
+    if (!this.state.regionState || typeof this.state.regionState !== 'object') this.state.regionState = createInitialRegionState();
     if (!this.state.dailyLedger || typeof this.state.dailyLedger !== 'object') this.state.dailyLedger = { tradePL: 0 };
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
@@ -1030,11 +1079,12 @@ class FallOfCavalry {
           aiState: this.worldAi,
           worldState: this.state?.map || {},
           factions: this.state?.factions || CONST.FACTIONS,
-          cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+          cfg: this.getWorldAiCfgWithRegionMods(),
           currentDay: day,
           banditCapOverride: this.getBanditCapWithEvents(rolledEvents.length ? rolledEvents : activeEvents),
         });
       }
+      this.getCurrentRegionModifiers(day);
       utils.devLog(this.state, `[Game] Day ${day} started`);
     });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
@@ -1197,6 +1247,7 @@ class FallOfCavalry {
           ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
         });
       });
     }
@@ -1547,7 +1598,7 @@ class FallOfCavalry {
       aiState: this.worldAi,
       worldState,
       factions: this.state?.factions || CONST.FACTIONS,
-      cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+      cfg: this.getWorldAiCfgWithRegionMods(),
       currentDay: this.state?.day ?? 1,
       banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
     });
@@ -1592,7 +1643,7 @@ class FallOfCavalry {
         aiState: this.worldAi,
         worldState,
         factions: this.state?.factions || CONST.FACTIONS,
-        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        cfg: this.getWorldAiCfgWithRegionMods(),
         currentDay: this.state?.day ?? 1,
         banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
       });
@@ -1602,7 +1653,7 @@ class FallOfCavalry {
         worldState,
         playerParty: this.playerParty,
         factions: this.state?.factions || CONST.FACTIONS,
-        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        cfg: this.getWorldAiCfgWithRegionMods(),
         dtSec: dt,
       });
       this.processWorldAiEncounters(encounters);
@@ -3062,6 +3113,7 @@ Renown
           ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -3088,6 +3140,7 @@ Renown
           ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
         });
         this.ensureInventoryModel();
         this.state.markets[settlement.id] = market;
@@ -3132,8 +3185,13 @@ Renown
         });
         if (completed) {
           const bonus = Number(completed?.bonusRenown ?? 0);
+          const baseRenown = Number(completed.rewardRenown ?? 0) + bonus;
+          const mult = this.getRenownGainMultAtCurrentRegion();
+          const boosted = Math.max(baseRenown, Math.floor(baseRenown * mult));
+          const extra = Math.max(0, boosted - baseRenown);
+          if (extra > 0) this.playerParty.renown = Math.floor(Number(this.playerParty.renown ?? 0) + extra);
           const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
-          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${completed.rewardRenown + bonus} renown${bonusText}`);
+          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${boosted} renown${bonusText}${extra > 0 ? ' (pilgrimage bonus)' : ''}`);
         }
       },
       onDiplomacyAction: (summary) => {
@@ -3444,7 +3502,8 @@ Renown
       this.state.interactHint = '';
       return;
     }
-    const typeText = nearest.poi.type === 'ruin' ? 'Harabe' : 'Kamp';
+    const poiTypeNames = { ruin: 'Harabe', camp: 'Kamp', fort: 'Fort', shrine: 'Mabet', battlefield: 'Savaş Alanı', caravan_site: 'Kervan Mevkii' };
+    const typeText = poiTypeNames[nearest.poi.type] || 'POI';
     this.state.interactHint = `E: İncele (${typeText})`;
   }
 
@@ -3489,10 +3548,21 @@ Renown
         biomeKey,
         settlementTier,
         map: this.state?.map,
+        nearestSettlementId: this.getNearestSettlementAt(poi.x, poi.y)?.id || null,
+        settlementTx: this.getNearestSettlementAt(poi.x, poi.y)?.tx || null,
+        settlementTy: this.getNearestSettlementAt(poi.x, poi.y)?.ty || null,
       },
       tuning: this.state?.tuning,
     });
     PoiSystem.markInvestigated(this.state, poi);
+    const poiRegionId = this.getRegionIdAtTile(poi.x, poi.y);
+    applyPOIOutcomeToRegion({
+      regionState: this.state.regionState,
+      poi: { ...poi, regionId: poiRegionId },
+      outcomeType: outcome?.regionEffect || outcome?.kind,
+      cfg: CONST.REGION_MODIFIERS,
+      currentDay: this.state?.day,
+    });
 
     if (outcome.kind === CONST.POI.OUTCOME.LOOT) {
       const gold = Math.max(0, Math.floor(outcome?.loot?.gold ?? 0));
@@ -3512,9 +3582,11 @@ Renown
         if (hasInventoryArray) this.addItem(firstItem.id, itemLabel, itemQty);
       }
 
+      const renownGain = Math.max(0, Math.floor(Number(outcome?.renown ?? 0) * this.getRenownGainMultAtCurrentRegion()));
+      if (renownGain > 0) this.playerParty.renown = Math.floor(Number(this.playerParty.renown ?? 0) + renownGain);
       const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
-      this.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}`);
-      this.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`] });
+      this.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}${renownGain > 0 ? `, +${renownGain} şan` : ''}`);
+      this.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
       if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, this.playerParty);
       return true;
     }
@@ -3522,7 +3594,9 @@ Renown
     if (outcome.kind === CONST.POI.OUTCOME.CLUE) {
       const gold = Math.max(0, Math.floor(outcome?.reward?.gold ?? 0));
       const food = Math.max(0, Math.floor(outcome?.reward?.food ?? 0));
+      const renownGain = Math.max(0, Math.floor(Number(outcome?.renown ?? 0) * this.getRenownGainMultAtCurrentRegion()));
       this.playerParty.gold = (this.playerParty.gold ?? 0) + gold;
+      if (renownGain > 0) this.playerParty.renown = Math.floor(Number(this.playerParty.renown ?? 0) + renownGain);
       if (Number.isFinite(this.state?.supplies?.food)) this.state.supplies.food += food;
 
       let clueLabel = outcome?.clue?.label || 'Belirsiz hedef';
@@ -3549,8 +3623,8 @@ Renown
           opportunity: markerOpportunity,
         };
       }
-      this.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak.`);
-      this.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`] });
+      this.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak${renownGain > 0 ? `, +${renownGain} şan` : ''}.`);
+      this.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
       if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, this.playerParty);
       return true;
     }
@@ -5064,6 +5138,7 @@ Up/Down select, Enter heal, Esc back`,
           ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
         });
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
         const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
@@ -5076,6 +5151,7 @@ Up/Down select, Enter heal, Esc back`,
           ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
         });
         push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
 
@@ -5601,6 +5677,7 @@ Up/Down select, Enter heal, Esc back`,
           shown: this.state?.tutorial?.shown && typeof this.state.tutorial.shown === 'object' ? this.state.tutorial.shown : {},
         },
         poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
+        regionState: this.state?.regionState && typeof this.state.regionState === 'object' ? this.state.regionState : createInitialRegionState(),
         clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
         marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
         events: this.state?.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState(),
@@ -5756,6 +5833,7 @@ Up/Down select, Enter heal, Esc back`,
       lastShownAt: 0,
     };
     this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
+    this.state.regionState = game.regionState && typeof game.regionState === 'object' && !Array.isArray(game.regionState) ? game.regionState : createInitialRegionState();
     this.state.clueMarker = game.clueMarker && typeof game.clueMarker === 'object' ? game.clueMarker : null;
     this.state.marketOpportunities = game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
       ? game.marketOpportunities
@@ -5783,7 +5861,7 @@ Up/Down select, Enter heal, Esc back`,
         aiState: this.worldAi,
         worldState: this.state?.map || {},
         factions: this.state?.factions || CONST.FACTIONS,
-        cfg: this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI,
+        cfg: this.getWorldAiCfgWithRegionMods(),
         currentDay: this.state?.day ?? 1,
       });
     }

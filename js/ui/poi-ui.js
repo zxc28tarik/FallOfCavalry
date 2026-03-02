@@ -1,4 +1,5 @@
 import { safeClass, safeText } from '../utils.js';
+import { getPoiModalMeta } from './modals.js';
 
 export default class PoiUI {
   constructor() {
@@ -34,9 +35,9 @@ export default class PoiUI {
 
   show({ poi, canInvestigate, cooldownText, remainingDays } = {}) {
     this.currentPoi = poi || null;
-    const label = poi?.type === 'ruin' ? 'Harabe' : 'Kamp';
-    safeText(this.refs.title, label);
-    safeText(this.refs.desc, poi?.type === 'ruin' ? 'Yıkık duvarlar arasında değerli bir şeyler olabilir.' : 'Sönmüş ateşler ve terk edilmiş çadırlar dikkat çekiyor.');
+    const meta = getPoiModalMeta(poi?.type);
+    safeText(this.refs.title, `${meta.title} [${meta.tag}]`);
+    safeText(this.refs.desc, meta.desc);
     const hasRemaining = Number.isFinite(remainingDays) && remainingDays > 0;
     const finalCooldownText = hasRemaining
       ? `Tekrar inceleme: ${remainingDays} gün sonra`

@@ -116,3 +116,17 @@ export function showWinScreen({ party, day, onNewRun }) {
 export function showLoseScreen({ party, day, onNewRun }) {
   return showOutcome({ title: 'Defeat', party, day, onNewRun });
 }
+
+
+const POI_MODAL_META = Object.freeze({
+  ruin: Object.freeze({ title: 'Harabe', tag: 'RUIN', desc: 'Yıkık duvarlar arasında ganimet veya pusucular olabilir.' }),
+  camp: Object.freeze({ title: 'Kamp', tag: 'CAMP', desc: 'Terk edilmiş çadırlarda izler hâlâ taze.' }),
+  fort: Object.freeze({ title: 'Sınır Kalesi', tag: 'FORT', desc: 'Eski garnizon kalıntısı. Çatışma ihtimali yüksek.' }),
+  shrine: Object.freeze({ title: 'Mabet', tag: 'SHRINE', desc: 'Yolcuların dua ettiği kutsal alan. Şöhret fırsatı sunar.' }),
+  battlefield: Object.freeze({ title: 'Savaş Meydanı', tag: 'BATTLEFIELD', desc: 'Kırık mızraklar ve terk edilmiş teçhizat dolu bir alan.' }),
+  caravan_site: Object.freeze({ title: 'Kervan Mevkii', tag: 'CARAVAN SITE', desc: 'Dağılmış kasalar ve ticaret rotası söylentileri var.' }),
+});
+
+export function getPoiModalMeta(poiType) {
+  return POI_MODAL_META[String(poiType || '').toLowerCase()] || POI_MODAL_META.ruin;
+}
