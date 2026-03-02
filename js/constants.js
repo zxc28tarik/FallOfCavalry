@@ -277,24 +277,6 @@ export const FACTIONS = Object.freeze([
   { id: FACTION.ID.BANDITS, name: 'Broken Banner', color: '#95a5a6', doctrine: 'Raid and Scatter', desc: 'Unreliable but dangerous raiders.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Low resources, high risk.' },
 ]);
 
-export const DIPLOMACY_RELATIONS = Object.freeze({
-  MIN_REL: -100,
-  MAX_REL: 100,
-  MIN: -100,
-  MAX: 100,
-  DEFAULT: 0,
-  ALLY_THRESHOLD: 50,
-  WAR_THRESHOLD: -30,
-  START_RELATIONS: Object.freeze({
-    'player:kingdom_a': 20,
-    'player:kingdom_b': 0,
-    'player:bandits': -60,
-    'kingdom_a:kingdom_b': -10,
-    'kingdom_a:bandits': -80,
-    'kingdom_b:bandits': -70,
-  }),
-});
-
 // =============================================================================
 // KARŞILAŞMA TİPLERİ
 // =============================================================================
