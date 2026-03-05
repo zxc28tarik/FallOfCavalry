@@ -114,6 +114,7 @@ import {
 } from './systems/faction-wars.js';
 
 import * as utils from './utils.js';
+import { BattleManager } from './managers/BattleManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -830,23 +831,18 @@ class FallOfCavalry {
   }
 
   getBattleFxConfig() {
-    const tuning = this.getEffectiveTuning();
-    const cfg = { ...(tuning.BATTLE_FX || CONST.BATTLE_FX) };
-    cfg.ENABLED = Boolean(cfg.ENABLED) && Boolean(this.settings?.fxEnabled);
-    return cfg;
+    return this.battleManager.getBattleFxConfig();
   }
 
   getBattleCameraConfig() {
-    const tuning = this.getEffectiveTuning();
-    const cfg = { ...(tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA) };
-    cfg.SHAKE_ENABLED = Boolean(cfg.SHAKE_ENABLED) && Boolean(this.settings?.cameraShakeEnabled);
-    return cfg;
+    return this.battleManager.getBattleCameraConfig();
   }
 
   applyGameSettingsPatch(patch = {}) {
     this.settings = applySettingsPatch(this.settings, patch, CONST.SETTINGS);
     this.state.settings = serializeSettings(this.settings);
     if (this.settingsUI?.visible) this.settingsUI.syncFromState();
+  }
   getRegionIdAtTile(tx, ty) {
     const nearestSettlement = this.getNearestSettlementAt(tx, ty);
     if (nearestSettlement?.id) return String(nearestSettlement.id);
@@ -908,6 +904,8 @@ class FallOfCavalry {
     }
 
     this.state = this.state || new GameState();
+    this.battleManager = this.battleManager || new BattleManager(this.state);
+    this.battleManager.init(this);
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
     if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
     if (!this.state.regionState || typeof this.state.regionState !== 'object') this.state.regionState = createInitialRegionState();
@@ -1003,17 +1001,11 @@ class FallOfCavalry {
   }
 
   ensureBattleUnitFx(unit) {
-    if (!unit) return;
-    if (!unit.fx) unit.fx = { hitUntil: 0, deathStartedAt: null };
-    if (!Number.isFinite(unit.fx.hitUntil)) unit.fx.hitUntil = 0;
-    if (unit.fx.deathStartedAt !== null && !Number.isFinite(unit.fx.deathStartedAt)) unit.fx.deathStartedAt = null;
+    return this.battleManager.ensureBattleUnitFx(unit);
   }
 
   getUnitAnimationKey(unit) {
-    if (!unit) return null;
-    if (unit.command === CONST.BATTLE_COMMANDS.ATTACK) return 'infantry_attack';
-    const moving = Math.hypot(Number(unit.vx) || 0, Number(unit.vy) || 0) > 0.01;
-    return moving ? 'infantry_walk' : 'infantry_idle';
+    return this.battleManager.getUnitAnimationKey(unit);
   }
 
   getBattleAnimPlayer(unit) {
@@ -1525,13 +1517,7 @@ class FallOfCavalry {
   }
 
   ensureRosterUnitState(unit) {
-    if (!unit || typeof unit !== 'object') return unit;
-    if (!Number.isFinite(unit.healProgress)) unit.healProgress = 0;
-    unit.healProgress = Math.max(0, Math.min(1, Number(unit.healProgress)));
-    const status = typeof unit.status === 'string' ? unit.status : 'healthy';
-    unit.status = ['healthy', 'wounded', 'dead'].includes(status) ? status : 'healthy';
-    if (unit.status === 'healthy') unit.healProgress = 0;
-    return unit;
+    return this.battleManager.ensureRosterUnitState(unit);
   }
 
   ensureRosterState() {
@@ -1615,14 +1601,7 @@ class FallOfCavalry {
 
 
   applyDifficultyToEnemyUnit(unit) {
-    const mult = Number(this.settings?.difficultyMult ?? 1);
-    if (!Number.isFinite(mult) || Math.abs(mult - 1) < 0.001) return unit;
-    const next = { ...unit };
-    next.maxHp = Math.max(1, Math.round(Number(next.maxHp ?? next.hp ?? 1) * mult));
-    next.hp = Math.max(1, Math.round(Number(next.hp ?? next.maxHp ?? 1) * mult));
-    next.atk = Math.max(1, Math.round(Number(next.atk ?? 1) * mult));
-    if (Number.isFinite(next.rangedDamage)) next.rangedDamage = Math.max(1, Math.round(Number(next.rangedDamage) * mult));
-    return next;
+    return this.battleManager.applyDifficultyToEnemyUnit(unit);
   }
 
   getEffectiveCount(entry) {
@@ -2301,19 +2280,10 @@ class FallOfCavalry {
 
     this.updateTransientUIState();
   }
+  }
 
   findNearestEnemy(unit, enemies) {
-    let best = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const enemy of enemies || []) {
-      if (!enemy || enemy.dead || enemy.hp <= 0) continue;
-      const d = Math.hypot((enemy.x || 0) - (unit.x || 0), (enemy.y || 0) - (unit.y || 0));
-      if (d < bestDist) {
-        bestDist = d;
-        best = enemy;
-      }
-    }
-    return best;
+    return this.battleManager.findNearestEnemy(unit, enemies);
   }
 
   applyUnitDamage(attacker, target, baseDamage, context = {}) {
@@ -3103,8 +3073,7 @@ class FallOfCavalry {
     if (!a) return { title: 'Battle Aftermath', body: 'No aftermath data', footer: 'Enter = Continue' };
 
     const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
-    const lootLines = (a.loot || []).map((l) => `- ${this.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('
-') || '- None';
+    const lootLines = (a.loot || []).map((l) => `- ${this.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
 
     return {
       title: 'Battle Aftermath',
@@ -3877,7 +3846,7 @@ Renown
   }
 
   getWoundedUnits() {
-    return (this.playerParty?.roster || []).filter((u) => u?.status === 'wounded');
+    return this.battleManager.getWoundedUnits();
   }
 
   buildCityPanelData() {
