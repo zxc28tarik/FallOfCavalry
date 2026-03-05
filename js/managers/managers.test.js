@@ -132,3 +132,50 @@ describe('BattleManager - Phase 2A', () => {
     expect(wounded[0].name).toBe('B');
   });
 });
+
+describe('BattleManager - Phase 2B', () => {
+  function createBM(gameOverrides = {}) {
+    const bm = new BattleManager({ mode: 'battle', battle: null });
+    bm.init({
+      settings: {},
+      getEffectiveTuning: () => ({}),
+      playerParty: { roster: [] },
+      floatingTexts: [],
+      floatingTextPool: { acquire: () => ({}), release: () => {} },
+      projectilePool: { acquire: () => ({}), release: () => {} },
+      spriteLoader: null,
+      assetsReady: false,
+      ...gameOverrides,
+    });
+    return bm;
+  }
+
+  it('updateUnitMoraleState sets routing when morale is very low', () => {
+    const bm = createBM();
+    const unit = { hp: 50, morale: 5, moraleState: 'steady' };
+    bm.updateUnitMoraleState(unit, { FLEE_THRESHOLD: 30, ROUT_THRESHOLD: 10, ROUT_SPEED_MULT: 1.5, ROUT_DEF_MULT: 0.5 });
+    expect(unit.moraleState).toBe('routing');
+    expect(unit.retreating).toBe(true);
+  });
+
+  it('updateUnitMoraleState sets shaken at mid morale', () => {
+    const bm = createBM();
+    const unit = { hp: 50, morale: 20, moraleState: 'steady' };
+    bm.updateUnitMoraleState(unit, { FLEE_THRESHOLD: 30, ROUT_THRESHOLD: 10 });
+    expect(unit.moraleState).toBe('shaken');
+  });
+
+  it('spawnFloatingText adds to game.floatingTexts', () => {
+    const texts = [];
+    const bm = createBM({ floatingTexts: texts, floatingTextPool: { acquire: () => ({}) } });
+    bm.spawnFloatingText(10, 20, 'Hit!', '#ff0000');
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe('Hit!');
+  });
+
+  it('drawBattleUnitFallback does not throw', () => {
+    const bm = createBM();
+    const ctx = { fillStyle: '', beginPath: () => {}, arc: () => {}, fill: () => {} };
+    expect(() => bm.drawBattleUnitFallback(ctx, { side: 'player' }, 0, 0, 5)).not.toThrow();
+  });
+});
