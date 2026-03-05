@@ -965,13 +965,23 @@ export const DIPLOMACY = Object.freeze({
     HOSTILE: -50,
     WAR: -80,
   },
-  
+
   TREATY_TYPE: {
     ALLIANCE: 'alliance',
     WAR: 'war',
     TRADE: 'trade',
     NON_AGGRESSION: 'non_aggression',
   },
+});
+
+export const DIPLOMACY_RELATIONS = Object.freeze({
+  MIN: -100,
+  MAX: 100,
+  NEUTRAL: 0,
+  FRIENDLY: 50,
+  ALLIED: 80,
+  HOSTILE: -50,
+  WAR: -80,
 });
 
 // =============================================================================
