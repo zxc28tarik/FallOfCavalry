@@ -444,3 +444,84 @@ describe('WorldManager - Phase 3A', () => {
     expect(party.hasDestination).toBe(true);
   });
 });
+
+describe('WorldManager - Phase 3B', () => {
+  function createWM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      camera: { x: 0, y: 0, zoom: 1 },
+      map: { width: 10, height: 10, tiles: new Array(100).fill({}), settlements: [{ tx: 5, ty: 5, id: 'c1', x: 300, y: 300 }], rivers: [], roads: [], crossings: [], biomes: new Uint8Array(100), fog: new Uint8Array(100) },
+      ...stateOverrides,
+    };
+    const wm = new WorldManager(state);
+    wm.init({
+      canvas: { width: 800, height: 600 },
+      playerParty: { x: 300, y: 300, radius: 12, hovered: false, destX: null, destY: null, hasDestination: false },
+      mouseWorldX: 0, mouseWorldY: 0,
+      mode: 'playing',
+      ensureFactionState: () => {},
+      getEffectiveTuning: () => ({}),
+      getSettlementTier: () => 2,
+      ...gameOverrides,
+    });
+    return wm;
+  }
+
+  it('clampCameraToWorld clamps camera within bounds', () => {
+    const wm = createWM({ camera: { x: 99999, y: 99999, zoom: 1 } });
+    const cam = wm.clampCameraToWorld();
+    expect(cam.x).toBeLessThan(99999);
+  });
+
+  it('centerCameraOnParty returns false without party', () => {
+    const wm = createWM({}, { playerParty: null });
+    expect(wm.centerCameraOnParty()).toBe(false);
+  });
+
+  it('centerCameraOnParty centers view on party', () => {
+    const wm = createWM();
+    expect(wm.centerCameraOnParty()).toBe(true);
+  });
+
+  it('updatePointerWorldState updates mouse coords', () => {
+    const wm = createWM();
+    wm.updatePointerWorldState(400, 300);
+    expect(wm.game.mouseWorldX).toBeGreaterThan(0);
+  });
+
+  it('completePlayerArrival snaps to destination', () => {
+    const party = { destX: 200, destY: 200, x: 190, y: 190, hasDestination: true, arrivalFeedbackTimer: 0 };
+    const wm = createWM({}, { playerParty: party });
+    expect(wm.completePlayerArrival()).toBe(true);
+    expect(party.hasDestination).toBe(false);
+    expect(party.arrivalFeedbackTimer).toBe(1.0);
+  });
+
+  it('rebuildMovementMasks creates masks from roads', () => {
+    const wm = createWM({ map: { width: 10, height: 10, tiles: new Array(100).fill({}), settlements: [], rivers: [], roads: [{ path: [{ x: 1, y: 1 }] }], crossings: [], biomes: new Uint8Array(100), fog: new Uint8Array(100) } });
+    wm.rebuildMovementMasks();
+    expect(wm._roadMask).toBeInstanceOf(Uint8Array);
+    expect(wm._roadMask[11]).toBe(1);
+  });
+
+  it('getMovementContextAt returns default for null map', () => {
+    const wm = createWM({ map: null });
+    const ctx = wm.getMovementContextAt(0, 0);
+    expect(ctx.onRoad).toBe(false);
+    expect(ctx).toHaveProperty('speedMult');
+  });
+
+  it('getMovementContextAt returns context for valid map', () => {
+    const wm = createWM();
+    wm.rebuildMovementMasks();
+    const ctx = wm.getMovementContextAt(60, 60);
+    expect(ctx).toHaveProperty('onRoad');
+    expect(ctx).toHaveProperty('terrainLabel');
+  });
+
+  it('getNearestSettlementTierAt returns tier', () => {
+    const wm = createWM();
+    const tier = wm.getNearestSettlementTierAt(5, 5);
+    expect(tier).toBe(2);
+  });
+});
