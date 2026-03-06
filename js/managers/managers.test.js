@@ -179,3 +179,89 @@ describe('BattleManager - Phase 2B', () => {
     expect(() => bm.drawBattleUnitFallback(ctx, { side: 'player' }, 0, 0, 5)).not.toThrow();
   });
 });
+
+describe('BattleManager - Phase 2C', () => {
+  function createBM(stateOverrides = {}, gameOverrides = {}) {
+    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'fight', timeSec: 0 }, ...stateOverrides };
+    const bm = new BattleManager(state);
+    bm.init({
+      settings: {},
+      getEffectiveTuning: () => ({ BATTLE_CASUALTIES: { WOUNDED_HP_MAX_MULT: 0.7, WOUNDED_ATK_MULT: 0.8 } }),
+      playerParty: { roster: [] },
+      floatingTexts: [],
+      floatingTextPool: { acquire: () => ({}) },
+      projectilePool: { acquire: () => ({}) },
+      enemyUnitsById: {},
+      enemyParties: [],
+      canvas: { width: 1280, height: 720 },
+      battleCommandsUI: null,
+      battleDeployUI: null,
+      battleDeployMode: null,
+      dom: {},
+      ...gameOverrides,
+    });
+    return bm;
+  }
+
+  it('getEnemyUnits generates enemy units for unknown id', () => {
+    const bm = createBM();
+    const units = bm.getEnemyUnits('bandit-1');
+    expect(units.length).toBeGreaterThan(0);
+    expect(units[0].id).toContain('bandit-1');
+  });
+
+  it('getEnemyUnits caches and returns cached units', () => {
+    const cached = [{ id: 'e1', hp: 50, maxHp: 50, atk: 10, rangedDamage: 0 }];
+    const bm = createBM({}, { enemyUnitsById: { 'enemy-1': cached }, settings: {} });
+    const result = bm.getEnemyUnits('enemy-1');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('e1');
+  });
+
+  it('createBattleUnitsFromRoster creates battle units with correct fields', () => {
+    const bm = createBM();
+    const roster = [{ id: 'u1', name: 'Soldier', hp: 100, maxHp: 100, atk: 12, def: 5, speed: 70 }];
+    const units = bm.createBattleUnitsFromRoster(roster, 'player');
+    expect(units).toHaveLength(1);
+    expect(units[0].unitId).toBe('player-u1-0');
+    expect(units[0].side).toBe('player');
+    expect(units[0].hp).toBe(100);
+    expect(units[0].moraleState).toBe('steady');
+  });
+
+  it('placeBattleUnits positions units vertically', () => {
+    const bm = createBM();
+    const units = [
+      { side: 'player', x: 0, y: 0 },
+      { side: 'player', x: 0, y: 0 },
+    ];
+    bm.placeBattleUnits(units, 'player');
+    expect(units[0].y).toBeLessThan(units[1].y);
+  });
+
+  it('applyBattleCommand applies to player units', () => {
+    const bm = createBM({ mode: 'battle', battle: { playerUnits: [{ unitId: 'p1', command: null, commandSpeedMult: 1, commandDefMult: 1 }], enemyUnits: [], phase: 'fight' } });
+    const result = bm.applyBattleCommand('HOLD');
+    expect(result).toBe(true);
+  });
+
+  it('toggleBattleHoldFire toggles ranged units', () => {
+    const ranged = { unitId: 'r1', isRanged: true, holdFire: false };
+    const bm = createBM({ mode: 'battle', battle: { playerUnits: [ranged], enemyUnits: [], phase: 'fight', selection: {} } });
+    bm.game.battleCommandsUI = { setToggleState: () => {} };
+    const result = bm.toggleBattleHoldFire(null);
+    expect(result).toBe(true);
+    expect(ranged.holdFire).toBe(true);
+  });
+
+  it('cancelBattleDeployment resets state', () => {
+    const state = { mode: 'battle', battle: { phase: 'deploy' } };
+    state.setMode = (m) => { state.mode = m; };
+    const bm = new BattleManager(state);
+    bm.init({ battleDeployMode: { cancel: () => {} }, battleDeployUI: { hide: () => {} } });
+    const result = bm.cancelBattleDeployment();
+    expect(result).toBe(true);
+    expect(state.battle).toBeNull();
+    expect(state.mode).toBe('map');
+  });
+});
