@@ -345,3 +345,102 @@ describe('BattleManager - Phase 2D', () => {
     expect(bm.game.lastEncounterEndTimeByEnemyId['enemy-1']).toBeDefined();
   });
 });
+
+describe('WorldManager - Phase 3A', () => {
+  function createWM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      camera: { x: 0, y: 0, zoom: 1 },
+      map: { width: 10, height: 10, tiles: [], settlements: [{ tx: 5, ty: 5, id: 'city-1' }], biomes: new Uint8Array(100) },
+      ...stateOverrides,
+    };
+    const wm = new WorldManager(state);
+    wm.init({ playerParty: null, mode: 'playing', ...gameOverrides });
+    return wm;
+  }
+
+  it('getCameraSafe returns defaults when camera is null', () => {
+    const wm = createWM({ camera: null });
+    const cam = wm.getCameraSafe();
+    expect(cam).toEqual({ x: 0, y: 0, zoom: 1 });
+  });
+
+  it('getCameraSafe heals NaN values', () => {
+    const wm = createWM({ camera: { x: NaN, y: 5, zoom: -1 } });
+    const cam = wm.getCameraSafe();
+    expect(cam.x).toBe(0);
+    expect(cam.y).toBe(5);
+    expect(cam.zoom).toBe(1);
+  });
+
+  it('getWorldBounds returns tile-based bounds', () => {
+    const wm = createWM();
+    const bounds = wm.getWorldBounds();
+    expect(bounds.minX).toBe(0);
+    expect(bounds.minY).toBe(0);
+    expect(bounds.maxX).toBeGreaterThan(0);
+  });
+
+  it('clampToWorld clamps negative coords to zero', () => {
+    const wm = createWM();
+    const result = wm.clampToWorld(-100, -100);
+    expect(result.x).toBe(0);
+    expect(result.y).toBe(0);
+  });
+
+  it('screenToWorld transforms with zoom', () => {
+    const wm = createWM({ camera: { x: 100, y: 200, zoom: 2 } });
+    const world = wm.screenToWorld(200, 400);
+    expect(world.x).toBe(200);
+    expect(world.y).toBe(400);
+  });
+
+  it('getTilePosition converts world to tile coords', () => {
+    const wm = createWM();
+    const pos = wm.getTilePosition(180, 240);
+    expect(pos.tx).toBe(3);
+    expect(pos.ty).toBe(4);
+  });
+
+  it('getBiomeKeyAtTile returns null for out of bounds', () => {
+    const wm = createWM();
+    expect(wm.getBiomeKeyAtTile(-1, 0)).toBeNull();
+  });
+
+  it('getNearestSettlementAt finds closest', () => {
+    const wm = createWM({ map: { width: 100, height: 100, tiles: [], settlements: [{ tx: 5, ty: 5 }, { tx: 50, ty: 50 }], biomes: new Uint8Array(10000) } });
+    const nearest = wm.getNearestSettlementAt(6, 6);
+    expect(nearest.tx).toBe(5);
+  });
+
+  it('getEffectiveCount returns 0 for null', () => {
+    const wm = createWM();
+    expect(wm.getEffectiveCount(null)).toBe(0);
+  });
+
+  it('getEffectiveCount uses hp/maxHp path', () => {
+    const wm = createWM();
+    expect(wm.getEffectiveCount({ hp: 50, maxHp: 100 })).toBe(1);
+    expect(wm.getEffectiveCount({ hp: 0, maxHp: 100 })).toBe(0);
+  });
+
+  it('isWorldPointOnParty returns false without party', () => {
+    const wm = createWM();
+    expect(wm.isWorldPointOnParty(0, 0)).toBe(false);
+  });
+
+  it('cancelPlayerDestination clears destination', () => {
+    const party = { hasDestination: true, destX: 100, destY: 100 };
+    const wm = createWM({}, { playerParty: party });
+    expect(wm.cancelPlayerDestination()).toBe(true);
+    expect(party.hasDestination).toBe(false);
+  });
+
+  it('setPlayerDestination sets clamped destination', () => {
+    const party = { selected: true, x: 50, y: 50, hasDestination: false, destX: null, destY: null };
+    const wm = createWM({}, { playerParty: party, mode: 'playing' });
+    const result = wm.setPlayerDestination(200, 200);
+    expect(result).toBe(true);
+    expect(party.hasDestination).toBe(true);
+  });
+});

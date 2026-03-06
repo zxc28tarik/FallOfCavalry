@@ -115,6 +115,7 @@ import {
 
 import * as utils from './utils.js';
 import { BattleManager } from './managers/BattleManager.js';
+import { WorldManager } from './managers/WorldManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -906,6 +907,8 @@ class FallOfCavalry {
     this.state = this.state || new GameState();
     this.battleManager = this.battleManager || new BattleManager(this.state);
     this.battleManager.init(this);
+    this.worldManager = this.worldManager || new WorldManager(this.state);
+    this.worldManager.init(this);
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
     if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
     if (!this.state.regionState || typeof this.state.regionState !== 'object') this.state.regionState = createInitialRegionState();
@@ -1308,47 +1311,11 @@ class FallOfCavalry {
     });
   }
 
-  getCameraSafe() {
-    if (!this.state) return { x: 0, y: 0, zoom: 1 };
-    if (!this.state.camera || typeof this.state.camera !== 'object') {
-      this.state.camera = { x: 0, y: 0, zoom: 1 };
-    }
+  getCameraSafe() { return this.worldManager.getCameraSafe(); }
 
-    if (!Number.isFinite(this.state.camera.x)) this.state.camera.x = 0;
-    if (!Number.isFinite(this.state.camera.y)) this.state.camera.y = 0;
-    if (!Number.isFinite(this.state.camera.zoom) || this.state.camera.zoom <= 0) {
-      this.state.camera.zoom = 1;
-    }
+  getWorldBounds() { return this.worldManager.getWorldBounds(); }
 
-    return this.state.camera;
-  }
-
-  getWorldBounds() {
-    const mapWidthTiles = Number.isFinite(this.state?.map?.width) ? this.state.map.width : CONST.WORLD.MAP_WIDTH;
-    const mapHeightTiles = Number.isFinite(this.state?.map?.height) ? this.state.map.height : CONST.WORLD.MAP_HEIGHT;
-    const tileSize = Number.isFinite(CONST.WORLD?.TILE_SIZE) ? CONST.WORLD.TILE_SIZE : 60;
-
-    const maxX = Math.max(0, mapWidthTiles * tileSize);
-    const maxY = Math.max(0, mapHeightTiles * tileSize);
-
-    return {
-      minX: 0,
-      minY: 0,
-      maxX,
-      maxY,
-    };
-  }
-
-  clampToWorld(x, y) {
-    const bounds = this.getWorldBounds();
-    const safeX = Number.isFinite(x) ? x : bounds.minX;
-    const safeY = Number.isFinite(y) ? y : bounds.minY;
-
-    return {
-      x: Math.max(bounds.minX, Math.min(bounds.maxX, safeX)),
-      y: Math.max(bounds.minY, Math.min(bounds.maxY, safeY)),
-    };
-  }
+  clampToWorld(x, y) { return this.worldManager.clampToWorld(x, y); }
 
   clampCameraToWorld() {
     const camera = this.getCameraSafe();
@@ -1385,15 +1352,7 @@ class FallOfCavalry {
     return true;
   }
 
-  screenToWorld(screenX, screenY) {
-    const camera = this.getCameraSafe();
-    const x = Number.isFinite(screenX) ? screenX : 0;
-    const y = Number.isFinite(screenY) ? screenY : 0;
-    return {
-      x: x / camera.zoom + camera.x,
-      y: y / camera.zoom + camera.y,
-    };
-  }
+  screenToWorld(screenX, screenY) { return this.worldManager.screenToWorld(screenX, screenY); }
 
   updatePointerWorldState(screenX, screenY) {
     const world = this.screenToWorld(screenX, screenY);
@@ -1513,15 +1472,7 @@ class FallOfCavalry {
     return this.battleManager.applyDifficultyToEnemyUnit(unit);
   }
 
-  getEffectiveCount(entry) {
-    if (!entry) return 0;
-    if (Number.isFinite(entry.hp) && Number.isFinite(entry.maxHp)) {
-      return entry.hp > 0 ? 1 : 0;
-    }
-    const count = Number.isFinite(entry.count) ? entry.count : 0;
-    const injured = Number.isFinite(entry.injured) ? entry.injured : 0;
-    return Math.max(0, count - injured);
-  }
+  getEffectiveCount(entry) { return this.worldManager.getEffectiveCount(entry); }
 
   initEnemyParties() {
     if (!this.state) return;
@@ -1744,12 +1695,7 @@ class FallOfCavalry {
     });
   }
 
-  getTilePosition(x, y) {
-    const tileSize = CONST.WORLD.TILE_SIZE;
-    const tx = Math.floor((Number.isFinite(x) ? x : 0) / tileSize);
-    const ty = Math.floor((Number.isFinite(y) ? y : 0) / tileSize);
-    return { tx, ty };
-  }
+  getTilePosition(x, y) { return this.worldManager.getTilePosition(x, y); }
 
   getMovementContextAt(x, y) {
     const map = this.state?.map;
@@ -1782,20 +1728,7 @@ class FallOfCavalry {
     return { onRoad, onRiver, onCrossing, blocked, speedMult, encounterMult, terrainLabel };
   }
 
-  getBiomeKeyAtTile(tx, ty) {
-    const map = this.state?.map;
-    if (!map || tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return null;
-    const idx = ty * map.width + tx;
-    const biome = map.biomes?.[idx];
-    switch (biome) {
-      case CONST.BIOME.FOREST: return 'FOREST';
-      case CONST.BIOME.HILLS: return 'HILLS';
-      case CONST.BIOME.MOUNTAIN: return 'MOUNTAIN';
-      case CONST.BIOME.SNOW: return 'SNOW';
-      case CONST.BIOME.SHORE: return 'SHORE';
-      default: return 'PLAINS';
-    }
-  }
+  getBiomeKeyAtTile(tx, ty) { return this.worldManager.getBiomeKeyAtTile(tx, ty); }
 
   getNearestSettlementTierAt(tx, ty) {
     const settlements = this.state?.map?.settlements || [];
@@ -1813,21 +1746,7 @@ class FallOfCavalry {
     return nearest ? this.getSettlementTier(nearest) : 2;
   }
 
-  getNearestSettlementAt(tx, ty) {
-    const settlements = this.state?.map?.settlements || [];
-    let nearest = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const settlement of settlements) {
-      const sx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
-      const sy = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor(Number(settlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
-      const dist = Math.hypot((sx - tx), (sy - ty));
-      if (dist < bestDist) {
-        bestDist = dist;
-        nearest = settlement;
-      }
-    }
-    return nearest;
-  }
+  getNearestSettlementAt(tx, ty) { return this.worldManager.getNearestSettlementAt(tx, ty); }
 
   computeEncounterRiskContext() {
     const player = this.playerParty;
@@ -3405,27 +3324,7 @@ Up/Down select, Enter heal, Esc back`,
     this.state.lastEventLogUntil = Date.now() + durationMs;
   }
 
-  setPlayerDestination(worldX, worldY) {
-    if (!this.playerParty) return false;
-    if (!this.playerParty.selected) return false;
-    if (this.mode === 'paused' || this.mode === 'menu' || this.state?.mode !== 'map') return false;
-
-    const clamped = this.clampToWorld(worldX, worldY);
-    this.playerParty.destX = clamped.x;
-    this.playerParty.destY = clamped.y;
-
-    const epsilon = 2;
-    const dist = Math.hypot(this.playerParty.destX - this.playerParty.x, this.playerParty.destY - this.playerParty.y);
-    if (dist <= epsilon) {
-      this.playerParty.hasDestination = false;
-      this.playerParty.destX = null;
-      this.playerParty.destY = null;
-      return false;
-    }
-
-    this.playerParty.hasDestination = true;
-    return true;
-  }
+  setPlayerDestination(worldX, worldY) { return this.worldManager.setPlayerDestination(worldX, worldY); }
 
   completePlayerArrival() {
     if (!this.playerParty) return false;
@@ -3444,19 +3343,9 @@ Up/Down select, Enter heal, Esc back`,
     return true;
   }
 
-  cancelPlayerDestination() {
-    if (!this.playerParty || !this.playerParty.hasDestination) return false;
-    this.playerParty.hasDestination = false;
-    this.playerParty.destX = null;
-    this.playerParty.destY = null;
-    return true;
-  }
+  cancelPlayerDestination() { return this.worldManager.cancelPlayerDestination(); }
 
-  isWorldPointOnParty(worldX, worldY, margin = 6) {
-    if (!this.playerParty) return false;
-    const dist = Math.hypot(worldX - this.playerParty.x, worldY - this.playerParty.y);
-    return dist <= this.playerParty.radius + margin;
-  }
+  isWorldPointOnParty(worldX, worldY, margin) { return this.worldManager.isWorldPointOnParty(worldX, worldY, margin); }
 
   setupPartyInputHandlers() {
     if (!this.canvas || this.partyPointerHandler || this.partyContextMenuHandler || this.partyPointerMoveHandler || this.partyPointerUpHandler) return;
