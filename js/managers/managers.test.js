@@ -265,3 +265,83 @@ describe('BattleManager - Phase 2C', () => {
     expect(state.mode).toBe('map');
   });
 });
+
+describe('BattleManager - Phase 2D', () => {
+  function createBM(stateOverrides = {}, gameOverrides = {}) {
+    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'fight', timeSec: 0 }, ...stateOverrides };
+    const bm = new BattleManager(state);
+    bm.init({
+      settings: {},
+      getEffectiveTuning: () => ({ BATTLE_CASUALTIES: { WOUNDED_HP_MAX_MULT: 0.7, WOUNDED_ATK_MULT: 0.8 } }),
+      playerParty: { roster: [] },
+      floatingTexts: [],
+      floatingTextPool: { acquire: () => ({}) },
+      projectilePool: { acquire: () => ({}) },
+      enemyUnitsById: {},
+      enemyParties: [],
+      canvas: { width: 1280, height: 720 },
+      battleCommandsUI: null,
+      battleDeployUI: null,
+      battleDeployMode: null,
+      dom: {},
+      itemCatalog: [
+        { id: 'grain', name: 'Grain', unitValue: 2 },
+        { id: 'leather', name: 'Leather', unitValue: 3 },
+        { id: 'arrows', name: 'Arrows', unitValue: 4 },
+        { id: 'wood', name: 'Wood', unitValue: 1 },
+        { id: 'iron', name: 'Iron', unitValue: 5 },
+      ],
+      lastEncounterEndTimeByEnemyId: {},
+      ...gameOverrides,
+    });
+    return bm;
+  }
+
+  it('generateBattleLoot returns empty array on defeat', () => {
+    const bm = createBM();
+    const loot = bm.generateBattleLoot('defeat', { enemyUnits: [{ isRanged: false }] });
+    expect(loot).toEqual([]);
+  });
+
+  it('generateBattleLoot returns loot items on victory', () => {
+    const bm = createBM();
+    const battle = { enemyUnits: [{ isRanged: false }, { isRanged: false }, { isRanged: true }] };
+    const loot = bm.generateBattleLoot('victory', battle);
+    expect(loot.length).toBeGreaterThan(0);
+    expect(loot[0]).toHaveProperty('id');
+    expect(loot[0]).toHaveProperty('qty');
+  });
+
+  it('applyRosterOutcomeFromBattle removes dead and marks wounded', () => {
+    const roster = [
+      { id: 'u1', name: 'A', hp: 100, maxHp: 100 },
+      { id: 'u2', name: 'B', hp: 100, maxHp: 100 },
+    ];
+    const bm = createBM({}, { playerParty: { roster } });
+    const battle = {
+      playerUnits: [
+        { sourceId: 'u1', hp: 0, dead: true },
+        { sourceId: 'u2', hp: 20 },
+      ],
+    };
+    const result = bm.applyRosterOutcomeFromBattle(battle);
+    expect(result.dead).toHaveLength(1);
+    expect(result.dead[0].name).toBe('A');
+    expect(roster).toHaveLength(1);
+    expect(roster[0].hp).toBe(20);
+    expect(roster[0].wounded).toBe(true);
+  });
+
+  it('applyBattleExit clears battle state', () => {
+    const state = { mode: 'battle', battle: { phase: 'fight' } };
+    const bm = new BattleManager(state);
+    bm.init({
+      lastEncounterEndTimeByEnemyId: {},
+      battleCommandsUI: { hide: () => {} },
+      battleDeployUI: { hide: () => {} },
+    });
+    bm.applyBattleExit({}, 'enemy-1', 0);
+    expect(state.battle).toBeNull();
+    expect(bm.game.lastEncounterEndTimeByEnemyId['enemy-1']).toBeDefined();
+  });
+});

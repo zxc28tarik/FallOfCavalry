@@ -2,9 +2,19 @@ import * as CONST from '../constants.js';
 import { getBattleMoraleConfig, clampMorale, applyMoraleDamage, applyAllyDeathShock } from '../systems/battle-morale.js';
 import { computeDamage, applyCommandEffects } from '../systems/combat-rules.js';
 import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from '../systems/flank.js';
-import { inferUnitRole, getCounterEffect, isBracedSpearman } from '../systems/battle-counters.js';
-import { spawnFx } from '../rendering/battle-fx.js';
-import { addCameraShake } from '../rendering/camera.js';
+import { inferUnitRole, getCounterEffect, isBracedSpearman, computeChargeState } from '../systems/battle-counters.js';
+import { spawnFx, tickBattleFx, renderBattleFx } from '../rendering/battle-fx.js';
+import { addCameraShake, setCameraTarget, updateCamera, applyCameraTransform } from '../rendering/camera.js';
+import { tickWeatherLayer, renderWeatherOverlay } from '../rendering/weather-layer.js';
+import { getWeatherTint } from '../systems/weather.js';
+import { computeUnitCohesion, getFormationMultipliers } from '../systems/formation.js';
+import { updateEnemyAI, clampToBattleBounds, computeSkirmishKiteStep } from '../systems/battle-ai.js';
+import { canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMeleeFallback, consumeAmmo } from '../systems/battle-ranged.js';
+import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
+import { createBattleRng, computeEnemyPower, generateBattleLoot as generateRewardLoot, computeRenownDelta } from '../systems/battle-rewards.js';
+import { applyBattleOutcomes } from '../systems/casualties.js';
+import { applyBattleOutcomeToRelations } from '../systems/factions.js';
+import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
 import AnimationPlayer from '../rendering/animation.js';
 import BattleCommandsUI from '../ui/battle-commands.js';
 import BattleDeployMode from '../game-modes/battle-deploy-mode.js';
@@ -598,21 +608,591 @@ export class BattleManager {
     this.game.battleCommandsUI.bind({ root: this.game?.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
   }
 
-  // --- Stubs for future sub-steps ---
+  // --- Core loop, render, resolution (Sub-Step 2D) ---
 
-  update(dt) {
-    // Battle update logic moves here incrementally (Sub-Step 2D).
+  updateBattleSimulation(dt) {
+    if (this.state?.mode !== 'battle') return;
+    if (this.game?.mode === 'paused') {
+      this.game?.updateTransientUIState?.();
+      return;
+    }
+    const battle = this.state?.battle;
+    if (!battle || !Number.isFinite(dt) || dt <= 0) {
+      this.game?.updateTransientUIState?.();
+      return;
+    }
+
+    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+      this.game?.updateTransientUIState?.();
+      return;
+    }
+
+    if (this.game) this.game.lastBattleDt = Math.max(1 / 120, dt);
+    const deltaMs = (typeof dt === 'number' && dt < 5) ? (dt * 1000) : dt;
+    battle.playerUnits = (battle.playerUnits || []).filter((u) => !u?._remove);
+    battle.enemyUnits = (battle.enemyUnits || []).filter((u) => !u?._remove);
+    const playerUnits = battle.playerUnits || [];
+    const enemyUnits = battle.enemyUnits || [];
+    const tuning = this.game?.getEffectiveTuning?.() || {};
+    const formationTuning = tuning.BATTLE_FORMATION || CONST.BATTLE_FORMATION;
+    const aiTuning = tuning.BATTLE_AI || CONST.BATTLE_AI;
+    const battleBounds = {
+      xMin: 0,
+      xMax: Number(this.game?.canvas?.width || CONST.BATTLE.BATTLEFIELD_WIDTH),
+      yMin: 0,
+      yMax: Number(this.game?.canvas?.height || CONST.BATTLE.BATTLEFIELD_HEIGHT),
+    };
+
+    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+      const preview = this.game.battleDeployMode.computePreviewPositions(playerUnits.length);
+      const ctx = this.game?.ctx;
+      if (ctx) {
+        ctx.fillStyle = 'rgba(212,175,55,0.12)';
+        ctx.fillRect(40, 60, Math.max(120, (this.game.canvas.width / 2) - 80), Math.max(120, this.game.canvas.height - 120));
+        ctx.save();
+        ctx.fillStyle = 'rgba(90,180,255,0.45)';
+        preview.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill(); });
+        const ax = this.game.battleDeployMode.anchorX;
+        const ay = this.game.battleDeployMode.anchorY;
+        const len = 42;
+        const rad = (this.game.battleDeployMode.angleDeg * Math.PI) / 180;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax + Math.cos(rad) * len, ay + Math.sin(rad) * len);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    const allUnits = [...playerUnits, ...enemyUnits];
+    const dtSec = deltaMs / 1000;
+    tickWeatherLayer(dtSec, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
+    for (const unit of allUnits) {
+      const allies = unit?.side === 'enemy' ? enemyUnits : playerUnits;
+      const cohesion = computeUnitCohesion(unit, allies, formationTuning.COHESION_RADIUS, formationTuning.COHESION_ALLY_CAP);
+      unit.formationCohesion = cohesion;
+      Object.assign(unit, getFormationMultipliers(unit, cohesion, formationTuning));
+    }
+    const moraleCfg = getBattleMoraleConfig(this.game);
+    const rangedCfg = tuning.BATTLE_RANGED || CONST.BATTLE_RANGED;
+    const battleFxCfg = this.getBattleFxConfig();
+    const cameraCfg = this.getBattleCameraConfig();
+    battle.timeSec = Number(battle.timeSec || 0) + dt;
+    if (battleFxCfg.ENABLED) tickBattleFx(dtSec, battleFxCfg);
+
+    const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0);
+    const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0);
+    if (aliveEnemy.length === 0) { this.resolveBattle('victory'); return; }
+    if (alivePlayer.length === 0) { this.resolveBattle('defeat'); return; }
+
+    if (cameraCfg.ENABLED && battle.camera) {
+      const focusUnits = [...alivePlayer, ...aliveEnemy];
+      if (focusUnits.length > 0) {
+        const center = focusUnits.reduce((acc, unit) => ({ x: acc.x + Number(unit.x || 0), y: acc.y + Number(unit.y || 0) }), { x: 0, y: 0 });
+        setCameraTarget(battle.camera, center.x / focusUnits.length, center.y / focusUnits.length);
+      }
+      updateCamera(battle.camera, dtSec, cameraCfg);
+    }
+
+    this.tickBattleMorale(allUnits, battle, dt, moraleCfg);
+    updateEnemyAI({ battle, dtMs: deltaMs, cfg: aiTuning, bounds: battleBounds });
+
+    for (const unit of allUnits) {
+      this.ensureBattleUnitFx(unit);
+      if (unit.dead || unit.hp <= 0) {
+        if (!unit.fx.deathStartedAt) unit.fx.deathStartedAt = performance.now();
+        continue;
+      }
+      const enemies = unit.side === 'player' ? aliveEnemy : alivePlayer;
+      unit.chargeCooldownRemaining = Math.max(0, Number(unit.chargeCooldownRemaining || 0) - dtSec);
+      if (unit.role === 'cavalry') computeChargeState({ unit, dtSec, cfg: tuning });
+      unit.attackTimer = Math.max(0, (unit.attackTimer || 0) - dt);
+      unit.rangedTimer = Math.max(0, (unit.rangedTimer || 0) - dt);
+
+      let target = enemies.find((e) => e.unitId === unit.targetId && !e.dead && e.hp > 0);
+      if ((unit.command === CONST.BATTLE_COMMANDS.FOCUS || unit.command === CONST.BATTLE_COMMANDS.SKIRMISH) && unit.focusTargetId) {
+        const focused = enemies.find((e) => e.unitId === unit.focusTargetId && !e.dead && e.hp > 0);
+        if (focused) target = focused;
+      }
+      if (!target) {
+        target = this.findNearestEnemy(unit, enemies);
+        unit.targetId = target?.unitId || null;
+      }
+      if (!target) continue;
+
+      const dx = target.x - unit.x;
+      const dy = target.y - unit.y;
+      const dist = Math.hypot(dx, dy) || 0.001;
+      const terrainMods = this.game?.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+      const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
+      const formationSpeed = Number(unit.formationSpeedMult ?? 1);
+      tickSuppression({ unit, dtMs: deltaMs, battleTimeSec: battle.timeSec, cfg: rangedCfg });
+      const suppressionSpeed = Number(unit.suppressionSpeedMult ?? 1);
+      const stepSpeed = (unit.speed * terrainMods.speed * cmdSpeed * formationSpeed * suppressionSpeed);
+      const prevX = unit.x;
+      const prevY = unit.y;
+      unit.lastPosX = prevX;
+      unit.lastPosY = prevY;
+
+      if (unit.command === CONST.BATTLE_COMMANDS.RETREAT) {
+        const retreatStep = Math.min(dist, stepSpeed * dt);
+        unit.x -= (dx / dist) * retreatStep;
+        unit.y -= (dy / dist) * retreatStep;
+      } else if (unit.aiApproachPoint) {
+        const adx = unit.aiApproachPoint.x - unit.x;
+        const ady = unit.aiApproachPoint.y - unit.y;
+        const adist = Math.hypot(adx, ady) || 0.001;
+        if (adist <= Math.max(10, unit.meleeRange || 16)) {
+          unit.aiApproachPoint = null;
+        } else {
+          const step = Math.min(adist, stepSpeed * dt);
+          unit.x += (adx / adist) * step;
+          unit.y += (ady / adist) * step;
+        }
+      } else if (unit.isRanged) {
+        const inSkirmish = unit.command === CONST.BATTLE_COMMANDS.SKIRMISH || unit.skirmish;
+        const desiredRange = unit.rangedRange * Number(aiTuning.SKIRMISH_DESIRED_RANGE_MULT ?? 0.9);
+        const minRange = unit.rangedRange * Number(aiTuning.SKIRMISH_MIN_RANGE_MULT ?? 0.6);
+        if (inSkirmish && dist < minRange) {
+          const kite = computeSkirmishKiteStep(unit, target, stepSpeed, dt, battleBounds, aiTuning);
+          unit.x = kite.x;
+          unit.y = kite.y;
+          if (kite.hitBounds && !kite.movedAway) {
+            unit.skirmishBoundsFailSec = Number(unit.skirmishBoundsFailSec || 0) + dt;
+            if (unit.skirmishBoundsFailSec >= Number(aiTuning.SKIRMISH_BOUNDS_FAIL_HOLD_SEC ?? 0.5)) {
+              applyCommandEffects(unit, CONST.BATTLE_COMMANDS.HOLD);
+              unit.skirmishHoldUntil = Number(battle.timeSec || 0) + Number(aiTuning.SKIRMISH_BOUNDS_FAIL_HOLD_SEC ?? 0.5);
+              unit.skirmishBoundsFailSec = 0;
+            }
+          } else {
+            unit.skirmishBoundsFailSec = 0;
+          }
+        } else if (Number(unit.skirmishHoldUntil || 0) > Number(battle.timeSec || 0)) {
+          // temporary hold near edge
+        } else if (dist <= unit.rangedRange) {
+        const canFire = canUnitFireRanged(unit, battle, rangedCfg, dist);
+        const fallbackToMelee = shouldUseMeleeFallback({ unit, distToTarget: dist, cfg: rangedCfg, battle });
+
+        if (canFire && dist <= unit.rangedRange) {
+          if (unit.rangedTimer <= 0 && (battle.projectiles?.length ?? 0) < 200) {
+            const ammoOk = consumeAmmo({
+              battle,
+              side: unit.side,
+              amount: Math.max(1, Math.floor(Number(rangedCfg.AMMO_PER_SHOT ?? 1))),
+            });
+            if (ammoOk) {
+              this.spawnProjectile(unit, target, battle.projectiles);
+              const shakenTimerMult = unit.moraleState === 'shaken'
+                ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
+                : 1;
+              unit.rangedTimer = unit.rangedCooldown * shakenTimerMult;
+            }
+          }
+        } else if (fallbackToMelee && dist <= unit.meleeRange) {
+          if (unit.attackTimer <= 0) {
+            const atkMult = unit.moraleState === 'shaken'
+              ? Number(moraleCfg.SHAKEN_ATTACK_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_MULT)
+              : 1;
+            this.applyUnitDamage(unit, target, unit.atk * atkMult);
+            const shakenTimerMult = unit.moraleState === 'shaken'
+              ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
+              : 1;
+            unit.attackTimer = 0.9 * shakenTimerMult;
+          }
+        } else {
+          const engageRange = inSkirmish ? desiredRange : 0;
+          if (dist > engageRange) {
+            const step = Math.min(dist, stepSpeed * dt);
+            unit.x += (dx / dist) * step;
+            unit.y += (dy / dist) * step;
+          }
+        }
+        }
+      } else if (dist <= unit.meleeRange) {
+        if (unit.attackTimer <= 0) {
+          const atkMult = unit.moraleState === 'shaken'
+            ? Number(moraleCfg.SHAKEN_ATTACK_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_MULT)
+            : 1;
+          this.applyUnitDamage(unit, target, unit.atk * atkMult, { isMelee: true });
+          const shakenTimerMult = unit.moraleState === 'shaken'
+            ? Number(moraleCfg.SHAKEN_ATTACK_COOLDOWN_MULT ?? CONST.BATTLE_MORALE.SHAKEN_ATTACK_COOLDOWN_MULT)
+            : 1;
+          unit.attackTimer = 0.9 * shakenTimerMult;
+        }
+      } else {
+        const step = Math.min(dist, stepSpeed * dt);
+        unit.x += (dx / dist) * step;
+        unit.y += (dy / dist) * step;
+      }
+
+      const clampedPos = clampToBattleBounds(unit, battleBounds, Number(aiTuning.AI_BOUNDS_PAD_PX ?? 0));
+      unit.x = clampedPos.x;
+      unit.y = clampedPos.y;
+      unit.vx = (unit.x - prevX) / dt;
+      unit.vy = (unit.y - prevY) / dt;
+      const safeDt = dt > 0 ? dt : (1 / 60);
+      unit.vx = (unit.x - prevX) / safeDt;
+      unit.vy = (unit.y - prevY) / safeDt;
+      const moveDx = unit.x - prevX;
+      const moveDy = unit.y - prevY;
+      const moveDist = Math.hypot(moveDx, moveDy);
+      if (moveDist > 0.01) unit.facing = Math.atan2(moveDy, moveDx);
+      else if (Math.hypot(dx, dy) > 0.001) unit.facing = Math.atan2(dy, dx);
+      if (!Number.isFinite(unit.facing)) unit.facing = unit.side === 'player' ? 0 : Math.PI;
+      const shouldTrail = battleFxCfg.ENABLED && (unit.role === 'cavalry' || moveDist > Math.max(12, (unit.speed || 0) * dt * 0.8));
+      if (shouldTrail) {
+        const perSec = Math.max(1, Number(battleFxCfg.TRAIL_PARTICLES_PER_SEC || 1));
+        const stepSec = 1 / perSec;
+        unit.trailAccumSec = Number(unit.trailAccumSec || 0) + dtSec;
+        while (unit.trailAccumSec >= stepSec) {
+          spawnFx({ type: 'trail', x: unit.x, y: unit.y, dirX: unit.vx, dirY: unit.vy, cfg: battleFxCfg });
+          unit.trailAccumSec -= stepSec;
+        }
+      } else {
+        unit.trailAccumSec = 0;
+      }
+      unit.animKey = this.getUnitAnimationKey(unit) || 'infantry_idle';
+      if (this.game?.assetsReady && this.game?.spriteLoader) {
+        const player = this.getBattleAnimPlayer(unit);
+        player?.set?.(unit.animKey);
+        player?.update?.(deltaMs);
+      }
+    }
+
+    const nextProjectiles = [];
+    for (const projectile of (battle.projectiles || [])) {
+      projectile.x += projectile.vx * dt;
+      projectile.y += projectile.vy * dt;
+      projectile.ttl -= dt;
+      if (projectile.ttl <= 0) { this.game?.projectilePool?.release(projectile); continue; }
+      const targets = projectile.side === 'player' ? enemyUnits : playerUnits;
+      let hit = false;
+      for (const unit of targets) {
+        if (unit.dead || unit.hp <= 0) continue;
+        const hitDist = Math.hypot(unit.x - projectile.x, unit.y - projectile.y);
+        if (hitDist <= (unit.radius || 9)) {
+          this.applyUnitDamage(projectile, unit, projectile.damage, { isMelee: false });
+          this.applyUnitDamage(projectile, unit, projectile.damage);
+          applySuppressionOnHit({ target: unit, battleTimeSec: Number(battle.timeSec || 0), cfg: rangedCfg });
+          hit = true;
+          this.game?.projectilePool?.release(projectile);
+          break;
+        }
+      }
+      if (!hit) nextProjectiles.push(projectile);
+    }
+    battle.projectiles = nextProjectiles;
+    this.updateFloatingTexts(dt);
+
+    this.game?.updateTransientUIState?.();
   }
 
-  render(ctx, camera) {
-    // Battle render logic moves here incrementally (Sub-Step 2D).
+  renderBattle() {
+    const ctx = this.game?.ctx;
+    const canvas = this.game?.canvas;
+    if (!ctx || !canvas) return;
+    ctx.fillStyle = '#1f1f24';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const battle = this.state?.battle;
+    if (!battle) return;
+    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+      this.game?.updateTransientUIState?.();
+      return;
+    }
+
+    const playerUnits = battle.playerUnits || [];
+    const enemyUnits = battle.enemyUnits || [];
+
+    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+      const preview = this.game.battleDeployMode.computePreviewPositions(playerUnits.length);
+      ctx.fillStyle = 'rgba(212,175,55,0.12)';
+      ctx.fillRect(40, 60, Math.max(120, (canvas.width / 2) - 80), Math.max(120, canvas.height - 120));
+      ctx.save();
+      ctx.fillStyle = 'rgba(90,180,255,0.45)';
+      preview.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill(); });
+      const ax = this.game.battleDeployMode.anchorX;
+      const ay = this.game.battleDeployMode.anchorY;
+      const len = 42;
+      const rad = (this.game.battleDeployMode.angleDeg * Math.PI) / 180;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax + Math.cos(rad) * len, ay + Math.sin(rad) * len);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0).length;
+    const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0).length;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '20px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R/X Commands`, canvas.width / 2, 30);
+    const ammoNow = Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)));
+    const ammoStart = Math.max(0, Math.floor(Number(battle.playerAmmoStart ?? 0)));
+    ctx.font = '14px Arial';
+    ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, canvas.width / 2, 50);
+
+    const cameraCfg = this.getBattleCameraConfig();
+    ctx.save();
+    if (cameraCfg.ENABLED && battle.camera) applyCameraTransform(ctx, battle.camera);
+
+    const now = performance.now();
+    for (const unit of [...playerUnits, ...enemyUnits]) {
+      this.ensureBattleUnitFx(unit);
+      if (unit.hp <= 0 && !unit.fx.deathStartedAt) unit.fx.deathStartedAt = now;
+      const isRenderable = !unit._remove && (!unit.dead || unit.fx.deathStartedAt);
+      if (!isRenderable) continue;
+      this.drawUnitSpriteOrFallback(ctx, unit, unit.x, unit.y, unit.radius || 9, now);
+
+      if (unit.isRanged && !unit._remove) {
+        ctx.fillStyle = '#f2c94c';
+        ctx.beginPath();
+        ctx.arc(unit.x, unit.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (!unit.dead && unit.hp > 0) {
+        const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
+        const moraleRatio = Math.max(0, Math.min(1, (unit.morale || 0) / Math.max(1, unit.moraleMax || 1)));
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(unit.x - 12, unit.y - 21, 24, 3);
+        ctx.fillStyle = unit.moraleState === 'routing' ? '#ff6b6b' : (unit.moraleState === 'shaken' ? '#f2c94c' : '#6bdc87');
+        ctx.fillRect(unit.x - 12, unit.y - 21, 24 * moraleRatio, 3);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
+        ctx.fillStyle = '#89d38d';
+        ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
+
+        if (unit.isRanged) {
+          ctx.fillStyle = '#e6e6e6';
+          ctx.font = '10px Arial';
+          ctx.textAlign = 'left';
+          const ammoText = unit.side === 'player' ? `A: ${Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)))}` : 'A: ∞';
+          ctx.fillText(ammoText, unit.x + 10, unit.y - 10);
+          if (this.state?.devMode && unit.holdFire === true) ctx.fillText('X', unit.x + 10, unit.y + 2);
+          ctx.textAlign = 'center';
+        }
+      }
+    }
+
+    for (const projectile of (battle.projectiles || [])) {
+      ctx.fillStyle = projectile.side === 'player' ? '#c6defd' : '#ffc5c2';
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, projectile.radius || 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const battleFxCfg = this.getBattleFxConfig();
+    if (battleFxCfg.ENABLED) renderBattleFx(ctx);
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '12px Arial';
+    for (const ft of this.game?.floatingTexts || []) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, ft.ttl / 0.8));
+      ctx.fillStyle = ft.color || '#ffffff';
+      ctx.fillText(ft.text || '', ft.x, ft.y);
+    }
+    ctx.restore();
+    ctx.restore();
+
+    const weatherTint = getWeatherTint(this.game?.weatherState || this.state?.weatherState, this.game?.getWeatherConfig?.());
+    renderWeatherOverlay(ctx, canvas.width, canvas.height, weatherTint);
+
+    const currentEvents = this.game?.refreshCurrentEventsSummary?.(this.state?.day);
+    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
+    this.game?.hudManager?.update?.();
   }
 
-  startBattle(playerUnits, enemyUnits, terrain) {
-    // Initialize battle state (Sub-Step 2D).
+  resolveBattle(result) {
+    if (!this.state || this.state.mode !== 'battle') return false;
+    const battle = this.state.battle;
+    if (!battle?.enemyId || battle.result || this.state.aftermath) return false;
+
+    const enemyId = battle.enemyId;
+    battle.result = result;
+    battle.resolvedAt = Date.now();
+
+    let usedAmmo = 0;
+    if (Number.isFinite(battle.playerAmmoStart)) {
+      usedAmmo = Math.max(0, Math.floor(Number(battle.playerAmmoStart) - Math.max(0, Number(battle.playerAmmo ?? 0))));
+    }
+    if (!Number.isFinite(usedAmmo)) usedAmmo = 0;
+    const arrowsExists = Array.isArray(this.game?.playerParty?.inventory?.items)
+      && this.game.playerParty.inventory.items.some((item) => item?.id === 'arrows');
+    if (arrowsExists && usedAmmo > 0) this.game?.removeItem?.('arrows', usedAmmo);
+
+    const tuning = this.game?.getEffectiveTuning?.() || {};
+    const rewardCfg = tuning.BATTLE_REWARDS || CONST.BATTLE_REWARDS;
+    const encounterId = `${enemyId}:${Math.floor(battle.startedAt ?? battle.resolvedAt ?? 0)}`;
+    const rewardRng = createBattleRng({
+      worldSeed: this.state?.seed,
+      encounterId,
+      day: this.state?.day,
+    });
+    const enemyPower = computeEnemyPower({ battle });
+    const lootReward = result === 'victory'
+      ? generateRewardLoot({ cfg: rewardCfg, rng: rewardRng, enemyPower })
+      : { gold: 0, items: [] };
+
+    const playerParty = this.game?.playerParty;
+    if (playerParty) playerParty.gold = (playerParty.gold ?? 0) + Number(lootReward.gold ?? 0);
+    for (const item of lootReward.items || []) {
+      const id = item?.id === 'food' ? 'grain' : item?.id;
+      this.game?.addItem?.(id, this.game?.getItemName?.(id), Math.max(1, Math.floor(item?.qty ?? 1)));
+    }
+
+    const rosterBefore = new Map((playerParty?.roster || []).map((u) => [u.id, { ...u }]));
+    const casualtyCfg = (this.game?.getEffectiveTuning?.() || {}).BATTLE_CASUALTIES;
+    applyBattleOutcomes({ battle, party: playerParty, cfg: casualtyCfg, rng: Math.random });
+
+    const dead = [];
+    const wounded = [];
+    for (const [id, unitBefore] of rosterBefore.entries()) {
+      const after = (playerParty?.roster || []).find((u) => u.id === id);
+      if (!after) dead.push({ id: unitBefore.id, name: unitBefore.name });
+      else if (after.status === 'wounded') wounded.push({ id: after.id, name: after.name });
+    }
+
+    const routingCount = (battle.playerUnits || []).filter((unit) => unit?.moraleState === 'routing').length;
+    const manyRouted = routingCount >= Math.ceil(Math.max(1, (battle.playerUnits || []).length) * 0.5);
+    const renownDelta = result === 'victory'
+      ? computeRenownDelta({
+        cfg: rewardCfg,
+        enemyPower,
+        casualtiesInfo: { deadCount: dead.length },
+        routingInfo: { manyRouted },
+      })
+      : 0;
+    if (playerParty) playerParty.renown = (playerParty.renown ?? 0) + renownDelta;
+
+    applyBattleOutcomeToRelations({
+      state: this.state.factions,
+      playerFactionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
+      enemyFactionId: battle.enemyFactionId || CONST.FACTION.ID.BANDITS,
+      result,
+      casualties: { dead: dead.length, wounded: wounded.length },
+      cfg: (this.game?.getEffectiveTuning?.() || {}).DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
+    });
+
+    const warCfg = (this.game?.getEffectiveTuning?.() || {}).FACTION_WAR || CONST.FACTION_WAR;
+    const playerFactionId = playerParty?.factionId || CONST.FACTION.ID.PLAYER;
+    const enemyFactionId = battle.enemyFactionId || CONST.FACTION.ID.BANDITS;
+    const nearCityId = battle?.context?.nearCityId || null;
+    const nearCity = (this.state?.map?.settlements || []).find((s) => s?.id === nearCityId) || null;
+    const isCityBattle = Boolean(nearCity);
+    onBattleResolved({
+      warState: this.state.warState,
+      factionsState: this.state.factions,
+      cfg: warCfg,
+      playerFactionId,
+      enemyFactionId,
+      result,
+      isCityBattle,
+    });
+    if (result === 'victory' && nearCity && nearCity.ownerFactionId === enemyFactionId) {
+      const taken = captureCity({
+        city: nearCity,
+        newOwnerFactionId: playerFactionId,
+        warState: this.state.warState,
+        factionsState: this.state.factions,
+        cfg: warCfg,
+        currentDay: this.state?.day ?? 1,
+      });
+      if (taken) this.game?.setLastEventLog?.(`City captured: ${nearCity.name || nearCity.id}`);
+    }
+
+    this.state.aftermath = {
+      result,
+      enemyId,
+      enemyFactionId: battle.enemyFactionId || CONST.FACTION.ID.BANDITS,
+      dead,
+      wounded,
+      casualties: { dead: dead.length, wounded: wounded.length, survivors: Math.max(0, (playerParty?.roster || []).length) },
+      loot: lootReward.items || [],
+      goldDelta: lootReward.gold || 0,
+      renownDelta,
+      renownTotal: playerParty?.renown ?? 0,
+      enemyPower,
+      routing: { manyRouted, routedCount: routingCount, totalUnits: (battle.playerUnits || []).length },
+      timestamp: Date.now(),
+    };
+    this.state.uiPanel = this.game?.buildAftermathPanelData?.();
+    this.state.setMode('aftermath');
+    this.game?.updateTransientUIState?.();
+    return true;
   }
 
-  endBattle(result) {
-    // Cleanup and resolve battle result (Sub-Step 2D).
+  generateBattleLoot(result, battle) {
+    const enemyUnits = battle?.enemyUnits || [];
+    const infantryCount = enemyUnits.filter((u) => !u?.isRanged).length;
+    const archerCount = enemyUnits.filter((u) => u?.isRanged).length;
+    const total = enemyUnits.length;
+    const unitScale = Math.max(1, Math.floor(total / 2));
+    if (result === 'defeat') return [];
+
+    const loot = [];
+    const push = (id, qty) => {
+      if (!Number.isFinite(qty) || qty <= 0) return;
+      const item = (this.game?.itemCatalog || []).find((i) => i.id === id);
+      if (!item) return;
+      loot.push({ id: item.id, name: item.name, qty: Math.floor(qty), unitValue: item.unitValue ?? item.baseBuy ?? 1 });
+    };
+
+    if (result === 'victory') {
+      push('grain', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
+      push('leather', Math.max(1, Math.floor(infantryCount / 2)));
+      if (archerCount > 0) {
+        push('arrows', 2 + Math.floor(archerCount * 1.5));
+        push('wood', 1 + Math.floor(archerCount / 2));
+      }
+      if (Math.random() < 0.2) push('iron', 1 + Math.floor(unitScale / 3));
+    } else {
+      push('grain', Math.max(1, Math.floor(unitScale / 2)));
+      if (archerCount > 0) push('arrows', 1 + Math.floor(archerCount / 2));
+    }
+
+    return loot.slice(0, 9);
+  }
+
+  applyRosterOutcomeFromBattle(battle) {
+    const roster = this.game?.playerParty?.roster || [];
+    const dead = [];
+    const wounded = [];
+
+    for (const unit of (battle?.playerUnits || [])) {
+      const idx = roster.findIndex((r) => r.id === unit.sourceId);
+      if (idx < 0) continue;
+      const model = roster[idx];
+      if (unit.hp <= 0 || unit.dead) {
+        dead.push({ id: model.id, name: model.name });
+        roster.splice(idx, 1);
+        continue;
+      }
+      model.hp = Math.max(1, Math.floor(unit.hp));
+      model.wounded = (model.hp / Math.max(1, model.maxHp)) <= 0.35;
+      if (model.wounded) wounded.push({ id: model.id, name: model.name });
+    }
+
+    return { dead, wounded };
+  }
+
+  applyBattleExit(enemy, enemyId, pushbackDistance) {
+    if (Number.isFinite(pushbackDistance) && pushbackDistance > 0) {
+      const previousDistance = this.game?.encounterPushbackDistance;
+      if (this.game) this.game.encounterPushbackDistance = pushbackDistance;
+      this.game?.applyEncounterPushback?.(enemy);
+      if (this.game) this.game.encounterPushbackDistance = previousDistance;
+    }
+
+    if (this.game) this.game.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
+    this.state.battle = null;
+    this.game?.battleCommandsUI?.hide?.();
+    this.game?.battleDeployUI?.hide?.();
+    if (this.game) this.game.battleDeployMode = null;
   }
 }
