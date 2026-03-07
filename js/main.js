@@ -85,7 +85,7 @@ import {
 } from './systems/battle-rewards.js';
 import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
 import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
-import { initWeatherLayer, setWeatherState, tickWeatherLayer, renderWeatherOverlay } from './rendering/weather-layer.js';
+import { initWeatherLayer, setWeatherState, renderWeatherOverlay } from './rendering/weather-layer.js';
 import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
 import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
 import { createDefaultSettings, applySettingsPatch, serializeSettings, deserializeSettings } from './systems/settings.js';
@@ -99,7 +99,7 @@ import {
 import {
   createInitialWorldAiState,
   ensureWorldParties,
-  updateWorldParties,
+
   removeWorldParty,
   getBanditCap,
 } from './systems/world-ai.js';
@@ -1351,57 +1351,7 @@ class FallOfCavalry {
 
   initEnemyParties() { return this.worldManager.initEnemyParties(); }
 
-  updateMapSimulation(dt) {
-    this.updatePoiInteractHint();
-    this.updateTransientUIState();
-    if (this.state) this.state.worldAi = this.worldAi;
-    if (this.state?.paused || this.state?.accounting) return;
-    this.updatePlayerParty(dt);
-    if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
-      const worldState = this.state?.map || {};
-      ensureWorldParties({
-        aiState: this.worldAi,
-        worldState,
-        factions: this.state?.factions || CONST.FACTIONS,
-        cfg: this.getWorldAiCfgWithRegionMods(),
-        currentDay: this.state?.day ?? 1,
-        banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
-      });
-      this.syncWarStateFromRelations();
-      const encounters = updateWorldParties({
-        aiState: this.worldAi,
-        worldState,
-        playerParty: this.playerParty,
-        factions: this.state?.factions || CONST.FACTIONS,
-        cfg: this.getWorldAiCfgWithRegionMods(),
-        dtSec: dt,
-      });
-      this.processWorldAiEncounters(encounters);
-    } else {
-      this.updateEnemyParties(dt);
-      this.tryTriggerEncounter();
-    }
-
-    const party = this.playerParty;
-    const tilePos = this.getTilePosition(party?.x ?? 0, party?.y ?? 0);
-    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
-    const settlementTx = Number.isFinite(nearestSettlement?.tx) ? nearestSettlement.tx : Math.floor(Number(nearestSettlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
-    const settlementTy = Number.isFinite(nearestSettlement?.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
-    const nearSettlement = Boolean(nearestSettlement) && Math.hypot(settlementTx - tilePos.tx, settlementTy - tilePos.ty) <= 2.5;
-    const nearPoi = Boolean(this.getNearestInteractablePoi());
-
-    this.maybeShowTutorialHint({
-      nearSettlement,
-      nearPoi,
-      inCamp: Boolean(this.state?.camp?.active),
-      inBattleDeploy: false,
-      inBattleFight: false,
-      inEncounter: this.state?.mode === 'encounter',
-    });
-
-    this.updateFogFromPlayer();
-    tickWeatherLayer(dt, this.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
-  }
+  updateMapSimulation(dt) { return this.worldManager.updateMapSimulation(dt); }
 
   ensureWorldGenerated(seed) { return this.worldManager.ensureWorldGenerated(seed); }
 
@@ -1423,69 +1373,7 @@ class FallOfCavalry {
 
   computeEncounterRiskContext() { return this.worldManager.computeEncounterRiskContext(); }
 
-  updateTransientUIState() {
-    if (!this.state) return;
-    this.ensureFactionState();
-    this.state.encounterRisk = this.computeEncounterRiskContext();
-    if (this.state.clueMarker && Number(this.state.day ?? 1) > Number(this.state.clueMarker.expiresDay ?? 0)) {
-      this.state.clueMarker = null;
-    }
-    this.cleanupExpiredMarketOpportunities(this.state.day);
-    const currentEvents = this.refreshCurrentEventsSummary(this.state.day);
-    setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
-    if (this.state.lastEventLog && Date.now() >= (this.state.lastEventLogUntil ?? 0)) {
-      this.state.lastEventLog = '';
-      this.state.lastEventLogUntil = 0;
-    }
-
-    if (this.state.mode === 'roster') {
-      this.state.playerRoster = this.playerRoster.map((unit) => ({
-        ...unit,
-        status: unit?.status || 'healthy',
-        effectiveCount: this.getEffectiveCount(unit),
-      }));
-      this.state.enemyRoster = this.enemyRoster.map((unit) => ({
-        ...unit,
-        effectiveCount: this.getEffectiveCount(unit),
-      }));
-      this.state.rosterCursorIndex = this.rosterCursorIndex;
-      this.state.rosterSelectedCount = this.getSelectedRosterCount();
-      this.state.rosterPowerPlayer = this.state.playerRoster.reduce((sum, unit) => sum + (unit.effectiveCount * ((unit.atk ?? 10) + 8)), 0);
-      this.state.rosterPowerEnemy = this.state.enemyRoster.reduce((sum, unit) => sum + (unit.effectiveCount * ((unit.atk ?? 10) + 8)), 0);
-    }
-
-    if (this.state.mode === 'city') {
-      this.state.uiPanel = this.buildCityPanelData();
-      const settlement = this.state.city;
-      this.state.currentCityFactionContext = this.getCityFactionContext(settlement);
-      if (settlement?.id) {
-        this.cityUI?.setData?.({
-          settlement,
-          recruitPool: settlement.recruitPool || [],
-          market: this.state?.markets?.[settlement.id] || null,
-        });
-      }
-    }
-
-    if (this.state.mode === 'aftermath') {
-      this.state.uiPanel = this.buildAftermathPanelData();
-    }
-    if (this.state.mode !== 'city') this.state.currentCityFactionContext = null;
-
-
-    if (this.state?.camp?.active) {
-      const { weight, cap } = this.getLogisticsSpeedMult();
-      const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
-      const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
-      this.campUI?.refresh?.({ weight, capacity: cap, raidChance });
-    }
-
-    if (this.state?.accounting) this.accountingUI?.show?.(this.state.accounting);
-    else this.accountingUI?.hide?.();
-
-    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
-    this.hudManager?.update?.();
-  }
+  updateTransientUIState() { return this.worldManager.updateTransientUIState(); }
 
   updateBattleSimulation(dt) { return this.battleManager.updateBattleSimulation(dt); }
 
@@ -1508,133 +1396,9 @@ class FallOfCavalry {
   }
 
 
-  updatePlayerParty(dt) {
-    if (!this.playerParty || !Number.isFinite(dt) || dt <= 0) return;
+  updatePlayerParty(dt) { return this.worldManager.updatePlayerParty(dt); }
 
-    if (this.playerParty.arrivalFeedbackTimer > 0) {
-      this.playerParty.arrivalFeedbackTimer = Math.max(0, this.playerParty.arrivalFeedbackTimer - dt);
-    }
-
-    if (this.followParty) {
-      this.centerCameraOnParty();
-    }
-
-    if (this.mode === 'paused' || this.state?.mode !== 'map') return;
-
-    if (!this.playerParty.hasDestination) return;
-
-    const dx = this.playerParty.destX - this.playerParty.x;
-    const dy = this.playerParty.destY - this.playerParty.y;
-    const dist = Math.hypot(dx, dy);
-    const epsilon = 2;
-
-    if (dist <= epsilon) {
-      this.completePlayerArrival();
-      return;
-    }
-
-    if (this.state?.camp?.active) {
-      this.cancelPlayerDestination();
-      return;
-    }
-
-    const currentContext = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
-    const logistics = this.getLogisticsSpeedMult();
-    this.currentTerrainStatus = `${currentContext.terrainLabel} | Yük: ${Math.round(logistics.weight)}/${Math.round(logistics.cap)}`;
-    if (currentContext.blocked) {
-      this.cancelPlayerDestination();
-      return;
-    }
-
-    const step = this.playerParty.speed * currentContext.speedMult * logistics.starvingMult * logistics.overcapMult * dt;
-    if (step >= dist) {
-      this.completePlayerArrival();
-      return;
-    }
-
-    const nx = this.playerParty.x + (dx / dist) * step;
-    const ny = this.playerParty.y + (dy / dist) * step;
-    const nextContext = this.getMovementContextAt(nx, ny);
-    if (nextContext.blocked) {
-      this.cancelPlayerDestination();
-      return;
-    }
-
-    this.playerParty.x = nx;
-    this.playerParty.y = ny;
-
-    const clamped = this.clampToWorld(this.playerParty.x, this.playerParty.y);
-    this.playerParty.x = clamped.x;
-    this.playerParty.y = clamped.y;
-
-    if (this.followParty) {
-      this.centerCameraOnParty();
-    }
-  }
-
-  updateEnemyParties(dt) {
-    if (!Array.isArray(this.enemyParties) || this.enemyParties.length === 0) return;
-    if (!Number.isFinite(dt) || dt <= 0 || this.state?.mode !== 'map') return;
-
-    const bounds = this.getWorldBounds();
-    const driftRate = 0.15;
-    const playerX = Number(this.playerParty?.x ?? 0);
-    const playerY = Number(this.playerParty?.y ?? 0);
-
-    this.enemyParties.forEach((enemy, index) => {
-      if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
-
-      const wobble = (this.state.timeSec * 0.65) + (index * 1.37);
-      enemy.vx = (enemy.vx ?? 0) + Math.sin(wobble) * driftRate * dt;
-      enemy.vy = (enemy.vy ?? 0) + Math.cos(wobble * 1.11) * driftRate * dt;
-
-      const enemyFactionId = enemy.factionId || CONST.FACTION.ID.BANDIT;
-      const stance = getStance(this.state?.factions, enemyFactionId, 'player', CONST.DIPLOMACY_RELATIONS);
-      const dxToPlayer = playerX - enemy.x;
-      const dyToPlayer = playerY - enemy.y;
-      const playerDist = Math.hypot(dxToPlayer, dyToPlayer) || 1;
-      const playerDirX = dxToPlayer / playerDist;
-      const playerDirY = dyToPlayer / playerDist;
-      const aggroRadius = stance === 'WAR' ? 260 : (stance === 'NEUTRAL' ? 140 : 0);
-      if (aggroRadius > 0 && playerDist <= aggroRadius) {
-        const aggroStrength = stance === 'WAR' ? 0.85 : 0.25;
-        enemy.vx += playerDirX * aggroStrength * dt;
-        enemy.vy += playerDirY * aggroStrength * dt;
-      }
-      if (stance === 'ALLY' && playerDist < 140) {
-        enemy.vx -= playerDirX * 0.5 * dt;
-        enemy.vy -= playerDirY * 0.5 * dt;
-      }
-
-      const speedLen = Math.hypot(enemy.vx, enemy.vy) || 1;
-      enemy.vx /= speedLen;
-      enemy.vy /= speedLen;
-
-      const speed = Number.isFinite(enemy.speed) ? enemy.speed : 35;
-      const radius = Number.isFinite(enemy.radius) ? enemy.radius : 12;
-      const context = this.getMovementContextAt(enemy.x, enemy.y);
-      const moveSpeed = speed * context.speedMult;
-      const nx = enemy.x + enemy.vx * moveSpeed * dt;
-      const ny = enemy.y + enemy.vy * moveSpeed * dt;
-      const nextContext = this.getMovementContextAt(nx, ny);
-      if (nextContext.blocked) {
-        enemy.vx *= -1;
-        enemy.vy *= -1;
-      } else {
-        enemy.x = nx;
-        enemy.y = ny;
-      }
-
-      if (enemy.x < bounds.minX + radius || enemy.x > bounds.maxX - radius) {
-        enemy.vx *= -1;
-        enemy.x = Math.max(bounds.minX + radius, Math.min(bounds.maxX - radius, enemy.x));
-      }
-      if (enemy.y < bounds.minY + radius || enemy.y > bounds.maxY - radius) {
-        enemy.vy *= -1;
-        enemy.y = Math.max(bounds.minY + radius, Math.min(bounds.maxY - radius, enemy.y));
-      }
-    });
-  }
+  updateEnemyParties(dt) { return this.worldManager.updateEnemyParties(dt); }
 
   processWorldAiEncounters(encounters) { return this.worldManager.processWorldAiEncounters(encounters); }
   tryTriggerEncounter() { return this.worldManager.tryTriggerEncounter(); }

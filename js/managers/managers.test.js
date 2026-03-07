@@ -625,3 +625,110 @@ describe('WorldManager - Phase 3C', () => {
     expect(wm.processWorldAiEncounters([{ partyId: 'p1' }])).toBe(false);
   });
 });
+
+describe('WorldManager - Phase 3D', () => {
+  function createWM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      camera: { x: 0, y: 0, zoom: 1 },
+      map: { width: 10, height: 10, tiles: new Array(100).fill({}), settlements: [{ tx: 5, ty: 5, id: 'c1', x: 300, y: 300 }], rivers: [], roads: [], crossings: [], biomes: new Uint8Array(100), fog: new Uint8Array(100) },
+      timeSec: 0,
+      day: 1,
+      setMode(m) { this.mode = m; },
+      ...stateOverrides,
+    };
+    const wm = new WorldManager(state);
+    wm.init({
+      canvas: { width: 800, height: 600 },
+      playerParty: { x: 300, y: 300, radius: 12, speed: 180, hovered: false, destX: null, destY: null, hasDestination: false, arrivalFeedbackTimer: 0, roster: [], gold: 0, xp: 0, morale: 64, renown: 0, starveDays: 0, contracts: [], factionId: 'player', inventory: { items: [], capacity: null } },
+      enemyParties: [],
+      worldAi: { parties: [] },
+      worldEncounterPartyByEnemyId: {},
+      lastEncounterEndTimeByEnemyId: {},
+      mouseWorldX: 0, mouseWorldY: 0,
+      mode: 'playing',
+      followParty: false,
+      currentTerrainStatus: '',
+      playerRoster: [],
+      enemyRoster: [],
+      rosterCursorIndex: 0,
+      ensureFactionState: () => {},
+      ensureRosterUnitState: (u) => u,
+      ensureInventoryModel: () => {},
+      initRosters: () => {},
+      getEffectiveTuning: () => ({ WORLD_AI: { ENABLED: false } }),
+      getSettlementTier: () => 2,
+      getWorldAiCfgWithRegionMods: () => ({}),
+      getBanditCapWithEvents: () => undefined,
+      getCurrentEvents: () => [],
+      maybeShowTutorialHint: () => {},
+      updatePoiInteractHint: () => {},
+      syncWarStateFromRelations: () => {},
+      getNearestInteractablePoi: () => null,
+      cleanupExpiredMarketOpportunities: () => {},
+      refreshCurrentEventsSummary: () => [],
+      getSelectedRosterCount: () => 0,
+      buildCityPanelData: () => ({}),
+      getCityFactionContext: () => null,
+      buildAftermathPanelData: () => ({}),
+      getLogisticsSpeedMult: () => ({ weight: 10, cap: 100, starvingMult: 1, overcapMult: 1 }),
+      hudManager: { update: () => {} },
+      ...gameOverrides,
+    });
+    return wm;
+  }
+
+  it('updateTransientUIState sets encounterRisk on state', () => {
+    const wm = createWM();
+    wm.updateTransientUIState();
+    expect(wm.state.encounterRisk).toBeDefined();
+    expect(wm.state.encounterRisk).toHaveProperty('mult');
+  });
+
+  it('updateTransientUIState syncs roster state in roster mode', () => {
+    const wm = createWM({ mode: 'roster' }, {
+      playerRoster: [{ id: 'u1', hp: 100, maxHp: 100, atk: 14 }],
+      enemyRoster: [{ id: 'e1', hp: 50, maxHp: 100, atk: 10 }],
+    });
+    wm.updateTransientUIState();
+    expect(wm.state.playerRoster).toHaveLength(1);
+    expect(wm.state.enemyRoster).toHaveLength(1);
+    expect(wm.state.rosterPowerPlayer).toBeGreaterThan(0);
+  });
+
+  it('updatePlayerParty does nothing without party', () => {
+    const wm = createWM({}, { playerParty: null });
+    expect(() => wm.updatePlayerParty(0.016)).not.toThrow();
+  });
+
+  it('updatePlayerParty moves party toward destination', () => {
+    const party = { x: 100, y: 100, radius: 12, speed: 180, destX: 200, destY: 100, hasDestination: true, arrivalFeedbackTimer: 0 };
+    const wm = createWM({}, { playerParty: party });
+    wm.rebuildMovementMasks();
+    wm.updatePlayerParty(0.1);
+    expect(party.x).toBeGreaterThan(100);
+  });
+
+  it('updateEnemyParties does nothing with empty array', () => {
+    const wm = createWM();
+    expect(() => wm.updateEnemyParties(0.016)).not.toThrow();
+  });
+
+  it('updateEnemyParties moves enemies', () => {
+    const enemy = { id: 'e1', x: 200, y: 200, radius: 12, speed: 35, vx: 1, vy: 0, factionId: 'bandits' };
+    const wm = createWM({ timeSec: 1 }, { enemyParties: [enemy] });
+    wm.rebuildMovementMasks();
+    const oldX = enemy.x;
+    wm.updateEnemyParties(0.1);
+    expect(enemy.x).not.toBe(oldX);
+  });
+
+  it('updateMapSimulation skips when paused', () => {
+    const party = { x: 100, y: 100, radius: 12, speed: 180, destX: 200, destY: 100, hasDestination: true, arrivalFeedbackTimer: 0 };
+    const wm = createWM({ paused: true }, { playerParty: party });
+    wm.rebuildMovementMasks();
+    wm.updateMapSimulation(0.1);
+    // Party should not move when paused
+    expect(party.x).toBe(100);
+  });
+});
