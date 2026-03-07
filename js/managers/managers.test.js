@@ -3,6 +3,7 @@ import { BattleManager } from './BattleManager.js';
 import { WorldManager } from './WorldManager.js';
 import { StateManager } from './StateManager.js';
 import { CityManager } from './CityManager.js';
+import { SaveManager } from './SaveManager.js';
 import { UIManager } from './UIManager.js';
 
 describe('Managers', () => {
@@ -730,5 +731,135 @@ describe('WorldManager - Phase 3D', () => {
     wm.updateMapSimulation(0.1);
     // Party should not move when paused
     expect(party.x).toBe(100);
+  });
+});
+
+describe('SaveManager - Phase 4A', () => {
+  function createSM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      day: 5,
+      ...stateOverrides,
+    };
+    const sm = new SaveManager(state);
+    sm.init({
+      playerParty: { gold: 100, roster: [{ id: 'u1' }, { id: 'u2' }] },
+      buildSavePayload: () => ({ version: 1 }),
+      applySavePayload: () => true,
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      ...gameOverrides,
+    });
+    return sm;
+  }
+
+  it('instantiates with correct defaults', () => {
+    const sm = new SaveManager({ mode: 'map' });
+    expect(sm.saveLoadRows).toEqual(['autosave', 'manual1', 'manual2']);
+    expect(sm.saveLoadCursor).toBe(0);
+    expect(sm.autosaveIntervalMs).toBe(60000);
+    expect(sm.autosaveTimerId).toBeNull();
+    expect(sm.saveSystem).toBeNull();
+  });
+
+  it('init creates SaveSystem instance', () => {
+    const sm = createSM();
+    expect(sm.saveSystem).toBeDefined();
+    expect(sm.saveSystem).not.toBeNull();
+  });
+
+  it('getSelectedSaveSlot returns first slot by default', () => {
+    const sm = createSM();
+    expect(sm.getSelectedSaveSlot()).toBe('autosave');
+  });
+
+  it('getSelectedSaveSlot returns correct slot at cursor', () => {
+    const sm = createSM();
+    sm.saveLoadCursor = 2;
+    expect(sm.getSelectedSaveSlot()).toBe('manual2');
+  });
+
+  it('getSelectedSaveSlot clamps out-of-range cursor', () => {
+    const sm = createSM();
+    sm.saveLoadCursor = 99;
+    expect(sm.getSelectedSaveSlot()).toBe('manual2');
+  });
+
+  it('buildSaveLoadPanelData returns correct structure', () => {
+    const sm = createSM();
+    const data = sm.buildSaveLoadPanelData();
+    expect(data.title).toBe('Save / Load');
+    expect(data.body).toContain('Day 5');
+    expect(data.body).toContain('Gold 100');
+    expect(data.body).toContain('Roster 2');
+    expect(data.footer).toContain('autosave');
+  });
+
+  it('saveToSlot calls buildSavePayload and returns true on success', () => {
+    let savedPayload = null;
+    const sm = createSM({}, {
+      buildSavePayload: () => ({ version: 1, test: true }),
+    });
+    sm.saveSystem = { saveSlot: (slot, payload) => { savedPayload = payload; return { ok: true }; }, hasSlot: () => false };
+    const result = sm.saveToSlot('manual1');
+    expect(result).toBe(true);
+    expect(savedPayload).toEqual({ version: 1, test: true });
+  });
+
+  it('saveToSlot returns false when saveSystem fails', () => {
+    const sm = createSM();
+    sm.saveSystem = { saveSlot: () => ({ ok: false }), hasSlot: () => false };
+    expect(sm.saveToSlot('manual1')).toBe(false);
+  });
+
+  it('loadFromSlot calls applySavePayload on success', () => {
+    let appliedData = null;
+    const sm = createSM({}, {
+      applySavePayload: (data) => { appliedData = data; return true; },
+    });
+    sm.saveSystem = { loadSlot: () => ({ ok: true, data: { game: {} } }), hasSlot: () => true };
+    const result = sm.loadFromSlot('manual1');
+    expect(result).toBe(true);
+    expect(appliedData).toEqual({ game: {} });
+  });
+
+  it('loadFromSlot returns false when slot empty', () => {
+    const sm = createSM();
+    sm.saveSystem = { loadSlot: () => ({ ok: false, reason: 'not found' }), hasSlot: () => false };
+    expect(sm.loadFromSlot('manual1')).toBe(false);
+  });
+
+  it('startAutosaveLoop sets timer id', () => {
+    const sm = createSM();
+    sm.autosaveIntervalMs = 999999;
+    sm.startAutosaveLoop();
+    expect(sm.autosaveTimerId).not.toBeNull();
+    sm.stopAutosaveLoop();
+  });
+
+  it('stopAutosaveLoop clears timer id', () => {
+    const sm = createSM();
+    sm.autosaveIntervalMs = 999999;
+    sm.startAutosaveLoop();
+    sm.stopAutosaveLoop();
+    expect(sm.autosaveTimerId).toBeNull();
+  });
+
+  it('quickSave delegates to saveToSlot manual1', () => {
+    let savedSlot = null;
+    const sm = createSM();
+    sm.saveSystem = { saveSlot: (slot) => { savedSlot = slot; return { ok: true }; }, hasSlot: () => false };
+    sm.quickSave();
+    expect(savedSlot).toBe('manual1');
+  });
+
+  it('quickLoad delegates to loadFromSlot manual1', () => {
+    let loadedSlot = null;
+    const sm = createSM({}, {
+      applySavePayload: () => true,
+    });
+    sm.saveSystem = { loadSlot: (slot) => { loadedSlot = slot; return { ok: true, data: {} }; }, hasSlot: () => true };
+    sm.quickLoad();
+    expect(loadedSlot).toBe('manual1');
   });
 });

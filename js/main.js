@@ -7,7 +7,7 @@ import GameState from './core/state.js';
 import InputManager from './core/input.js';
 import GameLoop from './core/game-loop.js';
 import HUDManager from './ui/hud.js';
-import SaveSystem from './systems/save-system.js';
+// SaveSystem → SaveManager
 import AudioSystem from './systems/audio-system.js';
 import * as CONST from './constants.js';
 import MinimapSimple from './rendering/minimap-simple.js';
@@ -116,6 +116,7 @@ import {
 import * as utils from './utils.js';
 import { BattleManager } from './managers/BattleManager.js';
 import { WorldManager } from './managers/WorldManager.js';
+import { SaveManager } from './managers/SaveManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -207,7 +208,7 @@ class FallOfCavalry {
     this.input = null;
     this.gameLoop = null;
     this.hudManager = null;
-    this.saveSystem = null;
+    // saveSystem → SaveManager
     this.audioSystem = null;
     this.startScreen = null;
     this.cityUI = null;
@@ -280,12 +281,7 @@ class FallOfCavalry {
     this.battleDragOffsetX = 0;
     this.battleDragOffsetY = 0;
     this.followParty = false;
-    this.saveLoadRows = ['autosave', 'manual1', 'manual2'];
-    this.saveLoadCursor = 0;
-    this.saveLoadPreviousMode = 'map';
-    this.autosaveIntervalMs = 60000;
-    this.autosaveTimerId = null;
-    this.lastAutosaveHudAt = 0;
+    // saveLoadRows, saveLoadCursor, saveLoadPreviousMode, autosaveIntervalMs, autosaveTimerId, lastAutosaveHudAt → SaveManager
     this._tuningPauseMode = null;
 
     this.minimapRenderer = null;
@@ -910,7 +906,8 @@ class FallOfCavalry {
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
-    this.saveSystem = this.saveSystem || new SaveSystem();
+    this.saveManager = this.saveManager || new SaveManager(this.state);
+    this.saveManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -1406,6 +1403,13 @@ class FallOfCavalry {
 
   // backward-compat: encounterMargin used in rendering (drawWorldMap)
   get encounterMargin() { return this.worldManager.encounterMargin; }
+
+  // backward-compat: saveSystem, saveLoadCursor, saveLoadRows used in keyboard handler + game flow
+  get saveSystem() { return this.saveManager.saveSystem; }
+  set saveSystem(v) { this.saveManager.saveSystem = v; }
+  get saveLoadCursor() { return this.saveManager.saveLoadCursor; }
+  set saveLoadCursor(v) { this.saveManager.saveLoadCursor = v; }
+  get saveLoadRows() { return this.saveManager.saveLoadRows; }
 
   resolveEncounter(action) {
     const encounter = this.state?.encounter;
@@ -4260,9 +4264,7 @@ Up/Down select, Enter heal, Esc back`,
     return true;
   }
 
-  getSelectedSaveSlot() {
-    return this.saveLoadRows[Math.max(0, Math.min(this.saveLoadRows.length - 1, this.saveLoadCursor))] || 'manual1';
-  }
+  getSelectedSaveSlot() { return this.saveManager.getSelectedSaveSlot(); }
 
   openSaveLoadPanel() {
     if (typeof this.saveSystem?.openLoadPanel === 'function') {
@@ -4294,56 +4296,11 @@ Up/Down select, Enter heal, Esc back`,
     return true;
   }
 
-  buildSaveLoadPanelData() {
-    const day = Math.floor(this.state?.day ?? 1);
-    const gold = Math.floor(this.playerParty?.gold ?? 0);
-    const rosterSize = (this.playerParty?.roster || []).length;
-    const rows = this.saveLoadRows.map((slot, idx) => {
-      const mark = idx === this.saveLoadCursor ? '>' : ' ';
-      const has = this.saveSystem?.hasSlot?.(slot) ? 'saved' : 'empty';
-      return `${mark} ${slot} (${has})`;
-    }).join('\n');
-    return {
-      title: 'Save / Load',
-      body: `Day ${day}  Gold ${gold}  Roster ${rosterSize}
+  buildSaveLoadPanelData() { return this.saveManager.buildSaveLoadPanelData(); }
 
-${rows}
+  saveToSlot(slot) { return this.saveManager.saveToSlot(slot); }
 
-Up/Down select slot
-S save  L load
-E export to textarea  I import from textarea
-Esc close`,
-      footer: 'Slots: autosave / manual1 / manual2',
-    };
-  }
-
-  saveToSlot(slot) {
-    const payload = this.buildSavePayload();
-    const res = this.saveSystem?.saveSlot?.(slot, payload);
-    if (!res?.ok) {
-      this.setLastEventLog('Save failed');
-      return false;
-    }
-    this.state.lastSaveMeta = { slot, at: Date.now() };
-    this.setLastEventLog(`Saved ${slot}`);
-    this.updateTransientUIState();
-    return true;
-  }
-
-  loadFromSlot(slot) {
-    const res = this.saveSystem?.loadSlot?.(slot);
-    if (!res?.ok || !res.data) {
-      this.setLastEventLog(`Load failed: ${res?.reason || 'unknown'}`);
-      return false;
-    }
-    const ok = this.applySavePayload(res.data, { slot });
-    if (!ok) {
-      this.setLastEventLog('Load failed');
-      return false;
-    }
-    this.setLastEventLog(`Loaded ${slot}`);
-    return true;
-  }
+  loadFromSlot(slot) { return this.saveManager.loadFromSlot(slot); }
 
   exportSelectedSaveToTextarea(slot) {
     const json = this.saveSystem?.exportSlot?.(slot);
@@ -4374,42 +4331,11 @@ Esc close`,
     return this.loadFromSlot(slot);
   }
 
-  startAutosaveLoop() {
-    if (this.autosaveTimerId) return;
-    const tick = () => {
-      this.autosaveTimerId = null;
-      if (this.state?.mode === 'map' && !this.state?.accounting && !this.state?.saveLoadOpen) {
-        this.runAutosave('interval');
-      }
-      this.startAutosaveLoop();
-    };
-    this.autosaveTimerId = setTimeout(tick, this.autosaveIntervalMs);
-  }
-
-  stopAutosaveLoop() {
-    if (!this.autosaveTimerId) return;
-    clearTimeout(this.autosaveTimerId);
-    this.autosaveTimerId = null;
-  }
-
-  runAutosave(trigger = 'manual') {
-    const ok = this.saveToSlot('autosave');
-    if (!ok) return false;
-    const now = Date.now();
-    if ((now - this.lastAutosaveHudAt) >= 30000 || trigger !== 'interval') {
-      this.lastAutosaveHudAt = now;
-      this.setLastEventLog('Autosaved', 1600);
-    }
-    return true;
-  }
-
-  quickSave() {
-    return this.saveToSlot('manual1');
-  }
-
-  quickLoad() {
-    return this.loadFromSlot('manual1');
-  }
+  startAutosaveLoop() { return this.saveManager.startAutosaveLoop(); }
+  stopAutosaveLoop() { return this.saveManager.stopAutosaveLoop(); }
+  runAutosave(trigger) { return this.saveManager.runAutosave(trigger); }
+  quickSave() { return this.saveManager.quickSave(); }
+  quickLoad() { return this.saveManager.quickLoad(); }
 
   renderStart() {
     if (!this.ctx || !this.canvas) return;
