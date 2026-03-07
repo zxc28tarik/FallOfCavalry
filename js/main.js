@@ -4266,35 +4266,8 @@ Up/Down select, Enter heal, Esc back`,
 
   getSelectedSaveSlot() { return this.saveManager.getSelectedSaveSlot(); }
 
-  openSaveLoadPanel() {
-    if (typeof this.saveSystem?.openLoadPanel === 'function') {
-      const opened = this.saveSystem.openLoadPanel();
-      if (opened) return true;
-    }
-
-    if (this.state && !this.state.saveLoadOpen) {
-      this.saveLoadPreviousMode = this.state.mode;
-      this.state.saveLoadOpen = true;
-      this.saveLoadCursor = 0;
-      this.state.uiPanel = this.buildSaveLoadPanelData();
-      this.updateTransientUIState();
-      return true;
-    }
-
-    const continued = this.continueGame();
-    if (!continued) {
-      this.startScreen?.setInfoMessage?.('Kayıt yükleme arayüzü yok; autosave yok.');
-    }
-    return continued;
-  }
-
-  closeSaveLoadPanel() {
-    if (!this.state?.saveLoadOpen) return false;
-    this.state.saveLoadOpen = false;
-    this.state.uiPanel = null;
-    this.updateTransientUIState();
-    return true;
-  }
+  openSaveLoadPanel() { return this.saveManager.openSaveLoadPanel(); }
+  closeSaveLoadPanel() { return this.saveManager.closeSaveLoadPanel(); }
 
   buildSaveLoadPanelData() { return this.saveManager.buildSaveLoadPanelData(); }
 
@@ -4302,34 +4275,8 @@ Up/Down select, Enter heal, Esc back`,
 
   loadFromSlot(slot) { return this.saveManager.loadFromSlot(slot); }
 
-  exportSelectedSaveToTextarea(slot) {
-    const json = this.saveSystem?.exportSlot?.(slot);
-    if (!json) {
-      this.setLastEventLog('Export failed');
-      return false;
-    }
-    if (this.dom?.saveTransferText) {
-      this.dom.saveTransferText.value = json;
-      this.dom.saveTransferText.focus?.();
-      this.dom.saveTransferText.select?.();
-    }
-    this.setLastEventLog(`Exported ${slot}`);
-    return true;
-  }
-
-  importTextareaToSlotAndLoad(slot) {
-    const text = this.dom?.saveTransferText?.value;
-    if (!text || typeof text !== 'string') {
-      this.setLastEventLog('Import text is empty');
-      return false;
-    }
-    const imported = this.saveSystem?.importToSlot?.(slot, text);
-    if (!imported?.ok) {
-      this.setLastEventLog(`Import failed: ${imported?.reason || 'invalid json'}`);
-      return false;
-    }
-    return this.loadFromSlot(slot);
-  }
+  exportSelectedSaveToTextarea(slot) { return this.saveManager.exportSelectedSaveToTextarea(slot); }
+  importTextareaToSlotAndLoad(slot) { return this.saveManager.importTextareaToSlotAndLoad(slot); }
 
   startAutosaveLoop() { return this.saveManager.startAutosaveLoop(); }
   stopAutosaveLoop() { return this.saveManager.stopAutosaveLoop(); }

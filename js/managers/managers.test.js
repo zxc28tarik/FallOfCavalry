@@ -863,3 +863,89 @@ describe('SaveManager - Phase 4A', () => {
     expect(loadedSlot).toBe('manual1');
   });
 });
+
+describe('SaveManager - Phase 4B', () => {
+  function createSM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      day: 5,
+      saveLoadOpen: false,
+      ...stateOverrides,
+    };
+    const sm = new SaveManager(state);
+    sm.init({
+      playerParty: { gold: 100, roster: [{ id: 'u1' }] },
+      buildSavePayload: () => ({ version: 1 }),
+      applySavePayload: () => true,
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      continueGame: () => false,
+      startScreen: { setInfoMessage: () => {} },
+      dom: { saveTransferText: { value: '', focus: () => {}, select: () => {} } },
+      ...gameOverrides,
+    });
+    return sm;
+  }
+
+  it('openSaveLoadPanel sets saveLoadOpen flag', () => {
+    const sm = createSM();
+    const result = sm.openSaveLoadPanel();
+    expect(result).toBe(true);
+    expect(sm.state.saveLoadOpen).toBe(true);
+  });
+
+  it('openSaveLoadPanel does not reopen if already open', () => {
+    const sm = createSM({ saveLoadOpen: true });
+    // Already open, should fall through to continueGame
+    const result = sm.openSaveLoadPanel();
+    expect(result).toBe(false);
+  });
+
+  it('closeSaveLoadPanel clears flag', () => {
+    const sm = createSM({ saveLoadOpen: true });
+    const result = sm.closeSaveLoadPanel();
+    expect(result).toBe(true);
+    expect(sm.state.saveLoadOpen).toBe(false);
+  });
+
+  it('closeSaveLoadPanel returns false when not open', () => {
+    const sm = createSM({ saveLoadOpen: false });
+    expect(sm.closeSaveLoadPanel()).toBe(false);
+  });
+
+  it('exportSelectedSaveToTextarea returns false without data', () => {
+    const sm = createSM();
+    sm.saveSystem = { exportSlot: () => null, hasSlot: () => false };
+    expect(sm.exportSelectedSaveToTextarea('manual1')).toBe(false);
+  });
+
+  it('exportSelectedSaveToTextarea writes to textarea on success', () => {
+    const textarea = { value: '', focus: () => {}, select: () => {} };
+    const sm = createSM({}, { dom: { saveTransferText: textarea } });
+    sm.saveSystem = { exportSlot: () => '{"test":true}', hasSlot: () => true };
+    const result = sm.exportSelectedSaveToTextarea('manual1');
+    expect(result).toBe(true);
+    expect(textarea.value).toBe('{"test":true}');
+  });
+
+  it('importTextareaToSlotAndLoad returns false with empty text', () => {
+    const sm = createSM({}, { dom: { saveTransferText: { value: '' } } });
+    expect(sm.importTextareaToSlotAndLoad('manual1')).toBe(false);
+  });
+
+  it('importTextareaToSlotAndLoad loads on valid import', () => {
+    let loadedSlot = null;
+    const sm = createSM({}, {
+      dom: { saveTransferText: { value: '{"game":{}}' } },
+      applySavePayload: () => true,
+    });
+    sm.saveSystem = {
+      importToSlot: () => ({ ok: true }),
+      loadSlot: (slot) => { loadedSlot = slot; return { ok: true, data: {} }; },
+      hasSlot: () => true,
+    };
+    const result = sm.importTextareaToSlotAndLoad('manual1');
+    expect(result).toBe(true);
+    expect(loadedSlot).toBe('manual1');
+  });
+});
