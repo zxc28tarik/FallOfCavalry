@@ -225,7 +225,7 @@ class FallOfCavalry {
     this.activePoi = null;
     this.pendingPoiAmbush = null;
     // fogOfWar, _worldSeedCache, _crossingSet, _roadMask, _riverMask → WorldManager
-    this._encounterRollByEnemyId = {};
+    // _encounterRollByEnemyId → WorldManager
     this.currentTerrainStatus = 'Arazi: normal';
     this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
     this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
@@ -252,8 +252,7 @@ class FallOfCavalry {
     this.worldAi = createInitialWorldAiState();
     this.worldEncounterPartyByEnemyId = {};
     this.lastEncounterEndTimeByEnemyId = {};
-    this.encounterMargin = 10;
-    this.encounterCooldownMs = 3000;
+    // encounterMargin, encounterCooldownMs → WorldManager
     this.encounterPushbackDistance = 64;
     this.defeatPushbackDistance = 120;
     this.maxUnitsToDeploy = 8;
@@ -1305,76 +1304,13 @@ class FallOfCavalry {
 
   updatePointerWorldState(screenX, screenY) { return this.worldManager.updatePointerWorldState(screenX, screenY); }
 
-  initPlayerParty() {
-    if (this.playerParty) return;
-
-    const fallback = {
-      x: 320,
-      y: 320,
-      radius: 12,
-      speed: 180,
-      selected: false,
-      destX: null,
-      destY: null,
-      hasDestination: false,
-      arrivalFeedbackTimer: 0,
-      hovered: false,
-    };
-
-    const statePlayer = this.state?.player;
-    if (statePlayer && Number.isFinite(statePlayer.x) && Number.isFinite(statePlayer.y)) {
-      fallback.x = statePlayer.x;
-      fallback.y = statePlayer.y;
-      fallback.destX = null;
-      fallback.destY = null;
-    }
-
-    this.playerParty = fallback;
-    this.ensureFactionState();
-    if (!Number.isFinite(this.playerParty.gold)) this.playerParty.gold = 0;
-    if (!Number.isFinite(this.playerParty.xp)) this.playerParty.xp = 0;
-    if (!Number.isFinite(this.playerParty.morale)) this.playerParty.morale = 64;
-    if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = 0;
-    if (!Number.isFinite(this.playerParty.starveDays)) this.playerParty.starveDays = 0;
-    if (!Array.isArray(this.playerParty.contracts)) this.playerParty.contracts = [];
-    if (typeof this.playerParty.factionId !== 'string' || !this.playerParty.factionId) this.playerParty.factionId = CONST.FACTION.ID.PLAYER;
-    if (!Number.isFinite(this.playerParty.renown)) this.playerParty.renown = Number(CONST.GAME.STARTING_RENOWN ?? 0);
-    if (!Array.isArray(this.playerParty.roster) || this.playerParty.roster.length === 0) {
-      const roster = [];
-      for (let i = 0; i < 6; i += 1) {
-        roster.push({ id: `inf-${i + 1}`, name: `Infantry ${i + 1}`, class: 'infantry', hp: 100, maxHp: 100, atk: 14, def: 8, speed: 72, meleeRange: 20, isRanged: false, status: 'healthy', healProgress: 0 });
-      }
-      for (let i = 0; i < 3; i += 1) {
-        roster.push({ id: `arc-${i + 1}`, name: `Archer ${i + 1}`, class: 'archer', hp: 78, maxHp: 78, atk: 10, def: 4, speed: 68, meleeRange: 14, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.2, isRanged: true, status: 'healthy', healProgress: 0 });
-      }
-      this.playerParty.roster = roster;
-    }
-    this.ensureRosterState();
-    if (!this.playerParty.inventory || typeof this.playerParty.inventory !== 'object') {
-      this.playerParty.inventory = { items: [], capacity: null };
-    }
-    this.ensureInventoryModel();
-    if (this.state) {
-      this.state.playerParty = this.playerParty;
-      setContractsRuntimeContext({ party: this.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
-      if (typeof this.state.lastEventLog !== 'string') this.state.lastEventLog = '';
-      if (!Number.isFinite(this.state.lastEventLogUntil)) this.state.lastEventLogUntil = 0;
-    }
-
-    this.initEnemyParties();
-    this.initRosters();
-  }
+  initPlayerParty() { return this.worldManager.initPlayerParty(); }
 
   ensureRosterUnitState(unit) {
     return this.battleManager.ensureRosterUnitState(unit);
   }
 
-  ensureRosterState() {
-    const roster = this.playerParty?.roster;
-    if (!Array.isArray(roster)) return;
-    roster.forEach((unit) => this.ensureRosterUnitState(unit));
-    this.playerParty.roster = roster.filter((unit) => unit?.status !== 'dead');
-  }
+  ensureRosterState() { return this.worldManager.ensureRosterState(); }
 
   initRosters() {
     if (Array.isArray(this.playerRoster) && this.playerRoster.length > 0) return;
@@ -1413,48 +1349,7 @@ class FallOfCavalry {
 
   getEffectiveCount(entry) { return this.worldManager.getEffectiveCount(entry); }
 
-  initEnemyParties() {
-    if (!this.state) return;
-    if (!this.worldAi || typeof this.worldAi !== 'object') this.worldAi = createInitialWorldAiState();
-    if (!Array.isArray(this.worldAi.parties)) this.worldAi.parties = [];
-
-    const worldState = this.state?.map || {};
-    ensureWorldParties({
-      aiState: this.worldAi,
-      worldState,
-      factions: this.state?.factions || CONST.FACTIONS,
-      cfg: this.getWorldAiCfgWithRegionMods(),
-      currentDay: this.state?.day ?? 1,
-      banditCapOverride: this.getBanditCapWithEvents(this.getCurrentEvents(this.state?.day ?? 1)),
-    });
-
-    this.enemyParties = [];
-    if (Array.isArray(this.state.aiParties) && this.state.aiParties.length > 0) {
-      this.enemyParties = this.state.aiParties.map((party) => ({
-        ...party,
-        factionId: party?.factionId || CONST.FACTION.ID.BANDITS,
-      }));
-      this.state.aiParties = this.enemyParties;
-      return;
-    }
-
-    const bounds = this.getWorldBounds();
-    const mapSpanX = Math.max(200, bounds.maxX - bounds.minX);
-    const mapSpanY = Math.max(200, bounds.maxY - bounds.minY);
-    const baseX = bounds.minX + mapSpanX * 0.35;
-    const baseY = bounds.minY + mapSpanY * 0.35;
-
-    this.enemyParties = [
-      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDIT },
-      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.HRE },
-      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.OTTOMAN },
-      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDITS },
-      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
-      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
-    ];
-    this.state.aiParties = this.enemyParties;
-    this.state.worldAi = this.worldAi;
-  }
+  initEnemyParties() { return this.worldManager.initEnemyParties(); }
 
   updateMapSimulation(dt) {
     this.updatePoiInteractHint();
@@ -1526,28 +1421,7 @@ class FallOfCavalry {
 
   getNearestSettlementAt(tx, ty) { return this.worldManager.getNearestSettlementAt(tx, ty); }
 
-  computeEncounterRiskContext() {
-    const player = this.playerParty;
-    if (!player || !this.state?.map) return { mult: 1, label: 'Orta' };
-
-    const moveContext = this.getMovementContextAt(player.x, player.y);
-    const { tx, ty } = this.getTilePosition(player.x, player.y);
-    const biomeKey = this.getBiomeKeyAtTile(tx, ty) || 'PLAINS';
-    const nearestSettlement = this.getNearestSettlementAt(tx, ty);
-    const settlementTx = Number.isFinite(nearestSettlement?.tx) ? nearestSettlement.tx : Math.floor(Number(nearestSettlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
-    const settlementTy = Number.isFinite(nearestSettlement?.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
-    const nearSettlement = nearestSettlement && Math.hypot((settlementTx - tx), (settlementTy - ty)) <= 2.5;
-    const market = nearSettlement ? this.state?.markets?.[nearestSettlement.id] : null;
-    const mult = computeRiskMultiplier({
-      state: this.state,
-      movementCtx: moveContext,
-      biomeKey,
-      inCamp: Boolean(this.state?.camp?.active),
-      supplies: this.state?.supplies,
-      market,
-    });
-    return { mult, label: riskLabel(mult) };
-  }
+  computeEncounterRiskContext() { return this.worldManager.computeEncounterRiskContext(); }
 
   updateTransientUIState() {
     if (!this.state) return;
@@ -1762,90 +1636,12 @@ class FallOfCavalry {
     });
   }
 
-  processWorldAiEncounters(encounters = []) {
-    if (!Array.isArray(encounters) || encounters.length === 0) return false;
-    if (this.state?.mode !== 'map' || this.state?.encounter) return false;
+  processWorldAiEncounters(encounters) { return this.worldManager.processWorldAiEncounters(encounters); }
+  tryTriggerEncounter() { return this.worldManager.tryTriggerEncounter(); }
+  triggerEncounter(enemy) { return this.worldManager.triggerEncounter(enemy); }
 
-    const first = encounters.find((entry) => entry?.partyId);
-    if (!first) return false;
-    const party = (this.worldAi?.parties || []).find((p) => p?.id === first.partyId);
-    if (!party) return false;
-
-    const enemyId = `wai-${party.id}`;
-    const existing = this.enemyParties.find((e) => e?.id === enemyId);
-    if (!existing) {
-      this.enemyParties.push({
-        id: enemyId,
-        x: Number(party.x ?? first.x ?? 0),
-        y: Number(party.y ?? first.y ?? 0),
-        radius: 12,
-        speed: 30,
-        vx: 0,
-        vy: 0,
-        temporary: true,
-        factionId: party.factionId,
-        worldPartyKind: party.kind,
-      });
-    }
-
-    this.worldEncounterPartyByEnemyId[enemyId] = party.id;
-    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12 });
-  }
-
-  tryTriggerEncounter() {
-    if (this.state?.mode !== 'map' || !this.playerParty || !Array.isArray(this.enemyParties)) return false;
-    if (this.state.encounter) return false;
-
-    const now = Date.now();
-    for (const enemy of this.enemyParties) {
-      if (!enemy?.id) continue;
-
-      const cooldownUntil = this.lastEncounterEndTimeByEnemyId[enemy.id] ?? 0;
-      if (now - cooldownUntil < this.encounterCooldownMs) continue;
-
-      const dist = Math.hypot(this.playerParty.x - enemy.x, this.playerParty.y - enemy.y);
-      const triggerDist = (this.playerParty.radius ?? 12) + (enemy.radius ?? 12) + this.encounterMargin;
-      if (dist > triggerDist) continue;
-
-      const rollAt = this._encounterRollByEnemyId[enemy.id] ?? 0;
-      if (now - rollAt < 350) continue;
-      this._encounterRollByEnemyId[enemy.id] = now;
-
-      const moveContext = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
-      const riskCtx = this.computeEncounterRiskContext();
-      this.state.encounterRisk = riskCtx;
-      let chance = 0.1 * moveContext.encounterMult * (Number(riskCtx?.mult) || 1);
-      if (moveContext.onRiver && !moveContext.onCrossing) {
-        chance *= 1.35;
-      }
-
-      if (Math.random() > Math.max(0.01, Math.min(0.95, chance))) continue;
-
-      this.triggerEncounter(enemy);
-      return true;
-    }
-
-    return false;
-  }
-
-  triggerEncounter(enemy) {
-    if (!this.state || this.state.mode !== 'map' || !enemy?.id) return false;
-
-    this.cancelPlayerDestination();
-    this.state.encounter = {
-      enemyId: enemy.id,
-      startedAt: Date.now(),
-      enemySnapshot: {
-        id: enemy.id,
-        x: enemy.x,
-        y: enemy.y,
-        radius: enemy.radius,
-      },
-    };
-    this.state.setMode('encounter');
-    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: true });
-    return true;
-  }
+  // backward-compat: encounterMargin used in rendering (drawWorldMap)
+  get encounterMargin() { return this.worldManager.encounterMargin; }
 
   resolveEncounter(action) {
     const encounter = this.state?.encounter;

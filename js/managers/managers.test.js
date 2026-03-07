@@ -525,3 +525,103 @@ describe('WorldManager - Phase 3B', () => {
     expect(tier).toBe(2);
   });
 });
+
+describe('WorldManager - Phase 3C', () => {
+  function createWM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      camera: { x: 0, y: 0, zoom: 1 },
+      map: { width: 10, height: 10, tiles: new Array(100).fill({}), settlements: [{ tx: 5, ty: 5, id: 'c1', x: 300, y: 300 }], rivers: [], roads: [], crossings: [], biomes: new Uint8Array(100), fog: new Uint8Array(100) },
+      setMode(m) { this.mode = m; },
+      ...stateOverrides,
+    };
+    const wm = new WorldManager(state);
+    wm.init({
+      canvas: { width: 800, height: 600 },
+      playerParty: { x: 300, y: 300, radius: 12, hovered: false, destX: null, destY: null, hasDestination: false, roster: [], gold: 0, xp: 0, morale: 64, renown: 0, starveDays: 0, contracts: [], factionId: 'player', inventory: { items: [], capacity: null } },
+      enemyParties: [],
+      worldAi: { parties: [] },
+      worldEncounterPartyByEnemyId: {},
+      lastEncounterEndTimeByEnemyId: {},
+      mouseWorldX: 0, mouseWorldY: 0,
+      mode: 'playing',
+      ensureFactionState: () => {},
+      ensureRosterUnitState: (u) => u,
+      ensureInventoryModel: () => {},
+      initRosters: () => {},
+      getEffectiveTuning: () => ({}),
+      getSettlementTier: () => 2,
+      getWorldAiCfgWithRegionMods: () => ({}),
+      getBanditCapWithEvents: () => undefined,
+      getCurrentEvents: () => [],
+      maybeShowTutorialHint: () => {},
+      ...gameOverrides,
+    });
+    return wm;
+  }
+
+  it('computeEncounterRiskContext returns default without player', () => {
+    const wm = createWM({}, { playerParty: null });
+    const ctx = wm.computeEncounterRiskContext();
+    expect(ctx.mult).toBe(1);
+    expect(ctx.label).toBe('Orta');
+  });
+
+  it('computeEncounterRiskContext returns risk context with player', () => {
+    const wm = createWM();
+    wm.rebuildMovementMasks();
+    const ctx = wm.computeEncounterRiskContext();
+    expect(ctx).toHaveProperty('mult');
+    expect(ctx).toHaveProperty('label');
+    expect(typeof ctx.mult).toBe('number');
+  });
+
+  it('ensureRosterState filters dead units', () => {
+    const roster = [
+      { id: 'u1', status: 'healthy' },
+      { id: 'u2', status: 'dead' },
+      { id: 'u3', status: 'wounded' },
+    ];
+    const wm = createWM({}, { playerParty: { x: 0, y: 0, radius: 12, roster } });
+    wm.ensureRosterState();
+    expect(wm.game.playerParty.roster).toHaveLength(2);
+    expect(wm.game.playerParty.roster.find(u => u.id === 'u2')).toBeUndefined();
+  });
+
+  it('initPlayerParty skips if party exists', () => {
+    const wm = createWM();
+    wm.initPlayerParty();
+    // playerParty already existed, should not overwrite
+    expect(wm.game.playerParty.x).toBe(300);
+  });
+
+  it('triggerEncounter sets encounter state', () => {
+    const wm = createWM();
+    const result = wm.triggerEncounter({ id: 'e1', x: 100, y: 100, radius: 12 });
+    expect(result).toBe(true);
+    expect(wm.state.encounter).toBeDefined();
+    expect(wm.state.encounter.enemyId).toBe('e1');
+    expect(wm.state.mode).toBe('encounter');
+  });
+
+  it('triggerEncounter returns false in wrong mode', () => {
+    const wm = createWM({ mode: 'battle' });
+    const result = wm.triggerEncounter({ id: 'e1', x: 100, y: 100, radius: 12 });
+    expect(result).toBe(false);
+  });
+
+  it('tryTriggerEncounter returns false without enemies', () => {
+    const wm = createWM();
+    expect(wm.tryTriggerEncounter()).toBe(false);
+  });
+
+  it('processWorldAiEncounters returns false with empty array', () => {
+    const wm = createWM();
+    expect(wm.processWorldAiEncounters([])).toBe(false);
+  });
+
+  it('processWorldAiEncounters returns false when not in map mode', () => {
+    const wm = createWM({ mode: 'battle' });
+    expect(wm.processWorldAiEncounters([{ partyId: 'p1' }])).toBe(false);
+  });
+});

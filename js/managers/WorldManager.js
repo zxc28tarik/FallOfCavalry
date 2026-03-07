@@ -2,6 +2,9 @@ import * as CONST from '../constants.js';
 import WorldGenerator from '../world/world-generator.js';
 import FogOfWar from '../world/fog-of-war.js';
 import { assignInitialSettlementOwners } from '../systems/factions.js';
+import { computeRiskMultiplier, riskLabel } from '../systems/encounter-risk.js';
+import { ensureWorldParties, createInitialWorldAiState } from '../systems/world-ai.js';
+import { setContractsRuntimeContext } from '../systems/contracts.js';
 
 export class WorldManager {
   constructor(gameState) {
@@ -14,6 +17,9 @@ export class WorldManager {
     this._riverMask = null;
     this._crossingSet = new Set();
     this._worldSeedCache = null;
+    this._encounterRollByEnemyId = {};
+    this.encounterMargin = 10;
+    this.encounterCooldownMs = 3000;
   }
 
   init(game) {
@@ -411,5 +417,229 @@ export class WorldManager {
       }
     });
     return best?.id || null;
+  }
+
+  // ─── 3C: Risk, Encounters, Party Initialization ─────────────────
+
+  computeEncounterRiskContext() {
+    const player = this.game?.playerParty;
+    if (!player || !this.state?.map) return { mult: 1, label: 'Orta' };
+
+    const moveContext = this.getMovementContextAt(player.x, player.y);
+    const { tx, ty } = this.getTilePosition(player.x, player.y);
+    const biomeKey = this.getBiomeKeyAtTile(tx, ty) || 'PLAINS';
+    const nearestSettlement = this.getNearestSettlementAt(tx, ty);
+    const settlementTx = Number.isFinite(nearestSettlement?.tx) ? nearestSettlement.tx : Math.floor(Number(nearestSettlement?.x ?? 0) / CONST.WORLD.TILE_SIZE);
+    const settlementTy = Number.isFinite(nearestSettlement?.ty) ? nearestSettlement.ty : Math.floor(Number(nearestSettlement?.y ?? 0) / CONST.WORLD.TILE_SIZE);
+    const nearSettlement = nearestSettlement && Math.hypot((settlementTx - tx), (settlementTy - ty)) <= 2.5;
+    const market = nearSettlement ? this.state?.markets?.[nearestSettlement.id] : null;
+    const mult = computeRiskMultiplier({
+      state: this.state,
+      movementCtx: moveContext,
+      biomeKey,
+      inCamp: Boolean(this.state?.camp?.active),
+      supplies: this.state?.supplies,
+      market,
+    });
+    return { mult, label: riskLabel(mult) };
+  }
+
+  initEnemyParties() {
+    if (!this.state) return;
+    if (!this.game?.worldAi || typeof this.game.worldAi !== 'object') {
+      if (this.game) this.game.worldAi = createInitialWorldAiState();
+    }
+    if (!Array.isArray(this.game?.worldAi?.parties)) {
+      if (this.game?.worldAi) this.game.worldAi.parties = [];
+    }
+
+    const worldState = this.state?.map || {};
+    ensureWorldParties({
+      aiState: this.game?.worldAi,
+      worldState,
+      factions: this.state?.factions || CONST.FACTIONS,
+      cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
+      currentDay: this.state?.day ?? 1,
+      banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.state?.day ?? 1)),
+    });
+
+    this.game.enemyParties = [];
+    if (Array.isArray(this.state.aiParties) && this.state.aiParties.length > 0) {
+      this.game.enemyParties = this.state.aiParties.map((party) => ({
+        ...party,
+        factionId: party?.factionId || CONST.FACTION.ID.BANDITS,
+      }));
+      this.state.aiParties = this.game.enemyParties;
+      return;
+    }
+
+    const bounds = this.getWorldBounds();
+    const mapSpanX = Math.max(200, bounds.maxX - bounds.minX);
+    const mapSpanY = Math.max(200, bounds.maxY - bounds.minY);
+    const baseX = bounds.minX + mapSpanX * 0.35;
+    const baseY = bounds.minY + mapSpanY * 0.35;
+
+    this.game.enemyParties = [
+      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDIT },
+      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.HRE },
+      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.OTTOMAN },
+      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDITS },
+      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
+      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
+    ];
+    this.state.aiParties = this.game.enemyParties;
+    this.state.worldAi = this.game.worldAi;
+  }
+
+  ensureRosterState() {
+    const roster = this.game?.playerParty?.roster;
+    if (!Array.isArray(roster)) return;
+    roster.forEach((unit) => this.game?.ensureRosterUnitState?.(unit));
+    this.game.playerParty.roster = roster.filter((unit) => unit?.status !== 'dead');
+  }
+
+  initPlayerParty() {
+    if (this.game?.playerParty) return;
+
+    const fallback = {
+      x: 320,
+      y: 320,
+      radius: 12,
+      speed: 180,
+      selected: false,
+      destX: null,
+      destY: null,
+      hasDestination: false,
+      arrivalFeedbackTimer: 0,
+      hovered: false,
+    };
+
+    const statePlayer = this.state?.player;
+    if (statePlayer && Number.isFinite(statePlayer.x) && Number.isFinite(statePlayer.y)) {
+      fallback.x = statePlayer.x;
+      fallback.y = statePlayer.y;
+      fallback.destX = null;
+      fallback.destY = null;
+    }
+
+    this.game.playerParty = fallback;
+    this.game?.ensureFactionState?.();
+    if (!Number.isFinite(this.game.playerParty.gold)) this.game.playerParty.gold = 0;
+    if (!Number.isFinite(this.game.playerParty.xp)) this.game.playerParty.xp = 0;
+    if (!Number.isFinite(this.game.playerParty.morale)) this.game.playerParty.morale = 64;
+    if (!Number.isFinite(this.game.playerParty.renown)) this.game.playerParty.renown = 0;
+    if (!Number.isFinite(this.game.playerParty.starveDays)) this.game.playerParty.starveDays = 0;
+    if (!Array.isArray(this.game.playerParty.contracts)) this.game.playerParty.contracts = [];
+    if (typeof this.game.playerParty.factionId !== 'string' || !this.game.playerParty.factionId) this.game.playerParty.factionId = CONST.FACTION.ID.PLAYER;
+    if (!Number.isFinite(this.game.playerParty.renown)) this.game.playerParty.renown = Number(CONST.GAME.STARTING_RENOWN ?? 0);
+    if (!Array.isArray(this.game.playerParty.roster) || this.game.playerParty.roster.length === 0) {
+      const roster = [];
+      for (let i = 0; i < 6; i += 1) {
+        roster.push({ id: `inf-${i + 1}`, name: `Infantry ${i + 1}`, class: 'infantry', hp: 100, maxHp: 100, atk: 14, def: 8, speed: 72, meleeRange: 20, isRanged: false, status: 'healthy', healProgress: 0 });
+      }
+      for (let i = 0; i < 3; i += 1) {
+        roster.push({ id: `arc-${i + 1}`, name: `Archer ${i + 1}`, class: 'archer', hp: 78, maxHp: 78, atk: 10, def: 4, speed: 68, meleeRange: 14, rangedRange: 220, rangedDamage: 12, rangedCooldown: 1.2, isRanged: true, status: 'healthy', healProgress: 0 });
+      }
+      this.game.playerParty.roster = roster;
+    }
+    this.ensureRosterState();
+    if (!this.game.playerParty.inventory || typeof this.game.playerParty.inventory !== 'object') {
+      this.game.playerParty.inventory = { items: [], capacity: null };
+    }
+    this.game?.ensureInventoryModel?.();
+    if (this.state) {
+      this.state.playerParty = this.game.playerParty;
+      setContractsRuntimeContext({ party: this.game.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
+      if (typeof this.state.lastEventLog !== 'string') this.state.lastEventLog = '';
+      if (!Number.isFinite(this.state.lastEventLogUntil)) this.state.lastEventLogUntil = 0;
+    }
+
+    this.initEnemyParties();
+    this.game?.initRosters?.();
+  }
+
+  tryTriggerEncounter() {
+    if (this.state?.mode !== 'map' || !this.game?.playerParty || !Array.isArray(this.game?.enemyParties)) return false;
+    if (this.state.encounter) return false;
+
+    const now = Date.now();
+    for (const enemy of this.game.enemyParties) {
+      if (!enemy?.id) continue;
+
+      const cooldownUntil = this.game?.lastEncounterEndTimeByEnemyId?.[enemy.id] ?? 0;
+      if (now - cooldownUntil < this.encounterCooldownMs) continue;
+
+      const dist = Math.hypot(this.game.playerParty.x - enemy.x, this.game.playerParty.y - enemy.y);
+      const triggerDist = (this.game.playerParty.radius ?? 12) + (enemy.radius ?? 12) + this.encounterMargin;
+      if (dist > triggerDist) continue;
+
+      const rollAt = this._encounterRollByEnemyId[enemy.id] ?? 0;
+      if (now - rollAt < 350) continue;
+      this._encounterRollByEnemyId[enemy.id] = now;
+
+      const moveContext = this.getMovementContextAt(this.game.playerParty.x, this.game.playerParty.y);
+      const riskCtx = this.computeEncounterRiskContext();
+      this.state.encounterRisk = riskCtx;
+      let chance = 0.1 * moveContext.encounterMult * (Number(riskCtx?.mult) || 1);
+      if (moveContext.onRiver && !moveContext.onCrossing) {
+        chance *= 1.35;
+      }
+
+      if (Math.random() > Math.max(0.01, Math.min(0.95, chance))) continue;
+
+      this.triggerEncounter(enemy);
+      return true;
+    }
+
+    return false;
+  }
+
+  triggerEncounter(enemy) {
+    if (!this.state || this.state.mode !== 'map' || !enemy?.id) return false;
+
+    this.cancelPlayerDestination();
+    this.state.encounter = {
+      enemyId: enemy.id,
+      startedAt: Date.now(),
+      enemySnapshot: {
+        id: enemy.id,
+        x: enemy.x,
+        y: enemy.y,
+        radius: enemy.radius,
+      },
+    };
+    this.state.setMode('encounter');
+    this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: true });
+    return true;
+  }
+
+  processWorldAiEncounters(encounters = []) {
+    if (!Array.isArray(encounters) || encounters.length === 0) return false;
+    if (this.state?.mode !== 'map' || this.state?.encounter) return false;
+
+    const first = encounters.find((entry) => entry?.partyId);
+    if (!first) return false;
+    const party = (this.game?.worldAi?.parties || []).find((p) => p?.id === first.partyId);
+    if (!party) return false;
+
+    const enemyId = `wai-${party.id}`;
+    const existing = (this.game?.enemyParties || []).find((e) => e?.id === enemyId);
+    if (!existing) {
+      this.game?.enemyParties?.push({
+        id: enemyId,
+        x: Number(party.x ?? first.x ?? 0),
+        y: Number(party.y ?? first.y ?? 0),
+        radius: 12,
+        speed: 30,
+        vx: 0,
+        vy: 0,
+        temporary: true,
+        factionId: party.factionId,
+        worldPartyKind: party.kind,
+      });
+    }
+
+    if (this.game) this.game.worldEncounterPartyByEnemyId[enemyId] = party.id;
+    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12 });
   }
 }
