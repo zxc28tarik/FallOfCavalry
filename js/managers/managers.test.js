@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EconomyManager } from './EconomyManager.js';
+import { GameInputManager } from './InputManager.js';
 import { BattleManager } from './BattleManager.js';
 import { WorldManager } from './WorldManager.js';
 import { StateManager } from './StateManager.js';
@@ -1477,5 +1478,65 @@ describe('EconomyManager - Phase 5C', () => {
     em.init({ playerParty: null });
     const result = em.processDailyEconomy(1);
     expect(result).toBeUndefined();
+  });
+
+  // Phase 6A — InputManager: setupPartyInputHandlers
+  describe('InputManager - Phase 6A', () => {
+    it('instantiates with correct initial state', () => {
+      const im = new GameInputManager({});
+      expect(im.game).toBeNull();
+      expect(im.rightPointerTracking).toBe(false);
+      expect(im.rightPointerMoved).toBe(false);
+      expect(im.rightPointerStartX).toBe(0);
+      expect(im.rightPointerStartY).toBe(0);
+      expect(im._wheelBound).toBe(false);
+      expect(im.partyPointerHandler).toBeNull();
+      expect(im.partyContextMenuHandler).toBeNull();
+      expect(im.partyPointerMoveHandler).toBeNull();
+      expect(im.partyPointerUpHandler).toBeNull();
+      expect(im.keyboardHandler).toBeNull();
+    });
+
+    it('init() stores game reference', () => {
+      const im = new GameInputManager({});
+      const fakeGame = { canvas: null };
+      im.init(fakeGame);
+      expect(im.game).toBe(fakeGame);
+    });
+
+    it('setupPartyInputHandlers() is no-op when canvas is null', () => {
+      const im = new GameInputManager({});
+      im.init({ canvas: null });
+      im.setupPartyInputHandlers();
+      expect(im.partyPointerHandler).toBeNull();
+    });
+
+    it('setupPartyInputHandlers() registers 4 listeners on mock canvas', () => {
+      const im = new GameInputManager({});
+      const listeners = {};
+      const mockCanvas = {
+        addEventListener: (type, fn, opts) => { listeners[type] = fn; },
+      };
+      im.init({ canvas: mockCanvas, state: { mode: 'map' } });
+      im.setupPartyInputHandlers();
+      expect(im.partyPointerHandler).toBeTypeOf('function');
+      expect(im.partyPointerMoveHandler).toBeTypeOf('function');
+      expect(im.partyPointerUpHandler).toBeTypeOf('function');
+      expect(im.partyContextMenuHandler).toBeTypeOf('function');
+      expect(listeners['mousedown']).toBe(im.partyPointerHandler);
+      expect(listeners['mousemove']).toBe(im.partyPointerMoveHandler);
+      expect(listeners['mouseup']).toBe(im.partyPointerUpHandler);
+      expect(listeners['contextmenu']).toBe(im.partyContextMenuHandler);
+    });
+
+    it('setupPartyInputHandlers() is no-op if handlers already set', () => {
+      const im = new GameInputManager({});
+      const mockCanvas = { addEventListener: vi.fn() };
+      im.init({ canvas: mockCanvas, state: {} });
+      im.partyPointerHandler = () => {};
+      im.setupPartyInputHandlers();
+      // addEventListener should NOT have been called (guard hit)
+      expect(mockCanvas.addEventListener).not.toHaveBeenCalled();
+    });
   });
 });

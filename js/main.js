@@ -118,6 +118,7 @@ import { BattleManager } from './managers/BattleManager.js';
 import { WorldManager } from './managers/WorldManager.js';
 import { SaveManager } from './managers/SaveManager.js';
 import { EconomyManager } from './managers/EconomyManager.js';
+import { GameInputManager } from './managers/InputManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -236,16 +237,10 @@ class FallOfCavalry {
     this.dom = {};
 
     this.resizeHandler = null;
-    this.keyboardHandler = null;
-    this.partyPointerHandler = null;
-    this.partyPointerMoveHandler = null;
-    this.partyPointerUpHandler = null;
-    this.partyContextMenuHandler = null;
-
-    this.rightPointerTracking = false;
-    this.rightPointerMoved = false;
-    this.rightPointerStartX = 0;
-    this.rightPointerStartY = 0;
+    // keyboardHandler, partyPointerHandler, partyPointerMoveHandler,
+    // partyPointerUpHandler, partyContextMenuHandler → InputManager
+    // rightPointerTracking, rightPointerMoved, rightPointerStartX,
+    // rightPointerStartY → InputManager
     this.mouseWorldX = 0;
     this.mouseWorldY = 0;
 
@@ -907,6 +902,8 @@ class FallOfCavalry {
     this.saveManager.init(this);
     this.economyManager = this.economyManager || new EconomyManager(this.state);
     this.economyManager.init(this);
+    this.inputManager = this.inputManager || new GameInputManager(this.state);
+    this.inputManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -1282,6 +1279,26 @@ class FallOfCavalry {
   get saveLoadCursor() { return this.saveManager.saveLoadCursor; }
   set saveLoadCursor(v) { this.saveManager.saveLoadCursor = v; }
   get saveLoadRows() { return this.saveManager.saveLoadRows; }
+
+  // backward-compat: input handler refs & tracking state (destroy() compatibility)
+  get keyboardHandler() { return this.inputManager?.keyboardHandler; }
+  set keyboardHandler(v) { if (this.inputManager) this.inputManager.keyboardHandler = v; }
+  get partyPointerHandler() { return this.inputManager?.partyPointerHandler; }
+  set partyPointerHandler(v) { if (this.inputManager) this.inputManager.partyPointerHandler = v; }
+  get partyPointerMoveHandler() { return this.inputManager?.partyPointerMoveHandler; }
+  set partyPointerMoveHandler(v) { if (this.inputManager) this.inputManager.partyPointerMoveHandler = v; }
+  get partyPointerUpHandler() { return this.inputManager?.partyPointerUpHandler; }
+  set partyPointerUpHandler(v) { if (this.inputManager) this.inputManager.partyPointerUpHandler = v; }
+  get partyContextMenuHandler() { return this.inputManager?.partyContextMenuHandler; }
+  set partyContextMenuHandler(v) { if (this.inputManager) this.inputManager.partyContextMenuHandler = v; }
+  get rightPointerTracking() { return this.inputManager?.rightPointerTracking ?? false; }
+  set rightPointerTracking(v) { if (this.inputManager) this.inputManager.rightPointerTracking = v; }
+  get rightPointerMoved() { return this.inputManager?.rightPointerMoved ?? false; }
+  set rightPointerMoved(v) { if (this.inputManager) this.inputManager.rightPointerMoved = v; }
+  get rightPointerStartX() { return this.inputManager?.rightPointerStartX ?? 0; }
+  set rightPointerStartX(v) { if (this.inputManager) this.inputManager.rightPointerStartX = v; }
+  get rightPointerStartY() { return this.inputManager?.rightPointerStartY ?? 0; }
+  set rightPointerStartY(v) { if (this.inputManager) this.inputManager.rightPointerStartY = v; }
 
   // backward-compat: city cursor properties used in keyboard handler
   get cityOffers() { return this.economyManager.cityOffers; }
@@ -2090,131 +2107,7 @@ Renown
 
   isWorldPointOnParty(worldX, worldY, margin) { return this.worldManager.isWorldPointOnParty(worldX, worldY, margin); }
 
-  setupPartyInputHandlers() {
-    if (!this.canvas || this.partyPointerHandler || this.partyContextMenuHandler || this.partyPointerMoveHandler || this.partyPointerUpHandler) return;
-
-    this.partyPointerHandler = (event) => {
-      if (this.state?.mode === 'battle') {
-        if (event?.button !== 0) return;
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (event?.clientX ?? 0) - rect.left;
-        const y = (event?.clientY ?? 0) - rect.top;
-
-        if (this.state?.battle?.phase === 'deploy' && this.battleDeployMode?.active) {
-          this.battleDeployMode.setAnchor(x, y);
-          return;
-        }
-
-        const hit = (this.state?.battle?.playerUnits || []).find((u) => !u.dead && Math.hypot(u.x - x, u.y - y) <= ((u.radius ?? 10) + 8));
-        if (!hit) return;
-        this.state.battle.selection = this.state.battle.selection || {};
-        this.state.battle.selection.unitId = hit.unitId;
-        return;
-      }
-
-      if (!this.playerParty || this.mode === 'menu' || this.state?.mode !== 'map') return;
-
-      const rect = typeof this.canvas.getBoundingClientRect === 'function'
-        ? this.canvas.getBoundingClientRect()
-        : { left: 0, top: 0 };
-      const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
-      const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
-      const world = this.updatePointerWorldState(screenX, screenY);
-
-      if (event?.button === 0) {
-        if (event?.shiftKey) {
-          this.setPlayerDestination(world.x, world.y);
-          return;
-        }
-
-        if (this.isWorldPointOnParty(world.x, world.y)) {
-          this.playerParty.selected = !this.playerParty.selected;
-        } else {
-          this.playerParty.selected = false;
-        }
-        return;
-      }
-
-      if (event?.button === 2) {
-        event.preventDefault?.();
-        this.rightPointerTracking = true;
-        this.rightPointerMoved = false;
-        this.rightPointerStartX = screenX;
-        this.rightPointerStartY = screenY;
-      }
-    };
-
-    this.partyPointerMoveHandler = (event) => {
-      if (this.state?.mode === 'battle') {
-        return;
-      }
-
-      if (!this.rightPointerTracking || !this.playerParty || this.mode === 'menu' || this.state?.mode !== 'map') return;
-
-      const rect = typeof this.canvas.getBoundingClientRect === 'function'
-        ? this.canvas.getBoundingClientRect()
-        : { left: 0, top: 0 };
-      const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
-      const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
-      const moved = Math.hypot(screenX - this.rightPointerStartX, screenY - this.rightPointerStartY);
-      if (moved > 8) {
-        this.rightPointerMoved = true;
-      }
-      this.updatePointerWorldState(screenX, screenY);
-    };
-
-    this.partyPointerUpHandler = (event) => {
-      if (this.state?.mode === 'battle') {
-        this.battleDragUnitId = null;
-        this.battleDragOffsetX = 0;
-        this.battleDragOffsetY = 0;
-        return;
-      }
-
-      if (event?.button !== 2 || !this.rightPointerTracking || !this.playerParty || this.mode === 'menu' || this.state?.mode !== 'map') return;
-
-      this.rightPointerTracking = false;
-      if (this.rightPointerMoved) {
-        this.rightPointerMoved = false;
-        return;
-      }
-
-      const rect = typeof this.canvas.getBoundingClientRect === 'function'
-        ? this.canvas.getBoundingClientRect()
-        : { left: 0, top: 0 };
-      const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
-      const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
-      const world = this.updatePointerWorldState(screenX, screenY);
-
-      if (this.isWorldPointOnParty(world.x, world.y)) {
-        this.cancelPlayerDestination();
-        return;
-      }
-
-      this.setPlayerDestination(world.x, world.y);
-    };
-
-    this.partyContextMenuHandler = (event) => {
-      event?.preventDefault?.();
-    };
-
-    this.canvas.addEventListener('mousedown', this.partyPointerHandler, { passive: false });
-    this.canvas.addEventListener('mousemove', this.partyPointerMoveHandler, { passive: false });
-    this.canvas.addEventListener('mouseup', this.partyPointerUpHandler, { passive: false });
-    this.canvas.addEventListener('contextmenu', this.partyContextMenuHandler, { passive: false });
-
-    if (this.canvas && !this._wheelBound) {
-      this._wheelBound = true;
-      this.canvas.addEventListener('wheel', (e) => {
-        if (this.state?.mode !== 'map') return;
-        e.preventDefault();
-        const cam = this.getCameraSafe();
-        const factor = e.deltaY < 0 ? 1.1 : 0.9;
-        cam.zoom = Math.max(0.3, Math.min(3.0, cam.zoom * factor));
-        this.clampCameraToWorld();
-      }, { passive: false });
-    }
-  }
+  setupPartyInputHandlers() { return this.inputManager.setupPartyInputHandlers(); }
 
   setupKeyboardShortcuts() {
     if (this.keyboardHandler) return;
