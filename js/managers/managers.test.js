@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { EconomyManager } from './EconomyManager.js';
 import { BattleManager } from './BattleManager.js';
 import { WorldManager } from './WorldManager.js';
 import { StateManager } from './StateManager.js';
@@ -1086,5 +1087,128 @@ describe('SaveManager - Phase 4C', () => {
     sm.applySavePayload({ game: {} });
     expect(sm.state.encounter).toBeNull();
     expect(sm.state.battle).toBeNull();
+  });
+});
+
+describe('EconomyManager - Phase 5A', () => {
+  const CATALOG = [
+    { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4 },
+    { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11 },
+  ];
+
+  function createEM(stateOverrides = {}, gameOverrides = {}) {
+    const state = { day: 1, status: {}, ...stateOverrides };
+    const em = new EconomyManager(state);
+    em.init({
+      itemCatalog: CATALOG,
+      playerParty: { x: 0, y: 0, inventory: { items: [], capacity: null } },
+      ...gameOverrides,
+    });
+    return em;
+  }
+
+  it('getSettlementTier returns 3 for city', () => {
+    const em = createEM();
+    expect(em.getSettlementTier({ type: 'city' })).toBe(3);
+  });
+
+  it('getSettlementTier returns 2 for town', () => {
+    const em = createEM();
+    expect(em.getSettlementTier({ type: 'town' })).toBe(2);
+  });
+
+  it('getSettlementTier returns 1 for village', () => {
+    const em = createEM();
+    expect(em.getSettlementTier({ type: 'village' })).toBe(1);
+  });
+
+  it('getSettlementOpportunityKey returns settlement id', () => {
+    const em = createEM();
+    expect(em.getSettlementOpportunityKey({ id: 'c1' })).toBe('c1');
+  });
+
+  it('getSettlementOpportunityKey returns null for null', () => {
+    const em = createEM();
+    expect(em.getSettlementOpportunityKey(null)).toBeNull();
+  });
+
+  it('cleanupExpiredMarketOpportunities removes expired entries', () => {
+    const em = createEM({ day: 10, marketOpportunities: { a: { expiresDay: 5 }, b: { expiresDay: 15 } } });
+    em.cleanupExpiredMarketOpportunities(10);
+    expect(em.state.marketOpportunities.a).toBeUndefined();
+    expect(em.state.marketOpportunities.b).toBeDefined();
+  });
+
+  it('getActiveSettlementForCity returns nearest settlement', () => {
+    const em = createEM({ map: { settlements: [{ id: 's1', x: 10, y: 0 }, { id: 's2', x: 100, y: 0 }] } });
+    em.game.playerParty.x = 5;
+    const result = em.getActiveSettlementForCity();
+    expect(result.id).toBe('s1');
+  });
+
+  it('getActiveSettlementForCity returns fallback when no settlements', () => {
+    const em = createEM({ map: { settlements: [] } });
+    const result = em.getActiveSettlementForCity();
+    expect(result.id).toBe('city-fallback');
+  });
+
+  it('ensureInventoryModel initializes missing inventory', () => {
+    const em = createEM({}, { playerParty: { inventory: null } });
+    em.ensureInventoryModel();
+    expect(em.game.playerParty.inventory).toEqual({ items: [], capacity: null });
+  });
+
+  it('getItemName returns name from catalog', () => {
+    const em = createEM();
+    expect(em.getItemName('grain')).toBe('Grain');
+  });
+
+  it('getItemName returns id when not found', () => {
+    const em = createEM();
+    expect(em.getItemName('unknown')).toBe('unknown');
+  });
+
+  it('addItem adds new item to inventory', () => {
+    const em = createEM();
+    em.addItem('grain', 'Grain', 5, 4);
+    const item = em.game.playerParty.inventory.items.find((i) => i.id === 'grain');
+    expect(item).toBeDefined();
+    expect(item.qty).toBe(5);
+  });
+
+  it('addItem accumulates qty for existing item', () => {
+    const em = createEM();
+    em.addItem('grain', 'Grain', 3, 4);
+    em.addItem('grain', 'Grain', 2, 4);
+    expect(em.getItemQty('grain')).toBe(5);
+  });
+
+  it('removeItem reduces qty', () => {
+    const em = createEM();
+    em.addItem('grain', 'Grain', 5, 4);
+    em.removeItem('grain', 2);
+    expect(em.getItemQty('grain')).toBe(3);
+  });
+
+  it('removeItem returns false when insufficient qty', () => {
+    const em = createEM();
+    em.addItem('grain', 'Grain', 1, 4);
+    expect(em.removeItem('grain', 5)).toBe(false);
+  });
+
+  it('listInventoryForUI returns all catalog items with qty', () => {
+    const em = createEM();
+    em.addItem('grain', 'Grain', 3, 4);
+    const list = em.listInventoryForUI();
+    expect(list).toHaveLength(CATALOG.length);
+    const grain = list.find((i) => i.id === 'grain');
+    expect(grain.qty).toBe(3);
+  });
+
+  it('getLogisticsSpeedMult returns object with starvingMult 1 when not starving', () => {
+    const em = createEM({ status: { starving: false } });
+    const result = em.getLogisticsSpeedMult();
+    expect(result.starvingMult).toBe(1);
+    expect(typeof result.overcapMult).toBe('number');
   });
 });

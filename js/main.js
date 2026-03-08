@@ -117,6 +117,7 @@ import * as utils from './utils.js';
 import { BattleManager } from './managers/BattleManager.js';
 import { WorldManager } from './managers/WorldManager.js';
 import { SaveManager } from './managers/SaveManager.js';
+import { EconomyManager } from './managers/EconomyManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -908,6 +909,8 @@ class FallOfCavalry {
     this.hudManager = this.hudManager || new HUDManager(this.state);
     this.saveManager = this.saveManager || new SaveManager(this.state);
     this.saveManager.init(this);
+    this.economyManager = this.economyManager || new EconomyManager(this.state);
+    this.economyManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -1586,87 +1589,12 @@ class FallOfCavalry {
     return true;
   }
 
-  ensureInventoryModel() {
-    if (!this.playerParty) return;
-    const inv = this.playerParty.inventory;
-    if (!inv || typeof inv !== 'object') {
-      this.playerParty.inventory = { items: [], capacity: null };
-      return;
-    }
-
-    if (!Array.isArray(inv.items)) {
-      const mapped = [];
-      Object.entries(inv).forEach(([id, qty]) => {
-        if (id === 'items' || id === 'capacity' || id === 'gold') return;
-        if (!Number.isFinite(qty) || qty <= 0) return;
-        const cat = this.itemCatalog.find((i) => i.id === id);
-        mapped.push({ id, name: cat?.name || id, qty: Math.floor(qty), unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
-      });
-      this.playerParty.inventory = {
-        items: mapped,
-        capacity: Number.isFinite(inv.capacity) ? inv.capacity : null,
-      };
-    }
-
-    if (!Number.isFinite(this.playerParty.inventory.capacity)) this.playerParty.inventory.capacity = null;
-  }
-
-  getItemName(itemId) {
-    return this.itemCatalog.find((item) => item.id === itemId)?.name || itemId;
-  }
-
-  getItemQty(itemId) {
-    this.ensureInventoryModel();
-    if (!itemId) return 0;
-    const item = (this.playerParty?.inventory?.items || []).find((entry) => entry.id === itemId);
-    return Math.max(0, Math.floor(item?.qty ?? 0));
-  }
-
-  addItem(itemId, name, qty = 1, unitValue = null) {
-    this.ensureInventoryModel();
-    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !this.playerParty?.inventory?.items) return false;
-    const list = this.playerParty.inventory.items;
-    const existing = list.find((entry) => entry.id === itemId);
-    const amount = Math.floor(qty);
-    if (existing) {
-      existing.qty = Math.max(0, Math.floor(existing.qty ?? 0) + amount);
-      if (!existing.name) existing.name = name || this.getItemName(itemId);
-      if (!Number.isFinite(existing.unitValue)) existing.unitValue = unitValue ?? this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1;
-      return true;
-    }
-
-    list.push({
-      id: itemId,
-      name: name || this.getItemName(itemId),
-      qty: amount,
-      unitValue: Number.isFinite(unitValue) ? unitValue : (this.itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1),
-    });
-    return true;
-  }
-
-  removeItem(itemId, qty) {
-    this.ensureInventoryModel();
-    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !this.playerParty?.inventory?.items) return false;
-    const list = this.playerParty.inventory.items;
-    const idx = list.findIndex((entry) => entry.id === itemId);
-    if (idx < 0) return false;
-    const next = Math.floor(list[idx].qty ?? 0) - Math.floor(qty);
-    if (next < 0) return false;
-    if (next === 0) list.splice(idx, 1);
-    else list[idx].qty = next;
-    return true;
-  }
-
-  listInventoryForUI() {
-    this.ensureInventoryModel();
-    return this.itemCatalog.map((item) => {
-      const invItem = (this.playerParty?.inventory?.items || []).find((entry) => entry.id === item.id);
-      return {
-        ...item,
-        qty: Math.max(0, Math.floor(invItem?.qty ?? 0)),
-      };
-    });
-  }
+  ensureInventoryModel() { return this.economyManager.ensureInventoryModel(); }
+  getItemName(itemId) { return this.economyManager.getItemName(itemId); }
+  getItemQty(itemId) { return this.economyManager.getItemQty(itemId); }
+  addItem(itemId, name, qty = 1, unitValue = null) { return this.economyManager.addItem(itemId, name, qty, unitValue); }
+  removeItem(itemId, qty) { return this.economyManager.removeItem(itemId, qty); }
+  listInventoryForUI() { return this.economyManager.listInventoryForUI(); }
 
   buildAftermathPanelData() {
     const a = this.state?.aftermath;
@@ -1895,14 +1823,7 @@ Renown
   }
 
 
-  getLogisticsSpeedMult() {
-    const starvingMult = this.state?.status?.starving ? CONST.SUPPLIES.STARVATION_SPEED_MULT : 1;
-    this.ensureInventoryModel();
-    const weight = capacitySystem.computeCarryWeight(this.playerParty?.inventory);
-    const cap = capacitySystem.computeCapacity(this.playerParty);
-    const overcapMult = capacitySystem.computeOvercapSpeedMult(weight, cap);
-    return { starvingMult, overcapMult, weight, cap };
-  }
+  getLogisticsSpeedMult() { return this.economyManager.getLogisticsSpeedMult(); }
 
   setupCampUI() {
     if (this.campUI) return;
@@ -2210,58 +2131,10 @@ Renown
     else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
   }
 
-  getSettlementTier(settlement) {
-    const type = String(settlement?.type || '').toLowerCase();
-    if (type.includes('city') || type.includes('castle')) return 3;
-    if (type.includes('town')) return 2;
-    return 1;
-  }
-
-  getSettlementOpportunityKey(settlement) {
-    if (!settlement || typeof settlement !== 'object') return null;
-    if (settlement.id) return String(settlement.id);
-    if (Number.isFinite(settlement.tx) && Number.isFinite(settlement.ty)) return `${settlement.tx},${settlement.ty}`;
-    if (Number.isFinite(settlement.x) && Number.isFinite(settlement.y)) {
-      const tx = Math.floor(settlement.x / CONST.WORLD.TILE_SIZE);
-      const ty = Math.floor(settlement.y / CONST.WORLD.TILE_SIZE);
-      return `${tx},${ty}`;
-    }
-    return null;
-  }
-
-  cleanupExpiredMarketOpportunities(day = this.state?.day) {
-    if (!this.state) return;
-    if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') {
-      this.state.marketOpportunities = {};
-      return;
-    }
-    const nowDay = Number(day ?? 1);
-    Object.keys(this.state.marketOpportunities).forEach((key) => {
-      const opportunity = this.state.marketOpportunities[key];
-      if (!opportunity || !Number.isFinite(opportunity.expiresDay) || nowDay > Number(opportunity.expiresDay)) {
-        delete this.state.marketOpportunities[key];
-      }
-    });
-  }
-
-  getActiveSettlementForCity() {
-    const settlements = this.state?.map?.settlements || [];
-    const px = this.playerParty?.x ?? 0;
-    const py = this.playerParty?.y ?? 0;
-    let nearest = settlements[0] || null;
-    let nearestDist = Number.POSITIVE_INFINITY;
-    for (const s of settlements) {
-      if (s && !s.ownerFactionId && s.owner) s.ownerFactionId = s.owner;
-      const dx = (s?.x ?? 0) - px;
-      const dy = (s?.y ?? 0) - py;
-      const dist = Math.hypot(dx, dy);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = s;
-      }
-    }
-    return nearest || { id: 'city-fallback', name: 'Settlement', type: 'town' };
-  }
+  getSettlementTier(settlement) { return this.economyManager.getSettlementTier(settlement); }
+  getSettlementOpportunityKey(settlement) { return this.economyManager.getSettlementOpportunityKey(settlement); }
+  cleanupExpiredMarketOpportunities(day = this.state?.day) { return this.economyManager.cleanupExpiredMarketOpportunities(day); }
+  getActiveSettlementForCity() { return this.economyManager.getActiveSettlementForCity(); }
 
   generateRecruitOffersForSettlement(settlement) {
     const tier = this.getSettlementTier(settlement);
