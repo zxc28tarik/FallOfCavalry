@@ -739,15 +739,28 @@ describe('SaveManager - Phase 4A', () => {
     const state = {
       mode: 'map',
       day: 5,
+      setMode(m) { this.mode = m; },
       ...stateOverrides,
     };
     const sm = new SaveManager(state);
     sm.init({
       playerParty: { gold: 100, roster: [{ id: 'u1' }, { id: 'u2' }] },
-      buildSavePayload: () => ({ version: 1 }),
-      applySavePayload: () => true,
+      enemyParties: [],
+      worldAi: { lastRespawnDay: 0, parties: [] },
+      lastEncounterEndTimeByEnemyId: {},
+      worldEncounterPartyByEnemyId: {},
+      itemCatalog: [],
+      settings: {},
       setLastEventLog: () => {},
       updateTransientUIState: () => {},
+      ensureInventoryModel: () => {},
+      ensureRosterState: () => {},
+      ensureFactionState: () => {},
+      cleanupExpiredMarketOpportunities: () => {},
+      refreshCurrentEventsSummary: () => [],
+      getEffectiveTuning: () => ({}),
+      getWorldAiCfgWithRegionMods: () => ({}),
+      setupSettingsUI: () => {},
       ...gameOverrides,
     });
     return sm;
@@ -797,13 +810,12 @@ describe('SaveManager - Phase 4A', () => {
 
   it('saveToSlot calls buildSavePayload and returns true on success', () => {
     let savedPayload = null;
-    const sm = createSM({}, {
-      buildSavePayload: () => ({ version: 1, test: true }),
-    });
+    const sm = createSM();
     sm.saveSystem = { saveSlot: (slot, payload) => { savedPayload = payload; return { ok: true }; }, hasSlot: () => false };
     const result = sm.saveToSlot('manual1');
     expect(result).toBe(true);
-    expect(savedPayload).toEqual({ version: 1, test: true });
+    expect(savedPayload).toHaveProperty('schemaVersion', 1);
+    expect(savedPayload).toHaveProperty('game');
   });
 
   it('saveToSlot returns false when saveSystem fails', () => {
@@ -812,15 +824,12 @@ describe('SaveManager - Phase 4A', () => {
     expect(sm.saveToSlot('manual1')).toBe(false);
   });
 
-  it('loadFromSlot calls applySavePayload on success', () => {
-    let appliedData = null;
-    const sm = createSM({}, {
-      applySavePayload: (data) => { appliedData = data; return true; },
-    });
-    sm.saveSystem = { loadSlot: () => ({ ok: true, data: { game: {} } }), hasSlot: () => true };
+  it('loadFromSlot applies payload data on success', () => {
+    const sm = createSM({ day: 5 });
+    sm.saveSystem = { loadSlot: () => ({ ok: true, data: { game: { day: 99 } } }), hasSlot: () => true };
     const result = sm.loadFromSlot('manual1');
     expect(result).toBe(true);
-    expect(appliedData).toEqual({ game: {} });
+    expect(sm.state.day).toBe(99);
   });
 
   it('loadFromSlot returns false when slot empty', () => {
@@ -870,18 +879,31 @@ describe('SaveManager - Phase 4B', () => {
       mode: 'map',
       day: 5,
       saveLoadOpen: false,
+      setMode(m) { this.mode = m; },
       ...stateOverrides,
     };
     const sm = new SaveManager(state);
     sm.init({
       playerParty: { gold: 100, roster: [{ id: 'u1' }] },
-      buildSavePayload: () => ({ version: 1 }),
-      applySavePayload: () => true,
+      enemyParties: [],
+      worldAi: { lastRespawnDay: 0, parties: [] },
+      lastEncounterEndTimeByEnemyId: {},
+      worldEncounterPartyByEnemyId: {},
+      itemCatalog: [],
+      settings: {},
       setLastEventLog: () => {},
       updateTransientUIState: () => {},
       continueGame: () => false,
       startScreen: { setInfoMessage: () => {} },
       dom: { saveTransferText: { value: '', focus: () => {}, select: () => {} } },
+      ensureInventoryModel: () => {},
+      ensureRosterState: () => {},
+      ensureFactionState: () => {},
+      cleanupExpiredMarketOpportunities: () => {},
+      refreshCurrentEventsSummary: () => [],
+      getEffectiveTuning: () => ({}),
+      getWorldAiCfgWithRegionMods: () => ({}),
+      setupSettingsUI: () => {},
       ...gameOverrides,
     });
     return sm;
@@ -947,5 +969,122 @@ describe('SaveManager - Phase 4B', () => {
     const result = sm.importTextareaToSlotAndLoad('manual1');
     expect(result).toBe(true);
     expect(loadedSlot).toBe('manual1');
+  });
+});
+
+describe('SaveManager - Phase 4C', () => {
+  function createSM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      mode: 'map',
+      day: 5,
+      setMode(m) { this.mode = m; },
+      ...stateOverrides,
+    };
+    const sm = new SaveManager(state);
+    sm.init({
+      playerParty: { gold: 100, roster: [{ id: 'u1' }] },
+      enemyParties: [],
+      worldAi: { lastRespawnDay: 0, parties: [] },
+      lastEncounterEndTimeByEnemyId: {},
+      worldEncounterPartyByEnemyId: {},
+      itemCatalog: [],
+      settings: {},
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      ensureInventoryModel: () => {},
+      ensureRosterState: () => {},
+      ensureFactionState: () => {},
+      cleanupExpiredMarketOpportunities: () => {},
+      refreshCurrentEventsSummary: () => [],
+      getEffectiveTuning: () => ({}),
+      getWorldAiCfgWithRegionMods: () => ({}),
+      setupSettingsUI: () => {},
+      ...gameOverrides,
+    });
+    return sm;
+  }
+
+  // buildSavePayload
+  it('buildSavePayload returns schemaVersion 1', () => {
+    const sm = createSM();
+    const payload = sm.buildSavePayload();
+    expect(payload.schemaVersion).toBe(1);
+  });
+
+  it('buildSavePayload includes savedAt ISO timestamp', () => {
+    const sm = createSM();
+    const payload = sm.buildSavePayload();
+    expect(typeof payload.savedAt).toBe('string');
+    expect(payload.savedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('buildSavePayload captures day from state', () => {
+    const sm = createSM({ day: 7 });
+    expect(sm.buildSavePayload().game.day).toBe(7);
+  });
+
+  it('buildSavePayload captures gold from playerParty', () => {
+    const sm = createSM({}, { playerParty: { gold: 250, roster: [] } });
+    expect(sm.buildSavePayload().game.playerParty.gold).toBe(250);
+  });
+
+  it('buildSavePayload serializes roster units', () => {
+    const sm = createSM({}, {
+      playerParty: {
+        gold: 0,
+        roster: [{ id: 'u1', hp: 10, maxHp: 20, atk: 5, def: 2, speed: 60, isRanged: false, wagePerDay: 1, quality: 0, status: 'healthy', healProgress: 0, meleeRange: 18, rangedRange: 0, rangedDamage: 0, rangedCooldown: 0 }],
+      },
+    });
+    const payload = sm.buildSavePayload();
+    expect(payload.game.roster).toHaveLength(1);
+    expect(payload.game.roster[0].id).toBe('u1');
+  });
+
+  // applySavePayload
+  it('applySavePayload returns false without playerParty', () => {
+    const sm = createSM({}, { playerParty: null });
+    expect(sm.applySavePayload({ game: { day: 10 } })).toBe(false);
+  });
+
+  it('applySavePayload applies day from payload', () => {
+    const sm = createSM({ day: 1 });
+    sm.applySavePayload({ game: { day: 42 } });
+    expect(sm.state.day).toBe(42);
+  });
+
+  it('applySavePayload applies gold to playerParty', () => {
+    const sm = createSM();
+    sm.applySavePayload({ game: { playerParty: { gold: 9999 } } });
+    expect(sm.game.playerParty.gold).toBe(9999);
+  });
+
+  it('applySavePayload returns true on success', () => {
+    const sm = createSM();
+    expect(sm.applySavePayload({ game: {} })).toBe(true);
+  });
+
+  it('applySavePayload sets lastSaveMeta slot', () => {
+    const sm = createSM();
+    sm.applySavePayload({ game: {} }, { slot: 'autosave' });
+    expect(sm.state.lastSaveMeta.slot).toBe('autosave');
+  });
+
+  it('applySavePayload forces map mode for unsafe modes', () => {
+    const sm = createSM();
+    sm.applySavePayload({ game: { mode: 'battle' } });
+    expect(sm.state.mode).toBe('map');
+  });
+
+  it('applySavePayload preserves safe city mode', () => {
+    const sm = createSM();
+    sm.applySavePayload({ game: { mode: 'city' } });
+    expect(sm.state.mode).toBe('city');
+  });
+
+  it('applySavePayload clears encounter and battle state', () => {
+    const sm = createSM({ encounter: { active: true }, battle: { active: true } });
+    sm.applySavePayload({ game: {} });
+    expect(sm.state.encounter).toBeNull();
+    expect(sm.state.battle).toBeNull();
   });
 });

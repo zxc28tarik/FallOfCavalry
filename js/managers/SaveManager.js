@@ -1,4 +1,13 @@
 import SaveSystem from '../systems/save-system.js';
+import * as CONST from '../constants.js';
+import { serializeSettings, deserializeSettings } from '../systems/settings.js';
+import { ensureFactionState, assignInitialSettlementOwners } from '../systems/factions.js';
+import { createInitialEventState } from '../systems/events.js';
+import { createInitialRegionState } from '../systems/region-state.js';
+import { ensureWorldParties } from '../systems/world-ai.js';
+import * as suppliesSystem from '../systems/supplies.js';
+import * as campSystem from '../systems/camp.js';
+import * as PoiSystem from '../systems/poi-system.js';
 
 export class SaveManager {
   constructor(gameState) {
@@ -48,7 +57,7 @@ Esc close`,
   }
 
   saveToSlot(slot) {
-    const payload = this.game?.buildSavePayload?.();
+    const payload = this.buildSavePayload();
     const res = this.saveSystem?.saveSlot?.(slot, payload);
     if (!res?.ok) {
       this.game?.setLastEventLog?.('Save failed');
@@ -66,7 +75,7 @@ Esc close`,
       this.game?.setLastEventLog?.(`Load failed: ${res?.reason || 'unknown'}`);
       return false;
     }
-    const ok = this.game?.applySavePayload?.(res.data, { slot });
+    const ok = this.applySavePayload(res.data, { slot });
     if (!ok) {
       this.game?.setLastEventLog?.('Load failed');
       return false;
@@ -171,5 +180,343 @@ Esc close`,
       return false;
     }
     return this.loadFromSlot(slot);
+  }
+
+  // ── Phase 4C: Core serialization ──────────────────────────────────
+
+  buildSavePayload() {
+    const nowIso = new Date().toISOString();
+    const playerParty = this.game?.playerParty;
+    const roster = (playerParty?.roster || []).map((unit) => ({
+      id: unit.id,
+      class: unit.class || 'unit',
+      label: unit.name || unit.class || 'Unit',
+      hp: Math.max(1, Math.floor(unit.hp ?? unit.maxHp ?? 1)),
+      maxHp: Math.max(1, Math.floor(unit.maxHp ?? unit.hp ?? 1)),
+      atk: Math.max(1, Math.floor(unit.atk ?? 10)),
+      def: Math.max(0, Math.floor(unit.def ?? 0)),
+      speed: Math.max(20, Math.floor(unit.speed ?? 60)),
+      melee: Boolean(!unit.isRanged),
+      ranged: Boolean(unit.isRanged),
+      wagePerDay: Math.max(0, Math.floor(unit.wagePerDay ?? 0)),
+      quality: Math.max(0, Math.floor(unit.quality ?? 0)),
+      status: ['healthy', 'wounded', 'dead'].includes(unit.status) ? unit.status : 'healthy',
+      healProgress: Math.max(0, Math.min(1, Number(unit.healProgress ?? 0))),
+      meleeRange: Math.floor(unit.meleeRange ?? 18),
+      rangedRange: Math.floor(unit.rangedRange ?? 0),
+      rangedDamage: Math.floor(unit.rangedDamage ?? 0),
+      rangedCooldown: Number(unit.rangedCooldown ?? 0),
+    }));
+
+    const settlements = this.state?.map?.settlements || [];
+    this.game?.ensureInventoryModel?.();
+    const itemCatalog = this.game?.itemCatalog || [];
+    const inventory = {
+      items: Array.isArray(playerParty?.inventory?.items) ? playerParty.inventory.items.map((item) => ({
+        id: item.id,
+        name: item.name || this.game?.getItemName?.(item.id) || item.id,
+        qty: Math.max(0, Math.floor(item.qty ?? 0)),
+        unitValue: Math.max(1, Math.floor(item.unitValue ?? itemCatalog.find((c) => c.id === item.id)?.unitValue ?? 1)),
+      })) : [],
+      capacity: Number.isFinite(playerParty?.inventory?.capacity) ? playerParty.inventory.capacity : null,
+    };
+
+    const settlementsRecruit = settlements
+      .filter((s) => s?.id && s?.recruit)
+      .map((s) => ({
+        settlementId: s.id,
+        lastRefreshDay: Number.isFinite(s.recruit?.lastRefreshDay) ? s.recruit.lastRefreshDay : 0,
+        refreshEveryDays: Number.isFinite(s.recruit?.refreshEveryDays) ? s.recruit.refreshEveryDays : 3,
+        offers: Array.isArray(s.recruit?.offers) ? s.recruit.offers : [],
+      }));
+
+    const enemyParties = this.game?.enemyParties || [];
+    const worldAi = this.game?.worldAi;
+    const lastEncounterEndTimeByEnemyId = this.game?.lastEncounterEndTimeByEnemyId || {};
+
+    return {
+      schemaVersion: 1,
+      savedAt: nowIso,
+      game: {
+        day: Number.isFinite(this.state?.day) ? this.state.day : 1,
+        mode: typeof this.state?.mode === 'string' ? this.state.mode : 'map',
+        paused: Boolean(this.state?.paused),
+        settings: serializeSettings(this.game?.settings),
+        camera: {
+          x: Number.isFinite(this.state?.camera?.x) ? this.state.camera.x : 0,
+          y: Number.isFinite(this.state?.camera?.y) ? this.state.camera.y : 0,
+          zoom: Number.isFinite(this.state?.camera?.zoom) ? this.state.camera.zoom : 1,
+        },
+        playerParty: {
+          x: Number.isFinite(playerParty?.x) ? playerParty.x : 320,
+          y: Number.isFinite(playerParty?.y) ? playerParty.y : 320,
+          radius: Number.isFinite(playerParty?.radius) ? playerParty.radius : 12,
+          speed: Number.isFinite(playerParty?.speed) ? playerParty.speed : 180,
+          selected: Boolean(playerParty?.selected),
+          destX: Number.isFinite(playerParty?.destX) ? playerParty.destX : null,
+          destY: Number.isFinite(playerParty?.destY) ? playerParty.destY : null,
+          hasDestination: Boolean(playerParty?.hasDestination),
+          gold: Number.isFinite(playerParty?.gold) ? playerParty.gold : 0,
+          xp: Number.isFinite(playerParty?.xp) ? playerParty.xp : 0,
+          morale: Number.isFinite(playerParty?.morale) ? playerParty.morale : 50,
+          renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
+          starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
+          contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
+        },
+        roster,
+        enemies: enemyParties.map((e) => ({
+          id: e.id,
+          x: Number.isFinite(e.x) ? e.x : 0,
+          y: Number.isFinite(e.y) ? e.y : 0,
+          radius: Number.isFinite(e.radius) ? e.radius : 12,
+          speed: Number.isFinite(e.speed) ? e.speed : 35,
+          vx: Number.isFinite(e.vx) ? e.vx : 0,
+          vy: Number.isFinite(e.vy) ? e.vy : 0,
+          temporary: Boolean(e.temporary),
+          factionId: e.factionId || CONST.FACTION.ID.BANDITS,
+        })),
+        enemyCooldowns: lastEncounterEndTimeByEnemyId,
+        worldAi: {
+          lastRespawnDay: Number.isFinite(worldAi?.lastRespawnDay) ? worldAi.lastRespawnDay : 0,
+          parties: Array.isArray(worldAi?.parties) ? worldAi.parties.map((party) => ({
+            id: party.id,
+            factionId: party.factionId,
+            kind: party.kind,
+            x: Number.isFinite(party.x) ? party.x : 0,
+            y: Number.isFinite(party.y) ? party.y : 0,
+            targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+            targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+            speed: Number.isFinite(party.speed) ? party.speed : 1,
+            alive: party.alive !== false,
+            homeCityId: party.homeCityId || null,
+          })) : [],
+        },
+        settlementsRecruit,
+        settlementsMarkets: settlements.filter((st) => st?.id).map((st) => ({
+          settlementId: st.id,
+          marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
+          priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
+        })),
+        settlementsOwners: settlements.filter((st) => st?.id).map((st) => ({
+          settlementId: st.id,
+          ownerFactionId: st.ownerFactionId || null,
+        })),
+        markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
+        supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
+        camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
+        tutorial: {
+          enabled: Boolean(this.state?.tutorial?.enabled ?? CONST.TUTORIAL_HINTS.ENABLED_DEFAULT),
+          shown: this.state?.tutorial?.shown && typeof this.state.tutorial.shown === 'object' ? this.state.tutorial.shown : {},
+        },
+        poiState: this.state?.poiState && typeof this.state.poiState === 'object' ? this.state.poiState : {},
+        regionState: this.state?.regionState && typeof this.state.regionState === 'object' ? this.state.regionState : createInitialRegionState(),
+        clueMarker: this.state?.clueMarker && typeof this.state.clueMarker === 'object' ? this.state.clueMarker : null,
+        marketOpportunities: this.state?.marketOpportunities && typeof this.state.marketOpportunities === 'object' ? this.state.marketOpportunities : {},
+        events: this.state?.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState(),
+        status: this.state?.status && typeof this.state.status === 'object' ? this.state.status : { starving: false },
+        lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
+        dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
+        inventory,
+        tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
+        factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : null,
+      },
+    };
+  }
+
+  applySavePayload(payload, { slot = 'manual1' } = {}) {
+    const game = payload?.game || {};
+    const playerParty = this.game?.playerParty;
+    if (!this.state || !playerParty) return false;
+
+    this.state.day = Number.isFinite(game.day) ? game.day : 1;
+    this.state.paused = Boolean(game.paused);
+    this.state.camera = {
+      x: Number.isFinite(game?.camera?.x) ? game.camera.x : 0,
+      y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
+      zoom: Number.isFinite(game?.camera?.zoom) ? game.camera.zoom : 1,
+    };
+
+    const p = game.playerParty || {};
+    playerParty.x = Number.isFinite(p.x) ? p.x : playerParty.x;
+    playerParty.y = Number.isFinite(p.y) ? p.y : playerParty.y;
+    playerParty.radius = Number.isFinite(p.radius) ? p.radius : playerParty.radius;
+    playerParty.speed = Number.isFinite(p.speed) ? p.speed : playerParty.speed;
+    playerParty.selected = Boolean(p.selected);
+    playerParty.destX = Number.isFinite(p.destX) ? p.destX : null;
+    playerParty.destY = Number.isFinite(p.destY) ? p.destY : null;
+    playerParty.hasDestination = Boolean(p.hasDestination);
+    playerParty.gold = Number.isFinite(p.gold) ? p.gold : 0;
+    playerParty.xp = Number.isFinite(p.xp) ? p.xp : 0;
+    playerParty.morale = Number.isFinite(p.morale) ? p.morale : 50;
+    playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
+    playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
+    playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.factionId = typeof p.factionId === 'string' ? p.factionId : CONST.FACTION.ID.PLAYER;
+    playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
+
+    const itemCatalog = this.game?.itemCatalog || [];
+    const inv = game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null };
+    playerParty.inventory = {
+      items: Array.isArray(inv.items) ? inv.items.map((it) => ({
+        id: it.id,
+        name: it.name || this.game?.getItemName?.(it.id) || it.id,
+        qty: Math.max(0, Math.floor(it.qty ?? 0)),
+        unitValue: Math.max(1, Math.floor(it.unitValue ?? itemCatalog.find((c) => c.id === it.id)?.unitValue ?? 1)),
+      })).filter((it) => it.id && it.qty > 0) : [],
+      capacity: Number.isFinite(inv.capacity) ? inv.capacity : null,
+    };
+    this.game?.ensureInventoryModel?.();
+
+    const roster = Array.isArray(game.roster) ? game.roster : [];
+    playerParty.roster = roster.map((u, i) => ({
+      id: u.id || `unit-${i + 1}`,
+      name: u.label || u.class || `Unit ${i + 1}`,
+      class: u.class || 'unit',
+      hp: Math.max(1, Math.floor(u.hp ?? u.maxHp ?? 1)),
+      maxHp: Math.max(1, Math.floor(u.maxHp ?? u.hp ?? 1)),
+      atk: Math.max(1, Math.floor(u.atk ?? 10)),
+      def: Math.max(0, Math.floor(u.def ?? 0)),
+      speed: Math.max(20, Math.floor(u.speed ?? 60)),
+      isRanged: Boolean(u.ranged),
+      meleeRange: Math.floor(u.meleeRange ?? 18),
+      rangedRange: Math.floor(u.rangedRange ?? 0),
+      rangedDamage: Math.floor(u.rangedDamage ?? 0),
+      rangedCooldown: Number(u.rangedCooldown ?? 0),
+      wagePerDay: Math.max(0, Math.floor(u.wagePerDay ?? 0)),
+      quality: Math.max(0, Math.floor(u.quality ?? 0)),
+      status: ['healthy', 'wounded', 'dead'].includes(u.status) ? u.status : 'healthy',
+      healProgress: Math.max(0, Math.min(1, Number(u.healProgress ?? 0))),
+    })).filter((u) => u.status !== 'dead');
+    this.game?.ensureRosterState?.();
+
+    this.game.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).filter((e) => !e?.temporary).map((e) => ({
+      id: e.id,
+      x: Number.isFinite(e.x) ? e.x : 0,
+      y: Number.isFinite(e.y) ? e.y : 0,
+      radius: Number.isFinite(e.radius) ? e.radius : 12,
+      speed: Number.isFinite(e.speed) ? e.speed : 35,
+      vx: Number.isFinite(e.vx) ? e.vx : 0,
+      vy: Number.isFinite(e.vy) ? e.vy : 0,
+      temporary: false,
+      factionId: e.factionId || CONST.FACTION.ID.BANDITS,
+    }));
+    this.state.aiParties = this.game.enemyParties;
+
+    this.game.lastEncounterEndTimeByEnemyId = game.enemyCooldowns && typeof game.enemyCooldowns === 'object'
+      ? game.enemyCooldowns
+      : {};
+
+    const savedWorldAi = game.worldAi && typeof game.worldAi === 'object' ? game.worldAi : {};
+    this.game.worldAi = {
+      lastRespawnDay: Number.isFinite(savedWorldAi.lastRespawnDay) ? savedWorldAi.lastRespawnDay : 0,
+      parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties.map((party) => ({
+        id: party.id,
+        factionId: party.factionId,
+        kind: party.kind,
+        x: Number.isFinite(party.x) ? party.x : 0,
+        y: Number.isFinite(party.y) ? party.y : 0,
+        targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+        targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+        speed: Number.isFinite(party.speed) ? party.speed : 1,
+        alive: party.alive !== false,
+        homeCityId: party.homeCityId || null,
+      })) : [],
+    };
+    this.game.worldEncounterPartyByEnemyId = {};
+    this.state.worldAi = this.game.worldAi;
+
+    const recruitBySettlement = new Map((Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : []).map((r) => [r.settlementId, r]));
+    const settlements = this.state.map?.settlements || [];
+    settlements.forEach((s) => {
+      const rec = recruitBySettlement.get(s.id);
+      if (!rec) return;
+      s.recruit = {
+        lastRefreshDay: Number.isFinite(rec.lastRefreshDay) ? rec.lastRefreshDay : 0,
+        refreshEveryDays: Number.isFinite(rec.refreshEveryDays) ? rec.refreshEveryDays : 3,
+        offers: Array.isArray(rec.offers) ? rec.offers : [],
+      };
+    });
+
+    const marketBySettlement = new Map((Array.isArray(game.settlementsMarkets) ? game.settlementsMarkets : []).map((m) => [m.settlementId, m]));
+    settlements.forEach((s) => {
+      const market = marketBySettlement.get(s.id);
+      if (!market) return;
+      s.marketStock = Array.isArray(market.marketStock) ? market.marketStock : [];
+      s.priceMultiplier = market.priceMultiplier && typeof market.priceMultiplier === 'object' ? market.priceMultiplier : {};
+    });
+
+    const ownerBySettlement = new Map((Array.isArray(game.settlementsOwners) ? game.settlementsOwners : []).map((entry) => [entry.settlementId, entry]));
+    settlements.forEach((s) => {
+      const owner = ownerBySettlement.get(s.id);
+      if (!owner) return;
+      s.ownerFactionId = typeof owner.ownerFactionId === 'string' ? owner.ownerFactionId : s.ownerFactionId;
+    });
+
+    this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
+    Object.values(this.state.markets).forEach((market) => {
+      if (!market || typeof market !== 'object') return;
+      if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+    });
+    this.state.supplies = game.supplies && typeof game.supplies === 'object' ? game.supplies : { food: 30 };
+    this.state.camp = game.camp && typeof game.camp === 'object' ? game.camp : { active: false, watch: 'med' };
+    this.game.settings = deserializeSettings(game.settings, CONST.SETTINGS);
+    this.state.settings = serializeSettings(this.game.settings);
+    this.state.tutorial = {
+      enabled: typeof game?.tutorial?.enabled === 'boolean' ? game.tutorial.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
+      shown: game?.tutorial?.shown && typeof game.tutorial.shown === 'object' && !Array.isArray(game.tutorial.shown) ? game.tutorial.shown : {},
+      lastShownAt: 0,
+    };
+    this.state.poiState = game.poiState && typeof game.poiState === 'object' && !Array.isArray(game.poiState) ? game.poiState : {};
+    this.state.regionState = game.regionState && typeof game.regionState === 'object' && !Array.isArray(game.regionState) ? game.regionState : createInitialRegionState();
+    this.state.clueMarker = game.clueMarker && typeof game.clueMarker === 'object' ? game.clueMarker : null;
+    this.state.marketOpportunities = game.marketOpportunities && typeof game.marketOpportunities === 'object' && !Array.isArray(game.marketOpportunities)
+      ? game.marketOpportunities
+      : {};
+    this.state.events = game.events && typeof game.events === 'object' && !Array.isArray(game.events)
+      ? game.events
+      : createInitialEventState();
+    this.state.status = game.status && typeof game.status === 'object' ? game.status : { starving: false };
+    this.state.lastAccounting = game.lastAccounting && typeof game.lastAccounting === 'object' ? game.lastAccounting : null;
+    this.state.dailyLedger = game.dailyLedger && typeof game.dailyLedger === 'object'
+      ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
+      : { tradePL: 0 };
+    this.state.tuning = game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {};
+    this.state.factions = ensureFactionState(game.factions, CONST.DIPLOMACY_RELATIONS);
+    this.state.factions = game.factions && typeof game.factions === 'object' && !Array.isArray(game.factions) ? game.factions : null;
+    this.game?.ensureFactionState?.();
+    assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
+    PoiSystem.ensurePoiState(this.state);
+    this.game?.cleanupExpiredMarketOpportunities?.(this.state.day);
+    this.game?.refreshCurrentEventsSummary?.(this.state.day);
+    if ((this.game?.getEffectiveTuning?.() || {}).WORLD_AI?.ENABLED ?? CONST.WORLD_AI?.ENABLED) {
+      ensureWorldParties({
+        aiState: this.game.worldAi,
+        worldState: this.state?.map || {},
+        factions: this.state?.factions || CONST.FACTIONS,
+        cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
+        currentDay: this.state?.day ?? 1,
+      });
+    }
+
+    const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
+    const safeModes = new Set(['map', 'city']);
+    if (!safeModes.has(loadedMode)) {
+      this.state.setMode('map');
+      this.game?.setLastEventLog?.('Loaded into map for safety');
+    } else {
+      this.state.setMode(loadedMode);
+    }
+
+    this.state.encounter = null;
+    this.state.battle = null;
+    this.state.accounting = null;
+    this.state.aftermath = null;
+    this.state.lastSaveMeta = { slot, at: Date.now() };
+    this.game?.setupSettingsUI?.();
+    this.game?.updateTransientUIState?.();
+    return true;
   }
 }
