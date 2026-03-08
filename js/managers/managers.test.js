@@ -1290,3 +1290,122 @@ describe('EconomyManager - Phase 5B', () => {
     expect(em.cityCursor).toBe(0);
   });
 });
+
+describe('EconomyManager - Phase 5C', () => {
+  const CATALOG = [
+    { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4 },
+    { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11 },
+  ];
+
+  function createEM(stateOverrides = {}, gameOverrides = {}) {
+    const state = {
+      day: 1,
+      mode: 'map',
+      markets: {},
+      city: null,
+      setMode(m) { this.mode = m; },
+      ...stateOverrides,
+    };
+    const em = new EconomyManager(state);
+    em.init({
+      itemCatalog: CATALOG,
+      playerParty: { x: 50, y: 50, gold: 200, roster: [], inventory: { items: [], capacity: null } },
+      getWoundedUnits: () => [],
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      setupCityServicesUI: () => {},
+      maybeShowTutorialHint: () => {},
+      runAutosave: () => {},
+      getCityFactionContext: () => null,
+      cityUI: { show: () => {}, hide: () => {} },
+      ...gameOverrides,
+    });
+    return em;
+  }
+
+  it('enterCityServices sets mode to city', () => {
+    const settlement = { id: 's1', type: 'town', x: 50, y: 50 };
+    const em = createEM({ map: { settlements: [settlement] } });
+    em.enterCityServices();
+    expect(em.state.mode).toBe('city');
+  });
+
+  it('exitCityServices sets mode back to map', () => {
+    const em = createEM({ mode: 'city' });
+    em.exitCityServices();
+    expect(em.state.mode).toBe('map');
+  });
+
+  it('buildCityPanelData menu contains gold and services', () => {
+    const em = createEM({ citySubmode: 'menu', city: { id: 's1', name: 'Caer', type: 'town' } });
+    const panel = em.buildCityPanelData();
+    expect(panel.title).toContain('Caer');
+    expect(panel.body).toContain('Gold:');
+    expect(panel.body).toContain('Recruit');
+  });
+
+  it('buildCityPanelData recruit shows offers', () => {
+    const settlement = { id: 's1', name: 'Caer', type: 'town' };
+    const em = createEM({ citySubmode: 'recruit', city: settlement });
+    const panel = em.buildCityPanelData();
+    expect(panel.title).toBe('City - Recruit');
+  });
+
+  it('recruitCurrentUnit deducts gold and adds to roster', () => {
+    const settlement = { id: 's1', type: 'town' };
+    const em = createEM({ city: settlement });
+    em.ensureCityOffers();
+    const before = em.game.playerParty.gold;
+    const result = em.recruitCurrentUnit(false);
+    expect(result).toBe(true);
+    expect(em.game.playerParty.gold).toBeLessThan(before);
+    expect(em.game.playerParty.roster.length).toBeGreaterThan(0);
+  });
+
+  it('recruitCurrentUnit returns false when no gold', () => {
+    const settlement = { id: 's1', type: 'town' };
+    const em = createEM({ city: settlement }, { playerParty: { x: 0, y: 0, gold: 0, roster: [], inventory: { items: [], capacity: null } } });
+    em.ensureCityOffers();
+    expect(em.recruitCurrentUnit(false)).toBe(false);
+  });
+
+  it('tradeCurrentItem buy deducts gold', () => {
+    const settlement = {
+      id: 's1', type: 'town',
+      marketStock: [{ id: 'grain', qty: 10 }, { id: 'iron', qty: 10 }],
+      priceMultiplier: { grain: 1, iron: 1 },
+    };
+    const em = createEM({ city: settlement });
+    em.cityMarketCursor = 0;
+    const before = em.game.playerParty.gold;
+    const result = em.tradeCurrentItem(1);
+    expect(result).toBe(true);
+    expect(em.game.playerParty.gold).toBeLessThan(before);
+  });
+
+  it('healCurrentUnit returns false when no wounded units', () => {
+    const em = createEM();
+    expect(em.healCurrentUnit()).toBe(false);
+  });
+
+  it('healCurrentUnit deducts gold and heals unit', () => {
+    const unit = { name: 'Soldier', hp: 50, maxHp: 100, status: 'wounded', healProgress: 0 };
+    const em = createEM({}, {
+      itemCatalog: CATALOG,
+      playerParty: { x: 0, y: 0, gold: 500, roster: [], inventory: { items: [], capacity: null } },
+      getWoundedUnits: () => [unit],
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      setupCityServicesUI: () => {},
+      maybeShowTutorialHint: () => {},
+      runAutosave: () => {},
+      getCityFactionContext: () => null,
+      cityUI: { show: () => {}, hide: () => {} },
+    });
+    const before = em.game.playerParty.gold;
+    const result = em.healCurrentUnit();
+    expect(result).toBe(true);
+    expect(em.game.playerParty.gold).toBeLessThan(before);
+    expect(unit.hp).toBeGreaterThan(50);
+  });
+});
