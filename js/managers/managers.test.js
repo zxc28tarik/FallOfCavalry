@@ -1212,3 +1212,81 @@ describe('EconomyManager - Phase 5A', () => {
     expect(typeof result.overcapMult).toBe('number');
   });
 });
+
+describe('EconomyManager - Phase 5B', () => {
+  const CATALOG = [
+    { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4 },
+    { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11 },
+  ];
+
+  function createEM(stateOverrides = {}, gameOverrides = {}) {
+    const state = { day: 1, markets: {}, ...stateOverrides };
+    const em = new EconomyManager(state);
+    em.init({
+      itemCatalog: CATALOG,
+      playerParty: { x: 50, y: 50, inventory: { items: [], capacity: null } },
+      ...gameOverrides,
+    });
+    return em;
+  }
+
+  it('getOrCreateMarketForSettlement creates market for new settlement', () => {
+    const em = createEM();
+    const s = { id: 's1', type: 'town' };
+    const market = em.getOrCreateMarketForSettlement(s);
+    expect(market).toBeDefined();
+    expect(em.state.markets['s1']).toBe(market);
+  });
+
+  it('getOrCreateMarketForSettlement returns same market on second call', () => {
+    const em = createEM();
+    const s = { id: 's1', type: 'town' };
+    const m1 = em.getOrCreateMarketForSettlement(s);
+    const m2 = em.getOrCreateMarketForSettlement(s);
+    expect(m1).toBe(m2);
+  });
+
+  it('generateRecruitOffersForSettlement returns 4+tier offers for city', () => {
+    const em = createEM();
+    const offers = em.generateRecruitOffersForSettlement({ id: 'c1', type: 'city' });
+    expect(offers.length).toBe(4 + 3); // tier 3
+    expect(offers[0]).toHaveProperty('unitClassLabel');
+    expect(offers[0]).toHaveProperty('hireCost');
+  });
+
+  it('ensureSettlementRecruitState initializes recruit offers when missing', () => {
+    const em = createEM();
+    const s = { id: 's1', type: 'town' };
+    em.ensureSettlementRecruitState(s, 1);
+    expect(Array.isArray(s.recruit.offers)).toBe(true);
+    expect(s.recruit.lastRefreshDay).toBe(1);
+  });
+
+  it('ensureSettlementRecruitState refreshes offers after interval', () => {
+    const em = createEM({ day: 10 });
+    const s = { id: 's1', type: 'town', recruit: { lastRefreshDay: 1, refreshEveryDays: 3, offers: [] } };
+    em.ensureSettlementRecruitState(s, 10);
+    expect(s.recruit.lastRefreshDay).toBe(10);
+    expect(s.recruit.offers.length).toBeGreaterThan(0);
+  });
+
+  it('ensureSettlementMarketState initializes marketStock when missing', () => {
+    const em = createEM();
+    const s = { id: 's1', type: 'town' };
+    em.ensureSettlementMarketState(s);
+    expect(Array.isArray(s.marketStock)).toBe(true);
+    expect(s.marketStock).toHaveLength(CATALOG.length);
+  });
+
+  it('ensureCityOffers populates cityOffers from nearest settlement', () => {
+    const settlement = { id: 's1', type: 'town', x: 50, y: 50 };
+    const em = createEM({ map: { settlements: [settlement] } });
+    em.ensureCityOffers();
+    expect(Array.isArray(em.cityOffers)).toBe(true);
+  });
+
+  it('cityCursor defaults to 0', () => {
+    const em = createEM();
+    expect(em.cityCursor).toBe(0);
+  });
+});

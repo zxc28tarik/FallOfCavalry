@@ -271,10 +271,6 @@ class FallOfCavalry {
       { id: 'cloth', name: 'Cloth', unitValue: 6, baseBuy: 6, baseSell: 4 },
       { id: 'tools', name: 'Tools', unitValue: 9, baseBuy: 9, baseSell: 6 },
     ];
-    this.cityOffers = [];
-    this.cityCursor = 0;
-    this.cityMarketCursor = 0;
-    this.cityHealerCursor = 0;
     this.battleProjectiles = [];
     this.floatingTexts = [];
     this.battleRecoveryTimer = 0;
@@ -1414,6 +1410,16 @@ class FallOfCavalry {
   set saveLoadCursor(v) { this.saveManager.saveLoadCursor = v; }
   get saveLoadRows() { return this.saveManager.saveLoadRows; }
 
+  // backward-compat: city cursor properties used in keyboard handler
+  get cityOffers() { return this.economyManager.cityOffers; }
+  set cityOffers(v) { this.economyManager.cityOffers = v; }
+  get cityCursor() { return this.economyManager.cityCursor; }
+  set cityCursor(v) { this.economyManager.cityCursor = v; }
+  get cityMarketCursor() { return this.economyManager.cityMarketCursor; }
+  set cityMarketCursor(v) { this.economyManager.cityMarketCursor = v; }
+  get cityHealerCursor() { return this.economyManager.cityHealerCursor; }
+  set cityHealerCursor(v) { this.economyManager.cityHealerCursor = v; }
+
   resolveEncounter(action) {
     const encounter = this.state?.encounter;
     if (!encounter?.enemyId || this.state?.mode !== 'encounter') return false;
@@ -1764,17 +1770,7 @@ Renown
     });
   }
 
-  getOrCreateMarketForSettlement(settlement) {
-    if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
-    if (!settlement?.id) return tradeSystem.initMarket(settlement, this.state?.seed);
-    if (!this.state.markets[settlement.id]) {
-      this.state.markets[settlement.id] = tradeSystem.initMarket(settlement, this.state?.seed);
-    }
-    if (!this.state.markets[settlement.id].momentum || typeof this.state.markets[settlement.id].momentum !== 'object') {
-      this.state.markets[settlement.id].momentum = {};
-    }
-    return this.state.markets[settlement.id];
-  }
+  getOrCreateMarketForSettlement(settlement) { return this.economyManager.getOrCreateMarketForSettlement(settlement); }
 
   enterCityServices() {
     if (!this.state) return false;
@@ -2136,94 +2132,10 @@ Renown
   cleanupExpiredMarketOpportunities(day = this.state?.day) { return this.economyManager.cleanupExpiredMarketOpportunities(day); }
   getActiveSettlementForCity() { return this.economyManager.getActiveSettlementForCity(); }
 
-  generateRecruitOffersForSettlement(settlement) {
-    const tier = this.getSettlementTier(settlement);
-    const day = Math.max(1, Math.floor(this.state?.day ?? 1));
-    const base = `${settlement?.id || 'settlement'}:${day}:${tier}`;
-    let seed = 0;
-    for (const ch of base) seed = (seed * 31 + ch.charCodeAt(0)) % 2147483647;
-    const rand = () => {
-      seed = (seed * 1103515245 + 12345) % 2147483647;
-      return (seed % 1000) / 1000;
-    };
-
-    const count = 4 + tier;
-    const offers = [];
-    for (let i = 0; i < count; i += 1) {
-      const ranged = tier > 1 ? rand() < 0.4 : rand() < 0.2;
-      const unitType = ranged ? 'archer' : 'infantry';
-      const quality = Math.min(5, Math.max(1, 1 + Math.floor(rand() * (tier + 2))));
-      const qStat = 1 + ((quality - 1) * 0.05);
-      const qCost = 1 + ((quality - 1) * 0.10);
-      const baseHp = ranged ? 78 : 100;
-      const baseAtk = ranged ? 10 : 14;
-      const baseDef = ranged ? 5 : 8;
-      const baseCost = ranged ? 12 : 10;
-      const baseWage = ranged ? 2 : 1;
-      offers.push({
-        id: `${settlement?.id || 's'}-rec-${day}-${i}`,
-        unitType,
-        unitClassLabel: ranged ? 'Archer' : 'Infantry',
-        quality,
-        count: 1 + Math.floor(rand() * (2 + tier)),
-        hireCost: Math.max(1, Math.round(baseCost * qCost)),
-        wagePerDay: Math.max(1, Math.round(baseWage * qCost)),
-        templateStats: {
-          maxHp: Math.max(1, Math.round(baseHp * qStat)),
-          atk: Math.max(1, Math.round(baseAtk * qStat)),
-          def: Math.max(0, Math.round(baseDef * qStat)),
-          speed: ranged ? 68 : 72,
-          melee: !ranged,
-          ranged,
-        },
-      });
-    }
-    return offers;
-  }
-
-  ensureSettlementRecruitState(settlement, dayNow) {
-    if (!settlement || typeof settlement !== 'object') return;
-    const today = Math.max(1, Math.floor(dayNow ?? this.state?.day ?? 1));
-    if (!settlement.recruit || typeof settlement.recruit !== 'object') {
-      settlement.recruit = { lastRefreshDay: today, refreshEveryDays: 3, offers: this.generateRecruitOffersForSettlement(settlement) };
-      return;
-    }
-    if (!Number.isFinite(settlement.recruit.refreshEveryDays)) settlement.recruit.refreshEveryDays = 3;
-    if (!Array.isArray(settlement.recruit.offers)) settlement.recruit.offers = [];
-    if (!Number.isFinite(settlement.recruit.lastRefreshDay)) settlement.recruit.lastRefreshDay = today;
-    if ((today - settlement.recruit.lastRefreshDay) >= settlement.recruit.refreshEveryDays) {
-      settlement.recruit.offers = this.generateRecruitOffersForSettlement(settlement);
-      settlement.recruit.lastRefreshDay = today;
-    }
-  }
-
-  ensureSettlementMarketState(settlement) {
-    if (!settlement || typeof settlement !== 'object') return;
-    const tier = this.getSettlementTier(settlement);
-    if (!Array.isArray(settlement.marketStock)) {
-      settlement.marketStock = this.itemCatalog.map((item, idx) => ({
-        id: item.id,
-        qty: Math.max(1, 4 + tier + idx % 3),
-      }));
-    }
-    if (typeof settlement.priceMultiplier !== 'object' || !settlement.priceMultiplier) {
-      settlement.priceMultiplier = {};
-      this.itemCatalog.forEach((item, idx) => {
-        const base = 1 + ((tier - 2) * 0.08) + ((idx % 3) * 0.03);
-        settlement.priceMultiplier[item.id] = Math.min(1.3, Math.max(0.8, Number(base.toFixed(2))));
-      });
-    }
-  }
-
-  ensureCityOffers() {
-    if (!this.state) return;
-    if (!this.state.city || typeof this.state.city !== 'object') {
-      this.state.city = this.getActiveSettlementForCity();
-    }
-    this.ensureSettlementRecruitState(this.state.city, this.state.day ?? 1);
-    this.ensureSettlementMarketState(this.state.city);
-    this.cityOffers = this.state.city?.recruit?.offers || [];
-  }
+  generateRecruitOffersForSettlement(settlement) { return this.economyManager.generateRecruitOffersForSettlement(settlement); }
+  ensureSettlementRecruitState(settlement, dayNow) { return this.economyManager.ensureSettlementRecruitState(settlement, dayNow); }
+  ensureSettlementMarketState(settlement) { return this.economyManager.ensureSettlementMarketState(settlement); }
+  ensureCityOffers() { return this.economyManager.ensureCityOffers(); }
 
   getWoundedUnits() {
     return this.battleManager.getWoundedUnits();
