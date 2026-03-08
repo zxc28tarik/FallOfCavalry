@@ -7,6 +7,10 @@ import {
   generateContractsForCity,
   emitContractEvent,
 } from '../systems/contracts.js';
+import { tickHealing } from '../systems/casualties.js';
+import * as suppliesSystem from '../systems/supplies.js';
+import * as campSystem from '../systems/camp.js';
+import { getActiveRegionModifiers } from '../systems/region-state.js';
 
 export class EconomyManager {
   constructor(gameState) {
@@ -540,5 +544,138 @@ Up/Down select, Enter heal, Esc back`,
     const cap = capacitySystem.computeCapacity(playerParty);
     const overcapMult = capacitySystem.computeOvercapSpeedMult(weight, cap);
     return { starvingMult, overcapMult, weight, cap };
+  }
+
+  // ── Phase 5D: Daily economy hub ───────────────────────────────────
+
+  processDailyEconomy(day) {
+    const playerParty = this.game?.playerParty;
+    if (!playerParty) return;
+
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
+    this.cleanupExpiredMarketOpportunities(day);
+    this.ensureInventoryModel();
+    this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
+      ? this.state.dailyLedger
+      : { tradePL: 0 };
+
+    const { weight, cap, overcapMult } = this.getLogisticsSpeedMult();
+    const goldBefore = Math.floor(playerParty.gold ?? 0);
+    const moraleBefore = Math.floor(playerParty.morale ?? 50);
+    const foodBefore = Number(this.state?.supplies?.food ?? 0);
+    const notes = [];
+    const activeEvents = this.game?.refreshCurrentEventsSummary?.(day) || [];
+    this.game?.applyDailyEventEffects?.(day, activeEvents);
+
+    const roster = playerParty.roster || [];
+    const totalWage = roster.reduce((sum, u) => sum + Math.max(0, Math.floor(u.wagePerDay ?? u.wage ?? 0)), 0);
+
+    if (totalWage > 0) {
+      const canPay = (playerParty.gold ?? 0) >= totalWage;
+      if (canPay) {
+        playerParty.gold -= totalWage;
+      } else {
+        playerParty.gold -= totalWage;
+        playerParty.morale = Math.max(10, (playerParty.morale ?? 50) - 5);
+        notes.push('Maaşlar ödenemedi, moral düştü.');
+      }
+    }
+
+    const supplyRes = suppliesSystem.applyEndOfDay(this.state, playerParty, { inCamp: Boolean(this.state?.camp?.active) });
+
+    let raid = { happened: false, lossText: '' };
+    if (this.state?.camp?.active) {
+      campSystem.applyCampBenefits(playerParty);
+      const raided = campSystem.rollRaid(this.state, Math.random);
+      if (raided) {
+        raid.happened = true;
+        if ((this.state.supplies?.food ?? 0) > 1.5) {
+          this.state.supplies.food = Math.max(0, Number((this.state.supplies.food - 2).toFixed(2)));
+          raid.lossText = 'Erzak -2';
+          this.game?.setLastEventLog?.(`Gün ${day}: Kamp baskını! Erzak -2.`);
+        } else {
+          playerParty.gold = Math.floor((playerParty.gold ?? 0) - 10);
+          raid.lossText = 'Altın -10';
+          this.game?.setLastEventLog?.(`Gün ${day}: Kamp baskını! Altın -10.`);
+        }
+      } else if (supplyRes.starved) {
+        this.game?.setLastEventLog?.(`Gün ${day}: Erzak bitti! Moral ${supplyRes.moraleDelta}.`);
+      }
+    } else if (supplyRes.starved) {
+      this.game?.setLastEventLog?.(`Gün ${day}: Erzak bitti! Moral ${supplyRes.moraleDelta}.`);
+    }
+
+    tickHealing({
+      party: playerParty,
+      cfg: this.game?.getEffectiveTuning?.()?.BATTLE_CASUALTIES,
+      isCamp: Boolean(this.state?.camp?.active),
+      isStarving: Boolean(supplyRes?.starved),
+    });
+
+    if ((playerParty.gold ?? 0) < 0) {
+      playerParty.morale = Math.max(0, (playerParty.morale ?? 50) - CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY);
+      notes.push(`Altın negatif: Moral -${CONST.ACCOUNTING.NEGATIVE_GOLD_MORALE_PENALTY}`);
+    }
+
+    if (this.state.markets && typeof this.state.markets === 'object') {
+      const settlements = this.state?.map?.settlements || [];
+      const settlementMap = new Map(settlements.filter((s) => s?.id).map((s) => [s.id, s]));
+      Object.entries(this.state.markets).forEach(([settlementKey, market]) => {
+        const settlement = settlementMap.get(settlementKey);
+        if (!settlement) return;
+        settlement.tier = this.getSettlementTier(settlement);
+        const biomeKey = this.game?.getBiomeKeyAtTile?.(settlement.tx, settlement.ty);
+        tradeSystem.advanceMarketOneDay(settlement, market, {
+          seed: this.state?.seed,
+          day: this.state?.day,
+          settlementKey,
+          biomeKey,
+          tuning: this.state?.tuning,
+          factions: this.state?.factions,
+          playerFactionId: 'player',
+          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
+          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
+          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.game?.getRegionIdAtTile?.(settlement.tx, settlement.ty), this.state?.day),
+        });
+      });
+    }
+
+    if (supplyRes?.starved) playerParty.starveDays = Math.max(0, Math.floor((playerParty.starveDays || 0) + 1));
+    else playerParty.starveDays = 0;
+
+    const summary = {
+      day: Number.isFinite(day) ? day : Math.floor(this.state?.day ?? 1),
+      foodBefore,
+      foodAfter: Number(this.state?.supplies?.food ?? 0),
+      consumed: Number(supplyRes?.consumed ?? 0),
+      starved: Boolean(supplyRes?.starved),
+      starvationMoraleDelta: Number(supplyRes?.moraleDelta ?? 0),
+      weight,
+      capacity: cap,
+      overcap: weight > cap,
+      overcapSpeedMult: overcapMult,
+      camp: { active: Boolean(this.state?.camp?.active), watch: this.state?.camp?.watch || 'med' },
+      raid,
+      goldBefore,
+      goldAfter: Math.floor(playerParty.gold ?? 0),
+      moraleBefore,
+      moraleAfter: Math.floor(playerParty.morale ?? 50),
+      tradePL: Number(this.state?.dailyLedger?.tradePL ?? 0),
+      notes,
+    };
+
+    this.state.lastAccounting = summary;
+    if (CONST.ACCOUNTING.AUTO_OPEN) {
+      this.state.accounting = summary;
+      this.state.paused = true;
+      this.game?.accountingUI?.show?.(summary);
+    }
+
+    const outcome = this.game?.evaluateCampaignOutcome?.();
+    if (outcome === 'win') this.game?.showCampaignWin?.();
+    if (outcome === 'lose') this.game?.showCampaignLose?.();
+    return summary;
   }
 }

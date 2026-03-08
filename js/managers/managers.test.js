@@ -1408,4 +1408,74 @@ describe('EconomyManager - Phase 5C', () => {
     expect(em.game.playerParty.gold).toBeLessThan(before);
     expect(unit.hp).toBeGreaterThan(50);
   });
+
+  // Phase 5D — processDailyEconomy
+  function createEMForDaily(stateOverride = {}, gameOverride = {}) {
+    const state = {
+      day: 1,
+      supplies: { food: 10 },
+      camp: { active: false, watch: 'med' },
+      dailyLedger: { tradePL: 0 },
+      markets: {},
+      map: { settlements: [] },
+      ...stateOverride,
+    };
+    const party = gameOverride.playerParty || {
+      x: 5, y: 5, gold: 200, morale: 60, starveDays: 0,
+      roster: [{ name: 'A', hp: 10, maxHp: 10, wagePerDay: 5, status: 'active' }],
+      inventory: { items: [], capacity: null },
+    };
+    const em = new EconomyManager(state);
+    em.init({
+      playerParty: party,
+      itemCatalog: CATALOG,
+      setLastEventLog: () => {},
+      updateTransientUIState: () => {},
+      refreshCurrentEventsSummary: () => [],
+      applyDailyEventEffects: () => {},
+      getEffectiveTuning: () => ({ BATTLE_CASUALTIES: {} }),
+      getBiomeKeyAtTile: () => 'plains',
+      getRegionIdAtTile: () => 'r1',
+      evaluateCampaignOutcome: () => null,
+      showCampaignWin: () => {},
+      showCampaignLose: () => {},
+      accountingUI: null,
+      state,
+      ...gameOverride,
+    });
+    return em;
+  }
+
+  it('processDailyEconomy deducts wages from gold', () => {
+    const em = createEMForDaily();
+    const goldBefore = em.game.playerParty.gold;
+    em.processDailyEconomy(1);
+    expect(em.game.playerParty.gold).toBeLessThan(goldBefore);
+  });
+
+  it('processDailyEconomy returns summary with day field', () => {
+    const em = createEMForDaily();
+    const result = em.processDailyEconomy(3);
+    expect(result).toBeDefined();
+    expect(result.day).toBe(3);
+  });
+
+  it('processDailyEconomy sets starved=false when food available', () => {
+    const em = createEMForDaily({ supplies: { food: 20 } });
+    const result = em.processDailyEconomy(1);
+    expect(result.starved).toBe(false);
+  });
+
+  it('processDailyEconomy sets starved=true when no food', () => {
+    const em = createEMForDaily({ supplies: { food: 0 } });
+    const result = em.processDailyEconomy(1);
+    expect(result.starved).toBe(true);
+  });
+
+  it('processDailyEconomy returns null when no playerParty', () => {
+    const em = new EconomyManager({});
+    em.init({ playerParty: null });
+    const result = em.processDailyEconomy(1);
+    expect(result).toBeUndefined();
+  });
 });
