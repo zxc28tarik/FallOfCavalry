@@ -7,6 +7,8 @@
 
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import * as CONST from '../constants.js';
+import { getWeatherTint } from '../systems/weather.js';
+import { renderWeatherOverlay } from '../rendering/weather-layer.js';
 
 export class RenderManager {
   constructor(gameState) {
@@ -68,6 +70,178 @@ export class RenderManager {
     g.ctx.font = '16px Arial';
     g.ctx.fillText('R Recruit  T Market  H Healer  |  E/Esc leave city', g.canvas.width / 2, g.canvas.height / 2 + 18);
     g.updateTransientUIState();
+  }
+
+  // ─── 7C: Map orchestrator + world overlays ──────────────────────────────────
+
+  renderMap() {
+    const g = this.game;
+    if (!g.ctx || !g.canvas) return;
+    const camera = g.getCameraSafe();
+    g.clampCameraToWorld();
+    g.ctx.fillStyle = '#1a1a1a';
+    g.ctx.fillRect(0, 0, g.canvas.width, g.canvas.height);
+
+    g.ctx.save();
+    g.ctx.scale(camera.zoom, camera.zoom);
+    g.ctx.translate(-camera.x, -camera.y);
+
+    this.renderWorldTerrain(g.ctx, camera);
+    this.renderWorldOverlays(g.ctx, camera);
+
+    g.ctx.restore();
+
+    const weatherTint = getWeatherTint(g.weatherState || this.state?.weatherState, g.getWeatherConfig());
+    renderWeatherOverlay(g.ctx, g.canvas.width, g.canvas.height, weatherTint);
+
+    if (g.followParty) {
+      g.ctx.font = '12px Arial';
+      g.ctx.textAlign = 'left';
+      g.ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      g.ctx.fillText('Follow: ON (F)', 12, g.canvas.height - 12);
+    }
+
+    if (this.state?.debug?.enabled) {
+      this.renderDebugInfo();
+    }
+
+    if (isCurrentEventsModalOpen()) {
+      const currentEvents = g.refreshCurrentEventsSummary(this.state?.day ?? 1);
+      renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
+    }
+    g.hudManager?.update?.();
+    g.minimapRenderer?.render(g);
+  }
+
+  renderWorldOverlays(ctx, camera) {
+    const g = this.game;
+    if (!ctx || !camera || !g.playerParty) return;
+
+    const lineBase = 2 / camera.zoom;
+    const party = g.playerParty;
+
+    if (party.hasDestination) {
+      ctx.strokeStyle = 'rgba(212,175,55,0.45)';
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.moveTo(party.x, party.y);
+      ctx.lineTo(party.destX, party.destY);
+      ctx.stroke();
+
+      const d = 8;
+      ctx.strokeStyle = 'rgba(212,175,55,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(party.destX - d, party.destY);
+      ctx.lineTo(party.destX + d, party.destY);
+      ctx.moveTo(party.destX, party.destY - d);
+      ctx.lineTo(party.destX, party.destY + d);
+      ctx.stroke();
+    }
+
+    if (party.selected && g.mode !== 'paused') {
+      ctx.strokeStyle = 'rgba(200,220,255,0.28)';
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.moveTo(party.x, party.y);
+      ctx.lineTo(g.mouseWorldX, g.mouseWorldY);
+      ctx.stroke();
+
+      const pd = 6;
+      ctx.strokeStyle = 'rgba(200,220,255,0.45)';
+      ctx.beginPath();
+      ctx.moveTo(g.mouseWorldX - pd, g.mouseWorldY);
+      ctx.lineTo(g.mouseWorldX + pd, g.mouseWorldY);
+      ctx.moveTo(g.mouseWorldX, g.mouseWorldY - pd);
+      ctx.lineTo(g.mouseWorldX, g.mouseWorldY + pd);
+      ctx.stroke();
+    }
+
+    if (party.arrivalFeedbackTimer > 0) {
+      const t = party.arrivalFeedbackTimer;
+      const pulse = 1 - t;
+      const radius = party.radius + 8 + Math.sin(pulse * Math.PI * 4) * 2;
+      ctx.strokeStyle = `rgba(242, 201, 76, ${0.15 + (t * 0.35)})`;
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.arc(party.x, party.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#4aa3ff';
+    ctx.beginPath();
+    ctx.arc(party.x, party.y, party.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (party.hovered && !party.selected) {
+      ctx.strokeStyle = 'rgba(170,205,255,0.65)';
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.arc(party.x, party.y, party.radius + 3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (party.selected) {
+      const encounterRadius = party.radius + g.encounterMargin;
+      ctx.strokeStyle = 'rgba(255,120,120,0.2)';
+      ctx.lineWidth = lineBase;
+      ctx.beginPath();
+      ctx.arc(party.x, party.y, encounterRadius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#f2c94c';
+      ctx.lineWidth = 3 / camera.zoom;
+      ctx.beginPath();
+      ctx.arc(party.x, party.y, party.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(g.worldAi?.parties)) {
+      const iconSize = Math.max(6, 10 / camera.zoom);
+      g.worldAi.parties.forEach((party) => {
+        if (!party || !Number.isFinite(party.x) || !Number.isFinite(party.y)) return;
+        if (party.kind === 'bandit') {
+          ctx.strokeStyle = '#ff4d4d';
+          ctx.lineWidth = Math.max(1.5, 2 / camera.zoom);
+          ctx.beginPath();
+          ctx.moveTo(party.x - iconSize, party.y - iconSize);
+          ctx.lineTo(party.x + iconSize, party.y + iconSize);
+          ctx.moveTo(party.x + iconSize, party.y - iconSize);
+          ctx.lineTo(party.x - iconSize, party.y + iconSize);
+          ctx.stroke();
+          return;
+        }
+
+        if (party.kind === 'patrol') {
+          ctx.strokeStyle = '#8fd3ff';
+          ctx.lineWidth = Math.max(1.2, 1.6 / camera.zoom);
+          ctx.beginPath();
+          ctx.moveTo(party.x, party.y - iconSize * 1.2);
+          ctx.lineTo(party.x, party.y + iconSize * 1.2);
+          ctx.lineTo(party.x - iconSize * 0.7, party.y + iconSize * 0.6);
+          ctx.moveTo(party.x, party.y - iconSize * 0.5);
+          ctx.lineTo(party.x + iconSize * 0.9, party.y - iconSize * 0.1);
+          ctx.stroke();
+          return;
+        }
+
+        ctx.fillStyle = '#d9b36a';
+        ctx.fillRect(party.x - iconSize, party.y - iconSize * 0.6, iconSize * 2, iconSize * 1.2);
+        ctx.strokeStyle = '#8a6b32';
+        ctx.lineWidth = Math.max(1, 1.4 / camera.zoom);
+        ctx.strokeRect(party.x - iconSize, party.y - iconSize * 0.6, iconSize * 2, iconSize * 1.2);
+      });
+    }
+
+    if (Array.isArray(g.enemyParties)) {
+      g.enemyParties.forEach((enemy) => {
+        if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
+        const enemyRadius = Number.isFinite(enemy.radius) ? enemy.radius : 12;
+        ctx.fillStyle = '#d9534f';
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemyRadius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
   }
 
   // ─── 7B: World terrain ──────────────────────────────────────────────────────

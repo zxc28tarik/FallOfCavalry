@@ -1817,4 +1817,102 @@ describe('EconomyManager - Phase 5C', () => {
       expect(() => rm.renderWorldTerrain(mockCtx, camera)).not.toThrow();
     });
   });
+
+  // ─── Phase 7C — RenderManager: renderMap + renderWorldOverlays ──────────────
+  describe('RenderManager - Phase 7C', () => {
+    function makeRMMap(stateOverride = {}, gameOverride = {}) {
+      const state = { day: 1, mode: 'map', debug: { fps: 60, enabled: false }, player: { gold: 0 }, ...stateOverride };
+      const rm = new RenderManager(state);
+      const mockCtx = {
+        fillStyle: '',
+        strokeStyle: '',
+        lineWidth: 1,
+        font: '',
+        textAlign: '',
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        scale: vi.fn(),
+        translate: vi.fn(),
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        fill: vi.fn(),
+        stroke: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        strokeRect: vi.fn(),
+      };
+      const mockCanvas = { width: 800, height: 600 };
+      const game = {
+        ctx: mockCtx,
+        canvas: mockCanvas,
+        state,
+        weatherState: null,
+        followParty: false,
+        playerParty: null,
+        mouseWorldX: 0,
+        mouseWorldY: 0,
+        encounterMargin: 50,
+        worldAi: null,
+        enemyParties: [],
+        mode: 'map',
+        hudManager: { update: vi.fn() },
+        minimapRenderer: { render: vi.fn() },
+        refreshCurrentEventsSummary: vi.fn(() => []),
+        getCameraSafe: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+        clampCameraToWorld: vi.fn(),
+        getWeatherConfig: vi.fn(() => ({})),
+        getEffectiveTuning: vi.fn(() => ({ WORLD_AI: { ENABLED: false } })),
+        ...gameOverride,
+      };
+      rm.init(game);
+      return { rm, game, mockCtx };
+    }
+
+    const camera = { x: 0, y: 0, zoom: 1 };
+
+    it('renderMap() is no-op when ctx is null', () => {
+      const { rm, game } = makeRMMap();
+      game.ctx = null;
+      expect(() => rm.renderMap()).not.toThrow();
+    });
+
+    it('renderMap() calls getCameraSafe and clampCameraToWorld', () => {
+      const { rm, game } = makeRMMap();
+      rm.renderMap();
+      expect(game.getCameraSafe).toHaveBeenCalled();
+      expect(game.clampCameraToWorld).toHaveBeenCalled();
+    });
+
+    it('renderMap() calls hudManager.update()', () => {
+      const { rm, game } = makeRMMap();
+      rm.renderMap();
+      expect(game.hudManager.update).toHaveBeenCalled();
+    });
+
+    it('renderWorldOverlays() is no-op when playerParty is null', () => {
+      const { rm, game, mockCtx } = makeRMMap();
+      game.playerParty = null;
+      expect(() => rm.renderWorldOverlays(mockCtx, camera)).not.toThrow();
+      expect(mockCtx.arc).not.toHaveBeenCalled();
+    });
+
+    it('renderWorldOverlays() draws player party circle', () => {
+      const { rm, game, mockCtx } = makeRMMap();
+      game.playerParty = { x: 100, y: 100, radius: 12, selected: false, hovered: false, hasDestination: false, arrivalFeedbackTimer: 0 };
+      rm.renderWorldOverlays(mockCtx, camera);
+      expect(mockCtx.arc).toHaveBeenCalledWith(100, 100, 12, 0, Math.PI * 2);
+    });
+
+    it('renderWorldOverlays() draws enemyParties circles', () => {
+      const { rm, game, mockCtx } = makeRMMap();
+      game.playerParty = { x: 0, y: 0, radius: 10, selected: false, hovered: false, hasDestination: false, arrivalFeedbackTimer: 0 };
+      game.enemyParties = [{ x: 200, y: 200, radius: 15 }];
+      rm.renderWorldOverlays(mockCtx, camera);
+      // arc called for player (radius 10) and for enemy (radius 15)
+      const arcCalls = mockCtx.arc.mock.calls.map(c => c[2]);
+      expect(arcCalls).toContain(15);
+    });
+  });
 });
