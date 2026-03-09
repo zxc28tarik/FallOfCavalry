@@ -1,0 +1,161 @@
+/**
+ * PoiManager — Phase 8C
+ * Handles Point of Interest investigation logic extracted from main.js.
+ */
+
+import * as PoiSystem from '../systems/poi-system.js';
+import { applyPOIOutcomeToRegion } from '../systems/region-state.js';
+import { emitContractEvent } from '../systems/contracts.js';
+import * as CONST from '../constants.js';
+
+export class PoiManager {
+  constructor(gameState) {
+    this.state = gameState;
+    this.game = null;
+  }
+
+  init(game) {
+    this.game = game;
+  }
+
+  // ─── Phase 8C: POI investigation ────────────────────────────────────────────
+
+  investigateActivePoi() {
+    const g = this.game;
+    const poi = g.activePoi;
+    if (!poi || !this.state) return false;
+    const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, poi);
+    if (!PoiSystem.canInteract(this.state, poi)) {
+      g.setLastEventLog(`Bu bölgeyi tekrar incelemek için ${remainingDays} gün bekle.`);
+      return false;
+    }
+
+    const tileSize = CONST.WORLD.TILE_SIZE;
+    const poiWorldX = poi.x * tileSize + tileSize * 0.5;
+    const poiWorldY = poi.y * tileSize + tileSize * 0.5;
+    const movementContext = g.getMovementContextAt(poiWorldX, poiWorldY);
+    const biomeKey = g.getBiomeKeyAtTile(poi.x, poi.y);
+    const settlementTier = g.getNearestSettlementTierAt(poi.x, poi.y);
+
+    const outcome = PoiSystem.rollOutcome({
+      seed: this.state.seed,
+      day: this.state.day,
+      poi,
+      context: {
+        onRoad: Boolean(movementContext?.onRoad),
+        biomeKey,
+        settlementTier,
+        map: this.state?.map,
+        nearestSettlementId: g.getNearestSettlementAt(poi.x, poi.y)?.id || null,
+        settlementTx: g.getNearestSettlementAt(poi.x, poi.y)?.tx || null,
+        settlementTy: g.getNearestSettlementAt(poi.x, poi.y)?.ty || null,
+      },
+      tuning: this.state?.tuning,
+    });
+    PoiSystem.markInvestigated(this.state, poi);
+    const poiRegionId = g.getRegionIdAtTile(poi.x, poi.y);
+    applyPOIOutcomeToRegion({
+      regionState: this.state.regionState,
+      poi: { ...poi, regionId: poiRegionId },
+      outcomeType: outcome?.regionEffect || outcome?.kind,
+      cfg: CONST.REGION_MODIFIERS,
+      currentDay: this.state?.day,
+    });
+
+    if (outcome.kind === CONST.POI.OUTCOME.LOOT) {
+      const gold = Math.max(0, Math.floor(outcome?.loot?.gold ?? 0));
+      const food = Math.max(0, Math.floor(outcome?.loot?.food ?? 0));
+      const firstItem = Array.isArray(outcome?.loot?.items) ? outcome.loot.items[0] : null;
+      const canAddFood = Number.isFinite(this.state?.supplies?.food);
+      const hasInventoryArray = Array.isArray(g.playerParty?.inventory?.items);
+
+      g.playerParty.gold = (g.playerParty.gold ?? 0) + gold;
+      if (canAddFood) this.state.supplies.food += food;
+
+      let itemLabel = 'ticaret malı';
+      let itemQty = 0;
+      if (firstItem?.id) {
+        itemQty = Math.max(1, Math.floor(firstItem.qty ?? 1));
+        itemLabel = g.getItemName(firstItem.id);
+        if (hasInventoryArray) g.addItem(firstItem.id, itemLabel, itemQty);
+      }
+
+      const renownGain = Math.max(0, Math.floor(Number(outcome?.renown ?? 0) * g.getRenownGainMultAtCurrentRegion()));
+      if (renownGain > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + renownGain);
+      const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
+      g.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}${renownGain > 0 ? `, +${renownGain} şan` : ''}`);
+      g.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
+      return true;
+    }
+
+    if (outcome.kind === CONST.POI.OUTCOME.CLUE) {
+      const gold = Math.max(0, Math.floor(outcome?.reward?.gold ?? 0));
+      const food = Math.max(0, Math.floor(outcome?.reward?.food ?? 0));
+      const renownGain = Math.max(0, Math.floor(Number(outcome?.renown ?? 0) * g.getRenownGainMultAtCurrentRegion()));
+      g.playerParty.gold = (g.playerParty.gold ?? 0) + gold;
+      if (renownGain > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + renownGain);
+      if (Number.isFinite(this.state?.supplies?.food)) this.state.supplies.food += food;
+
+      let clueLabel = outcome?.clue?.label || 'Belirsiz hedef';
+      if (outcome?.clue && Number.isFinite(outcome.clue.x) && Number.isFinite(outcome.clue.y)) {
+        let markerOpportunity = null;
+        if (outcome?.opportunity?.itemId) {
+          const settlementKey = String(outcome.opportunity.settlementKey || outcome?.clue?.settlementKey || `${outcome.clue.x},${outcome.clue.y}`);
+          const dayNow = Number(this.state.day ?? 1);
+          const expiresDay = Number(outcome.opportunity.expiresDay ?? dayNow + CONST.POI.OPPORTUNITY_DURATION_DAYS);
+          const bonusPct = Math.max(1, Math.floor(outcome.opportunity.bonusPct ?? 0));
+          const itemId = outcome.opportunity.itemId;
+          const itemName = g.getItemName(itemId);
+          const daysLeft = Math.max(0, expiresDay - dayNow);
+          markerOpportunity = { settlementKey, itemId, bonusPct, expiresDay };
+          this.state.marketOpportunities = this.state.marketOpportunities || {};
+          this.state.marketOpportunities[settlementKey] = markerOpportunity;
+          clueLabel = `${outcome.clue.label || 'Yerleşim'}: ${itemName} +%${bonusPct} (${daysLeft} gün)`;
+        }
+        this.state.clueMarker = {
+          x: outcome.clue.x,
+          y: outcome.clue.y,
+          label: clueLabel,
+          expiresDay: Number(this.state.day ?? 1) + 3,
+          opportunity: markerOpportunity,
+        };
+      }
+      g.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak${renownGain > 0 ? `, +${renownGain} şan` : ''}.`);
+      g.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
+      return true;
+    }
+
+    if (outcome.kind === CONST.POI.OUTCOME.NOTHING) {
+      const msg = outcome?.message || 'Burada kayda değer bir şey yok...';
+      g.setLastEventLog(msg);
+      g.poiUI?.showResult?.({ kind: 'nothing', lines: [msg] });
+      if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
+      return true;
+    }
+
+    if (outcome.kind === CONST.POI.OUTCOME.AMBUSH) {
+      const loss = outcome?.loss;
+      if (loss?.mode === 'food' && Number.isFinite(this.state?.supplies?.food)) {
+        const before = Math.max(0, Math.floor(this.state.supplies.food));
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        this.state.supplies.food = Math.max(0, before - amount);
+      } else if (loss?.mode === 'gold') {
+        const before = Math.max(0, Math.floor(g.playerParty.gold ?? 0));
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        g.playerParty.gold = Math.max(0, before - amount);
+      } else if (loss?.mode === 'morale') {
+        const amount = Math.max(0, Math.floor(loss.amount ?? 0));
+        g.playerParty.morale = Math.max(0, Math.floor((g.playerParty.morale ?? 50) - amount));
+      }
+      g.pendingPoiAmbush = outcome.enemyId;
+      const lossText = loss?.mode ? `${Math.max(0, Math.floor(loss.amount ?? 0))} ${loss.mode === 'food' ? 'erzak' : (loss.mode === 'gold' ? 'altın' : 'moral')} kaybettin` : 'kayıp yaşandı';
+      g.setLastEventLog(`Pusu! ${lossText}.`);
+      g.poiUI?.showResult?.({ kind: 'ambush', lines: [`Pusu! ${lossText}.`, 'Kapat ile karşılaşmaya geç.'] });
+      return true;
+    }
+
+    return false;
+  }
+}
