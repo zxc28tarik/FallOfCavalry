@@ -2180,4 +2180,83 @@ describe('EconomyManager - Phase 5C', () => {
       expect(result).toHaveProperty('ENCOUNTER_RISK');
     });
   });
+
+  // ─── Phase 9B: UIManager ─────────────────────────────────────────────────────
+
+  describe('UIManager — Phase 9B', () => {
+    function makeUM9B() {
+      const state = { mode: 'start', tuning: {}, devMode: false };
+      const um = new UIManager(state);
+      const game = {
+        listenersBound: false,
+        hudManager: null,
+        settingsUI: null,
+        codexUI: null,
+        campUI: null,
+        accountingUI: null,
+        poiUI: null,
+        dom: {},
+        warnOnce: () => {},
+        ensureTutorialState: () => {},
+        setupKeyboardShortcuts: () => {},
+        setupDebugSmokePanel: () => {},
+        getEffectiveTuning: () => ({ EVENTS: {}, WORLD_AI: { ENABLED: false } }),
+        refreshWeatherState: () => {},
+        refreshCurrentEventsSummary: () => [],
+        getWorldAiCfgWithRegionMods: () => ({}),
+        getBanditCapWithEvents: () => 5,
+        getCurrentRegionModifiers: () => [],
+        onModeChanged: () => {},
+        renderStart: () => {},
+        renderMap: () => {},
+        renderCity: () => {},
+        renderBattle: () => {},
+        renderEncounter: () => {},
+        updateMapSimulation: () => {},
+        updateTransientUIState: () => {},
+        updateBattleSimulation: () => {},
+        processDailyEconomy: () => {},
+        worldAi: null,
+      };
+      um.init(game);
+      return { um, state, game };
+    }
+
+    it('UIManager instantiates with state and init(game)', () => {
+      const state = {};
+      const um = new UIManager(state);
+      expect(um.state).toBe(state);
+      expect(um.game).toBeNull();
+      const g = { dummy: true };
+      um.init(g);
+      expect(um.game).toBe(g);
+    });
+
+    it('setupEventListeners() is no-op when listenersBound is true', () => {
+      const { um, game } = makeUM9B();
+      game.listenersBound = true;
+      expect(() => um.setupEventListeners()).not.toThrow();
+      // Should not change listenersBound
+      expect(game.listenersBound).toBe(true);
+    });
+
+    it('setupEventListeners() sets g.listenersBound on first call', () => {
+      const { um, game, state } = makeUM9B();
+      state.on = (event, cb) => {}; // mock state.on
+      um.setupEventListeners();
+      expect(game.listenersBound).toBe(true);
+    });
+
+    it('setupMenuActions() is no-op when hudManager lacks setMenuHandlers', () => {
+      const { um, game } = makeUM9B();
+      game.hudManager = {}; // has no setMenuHandlers
+      expect(() => um.setupMenuActions()).not.toThrow();
+    });
+
+    it('setupDOMReferences() method exists on UIManager', () => {
+      const { um } = makeUM9B();
+      // setupDOMReferences uses real DOM APIs — just verify the method is defined
+      expect(typeof um.setupDOMReferences).toBe('function');
+    });
+  });
 });

@@ -123,6 +123,7 @@ import { RenderManager } from './managers/RenderManager.js';
 import { CityManager } from './managers/CityManager.js';
 import { PoiManager } from './managers/PoiManager.js';
 import { TuningManager } from './managers/TuningManager.js';
+import { UIManager } from './managers/UIManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -607,6 +608,8 @@ class FallOfCavalry {
     this.poiManager.init(this);
     this.tuningManager = this.tuningManager || new TuningManager(this.state);
     this.tuningManager.init(this);
+    this.uiManager = this.uiManager || new UIManager(this.state);
+    this.uiManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -713,59 +716,7 @@ class FallOfCavalry {
     window.addEventListener('resize', resize);
   }
 
-  setupEventListeners() {
-    if (this.listenersBound || !this.state) return;
-
-    this.state.on('mode:changed', ({ old, new: newMode }) => this.onModeChanged(old, newMode));
-    this.state.on('day:advanced', (day) => {
-      this.state.dailyLedger = { tradePL: 0 };
-      this.refreshWeatherState(day);
-      const activeEvents = this.refreshCurrentEventsSummary(day);
-      rollWarEvents({
-        eventState: this.state.events,
-        warState: this.state.warState,
-        factionsState: this.state.factions,
-        worldState: this.state?.map || {},
-        currentDay: day,
-        cfg: this.getEffectiveTuning().EVENTS || CONST.EVENTS,
-      });
-      const rolledEvents = this.refreshCurrentEventsSummary(day);
-      if ((this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
-        ensureWorldParties({
-          aiState: this.worldAi,
-          worldState: this.state?.map || {},
-          factions: this.state?.factions || CONST.FACTIONS,
-          cfg: this.getWorldAiCfgWithRegionMods(),
-          currentDay: day,
-          banditCapOverride: this.getBanditCapWithEvents(rolledEvents.length ? rolledEvents : activeEvents),
-        });
-      }
-      this.getCurrentRegionModifiers(day);
-      utils.devLog(this.state, `[Game] Day ${day} started`);
-    });
-    this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
-      utils.devLog(this.state, `[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
-    });
-
-    this.state.on('render:start', () => this.renderStart());
-    this.state.on('render:map', () => this.renderMap());
-    this.state.on('render:city', () => this.renderCity());
-    this.state.on('render:battle', () => this.renderBattle());
-    this.state.on('render:encounter', () => this.renderEncounter());
-    this.state.on('map:update', (dt) => this.updateMapSimulation(dt));
-    this.state.on('encounter:update', () => this.updateTransientUIState());
-    this.state.on('battle:update', (dt) => this.updateBattleSimulation(dt));
-    this.state.on('city:update', () => this.updateTransientUIState());
-
-    this.setupKeyboardShortcuts();
-    this.state.on('day:tick', (day) => this.processDailyEconomy(day));
-    this.state.on('ui:events:toggle', () => {
-      const events = this.refreshCurrentEventsSummary(this.state?.day ?? 1);
-      toggleCurrentEventsModal({ events, currentDay: this.state?.day ?? 1 });
-    });
-    this.listenersBound = true;
-  }
-
+  setupEventListeners() { return this.uiManager.setupEventListeners(); }
 
   getCurrentEvents(day = Number(this.state?.day ?? 1)) {
     this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
@@ -1187,26 +1138,7 @@ Renown
 
   getLogisticsSpeedMult() { return this.economyManager.getLogisticsSpeedMult(); }
 
-  setupCampUI() {
-    if (this.campUI) return;
-    this.campUI = new CampUI({
-      state: this.state,
-      onClose: () => {
-        if (this.state?.camp?.active) campSystem.toggleCamp(this.state);
-        this.campUI?.hide?.();
-      },
-      onSetWatch: (level) => {
-        campSystem.setWatch(this.state, level);
-      },
-    });
-
-    this.campUI.bind({
-      root: utils.getEl('campModal'),
-      closeBtn: utils.getEl('campCloseBtn'),
-      status: utils.getEl('campStatusText'),
-    });
-  }
-
+  setupCampUI() { return this.uiManager.setupCampUI(); }
   toggleCampMode() {
     campSystem.ensureCampState(this.state);
     const active = campSystem.toggleCamp(this.state);
@@ -1241,23 +1173,7 @@ Renown
 
 
 
-  setupAccountingUI() {
-    if (this.accountingUI) return;
-    this.accountingUI = new AccountingUI();
-    this.accountingUI.bind({
-      modal: this.dom.accountingModal,
-      body: this.dom.accountingBody,
-      btnContinue: this.dom.btnAccountingContinue,
-    });
-
-    if (this.dom.btnAccountingContinue && !this._accountingContinueBound) {
-      this._accountingContinueBound = true;
-      this.dom.btnAccountingContinue.addEventListener('click', () => {
-        this.closeAccountingModal();
-      });
-    }
-  }
-
+  setupAccountingUI() { return this.uiManager.setupAccountingUI(); }
   closeAccountingModal() {
     this.accountingUI?.hide?.();
     this.state.accounting = null;
@@ -1268,28 +1184,7 @@ Renown
     return true;
   }
 
-  setupPoiUI() {
-    if (this.poiUI) return;
-    this.poiUI = new PoiUI();
-    this.poiUI.bind({
-      modal: this.dom.poiModal,
-      title: this.dom.poiTitle,
-      desc: this.dom.poiDesc,
-      cooldown: this.dom.poiCooldown,
-      result: this.dom.poiResult,
-      btnClose: this.dom.btnClosePoi,
-      btnInvestigate: this.dom.btnPoiInvestigate,
-      btnLeave: this.dom.btnPoiLeave,
-    });
-    this.poiUI.onLeave = () => {
-      this.resolvePoiFollowup();
-      this.activePoi = null;
-    };
-    this.poiUI.onInvestigate = () => {
-      this.investigateActivePoi();
-    };
-  }
-
+  setupPoiUI() { return this.uiManager.setupPoiUI(); }
   getNearestInteractablePoi() {
     const nearest = PoiSystem.getNearestPoi(this.state?.map, this.playerParty?.x, this.playerParty?.y, CONST.WORLD.TILE_SIZE);
     if (!nearest || nearest.distTiles > CONST.POI.INTERACT_RADIUS_TILES) return null;
@@ -1446,160 +1341,9 @@ Renown
     }
   }
 
-  setupDOMReferences() {
-    this.dom = {
-      hud: utils.getEl('hud'),
-      hudFaction: utils.getEl('hudFaction'),
-      hudGold: utils.getEl('hudGold'),
-      hudArmy: utils.getEl('hudArmy'),
-      hudRenown: utils.getEl('hudRenown'),
-      hudDay: utils.getEl('hudDay'),
-      startModal: utils.getEl('startModal'),
-      factionGrid: utils.getEl('factionGrid'),
-      btnStart: utils.getEl('btnStart'),
-      btnContinue: utils.getEl('btnContinue'),
-      btnLoadStart: utils.getEl('btnLoadStart'),
-      seedInput: utils.getEl('seedInput'),
-      randomSeedBtn: utils.getEl('randomSeedBtn'),
-      startSaveInfo: utils.getEl('startSaveInfo'),
-      selectedFactionName: utils.getEl('selectedFactionName'),
-      selectedFactionDesc: utils.getEl('selectedFactionDesc'),
-      selectedFactionDoc: utils.getEl('selectedFactionDoc'),
-      selectedFactionArmy: utils.getEl('selectedFactionArmy'),
-      mainMenuOverlay: utils.getEl('mainMenuOverlay'),
-      settlementModal: utils.getEl('settlementModal'),
-      encounterModal: utils.getEl('encounterModal'),
-      poiModal: utils.getEl('poiModal'),
-      poiTitle: utils.getEl('poiTitle'),
-      poiDesc: utils.getEl('poiDesc'),
-      poiCooldown: utils.getEl('poiCooldown'),
-      poiResult: utils.getEl('poiResult'),
-      btnClosePoi: utils.getEl('btnClosePoi'),
-      btnPoiInvestigate: utils.getEl('btnPoiInvestigate'),
-      btnPoiLeave: utils.getEl('btnPoiLeave'),
-      battleResultModal: utils.getEl('battleResultModal'),
-      battleCommandBar: utils.getEl('battleCommandBar'),
-      battleDeployOverlay: utils.getEl('battleDeployOverlay'),
-      btnDeployStart: utils.getEl('btnDeployStart'),
-      btnDeployCancel: utils.getEl('btnDeployCancel'),
-      deployHint: utils.getEl('deployHint'),
-      toggleHints: utils.getEl('toggleHints'),
-      tooltip: utils.getEl('tooltip'),
-      debugOverlay: utils.getEl('debugOverlay'),
-      hudMinimapPanel: utils.getEl('hudMinimapPanel'),
-      hudMiniMap: utils.getEl('hudMiniMap'),
-      saveTransferText: utils.getEl('saveTransferText'),
-      accountingModal: utils.getEl('accountingModal'),
-      accountingBody: utils.getEl('accountingBody'),
-      btnAccountingContinue: utils.getEl('btnAccountingContinue'),
-      tuningModal: utils.getEl('tuningModal'),
-      tuningBody: utils.getEl('tuningBody'),
-      btnCloseTuning: utils.getEl('btnCloseTuning'),
-      btnTuningSave: utils.getEl('btnTuningSave'),
-      btnTuningReset: utils.getEl('btnTuningReset'),
-      buildInfo: utils.getEl('buildInfo'),
-      helpBtn: utils.getEl('helpBtn'),
-      settingsBtn: utils.getEl('settingsBtn'),
-      codexBtn: utils.getEl('codexBtn'),
-      helpOverlay: utils.getEl('helpOverlay'),
-      helpCloseBtn: utils.getEl('helpCloseBtn'),
-    };
+  setupDOMReferences() { return this.uiManager.setupDOMReferences(); }
 
-    const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
-    const missing = Object.entries(this.dom).filter(([key, el]) => !el && !optionalStartUi.has(key)).map(([key]) => key);
-    if (missing.length) {
-      this.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
-    }
-
-    const btnSave = document.getElementById('btnSaveGame');
-    const btnLoad = document.getElementById('btnLoadGame');
-    const btnReset = document.getElementById('btnResetGame');
-    const btnTransfer = document.getElementById('btnOpenSaveTransfer');
-    const btnExport = document.getElementById('btnExportSave');
-    const btnImport = document.getElementById('btnImportSave');
-    const btnCloseTransfer = document.getElementById('btnCloseSaveTransfer');
-
-    if (btnSave) btnSave.addEventListener('click', () => this.quickSave());
-    if (btnLoad) btnLoad.addEventListener('click', () => this.openSaveLoadPanel());
-    if (btnReset) btnReset.addEventListener('click', () => {
-      if (confirm('Oyunu sıfırlamak istediğine emin misin?')) {
-        this.saveSystem?.deleteSave?.();
-        this.saveSystem?.deleteAutosave?.();
-        location.reload();
-      }
-    });
-    if (btnTransfer) btnTransfer.addEventListener('click', () => {
-      document.getElementById('saveTransferModal')?.classList.remove('hidden');
-    });
-    if (btnExport) btnExport.addEventListener('click', () => {
-      this.exportSelectedSaveToTextarea('manual1');
-    });
-    if (btnImport) btnImport.addEventListener('click', () => {
-      this.importTextareaToSlotAndLoad('manual1');
-      document.getElementById('saveTransferModal')?.classList.add('hidden');
-    });
-    if (btnCloseTransfer) btnCloseTransfer.addEventListener('click', () => {
-      document.getElementById('saveTransferModal')?.classList.add('hidden');
-    });
-
-    this.minimapRenderer = new MinimapSimple(
-      document.getElementById('hudMiniMap')
-    );
-
-    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
-      document.querySelectorAll('[data-battle-speed]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const speed = parseFloat(btn.dataset.battleSpeed);
-          if (!Number.isFinite(speed)) return;
-          if (this.state?.battle) this.state.battleSpeed = speed;
-          document.querySelectorAll('[data-battle-speed]')
-            .forEach(b => b.classList.remove('is-active'));
-          btn.classList.add('is-active');
-        });
-      });
-    }
-
-    const btnBattlePause = document.getElementById('btnBattlePause');
-    if (btnBattlePause) {
-      btnBattlePause.addEventListener('click', () => {
-        if (this.state?.mode === 'battle') this.togglePaused();
-      });
-    }
-
-    this.setupDebugSmokePanel();
-  }
-
-
-  setupSettingsUI() {
-    const toggleHints = this.dom?.toggleHints;
-    this.ensureTutorialState();
-    if (toggleHints) {
-      toggleHints.checked = Boolean(this.state?.tutorial?.enabled);
-      if (toggleHints.dataset.boundHintToggle !== '1') {
-        toggleHints.dataset.boundHintToggle = '1';
-        toggleHints.addEventListener('change', (event) => {
-          this.ensureTutorialState();
-          const checked = Boolean(event?.target?.checked);
-          this.state.tutorial.enabled = checked;
-          if (!checked) this.state.tutorial.lastShownAt = 0;
-        });
-      }
-    }
-
-    if (!this.settingsUI) {
-      this.settingsUI = new SettingsUI({
-        getSettings: () => this.settings,
-        cfg: CONST.SETTINGS,
-        onApply: (nextSettings) => {
-          this.settings = nextSettings;
-          this.state.settings = serializeSettings(nextSettings);
-        },
-      });
-    }
-
-    if (!this.codexUI) this.codexUI = new CodexUI();
-  }
-
+  setupSettingsUI() { return this.uiManager.setupSettingsUI(); }
   setupHelpOverlay() {
     const body = this.dom?.helpOverlay?.querySelector?.('.frame-dark');
     if (body) {
@@ -1891,30 +1635,7 @@ Renown
 
     document.getElementById('mainMenuOverlay')?.classList.add('hidden');
   }
-  setupMenuActions() {
-    if (!this.hudManager || typeof this.hudManager.setMenuHandlers !== 'function') return;
-
-    this.hudManager.setMenuHandlers({
-      onStart: () => this.enterStart(),
-      onContinue: () => this.continueGame(),
-      onQuitToMenu: () => this.quitToMenu(),
-      onSettings: () => this.openSettings(),
-      onCloseSettings: () => this.closeSettings(),
-      onVolumeChange: (value) => this.applyMasterVolume(value),
-      onHudHelp: () => this.toggleHelpOverlay(),
-      onHudSettings: () => this.settingsUI?.toggle?.(),
-      onHudCodex: () => this.codexUI?.toggle?.(),
-    });
-
-    this.hudManager?.setRosterHandlers?.({
-      onToggleUnit: (index) => {
-        if (!Number.isInteger(index)) return;
-        this.rosterCursorIndex = index;
-        this.toggleRosterSelectionAtCursor();
-      },
-    });
-  }
-
+  setupMenuActions() { return this.uiManager.setupMenuActions(); }
   enterMenu() {
     this.stop();
     this.mode = 'menu';
