@@ -1539,4 +1539,124 @@ describe('EconomyManager - Phase 5C', () => {
       expect(mockCanvas.addEventListener).not.toHaveBeenCalled();
     });
   });
+
+  // Phase 6B — GameInputManager: setupKeyboardShortcuts
+  describe('GameInputManager - Phase 6B', () => {
+    // Helper: build a GameInputManager with a pre-wired keyboardHandler
+    // (bypasses the document guard — vitest runs in Node, no browser document)
+    function makeIMWithHandler(gameOverride = {}) {
+      const game = {
+        state: { mode: 'map', devMode: false },
+        mode: 'playing',
+        dom: {},
+        settingsUI: null,
+        codexUI: null,
+        helpOverlayVisible: false,
+        followParty: false,
+        saveLoadCursor: 0,
+        saveLoadRows: [],
+        playerRoster: [],
+        maxUnitsToDeploy: 6,
+        cityOffers: [],
+        cityCursor: 0,
+        cityMarketCursor: 0,
+        cityHealerCursor: 0,
+        itemCatalog: [],
+        battleDeployMode: null,
+        battleDeployUI: null,
+        toggleHelpOverlay: vi.fn(),
+        toggleCampMode: vi.fn(),
+        setPaused: vi.fn(),
+        togglePaused: vi.fn(),
+        closeAccountingModal: vi.fn(),
+        closeSaveLoadPanel: vi.fn(),
+        openSaveLoadPanel: vi.fn(),
+        quickSave: vi.fn(),
+        quickLoad: vi.fn(),
+        enterStart: vi.fn(),
+        closeSettings: vi.fn(),
+        resolveEncounter: vi.fn(),
+        moveRosterCursor: vi.fn(),
+        toggleRosterSelectionAtCursor: vi.fn(),
+        confirmRosterSelection: vi.fn(),
+        updateTransientUIState: vi.fn(),
+        buildSaveLoadPanelData: vi.fn(() => ({})),
+        getSelectedSaveSlot: vi.fn(() => 'slot1'),
+        saveToSlot: vi.fn(),
+        loadFromSlot: vi.fn(),
+        exportSelectedSaveToTextarea: vi.fn(),
+        importTextareaToSlotAndLoad: vi.fn(() => false),
+        exitAftermathToMap: vi.fn(),
+        applyBattleCommand: vi.fn(),
+        toggleBattleHoldFire: vi.fn(),
+        resolveBattle: vi.fn(),
+        recruitCurrentUnit: vi.fn(),
+        tradeCurrentItem: vi.fn(),
+        healCurrentUnit: vi.fn(),
+        getWoundedUnits: vi.fn(() => []),
+        cancelPlayerDestination: vi.fn(),
+        centerCameraOnParty: vi.fn(),
+        enterCityServices: vi.fn(),
+        refreshCurrentEventsSummary: vi.fn(() => []),
+        openPoiModal: vi.fn(),
+        toggleDebug: vi.fn(),
+        reloadSpriteAssets: vi.fn(),
+        showTuningModal: vi.fn(),
+        hideTuningModal: vi.fn(),
+        ...gameOverride,
+      };
+      const im = new GameInputManager({});
+      im.init(game);
+      // Manually wire handler (document not available in Node/vitest env)
+      const savedDoc = global.document;
+      global.document = { addEventListener: () => {} };
+      im.setupKeyboardShortcuts();
+      global.document = savedDoc;
+      return im;
+    }
+
+    it('setupKeyboardShortcuts() is no-op if keyboardHandler already set', () => {
+      const im = new GameInputManager({});
+      im.init({ state: {} });
+      im.keyboardHandler = () => 'pre-set';
+      // Mock document so the guard doesn't short-circuit
+      const savedDoc = global.document;
+      global.document = { addEventListener: vi.fn() };
+      im.setupKeyboardShortcuts();
+      global.document = savedDoc;
+      // Handler should still be the original (guard hit on keyboardHandler check)
+      expect(im.keyboardHandler()).toBe('pre-set');
+    });
+
+    it('setupKeyboardShortcuts() is no-op in non-browser env (no document)', () => {
+      const im = new GameInputManager({});
+      im.init({ state: {} });
+      const savedDoc = global.document;
+      global.document = undefined;
+      im.setupKeyboardShortcuts();
+      global.document = savedDoc;
+      expect(im.keyboardHandler).toBeNull();
+    });
+
+    it('Escape in mode=paused calls game.setPaused(false)', () => {
+      const setPaused = vi.fn();
+      const im = makeIMWithHandler({ mode: 'paused', state: { mode: 'map' }, setPaused });
+      im.keyboardHandler({ key: 'Escape', preventDefault: () => {} });
+      expect(setPaused).toHaveBeenCalledWith(false);
+    });
+
+    it('k key in state.mode=map calls game.toggleCampMode()', () => {
+      const toggleCampMode = vi.fn();
+      const im = makeIMWithHandler({ state: { mode: 'map' }, toggleCampMode });
+      im.keyboardHandler({ key: 'k', preventDefault: () => {} });
+      expect(toggleCampMode).toHaveBeenCalled();
+    });
+
+    it('F5 in state.mode=map calls game.openSaveLoadPanel()', () => {
+      const openSaveLoadPanel = vi.fn();
+      const im = makeIMWithHandler({ state: { mode: 'map' }, openSaveLoadPanel });
+      im.keyboardHandler({ key: 'F5', preventDefault: () => {} });
+      expect(openSaveLoadPanel).toHaveBeenCalled();
+    });
+  });
 });
