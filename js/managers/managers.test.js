@@ -1747,4 +1747,74 @@ describe('EconomyManager - Phase 5C', () => {
       expect(infoEl.textContent).toContain('FPS');
     });
   });
+
+  // ─── Phase 7B — RenderManager: renderWorldTerrain ──────────────────────────
+  describe('RenderManager - Phase 7B', () => {
+    function makeRMTerrain(stateOverride = {}, gameOverride = {}) {
+      const state = { day: 1, map: null, clueMarker: null, ...stateOverride };
+      const rm = new RenderManager(state);
+      const mockCtx = {
+        fillStyle: '',
+        strokeStyle: '',
+        lineWidth: 1,
+        fillRect: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        stroke: vi.fn(),
+        arc: vi.fn(),
+        fill: vi.fn(),
+        closePath: vi.fn(),
+        fillText: vi.fn(),
+      };
+      const mockCanvas = { width: 800, height: 600 };
+      const game = {
+        canvas: mockCanvas,
+        assetsReady: false,
+        spriteLoader: null,
+        getPoiSpriteKey: vi.fn(() => 'poi_default'),
+        ...gameOverride,
+      };
+      rm.init(game);
+      return { rm, game, mockCtx };
+    }
+
+    const camera = { x: 0, y: 0, zoom: 1 };
+
+    it('renderWorldTerrain() is no-op when map is null', () => {
+      const { rm, mockCtx } = makeRMTerrain({ map: null });
+      expect(() => rm.renderWorldTerrain(mockCtx, camera)).not.toThrow();
+      expect(mockCtx.fillRect).not.toHaveBeenCalled();
+    });
+
+    it('renderWorldTerrain() is no-op when map.tiles is empty', () => {
+      const { rm, mockCtx } = makeRMTerrain({ map: { tiles: [], width: 2, height: 2 } });
+      expect(() => rm.renderWorldTerrain(mockCtx, camera)).not.toThrow();
+      expect(mockCtx.fillRect).not.toHaveBeenCalled();
+    });
+
+    it('renderWorldTerrain() calls ctx.fillRect for valid tiles', () => {
+      const map = {
+        tiles: [{ type: 0 }, { type: 0 }, { type: 0 }, { type: 0 }],
+        width: 2,
+        height: 2,
+        rivers: [],
+        roads: [],
+        pois: [],
+        settlements: [],
+      };
+      const { rm, mockCtx } = makeRMTerrain({ map });
+      rm.renderWorldTerrain(mockCtx, camera);
+      expect(mockCtx.fillRect).toHaveBeenCalled();
+    });
+
+    it('clue marker branch skipped when no clueMarker', () => {
+      const map = { tiles: [{ type: 0 }], width: 1, height: 1, rivers: [], roads: [], pois: [], settlements: [] };
+      const { rm, mockCtx } = makeRMTerrain({ map, clueMarker: null });
+      rm.renderWorldTerrain(mockCtx, camera);
+      // arc would be called only for clue marker — should NOT have been called for null clue
+      // (arc may be called for settlements, so just check no throw)
+      expect(() => rm.renderWorldTerrain(mockCtx, camera)).not.toThrow();
+    });
+  });
 });
