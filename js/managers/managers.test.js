@@ -1915,4 +1915,91 @@ describe('EconomyManager - Phase 5C', () => {
       expect(arcCalls).toContain(15);
     });
   });
+
+  // ─── Phase 8A — BattleManager: confirmRosterSelection + exitAftermathToMap ──
+  describe('BattleManager - Phase 8A', () => {
+    function makeBM8A(stateOverride = {}, gameOverride = {}) {
+      const state = {
+        mode: 'roster',
+        roster: { enemyId: 'enemy-1', warning: '' },
+        encounter: { enemyId: 'enemy-1' },
+        battle: null,
+        aftermath: null,
+        escortState: null,
+        factions: {},
+        map: { settlements: [] },
+        uiPanel: null,
+        setMode: vi.fn(),
+        ...stateOverride,
+      };
+      const bm = new BattleManager(state);
+      const game = {
+        state,
+        playerRoster: [],
+        enemyRoster: [],
+        playerParty: { x: 0, y: 0 },
+        enemyParties: [],
+        worldAi: { parties: [] },
+        worldEncounterPartyByEnemyId: {},
+        encounterPushbackDistance: 64,
+        defeatPushbackDistance: 120,
+        currentBattleTerrain: null,
+        battleCommandsUI: { show: vi.fn(), hide: vi.fn() },
+        getEffectiveCount: vi.fn(() => 0),
+        createBattleUnitsFromRoster: vi.fn(() => []),
+        placeBattleUnits: vi.fn(),
+        cancelPlayerDestination: vi.fn(),
+        getEffectiveTuning: vi.fn(() => ({ BATTLE_RANGED: {} })),
+        getActiveSettlementForCity: vi.fn(() => null),
+        findNearestCityId: vi.fn(() => null),
+        getBattleFxConfig: vi.fn(() => ({})),
+        startBattleDeployment: vi.fn(),
+        updateTransientUIState: vi.fn(),
+        setLastEventLog: vi.fn(),
+        cleanupTemporaryEnemy: vi.fn(),
+        applyBattleExit: vi.fn(),
+        runAutosave: vi.fn(),
+        ...gameOverride,
+      };
+      bm.init(game);
+      return { bm, game, state };
+    }
+
+    it('confirmRosterSelection() returns false when mode is not roster', () => {
+      const { bm } = makeBM8A({ mode: 'map' });
+      expect(bm.confirmRosterSelection()).toBe(false);
+    });
+
+    it('confirmRosterSelection() returns false when no units selected (0 effective count)', () => {
+      const { bm, game } = makeBM8A();
+      game.playerRoster = [{ selected: true }];
+      game.getEffectiveCount.mockReturnValue(0);
+      expect(bm.confirmRosterSelection()).toBe(false);
+    });
+
+    it('confirmRosterSelection() sets state.battle and transitions to battle', () => {
+      const { bm, game, state } = makeBM8A();
+      game.playerRoster = [{ selected: true }];
+      game.getEffectiveCount.mockReturnValue(2);
+      bm.confirmRosterSelection();
+      expect(state.setMode).toHaveBeenCalledWith('battle');
+      expect(state.battle).toBeDefined();
+    });
+
+    it('exitAftermathToMap() returns false when mode is not aftermath', () => {
+      const { bm } = makeBM8A({ mode: 'map', aftermath: null });
+      expect(bm.exitAftermathToMap()).toBe(false);
+    });
+
+    it('exitAftermathToMap() resets state.aftermath to null and calls runAutosave', () => {
+      const { bm, game, state } = makeBM8A({
+        mode: 'aftermath',
+        aftermath: { enemyId: 'e1', result: 'defeat', goldDelta: 0, renownDelta: 0 },
+      });
+      game.enemyParties = [{ id: 'e1', x: 0, y: 0 }];
+      bm.exitAftermathToMap();
+      expect(state.aftermath).toBeNull();
+      expect(game.runAutosave).toHaveBeenCalledWith('aftermath-close');
+    });
+  });
 });

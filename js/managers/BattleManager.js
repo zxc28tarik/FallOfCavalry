@@ -3,16 +3,20 @@ import { getBattleMoraleConfig, clampMorale, applyMoraleDamage, applyAllyDeathSh
 import { computeDamage, applyCommandEffects } from '../systems/combat-rules.js';
 import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from '../systems/flank.js';
 import { inferUnitRole, getCounterEffect, isBracedSpearman, computeChargeState } from '../systems/battle-counters.js';
-import { spawnFx, tickBattleFx, renderBattleFx } from '../rendering/battle-fx.js';
-import { addCameraShake, setCameraTarget, updateCamera, applyCameraTransform } from '../rendering/camera.js';
+import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from '../rendering/battle-fx.js';
+import { createCamera, addCameraShake, setCameraTarget, updateCamera, applyCameraTransform } from '../rendering/camera.js';
 import { tickWeatherLayer, renderWeatherOverlay } from '../rendering/weather-layer.js';
 import { getWeatherTint } from '../systems/weather.js';
 import { computeUnitCohesion, getFormationMultipliers } from '../systems/formation.js';
 import { updateEnemyAI, clampToBattleBounds, computeSkirmishKiteStep } from '../systems/battle-ai.js';
-import { canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMeleeFallback, consumeAmmo } from '../systems/battle-ranged.js';
+import { initBattleAmmoFromParty, canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMeleeFallback, consumeAmmo } from '../systems/battle-ranged.js';
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import { createBattleRng, computeEnemyPower, generateBattleLoot as generateRewardLoot, computeRenownDelta } from '../systems/battle-rewards.js';
 import { applyBattleOutcomes } from '../systems/casualties.js';
+import { getBattleTerrainContext } from '../systems/terrain-effects.js';
+import { removeWorldParty } from '../systems/world-ai.js';
+import { emitContractEvent } from '../systems/contracts.js';
+import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
 import AnimationPlayer from '../rendering/animation.js';
@@ -1194,5 +1198,122 @@ export class BattleManager {
     this.game?.battleCommandsUI?.hide?.();
     this.game?.battleDeployUI?.hide?.();
     if (this.game) this.game.battleDeployMode = null;
+  }
+
+  // ─── Phase 8A: Roster → battle transition ──────────────────────────────────
+
+  confirmRosterSelection() {
+    const g = this.game;
+    if (!this.state || this.state.mode !== 'roster') return false;
+    const selected = g.playerRoster.filter((unit) => unit.selected && g.getEffectiveCount(unit) > 0);
+    if (selected.length < 1) {
+      this.state.roster.warning = 'Select at least 1 unit to deploy.';
+      g.updateTransientUIState();
+      return false;
+    }
+
+    const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
+    const enemyParty = (g.enemyParties || []).find((party) => party?.id === enemyId) || null;
+    const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
+    const playerUnits = g.createBattleUnitsFromRoster(selected, 'player');
+    const enemyUnits = g.createBattleUnitsFromRoster(g.enemyRoster, 'enemy');
+    g.placeBattleUnits(enemyUnits, 'enemy');
+
+    const battleAmmo = initBattleAmmoFromParty({ party: g.playerParty, cfg: g.getEffectiveTuning().BATTLE_RANGED });
+
+    g.cancelPlayerDestination();
+    this.state.encounter = null;
+    this.state.roster.warning = '';
+    initBattleFx(this.getBattleFxConfig());
+    this.state.battle = {
+      enemyId,
+      enemyFactionId,
+      startedAt: Date.now(),
+      result: null,
+      resolvedAt: null,
+      playerUnits,
+      enemyUnits,
+      projectiles: [],
+      playerAmmoStart: battleAmmo.startAmmo,
+      playerAmmo: battleAmmo.ammo,
+      targetRetargetTimer: 0,
+      settlement: g.getActiveSettlementForCity(),
+      context: { nearCityId: g.findNearestCityId(g.playerParty?.x, g.playerParty?.y) },
+      phase: 'deploy',
+      camera: createCamera(),
+    };
+
+    g.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
+    this.state.setMode('battle');
+    g.battleCommandsUI?.show?.();
+    g.startBattleDeployment();
+    g.updateTransientUIState();
+    return true;
+  }
+
+  exitAftermathToMap(takeLoot = true) {
+    const g = this.game;
+    if (!this.state || this.state.mode !== 'aftermath' || !this.state.aftermath) return false;
+    const aftermath = this.state.aftermath;
+    const enemyId = aftermath.enemyId;
+    const result = aftermath.result;
+    const enemy = g.enemyParties.find((party) => party?.id === enemyId) || null;
+    const linkedWorldPartyId = g.worldEncounterPartyByEnemyId?.[enemyId] || null;
+
+    if (takeLoot) {
+      g.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
+    } else {
+      g.setLastEventLog('Aftermath continued');
+    }
+
+    if (linkedWorldPartyId) {
+      removeWorldParty(g.worldAi, linkedWorldPartyId);
+      delete g.worldEncounterPartyByEnemyId[enemyId];
+    }
+
+    if (result === 'victory') {
+      const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
+      const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
+      const locationCity = settlements.reduce((best, settlement) => {
+        if (!settlement) return best;
+        const sx = Number(settlement.tx ?? settlement.x ?? 0);
+        const sy = Number(settlement.ty ?? settlement.y ?? 0);
+        const px = Number(g.playerParty?.x ?? 0);
+        const py = Number(g.playerParty?.y ?? 0);
+        const dist = Math.hypot(sx - px, sy - py);
+        if (!best || dist < best.dist) return { dist, settlement };
+        return best;
+      }, null);
+      const locationCityId = locationCity?.settlement?.id || null;
+      const isTargetLeader = Boolean(enemy?.isTargetLeader || enemy?.type === 'bandit_leader');
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: enemy?.factionId || 'bandits', regionId, locationCityId, isTargetLeader }, g.playerParty);
+      if (this.state?.escortState?.active && (enemy?.factionId || 'bandits') === 'bandits') {
+        this.state.escortState.banditEncounters = Number(this.state.escortState.banditEncounters ?? 0) + 1;
+      }
+      if (enemy?.type === 'caravan') {
+        applyTradeCaravanAttackPenalty({
+          factions: this.state?.factions,
+          caravanFactionId: enemy.factionId,
+          cfg: CONST.DIPLOMACY_ACTIONS,
+        });
+      }
+      const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
+      emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, g.playerParty);
+      g.cleanupTemporaryEnemy(enemyId, { force: true });
+      g.applyBattleExit(enemy, enemyId, g.encounterPushbackDistance);
+    } else if (result === 'defeat') {
+      g.cancelPlayerDestination();
+      g.cleanupTemporaryEnemy(enemyId);
+      g.applyBattleExit(enemy, enemyId, g.defeatPushbackDistance);
+    } else {
+      g.cleanupTemporaryEnemy(enemyId);
+      g.applyBattleExit(enemy, enemyId, g.encounterPushbackDistance);
+    }
+
+    this.state.uiPanel = null;
+    this.state.aftermath = null;
+    this.state.setMode('map');
+    g.runAutosave('aftermath-close');
+    return true;
   }
 }

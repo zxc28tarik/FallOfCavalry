@@ -1394,53 +1394,7 @@ class FallOfCavalry {
     enemy.y = enemyTarget.y;
   }
 
-  confirmRosterSelection() {
-    if (!this.state || this.state.mode !== 'roster') return false;
-    const selected = this.playerRoster.filter((unit) => unit.selected && this.getEffectiveCount(unit) > 0);
-    if (selected.length < 1) {
-      this.state.roster.warning = 'Select at least 1 unit to deploy.';
-      this.updateTransientUIState();
-      return false;
-    }
-
-    const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
-    const enemyParty = (this.enemyParties || []).find((party) => party?.id === enemyId) || null;
-    const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
-    const playerUnits = this.createBattleUnitsFromRoster(selected, 'player');
-    const enemyUnits = this.createBattleUnitsFromRoster(this.enemyRoster, 'enemy');
-    this.placeBattleUnits(enemyUnits, 'enemy');
-
-    const battleAmmo = initBattleAmmoFromParty({ party: this.playerParty, cfg: this.getEffectiveTuning().BATTLE_RANGED });
-
-    this.cancelPlayerDestination();
-    this.state.encounter = null;
-    this.state.roster.warning = '';
-    initBattleFx(this.getBattleFxConfig());
-    this.state.battle = {
-      enemyId,
-      enemyFactionId,
-      startedAt: Date.now(),
-      result: null,
-      resolvedAt: null,
-      playerUnits,
-      enemyUnits,
-      projectiles: [],
-      playerAmmoStart: battleAmmo.startAmmo,
-      playerAmmo: battleAmmo.ammo,
-      targetRetargetTimer: 0,
-      settlement: this.getActiveSettlementForCity(),
-      context: { nearCityId: this.findNearestCityId(this.playerParty?.x, this.playerParty?.y) },
-      phase: 'deploy',
-      camera: createCamera(),
-    };
-
-    this.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
-    this.state.setMode('battle');
-    this.battleCommandsUI?.show?.();
-    this.startBattleDeployment();
-    this.updateTransientUIState();
-    return true;
-  }
+  confirmRosterSelection() { return this.battleManager.confirmRosterSelection(); }
 
   createBattleUnitsFromRoster(roster, side) { return this.battleManager.createBattleUnitsFromRoster(roster, side); }
 
@@ -2007,70 +1961,7 @@ Renown
 
   resolveBattle(result) { return this.battleManager.resolveBattle(result); }
 
-  exitAftermathToMap(takeLoot = true) {
-    if (!this.state || this.state.mode !== 'aftermath' || !this.state.aftermath) return false;
-    const aftermath = this.state.aftermath;
-    const enemyId = aftermath.enemyId;
-    const result = aftermath.result;
-    const enemy = this.enemyParties.find((party) => party?.id === enemyId) || null;
-    const linkedWorldPartyId = this.worldEncounterPartyByEnemyId?.[enemyId] || null;
-
-    if (takeLoot) {
-      this.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
-    } else {
-      this.setLastEventLog('Aftermath continued');
-    }
-
-    if (linkedWorldPartyId) {
-      removeWorldParty(this.worldAi, linkedWorldPartyId);
-      delete this.worldEncounterPartyByEnemyId[enemyId];
-    }
-
-    if (result === 'victory') {
-      const regionId = `region-${Math.floor(((enemy?.x ?? 0) + (enemy?.y ?? 0)) / Math.max(1, CONST.WORLD.TILE_SIZE * 20))}`;
-      const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
-      const locationCity = settlements.reduce((best, settlement) => {
-        if (!settlement) return best;
-        const sx = Number(settlement.tx ?? settlement.x ?? 0);
-        const sy = Number(settlement.ty ?? settlement.y ?? 0);
-        const px = Number(this.playerParty?.x ?? 0);
-        const py = Number(this.playerParty?.y ?? 0);
-        const dist = Math.hypot(sx - px, sy - py);
-        if (!best || dist < best.dist) return { dist, settlement };
-        return best;
-      }, null);
-      const locationCityId = locationCity?.settlement?.id || null;
-      const isTargetLeader = Boolean(enemy?.isTargetLeader || enemy?.type === 'bandit_leader');
-      emitContractEvent({ type: 'BATTLE_WON', enemyFaction: enemy?.factionId || 'bandits', regionId, locationCityId, isTargetLeader }, this.playerParty);
-      if (this.state?.escortState?.active && (enemy?.factionId || 'bandits') === 'bandits') {
-        this.state.escortState.banditEncounters = Number(this.state.escortState.banditEncounters ?? 0) + 1;
-      }
-      if (enemy?.type === 'caravan') {
-        applyTradeCaravanAttackPenalty({
-          factions: this.state?.factions,
-          caravanFactionId: enemy.factionId,
-          cfg: CONST.DIPLOMACY_ACTIONS,
-        });
-      }
-      const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
-      emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, this.playerParty);
-      this.cleanupTemporaryEnemy(enemyId, { force: true });
-      this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
-    } else if (result === 'defeat') {
-      this.cancelPlayerDestination();
-      this.cleanupTemporaryEnemy(enemyId);
-      this.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
-    } else {
-      this.cleanupTemporaryEnemy(enemyId);
-      this.applyBattleExit(enemy, enemyId, this.encounterPushbackDistance);
-    }
-
-    this.state.uiPanel = null;
-    this.state.aftermath = null;
-    this.state.setMode('map');
-    this.runAutosave('aftermath-close');
-    return true;
-  }
+  exitAftermathToMap(takeLoot = true) { return this.battleManager.exitAftermathToMap(takeLoot); }
 
 
   applyBattleExit(enemy, enemyId, pushbackDistance) { return this.battleManager.applyBattleExit(enemy, enemyId, pushbackDistance); }
