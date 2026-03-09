@@ -11,6 +11,8 @@ import { RenderManager } from './RenderManager.js';
 import { PoiManager } from './PoiManager.js';
 import { TuningManager } from './TuningManager.js';
 import { DevManager } from './DevManager.js';
+import { DiplomacyManager } from './DiplomacyManager.js';
+import * as CONST from '../constants.js';
 
 describe('Managers', () => {
   it('should instantiate BattleManager', () => {
@@ -2301,6 +2303,46 @@ describe('EconomyManager - Phase 5C', () => {
       state.devMode = true;
       state.debug = null; // falsy
       expect(() => dm.toggleDebug()).not.toThrow();
+    });
+  });
+
+  // ─── Phase 10A: DiplomacyManager ────────────────────────────────────────────
+
+  describe('DiplomacyManager - Phase 10A', () => {
+    function makeDM10A(stateOverrides = {}) {
+      const state = { factions: null, warState: null, ...stateOverrides };
+      const dm = new DiplomacyManager(state);
+      const game = { getEffectiveTuning: () => ({ DIPLOMACY_RELATIONS: {}, FACTION_WAR: {} }), playerParty: null };
+      dm.init(game);
+      return { dm, state, game };
+    }
+
+    it('instantiates with state and null game', () => {
+      const dm = new DiplomacyManager({});
+      expect(dm.state).toBeDefined();
+      expect(dm.game).toBeNull();
+    });
+
+    it('getFactionName returns name for a known faction', () => {
+      const { dm } = makeDM10A();
+      const first = CONST.FACTIONS[0];
+      expect(dm.getFactionName(first.id)).toBe(first.name);
+    });
+
+    it('getFactionName returns factionId for unknown faction', () => {
+      const { dm } = makeDM10A();
+      expect(dm.getFactionName('totally_unknown')).toBe('totally_unknown');
+    });
+
+    it('ensureFactionState is a no-op when state is null', () => {
+      const dm = new DiplomacyManager(null);
+      dm.init({ getEffectiveTuning: () => ({}), playerParty: null });
+      expect(() => dm.ensureFactionState()).not.toThrow();
+    });
+
+    it('getCityFactionContext returns null when state has no factions', () => {
+      const { dm } = makeDM10A();
+      expect(dm.getCityFactionContext({ ownerFactionId: 'free_company' })).toBeNull();
     });
   });
 });
