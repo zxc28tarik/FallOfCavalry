@@ -120,6 +120,7 @@ import { SaveManager } from './managers/SaveManager.js';
 import { EconomyManager } from './managers/EconomyManager.js';
 import { GameInputManager } from './managers/InputManager.js';
 import { RenderManager } from './managers/RenderManager.js';
+import { CityManager } from './managers/CityManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -907,6 +908,8 @@ class FallOfCavalry {
     this.inputManager.init(this);
     this.renderManager = this.renderManager || new RenderManager(this.state);
     this.renderManager.init(this);
+    this.cityManager = this.cityManager || new CityManager(this.state);
+    this.cityManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -1477,145 +1480,7 @@ Renown
 
 
 
-  setupCityServicesUI() {
-    if (this.cityUI) return;
-    this.cityUI = new CityServicesUI({
-      state: this.state,
-      party: this.playerParty,
-      recruitmentSystem,
-      tradeSystem,
-      onRecruit: (unit) => {
-        const result = recruitmentSystem.hireUnit(this.playerParty, unit);
-        if (result?.ok) {
-          if (Array.isArray(this.state?.city?.recruitPool)) {
-            this.state.city.recruitPool = this.state.city.recruitPool.filter((it) => it.uid !== unit.uid);
-          }
-          this.setLastEventLog(result.message || 'Birlik kiralandı.');
-          this.runAutosave('recruit');
-        } else {
-          this.setLastEventLog(result?.message || 'Kiralama başarısız.');
-        }
-      },
-      onBuy: (itemId, qty) => {
-        const settlement = this.state?.city;
-        if (!settlement) return;
-        const market = this.getOrCreateMarketForSettlement(settlement);
-        const result = tradeSystem.buy(this.playerParty, market, settlement, itemId, qty, {
-          day: this.state?.day,
-          settlementKey: this.getSettlementOpportunityKey(settlement),
-          marketOpportunities: this.state?.marketOpportunities,
-          tuning: this.state?.tuning,
-          factions: this.state?.factions,
-          playerFactionId: 'player',
-          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
-          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
-          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
-        });
-        this.ensureInventoryModel();
-        this.state.markets[settlement.id] = market;
-        if (result?.ok) {
-          this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
-            ? this.state.dailyLedger
-            : { tradePL: 0 };
-          this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) - Number(result?.spentGold ?? 0);
-        }
-        this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
-        if (result?.ok) this.runAutosave('trade');
-      },
-      onSell: (itemId, qty) => {
-        const settlement = this.state?.city;
-        if (!settlement) return;
-        const market = this.getOrCreateMarketForSettlement(settlement);
-        const result = tradeSystem.sell(this.playerParty, market, settlement, itemId, qty, {
-          day: this.state?.day,
-          settlementKey: this.getSettlementOpportunityKey(settlement),
-          marketOpportunities: this.state?.marketOpportunities,
-          tuning: this.state?.tuning,
-          factions: this.state?.factions,
-          playerFactionId: 'player',
-          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
-          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
-          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
-        });
-        this.ensureInventoryModel();
-        this.state.markets[settlement.id] = market;
-        if (result?.ok) {
-          this.state.dailyLedger = this.state.dailyLedger && typeof this.state.dailyLedger === 'object'
-            ? this.state.dailyLedger
-            : { tradePL: 0 };
-          this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
-        }
-        this.setLastEventLog(result?.message || 'İşlem tamamlandı.');
-        if (result?.ok && itemId === 'grain') {
-          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, this.playerParty);
-        }
-        if (result?.ok) this.runAutosave('trade');
-      },
-      onAcceptContract: (contractId) => {
-        const accepted = acceptContract(contractId, this.playerParty);
-        if (accepted?.type === 'ESCORT') {
-          this.state.escortState = {
-            contractId: accepted.id,
-            fromCityId: accepted.cityId,
-            toCityId: accepted.targetCityId,
-            maxBanditEncounters: Number(accepted.maxBanditEncounters ?? 1),
-            banditEncounters: 0,
-            active: true,
-          };
-        }
-        if (accepted) this.setLastEventLog('Contract accepted.');
-      },
-      onCompleteContract: (contractId) => {
-        const completed = completeContract(contractId, this.playerParty, {
-          warState: this.state?.warState,
-          factions: this.state?.factions,
-          onRelationBonus: (contract) => {
-            const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
-            applyContractRelationBonus({
-              factions: this.state?.factions,
-              contract: { ...contract, factionId: contract.factionId || currentCityFactionId },
-              cfg: CONST.DIPLOMACY_ACTIONS,
-            });
-          },
-        });
-        if (completed) {
-          const bonus = Number(completed?.bonusRenown ?? 0);
-          const baseRenown = Number(completed.rewardRenown ?? 0) + bonus;
-          const mult = this.getRenownGainMultAtCurrentRegion();
-          const boosted = Math.max(baseRenown, Math.floor(baseRenown * mult));
-          const extra = Math.max(0, boosted - baseRenown);
-          if (extra > 0) this.playerParty.renown = Math.floor(Number(this.playerParty.renown ?? 0) + extra);
-          const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
-          this.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${boosted} renown${bonusText}${extra > 0 ? ' (pilgrimage bonus)' : ''}`);
-        }
-      },
-      onDiplomacyAction: (summary) => {
-        this.ensureFactionState();
-        if (summary?.ok) {
-          this.setLastEventLog(summary.message || 'Diplomacy action completed.');
-          this.runAutosave('diplomacy');
-        } else if (summary?.message) {
-          this.setLastEventLog(summary.message);
-        }
-      },
-      getFactionContext: (settlement) => this.getCityFactionContext(settlement),
-      onClose: () => this.exitCityServices(),
-    });
-
-    this.cityUI.bind({
-      cityRoot: utils.getEl('settlementModal'),
-      btnRecruit: utils.getEl('btnRecruit'),
-      btnTrade: utils.getEl('btnTrade'),
-      btnContracts: utils.getEl('btnContracts'),
-      cityClose: utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
-      cityList: utils.getEl('settlementLore'),
-      cityTitle: utils.getEl('settlementTitle'),
-      citySubtitle: utils.getEl('settlementSubtitle'),
-      cityRelation: utils.getEl('settlementRelation'),
-    });
-  }
+  setupCityServicesUI() { return this.cityManager.setupCityServicesUI(); }
 
   getOrCreateMarketForSettlement(settlement) { return this.economyManager.getOrCreateMarketForSettlement(settlement); }
 
