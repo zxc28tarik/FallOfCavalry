@@ -127,6 +127,7 @@ import { UIManager } from './managers/UIManager.js';
 import { DevManager } from './managers/DevManager.js';
 import { DiplomacyManager } from './managers/DiplomacyManager.js';
 import { EncounterManager } from './managers/EncounterManager.js';
+import { GameFlowManager } from './managers/GameFlowManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -540,6 +541,8 @@ class FallOfCavalry {
     this.uiManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
     this.devManager.init(this);
+    this.gameFlowManager = this.gameFlowManager || new GameFlowManager(this.state);
+    this.gameFlowManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -663,31 +666,7 @@ class FallOfCavalry {
     return activeEvents;
   }
 
-  applyDailyEventEffects(day, activeEvents) {
-    if (!this.playerParty || !Array.isArray(activeEvents) || !activeEvents.length) return;
-    const eventsCfg = this.getEffectiveTuning().EVENTS || CONST.EVENTS;
-    const warTaxActive = activeEvents.some((event) => event?.type === EVENT_TYPES.WAR_TAX);
-    if (warTaxActive) {
-      this.playerParty.gold = Math.max(0, Math.floor(Number(this.playerParty.gold ?? 0) / Number(eventsCfg.WAR_TAX_GOLD_MULT ?? 1.15)));
-    }
-
-    const refugeeEvents = activeEvents.filter((event) => event?.type === EVENT_TYPES.REFUGEE_INFLUX);
-    if (refugeeEvents.length > 0) {
-      this.playerParty.renown = Math.max(0, Math.floor(Number(this.playerParty.renown ?? 0) + (Number(eventsCfg.REFUGEE_RENOWN_BONUS ?? 5) * refugeeEvents.length)));
-      refugeeEvents.forEach((event) => {
-        const sourceFaction = Array.isArray(event?.factionsInvolved)
-          ? event.factionsInvolved.find((id) => id && id !== 'player')
-          : null;
-        if (!sourceFaction) return;
-        const rel = getRelation(this.state.factions, 'player', sourceFaction, CONST.DIPLOMACY_RELATIONS);
-        setRelation(this.state.factions, 'player', sourceFaction, rel + 2, CONST.DIPLOMACY_RELATIONS);
-      });
-    }
-
-    if (warTaxActive || refugeeEvents.length > 0) {
-      this.setLastEventLog(`Day ${day}: ${warTaxActive ? 'War tax applied. ' : ''}${refugeeEvents.length > 0 ? 'Refugees supported.' : ''}`.trim());
-    }
-  }
+  applyDailyEventEffects(day, activeEvents) { return this.gameFlowManager.applyDailyEventEffects(day, activeEvents); }
 
   getBanditCapWithEvents(worldEvents) {
     const worldCfg = this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
@@ -996,66 +975,14 @@ class FallOfCavalry {
     return nearest;
   }
 
-  updatePoiInteractHint() {
-    if (!this.state) return;
-    const map = this.state?.map;
-    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) {
-      this.state.interactHint = '';
-      return;
-    }
-    const nearest = this.getNearestInteractablePoi();
-    if (!nearest?.poi) {
-      this.state.interactHint = '';
-      return;
-    }
-    const poiTypeNames = { ruin: 'Harabe', camp: 'Kamp', fort: 'Fort', shrine: 'Mabet', battlefield: 'Savaş Alanı', caravan_site: 'Kervan Mevkii' };
-    const typeText = poiTypeNames[nearest.poi.type] || 'POI';
-    this.state.interactHint = `E: İncele (${typeText})`;
-  }
+  updatePoiInteractHint() { return this.poiManager.updatePoiInteractHint(); }
 
-  openPoiModal() {
-    if (this.state?.mode !== 'map') return false;
-    const map = this.state?.map;
-    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) return false;
-    if (!this.poiUI || typeof this.poiUI.show !== 'function') return false;
-    const nearest = this.getNearestInteractablePoi();
-    if (!nearest?.poi) return false;
-    this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: true, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
-    this.activePoi = nearest.poi;
-    const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
-    const can = PoiSystem.canInteract(this.state, nearest.poi);
-    const cooldownText = remainingDays > 0 ? `Tekrar inceleme: ${remainingDays} gün sonra` : '';
-    this.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText, remainingDays });
-    return true;
-  }
+  openPoiModal() { return this.poiManager.openPoiModal(); }
 
   investigateActivePoi() { return this.poiManager.investigateActivePoi(); }
 
 
-  resolvePoiFollowup() {
-    const enemyId = this.pendingPoiAmbush;
-    this.pendingPoiAmbush = null;
-    if (!enemyId) return;
-
-    if (Array.isArray(this.enemyParties)) {
-      this.enemyParties.push({
-        id: enemyId,
-        x: (this.playerParty?.x ?? 0) + 60,
-        y: (this.playerParty?.y ?? 0) + 40,
-        radius: 12,
-        speed: 40,
-        vx: 0,
-        vy: 0,
-        temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
-        factionId: CONST.FACTION.ID.BANDITS,
-      });
-      this.state.aiParties = this.enemyParties;
-    }
-    this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
-    if (typeof this.enterEncounter === 'function') this.enterEncounter(enemyId);
-    else if (typeof this.startEncounter === 'function') this.startEncounter(enemyId);
-    else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
-  }
+  resolvePoiFollowup() { return this.poiManager.resolvePoiFollowup(); }
 
   getSettlementTier(settlement) { return this.economyManager.getSettlementTier(settlement); }
   getSettlementOpportunityKey(settlement) { return this.economyManager.getSettlementOpportunityKey(settlement); }
@@ -1199,52 +1126,7 @@ class FallOfCavalry {
 
 
 
-  setupStartFlow() {
-    if (!this.startScreen) {
-      this.startScreen = new StartScreen({
-        state: this.state,
-        saveSystem: this.saveSystem,
-        onStart: ({ faction, seed }) => {
-          this.state.seed = seed;
-          this.state.selectedFaction = {
-            id: faction.id,
-            name: faction.name,
-            color: faction.color,
-            doctrine: faction.doctrine,
-            desc: faction.desc,
-          };
-          if (this.state.player) {
-            this.state.player.gold = faction.startingGold;
-            this.state.player.renown = faction.startingRenown;
-            this.state.player.army = faction.startingArmy;
-          }
-          if (this.playerParty) {
-            this.playerParty.gold = faction.startingGold;
-            this.playerParty.factionId = faction.id;
-          }
-
-          this.ensureWorldGenerated(seed);
-          this.startNewGame();
-        },
-        onContinue: () => this.continueGame(),
-        onLoad: () => this.openSaveLoadPanel(),
-      });
-    }
-
-    this.startScreen.bind({
-      factionGrid: utils.getEl('factionGrid'),
-      btnStart: utils.getEl('btnStart'),
-      btnContinue: utils.getEl('btnContinue'),
-      btnLoadStart: utils.getEl('btnLoadStart'),
-      seedInput: utils.getEl('seedInput'),
-      randomSeedBtn: utils.getEl('randomSeedBtn'),
-      selectedFactionName: utils.getEl('selectedFactionName'),
-      selectedFactionDesc: utils.getEl('selectedFactionDesc'),
-      selectedFactionDoc: utils.getEl('selectedFactionDoc'),
-      selectedFactionArmy: utils.getEl('selectedFactionArmy'),
-      startSaveInfo: utils.getEl('startSaveInfo'),
-    });
-  }
+  setupStartFlow() { return this.gameFlowManager.setupStartFlow(); }
 
   enterStart() {
     this.mode = 'menu';
@@ -1285,43 +1167,7 @@ class FallOfCavalry {
     return true;
   }
 
-  continueGame() {
-    const canContinue = Boolean(this.saveSystem?.hasSave?.());
-    this.hudManager?.setContinueEnabled?.(canContinue);
-    if (!canContinue) {
-      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
-      return false;
-    }
-
-    const payload = this.saveSystem?.loadLatest?.();
-    if (!payload) {
-      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
-      return false;
-    }
-
-    const ok = this.applySavePayload(payload, { slot: 'autosave' });
-    if (!ok) {
-      this.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
-      return false;
-    }
-
-    if (!this.started && this.gameLoop?.start) {
-      this.started = true;
-      this.gameLoop.start();
-    }
-
-    this.mode = 'playing';
-    if (this.state?.mode !== 'map') this.state.setMode('map');
-    this.startAutosaveLoop();
-    this.hudManager?.setPaused?.(false);
-    this.hudManager?.setMenuVisible?.(false);
-    this.hudManager?.setSettingsVisible?.(false);
-    utils.safeClass(this.dom.startModal, 'add', 'hidden');
-    utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
-    this.clampCameraToWorld();
-    this.updateTransientUIState();
-    return true;
-  }
+  continueGame() { return this.gameFlowManager.continueGame(); }
 
   openSettings() {
     if (this.mode === 'menu') {
@@ -1403,37 +1249,7 @@ class FallOfCavalry {
     return true;
   }
 
-  setPaused(isPaused) {
-    if (this.mode === 'menu') return true;
-
-    const nextPaused = Boolean(isPaused);
-    if (nextPaused && this.mode === 'paused') {
-      this.warnOnce('game:pause-duplicate:on', '[Game] Pause already enabled');
-      return true;
-    }
-    if (!nextPaused && this.mode === 'playing') {
-      this.warnOnce('game:pause-duplicate:off', '[Game] Pause already disabled');
-      return true;
-    }
-
-    if (nextPaused) {
-      this.mode = 'paused';
-      this.hudManager?.setPaused?.(true);
-      this.hudManager?.setMenuVisible?.(false);
-      if (this.started) {
-        this.gameLoop?.stop?.();
-      }
-      return true;
-    }
-
-    this.mode = 'playing';
-    this.hudManager?.setPaused?.(false);
-    this.hudManager?.setMenuVisible?.(false);
-    if (this.started) {
-      this.gameLoop?.start?.();
-    }
-    return true;
-  }
+  setPaused(isPaused) { return this.gameFlowManager.setPaused(isPaused); }
 
   togglePaused() {
     if (this.mode === 'playing') return this.setPaused(true);

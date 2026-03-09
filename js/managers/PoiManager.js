@@ -158,4 +158,67 @@ export class PoiManager {
 
     return false;
   }
+
+  // ─── Phase 10C: POI UI & flow methods ───────────────────────────────────────
+
+  updatePoiInteractHint() {
+    if (!this.state) return;
+    const g = this.game;
+    const map = this.state?.map;
+    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) {
+      this.state.interactHint = '';
+      return;
+    }
+    const nearest = g.getNearestInteractablePoi();
+    if (!nearest?.poi) {
+      this.state.interactHint = '';
+      return;
+    }
+    const poiTypeNames = { ruin: 'Harabe', camp: 'Kamp', fort: 'Fort', shrine: 'Mabet', battlefield: 'Savaş Alanı', caravan_site: 'Kervan Mevkii' };
+    const typeText = poiTypeNames[nearest.poi.type] || 'POI';
+    this.state.interactHint = `E: İncele (${typeText})`;
+  }
+
+  openPoiModal() {
+    const g = this.game;
+    if (this.state?.mode !== 'map') return false;
+    const map = this.state?.map;
+    if (!map || !Array.isArray(map.pois) || map.pois.length === 0) return false;
+    if (!g.poiUI || typeof g.poiUI.show !== 'function') return false;
+    const nearest = g.getNearestInteractablePoi();
+    if (!nearest?.poi) return false;
+    g.maybeShowTutorialHint({ nearSettlement: false, nearPoi: true, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
+    g.activePoi = nearest.poi;
+    const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
+    const can = PoiSystem.canInteract(this.state, nearest.poi);
+    const cooldownText = remainingDays > 0 ? `Tekrar inceleme: ${remainingDays} gün sonra` : '';
+    g.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText, remainingDays });
+    return true;
+  }
+
+  resolvePoiFollowup() {
+    const g = this.game;
+    const enemyId = g.pendingPoiAmbush;
+    g.pendingPoiAmbush = null;
+    if (!enemyId) return;
+
+    if (Array.isArray(g.enemyParties)) {
+      g.enemyParties.push({
+        id: enemyId,
+        x: (g.playerParty?.x ?? 0) + 60,
+        y: (g.playerParty?.y ?? 0) + 40,
+        radius: 12,
+        speed: 40,
+        vx: 0,
+        vy: 0,
+        temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
+        factionId: CONST.FACTION.ID.BANDITS,
+      });
+      this.state.aiParties = g.enemyParties;
+    }
+    this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
+    if (typeof g.enterEncounter === 'function') g.enterEncounter(enemyId);
+    else if (typeof g.startEncounter === 'function') g.startEncounter(enemyId);
+    else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
+  }
 }

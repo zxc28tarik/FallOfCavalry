@@ -13,6 +13,7 @@ import { TuningManager } from './TuningManager.js';
 import { DevManager } from './DevManager.js';
 import { DiplomacyManager } from './DiplomacyManager.js';
 import { EncounterManager } from './EncounterManager.js';
+import { GameFlowManager } from './GameFlowManager.js';
 import * as CONST from '../constants.js';
 
 describe('Managers', () => {
@@ -2404,6 +2405,82 @@ describe('EconomyManager - Phase 5C', () => {
       const result = em.buildAftermathPanelData();
       expect(result.title).toBe('Battle Aftermath');
       expect(result.body).toBe('No aftermath data');
+    });
+  });
+
+  // ─── Phase 10C: GameFlowManager ──────────────────────────────────────────────
+
+  describe('GameFlowManager - Phase 10C', () => {
+    function makeGFM10C(stateOverrides = {}, gameOverrides = {}) {
+      const state = { mode: 'map', factions: null, ...stateOverrides };
+      state.setMode = (m) => { state.mode = m; };
+      const gfm = new GameFlowManager(state);
+      const game = {
+        mode: 'playing',
+        started: false,
+        saveSystem: null,
+        hudManager: { setContinueEnabled: () => {}, setPaused: () => {}, setMenuVisible: () => {}, setSettingsVisible: () => {} },
+        startScreen: null,
+        gameLoop: null,
+        applySavePayload: () => false,
+        startAutosaveLoop: () => {},
+        dom: { startModal: null, mainMenuOverlay: null },
+        clampCameraToWorld: () => {},
+        updateTransientUIState: () => {},
+        warnOnce: () => {},
+        playerParty: null,
+        getEffectiveTuning: () => ({}),
+        setLastEventLog: () => {},
+        ...gameOverrides,
+      };
+      gfm.init(game);
+      return { gfm, state, game };
+    }
+
+    it('instantiates with state and null game', () => {
+      const gfm = new GameFlowManager({});
+      expect(gfm.state).toBeDefined();
+      expect(gfm.game).toBeNull();
+    });
+
+    it('continueGame returns false when saveSystem is null', () => {
+      const { gfm } = makeGFM10C();
+      expect(gfm.continueGame()).toBe(false);
+    });
+
+    it('setPaused returns true immediately in menu mode', () => {
+      const { gfm, game } = makeGFM10C();
+      game.mode = 'menu';
+      expect(gfm.setPaused(true)).toBe(true);
+    });
+
+    it('applyDailyEventEffects is a no-op when playerParty is null', () => {
+      const { gfm } = makeGFM10C();
+      expect(() => gfm.applyDailyEventEffects(1, [{ type: 'war_tax' }])).not.toThrow();
+    });
+  });
+
+  // ─── Phase 10C: PoiManager extension ─────────────────────────────────────────
+
+  describe('PoiManager extension - Phase 10C', () => {
+    it('updatePoiInteractHint is a no-op when state is null', () => {
+      const pm = new PoiManager(null);
+      pm.init({ getNearestInteractablePoi: () => null });
+      expect(() => pm.updatePoiInteractHint()).not.toThrow();
+    });
+
+    it('openPoiModal returns false in non-map mode', () => {
+      const state = { mode: 'battle', map: { pois: [{}] } };
+      const pm = new PoiManager(state);
+      pm.init({ poiUI: null, state });
+      expect(pm.openPoiModal()).toBe(false);
+    });
+
+    it('resolvePoiFollowup is a no-op when pendingPoiAmbush is null', () => {
+      const state = {};
+      const pm = new PoiManager(state);
+      pm.init({ pendingPoiAmbush: null, enemyParties: [], playerParty: { x: 0, y: 0 } });
+      expect(() => pm.resolvePoiFollowup()).not.toThrow();
     });
   });
 });
