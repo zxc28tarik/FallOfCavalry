@@ -10,6 +10,7 @@ import { UIManager } from './UIManager.js';
 import { RenderManager } from './RenderManager.js';
 import { PoiManager } from './PoiManager.js';
 import { TuningManager } from './TuningManager.js';
+import { DevManager } from './DevManager.js';
 
 describe('Managers', () => {
   it('should instantiate BattleManager', () => {
@@ -2257,6 +2258,49 @@ describe('EconomyManager - Phase 5C', () => {
       const { um } = makeUM9B();
       // setupDOMReferences uses real DOM APIs — just verify the method is defined
       expect(typeof um.setupDOMReferences).toBe('function');
+    });
+  });
+
+  // ─── Phase 9C: DevManager ─────────────────────────────────────────────────────
+
+  describe('DevManager — Phase 9C', () => {
+    function makeDM9C() {
+      const state = { devMode: false, debug: null, mode: 'start', tuning: {} };
+      const dm = new DevManager(state);
+      const game = {
+        dom: {},
+        smokeResults: null,
+        appendSmokeResults: () => {},
+        showTuningModal: () => {},
+      };
+      dm.init(game);
+      return { dm, state, game };
+    }
+
+    it('DevManager instantiates correctly', () => {
+      const state = {};
+      const dm = new DevManager(state);
+      expect(dm.state).toBe(state);
+      expect(dm.game).toBeNull();
+    });
+
+    it('runSmokeScenarios() returns [] when devMode is false', async () => {
+      const { dm } = makeDM9C();
+      const result = await dm.runSmokeScenarios();
+      expect(result).toEqual([]);
+    });
+
+    it('setupDebugSmokePanel() is no-op when g.dom.debugOverlay is null', () => {
+      const { dm, game } = makeDM9C();
+      game.dom = { debugOverlay: null };
+      expect(() => dm.setupDebugSmokePanel()).not.toThrow();
+    });
+
+    it('toggleDebug() is no-op when state.debug is falsy', () => {
+      const { dm, state } = makeDM9C();
+      state.devMode = true;
+      state.debug = null; // falsy
+      expect(() => dm.toggleDebug()).not.toThrow();
     });
   });
 });

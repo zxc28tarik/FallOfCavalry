@@ -124,6 +124,7 @@ import { CityManager } from './managers/CityManager.js';
 import { PoiManager } from './managers/PoiManager.js';
 import { TuningManager } from './managers/TuningManager.js';
 import { UIManager } from './managers/UIManager.js';
+import { DevManager } from './managers/DevManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -610,6 +611,8 @@ class FallOfCavalry {
     this.tuningManager.init(this);
     this.uiManager = this.uiManager || new UIManager(this.state);
     this.uiManager.init(this);
+    this.devManager = this.devManager || new DevManager(this.state);
+    this.devManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -1360,195 +1363,14 @@ Renown
     if (this.dom?.helpOverlay) this.dom.helpOverlay.classList.toggle('hidden', !next);
   }
 
-  setupDebugSmokePanel() {
-    if (!this.dom?.debugOverlay) return;
-    if (!this.state?.devMode) {
-      this.dom.debugOverlay.classList.add('hidden');
-      this.dom.debugOverlay.innerHTML = '';
-      return;
-    }
-    if (this.dom.debugOverlay.dataset.smokeReady === '1') return;
-    this.dom.debugOverlay.dataset.smokeReady = '1';
-    this.dom.debugOverlay.innerHTML = '<div id="debugInfo" class="debug-info"></div><div class="debug-actions"><button id="btnOpenTuning" class="action-btn btn-dark text-xs">Tuning</button><button id="btnRunSmoke" class="action-btn btn-dark text-xs">Run Smoke</button><pre id="smokeResults" class="smoke-results"></pre></div>';
-    this.dom.btnRunSmoke = this.dom.debugOverlay.querySelector('#btnRunSmoke');
-    this.dom.btnOpenTuning = this.dom.debugOverlay.querySelector('#btnOpenTuning');
-    this.dom.smokeResults = this.dom.debugOverlay.querySelector('#smokeResults');
-
-    if (this.dom.btnOpenTuning && !this._tuningDebugBtnBound) {
-      this._tuningDebugBtnBound = true;
-      this.dom.btnOpenTuning.addEventListener('click', () => { this.showTuningModal(); });
-    }
-
-    if (this.dom.btnRunSmoke && !this._smokeBtnBound) {
-      this._smokeBtnBound = true;
-      this.dom.btnRunSmoke.addEventListener('click', async () => {
-        await this.runSmokeScenarios();
-      });
-    }
-
-    if (typeof window !== 'undefined' && this.state?.devMode) {
-      window.__FOC_RUN_SMOKE__ = () => this.runSmokeScenarios();
-    }
-  }
-
+  setupDebugSmokePanel() { return this.devManager.setupDebugSmokePanel(); }
   appendSmokeResults(results) {
     if (!this.dom?.smokeResults) return;
     const rows = (results || []).map((r) => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.msg}`);
     this.dom.smokeResults.textContent = rows.join('\n');
   }
 
-  async runSmokeScenarios() {
-    if (!this.state?.devMode) return [];
-    const out = [];
-    const push = (name, ok, msg) => out.push({ name, ok: Boolean(ok), msg: msg || (ok ? 'PASS' : 'FAIL') });
-
-    push('1) Start screen opens', this.state?.mode === 'start', `mode=${this.state?.mode}`);
-    push('2) Faction cards exist', (document.querySelectorAll('.faction-card').length || 0) > 0, `cards=${document.querySelectorAll('.faction-card').length}`);
-    push('3) Start button state exists', Boolean(this.dom?.btnStart), this.dom?.btnStart?.disabled ? 'disabled' : 'enabled');
-
-    const prevMode = this.state?.mode;
-    this.startNewGame();
-    push('4) Start enters map', this.state?.mode === 'map', `mode=${this.state?.mode}`);
-
-    const nearSettlement = this.getActiveSettlementForCity();
-    push('5) Settlement nearby query', Boolean(nearSettlement), nearSettlement ? (nearSettlement.name || nearSettlement.id) : 'none');
-
-    const prevCamp = Boolean(this.state?.camp?.active);
-    if (!prevCamp) this.toggleCampMode();
-    push('6) Camp can activate', Boolean(this.state?.camp?.active), `active=${this.state?.camp?.active}`);
-    if (this.state?.camp?.active) this.toggleCampMode();
-    push('7) Camp can deactivate', !this.state?.camp?.active, `active=${this.state?.camp?.active}`);
-
-    const movementCtx = this.getMovementContextAt(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
-    push('8) Movement context valid', Number.isFinite(movementCtx?.speedMult), `speedMult=${movementCtx?.speedMult}`);
-
-    const foodBefore = this.state?.supplies?.food ?? 0;
-    this.processDailyEconomy((this.state?.day ?? 1) + 1);
-    push('9) End day opens accounting', Boolean(this.state?.accounting), this.state?.accounting ? 'opened' : 'not opened');
-    push('10) Food consumed/unchanged', (this.state?.supplies?.food ?? 0) <= foodBefore, `${foodBefore}→${this.state?.supplies?.food ?? 0}`);
-
-    const saveOk = this.saveToSlot('manual2');
-    const loadOk = this.loadFromSlot('manual2');
-    push('11) Save+Load works', Boolean(saveOk && loadOk), `save=${saveOk} load=${loadOk}`);
-    push('12) lastAccounting exists', Boolean(this.state?.lastAccounting), this.state?.lastAccounting ? 'present' : 'missing');
-
-    push('13) Battle command UI exists', Boolean(this.dom?.battleCommandBar), this.dom?.battleCommandBar ? 'present' : 'missing');
-    const dmgTest = computeDamage({ attacker: { atk: 10, damageType: CONST.DAMAGE_TYPE.CUT }, defender: { armorType: CONST.ARMOR_TYPE.HEAVY }, base: 10, terrainMods: CONST.TERRAIN_MODS.PLAINS });
-    push('14) computeDamage finite', Number.isFinite(dmgTest), `damage=${dmgTest}`);
-
-    this.state.battle = this.state.battle || { playerUnits: [{ unitId: 'p1' }], enemyUnits: [], phase: 'deploy', projectiles: [] };
-    this.battleDeployMode = new BattleDeployMode({ state: this.state, party: this.playerParty, battle: this.state.battle, camera: this.state?.camera });
-    this.battleDeployUI?.show?.();
-    push('15) Deployment overlay shows on battle start', !(this.dom?.battleDeployOverlay?.classList?.contains('hidden')), this.dom?.battleDeployOverlay?.classList?.contains('hidden') ? 'hidden' : 'visible');
-    const previewCount = this.battleDeployMode.computePreviewPositions((this.state.battle.playerUnits || []).length).length;
-    push('16) Formation preview count matches units', previewCount === (this.state.battle.playerUnits || []).length, `preview=${previewCount}`);
-
-    const mapPois = this.state?.map?.pois || [];
-    if (mapPois.length > 0) {
-      const p = mapPois[0];
-      const tileSize = CONST.WORLD.TILE_SIZE;
-      this.playerParty.x = p.x * tileSize + tileSize * 0.5;
-      this.playerParty.y = p.y * tileSize + tileSize * 0.5;
-      this.updatePoiInteractHint();
-      push('17) POI interaction hint appears near POI', Boolean(this.state?.interactHint), this.state?.interactHint || 'missing');
-
-      const poiKey = PoiSystem.keyOfPoi(p);
-      const prevVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
-      this.activePoi = p;
-      this.investigateActivePoi();
-      const nowVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
-      const expectedDay = Number(this.state?.day ?? 1);
-      push('18) POI investigate updates poiState', nowVisited === expectedDay || nowVisited === prevVisited, `lastVisited=${nowVisited}`);
-
-      const moveCtxAtPoi = this.getMovementContextAt(this.playerParty.x, this.playerParty.y);
-      const testCtx = {
-        onRoad: Boolean(moveCtxAtPoi?.onRoad),
-        biomeKey: this.getBiomeKeyAtTile(p.x, p.y),
-        settlementTier: this.getNearestSettlementTierAt(p.x, p.y),
-        map: this.state?.map,
-      };
-      const first = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx, tuning: this.state?.tuning });
-      const second = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx, tuning: this.state?.tuning });
-      push('19) POI rollOutcome deterministic kind', first?.kind === second?.kind, `${first?.kind} vs ${second?.kind}`);
-    } else {
-      push('17) POI interaction hint appears near POI', true, 'PASS (no POI data)');
-      push('18) POI investigate updates poiState', true, 'PASS (no POI data)');
-      push('19) POI rollOutcome deterministic kind', true, 'PASS (no POI data)');
-    }
-
-    const firstSettlement = this.state?.map?.settlements?.[0] || null;
-    if (firstSettlement) {
-      const settlementKey = this.getSettlementOpportunityKey(firstSettlement);
-      const market = this.getOrCreateMarketForSettlement(firstSettlement);
-      const itemId = (CONST.TRADE_ITEMS?.[0]?.id) || null;
-      if (settlementKey && itemId) {
-        const baseSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
-          day: this.state.day,
-          settlementKey,
-          marketOpportunities: {},
-          tuning: this.state?.tuning,
-          factions: this.state?.factions,
-          playerFactionId: 'player',
-          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
-          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
-          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
-        });
-        this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
-        const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
-          day: this.state.day,
-          settlementKey,
-          marketOpportunities: this.state.marketOpportunities,
-          tuning: this.state?.tuning,
-          factions: this.state?.factions,
-          playerFactionId: 'player',
-          ownerFactionId: settlement?.ownerFactionId || settlement?.owner || null,
-          diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
-          diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, this.getRegionIdAtTile(settlement.tx, settlement.ty), this.state?.day),
-        });
-        push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
-
-        this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) - 1 };
-        this.cleanupExpiredMarketOpportunities(this.state.day);
-    const currentEvents = this.refreshCurrentEventsSummary(this.state.day);
-        push('21) Expired opportunities are cleaned', !this.state.marketOpportunities[settlementKey], this.state.marketOpportunities[settlementKey] ? 'not cleaned' : 'cleaned');
-      } else {
-        push('20) Opportunity modifies sell price when active', true, 'PASS (missing settlementKey/itemId)');
-        push('21) Expired opportunities are cleaned', true, 'PASS (missing settlementKey/itemId)');
-      }
-    } else {
-      push('20) Opportunity modifies sell price when active', true, 'PASS (no settlement data)');
-      push('21) Expired opportunities are cleaned', true, 'PASS (no settlement data)');
-    }
-
-    push('22) Tuning state exists', Boolean(this.state?.tuning && typeof this.state.tuning === 'object' && !Array.isArray(this.state.tuning)), this.state?.tuning ? 'present' : 'missing');
-
-    const baseRisk = computeRiskMultiplier({
-      state: { ...this.state, tuning: {} },
-      movementCtx: { onRoad: true },
-      biomeKey: 'PLAINS',
-      inCamp: false,
-      supplies: { food: 10 },
-      market: null,
-    });
-    const tunedRisk = computeRiskMultiplier({
-      state: { ...this.state, tuning: { ENCOUNTER_RISK: { ROAD_MULT: Number(CONST.ENCOUNTER_RISK.ROAD_MULT) + 0.25 } } },
-      movementCtx: { onRoad: true },
-      biomeKey: 'PLAINS',
-      inCamp: false,
-      supplies: { food: 10 },
-      market: null,
-    });
-    push('23) Tuning override affects encounterRisk', tunedRisk !== baseRisk, `${baseRisk}→${tunedRisk}`);
-
-    if (prevMode === 'start') this.enterStart();
-
-    this.smokeResults = out;
-    this.appendSmokeResults(out);
-    return out;
-  }
-
+  async runSmokeScenarios() { return this.devManager.runSmokeScenarios(); }
   onModeChanged(oldMode, newMode) {
     utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
     if (newMode !== 'map') {
@@ -1880,20 +1702,7 @@ Renown
     return true;
   }
 
-  toggleDebug() {
-    if (!this.state?.devMode || !this.state?.debug) return;
-
-    this.state.debug.enabled = !this.state.debug.enabled;
-
-    if (this.dom.debugOverlay) {
-      if (this.state.debug.enabled) {
-        this.dom.debugOverlay.classList.remove('hidden');
-      } else {
-        this.dom.debugOverlay.classList.add('hidden');
-      }
-    }
-  }
-
+  toggleDebug() { return this.devManager.toggleDebug(); }
   buildSavePayload() { return this.saveManager.buildSavePayload(); }
   applySavePayload(payload, opts) { return this.saveManager.applySavePayload(payload, opts); }
 
