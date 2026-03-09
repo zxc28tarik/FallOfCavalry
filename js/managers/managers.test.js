@@ -9,6 +9,7 @@ import { SaveManager } from './SaveManager.js';
 import { UIManager } from './UIManager.js';
 import { RenderManager } from './RenderManager.js';
 import { PoiManager } from './PoiManager.js';
+import { TuningManager } from './TuningManager.js';
 
 describe('Managers', () => {
   it('should instantiate BattleManager', () => {
@@ -2115,6 +2116,68 @@ describe('EconomyManager - Phase 5C', () => {
       // investigateActivePoi will call PoiSystem.rollOutcome — result depends on seed/day
       // Just ensure it returns a boolean and doesn't throw
       expect(() => pm.investigateActivePoi()).not.toThrow();
+    });
+  });
+
+  // ─── Phase 9A: TuningManager ─────────────────────────────────────────────────
+
+  describe('TuningManager — Phase 9A', () => {
+    function makeTM9A() {
+      const state = { tuning: {}, tuningDraft: null, devMode: false };
+      const tm = new TuningManager(state);
+      const game = {
+        ensureTuningState: () => {
+          if (!state.tuning) state.tuning = {};
+        },
+        updateTransientUIState: () => {},
+        runAutosave: () => {},
+        TuningUIClass: null,
+        tuningUI: null,
+        dom: {},
+        mode: 'start',
+        setPaused: () => {},
+        _tuningPauseMode: null,
+      };
+      tm.init(game);
+      return { tm, state, game };
+    }
+
+    it('TuningManager instantiates with state and null game', () => {
+      const state = {};
+      const tm = new TuningManager(state);
+      expect(tm.state).toBe(state);
+      expect(tm.game).toBeNull();
+    });
+
+    it('getTuningDefaults() returns object with expected category keys', () => {
+      const { tm } = makeTM9A();
+      const defaults = tm.getTuningDefaults();
+      expect(typeof defaults).toBe('object');
+      expect(defaults).toHaveProperty('ENCOUNTER_RISK');
+      expect(defaults).toHaveProperty('POI');
+      expect(defaults).toHaveProperty('MARKET');
+      expect(defaults).toHaveProperty('WORLD_AI');
+      expect(defaults).toHaveProperty('BATTLE_REWARDS');
+    });
+
+    it('applyTuningDraft(null) is no-op (no throw)', () => {
+      const { tm } = makeTM9A();
+      expect(() => tm.applyTuningDraft(null)).not.toThrow();
+      expect(() => tm.applyTuningDraft(undefined)).not.toThrow();
+      expect(() => tm.applyTuningDraft('bad')).not.toThrow();
+    });
+
+    it('applyTuningDraft sets state.tuning group values', () => {
+      const { tm, state } = makeTM9A();
+      tm.applyTuningDraft({ POI: { LOOT_CHANCE: 0.5 } });
+      expect(state.tuning?.POI?.LOOT_CHANCE).toBe(0.5);
+    });
+
+    it('getEffectiveTuning() returns merged object without throwing', () => {
+      const { tm } = makeTM9A();
+      const result = tm.getEffectiveTuning();
+      expect(typeof result).toBe('object');
+      expect(result).toHaveProperty('ENCOUNTER_RISK');
     });
   });
 });
