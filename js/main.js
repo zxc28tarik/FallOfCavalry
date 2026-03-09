@@ -119,6 +119,7 @@ import { WorldManager } from './managers/WorldManager.js';
 import { SaveManager } from './managers/SaveManager.js';
 import { EconomyManager } from './managers/EconomyManager.js';
 import { GameInputManager } from './managers/InputManager.js';
+import { RenderManager } from './managers/RenderManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -904,6 +905,8 @@ class FallOfCavalry {
     this.economyManager.init(this);
     this.inputManager = this.inputManager || new GameInputManager(this.state);
     this.inputManager.init(this);
+    this.renderManager = this.renderManager || new RenderManager(this.state);
+    this.renderManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
     const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
       ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
@@ -2876,17 +2879,7 @@ Renown
   quickSave() { return this.saveManager.quickSave(); }
   quickLoad() { return this.saveManager.quickLoad(); }
 
-  renderStart() {
-    if (!this.ctx || !this.canvas) return;
-    this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '48px "Cinzel", serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('FallOfCavalry', this.canvas.width / 2, this.canvas.height / 2);
-    this.ctx.font = '24px "Crimson Text", serif';
-    this.ctx.fillText('Select your faction to begin', this.canvas.width / 2, this.canvas.height / 2 + 60);
-  }
+  renderStart() { return this.renderManager.renderStart(); }
 
   renderMap() {
     if (!this.ctx || !this.canvas) return;
@@ -3211,58 +3204,14 @@ Renown
     }
   }
 
-  renderEncounter() {
-    if (!this.ctx || !this.canvas) return;
+  renderEncounter() { return this.renderManager.renderEncounter(); }
 
-    this.ctx.fillStyle = '#171717';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-    const enemyId = this.state?.encounter?.enemyId ?? 'unknown';
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.textAlign = 'center';
-    this.ctx.font = '40px Arial';
-    this.ctx.fillText('Encounter!', this.canvas.width / 2, this.canvas.height / 2 - 20);
-    this.ctx.font = '22px Arial';
-    this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
-    this.ctx.font = '18px Arial';
-    this.ctx.fillText('F = Battle Prep, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
-    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
-    this.hudManager?.update?.();
-  }
-
-  renderCity() {
-    if (!this.ctx || !this.canvas) return;
-    this.ctx.fillStyle = '#2a2a2a';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '28px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('City Services', this.canvas.width / 2, this.canvas.height / 2 - 12);
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText('R Recruit  T Market  H Healer  |  E/Esc leave city', this.canvas.width / 2, this.canvas.height / 2 + 18);
-    this.updateTransientUIState();
-  }
+  renderCity() { return this.renderManager.renderCity(); }
 
   renderBattle() { return this.battleManager.renderBattle(); }
 
 
-  renderDebugInfo() {
-    if (!this.state || !this.input) return;
-
-    const lines = [
-      `FPS: ${this.state.debug.fps.toFixed(0)}`,
-      `Mode: ${this.state.mode}`,
-      `Day: ${this.state.day}`,
-      `Gold: ${this.state.player.gold}`,
-      `Mouse: (${this.input.mouse.x.toFixed(0)}, ${this.input.mouse.y.toFixed(0)})`,
-    ];
-
-    if (this.dom.debugOverlay) {
-      const infoEl = this.dom.debugOverlay.querySelector?.('#debugInfo');
-      if (infoEl) infoEl.textContent = lines.join('\n');
-      else this.dom.debugOverlay.textContent = lines.join('\n');
-    }
-  }
+  renderDebugInfo() { return this.renderManager.renderDebugInfo(); }
 }
 
 export function bootstrapFallOfCavalry() {

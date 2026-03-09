@@ -7,6 +7,7 @@ import { StateManager } from './StateManager.js';
 import { CityManager } from './CityManager.js';
 import { SaveManager } from './SaveManager.js';
 import { UIManager } from './UIManager.js';
+import { RenderManager } from './RenderManager.js';
 
 describe('Managers', () => {
   it('should instantiate BattleManager', () => {
@@ -1657,6 +1658,93 @@ describe('EconomyManager - Phase 5C', () => {
       const im = makeIMWithHandler({ state: { mode: 'map' }, openSaveLoadPanel });
       im.keyboardHandler({ key: 'F5', preventDefault: () => {} });
       expect(openSaveLoadPanel).toHaveBeenCalled();
+    });
+  });
+
+  // ─── Phase 7A — RenderManager: simple render screens ───────────────────────
+  describe('RenderManager - Phase 7A', () => {
+    function makeRM(stateOverride = {}, gameOverride = {}) {
+      const state = { day: 1, mode: 'map', debug: { fps: 60 }, player: { gold: 100 }, ...stateOverride };
+      const rm = new RenderManager(state);
+      const mockCtx = {
+        fillStyle: '',
+        font: '',
+        textAlign: '',
+        fillRect: vi.fn(),
+        fillText: vi.fn(),
+        beginPath: vi.fn(),
+        arc: vi.fn(),
+        fill: vi.fn(),
+        save: vi.fn(),
+        restore: vi.fn(),
+        scale: vi.fn(),
+        translate: vi.fn(),
+        querySelector: vi.fn(),
+      };
+      const mockCanvas = { width: 800, height: 600 };
+      const mockInput = { mouse: { x: 0, y: 0 } };
+      const mockDom = { debugOverlay: null };
+      const game = {
+        ctx: mockCtx,
+        canvas: mockCanvas,
+        input: mockInput,
+        dom: mockDom,
+        state,
+        hudManager: { update: vi.fn() },
+        updateTransientUIState: vi.fn(),
+        refreshCurrentEventsSummary: vi.fn(() => []),
+        ...gameOverride,
+      };
+      rm.init(game);
+      return { rm, game, mockCtx, mockCanvas, mockInput, mockDom };
+    }
+
+    it('RenderManager instantiates correctly', () => {
+      const { rm } = makeRM();
+      expect(rm).toBeDefined();
+      expect(rm.state).toBeDefined();
+      expect(rm.game).toBeDefined();
+    });
+
+    it('init() wires game reference', () => {
+      const rm = new RenderManager({});
+      expect(rm.game).toBeNull();
+      const fakeGame = {};
+      rm.init(fakeGame);
+      expect(rm.game).toBe(fakeGame);
+    });
+
+    it('renderStart() is no-op when ctx is null', () => {
+      const { rm, game } = makeRM();
+      game.ctx = null;
+      expect(() => rm.renderStart()).not.toThrow();
+    });
+
+    it('renderStart() calls ctx.fillRect for background', () => {
+      const { rm, mockCtx } = makeRM();
+      rm.renderStart();
+      expect(mockCtx.fillRect).toHaveBeenCalled();
+    });
+
+    it('renderCity() calls game.updateTransientUIState()', () => {
+      const { rm, game } = makeRM();
+      rm.renderCity();
+      expect(game.updateTransientUIState).toHaveBeenCalled();
+    });
+
+    it('renderDebugInfo() is no-op when input is null', () => {
+      const { rm, game } = makeRM();
+      game.input = null;
+      expect(() => rm.renderDebugInfo()).not.toThrow();
+    });
+
+    it('renderDebugInfo() writes to dom.debugOverlay when present', () => {
+      const infoEl = { textContent: '' };
+      const debugOverlay = { querySelector: vi.fn(() => infoEl) };
+      const { rm, game } = makeRM();
+      game.dom.debugOverlay = debugOverlay;
+      rm.renderDebugInfo();
+      expect(infoEl.textContent).toContain('FPS');
     });
   });
 });
