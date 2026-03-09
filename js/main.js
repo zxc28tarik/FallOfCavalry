@@ -126,6 +126,7 @@ import { TuningManager } from './managers/TuningManager.js';
 import { UIManager } from './managers/UIManager.js';
 import { DevManager } from './managers/DevManager.js';
 import { DiplomacyManager } from './managers/DiplomacyManager.js';
+import { EncounterManager } from './managers/EncounterManager.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -321,19 +322,15 @@ class FallOfCavalry {
     if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
   }
   ensureFactionState() { return this.diplomacyManager.ensureFactionState(); }
-  }
 
   getFactionName(factionId) { return this.diplomacyManager.getFactionName(factionId); }
-  }
 
   getCityFactionContext(settlement) { return this.diplomacyManager.getCityFactionContext(settlement); }
-  }
 
 
   findNearestCityId(x, y, radiusTiles) { return this.worldManager.findNearestCityId(x, y, radiusTiles); }
 
   syncWarStateFromRelations() { return this.diplomacyManager.syncWarStateFromRelations(); }
-  }
 
   getTuningDefaults() { return this.tuningManager.getTuningDefaults(); }
   getEffectiveTuning() { return this.tuningManager.getEffectiveTuning(); }
@@ -537,6 +534,8 @@ class FallOfCavalry {
     this.cityManager.init(this);
     this.poiManager = this.poiManager || new PoiManager(this.state);
     this.poiManager.init(this);
+    this.encounterManager = this.encounterManager || new EncounterManager(this.state);
+    this.encounterManager.init(this);
     this.uiManager = this.uiManager || new UIManager(this.state);
     this.uiManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
@@ -895,86 +894,14 @@ class FallOfCavalry {
   get cityHealerCursor() { return this.economyManager.cityHealerCursor; }
   set cityHealerCursor(v) { this.economyManager.cityHealerCursor = v; }
 
-  resolveEncounter(action) {
-    const encounter = this.state?.encounter;
-    if (!encounter?.enemyId || this.state?.mode !== 'encounter') return false;
+  resolveEncounter(action) { return this.encounterManager.resolveEncounter(action); }
 
-    const enemy = this.enemyParties.find((party) => party.id === encounter.enemyId);
-    if (action === 'fight') {
-      this.enterRoster(encounter.enemyId);
-      return true;
-    }
-
-    this.finishEncounterToMap(enemy, encounter.enemyId);
-    return true;
-  }
-
-  enterRoster(enemyId) {
-    if (!this.state || this.state.mode !== 'encounter') return false;
-    this.playerRoster = (this.playerParty?.roster || []).map((unit, idx) => ({
-      ...unit,
-      status: unit?.status || 'healthy',
-      selected: idx < this.maxUnitsToDeploy,
-    }));
-    this.enemyRoster = this.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
-    this.rosterCursorIndex = 0;
-
-    if (!this.state.roster || typeof this.state.roster !== 'object') {
-      this.state.roster = {};
-    }
-
-    this.state.roster.enemyId = enemyId;
-    this.state.roster.warning = '';
-    this.state.roster.maxDeploy = this.maxUnitsToDeploy;
-    this.state.setMode('roster');
-    this.updateTransientUIState();
-    return true;
-  }
+  enterRoster(enemyId) { return this.encounterManager.enterRoster(enemyId); }
 
 
-  finishEncounterToMap(enemy, enemyId) {
-    this.applyEncounterPushback(enemy);
-    this.cleanupTemporaryEnemy(enemyId);
-    this.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
-    if (this.state) {
-      this.state.encounter = null;
-      this.battleCommandsUI?.hide?.();
-    this.state.setMode('map');
-    }
-  }
+  finishEncounterToMap(enemy, enemyId) { return this.encounterManager.finishEncounterToMap(enemy, enemyId); }
 
-  applyEncounterPushback(enemy) {
-    if (!this.playerParty || !enemy) return;
-
-    let dx = this.playerParty.x - enemy.x;
-    let dy = this.playerParty.y - enemy.y;
-    let dist = Math.hypot(dx, dy);
-
-    if (dist < 0.001) {
-      const angleSeed = (enemy.id?.length ?? 1) * 0.73;
-      dx = Math.cos(angleSeed);
-      dy = Math.sin(angleSeed);
-      dist = 1;
-    }
-
-    const ux = dx / dist;
-    const uy = dy / dist;
-    const halfPush = this.encounterPushbackDistance / 2;
-
-    const playerTarget = this.clampToWorld(
-      this.playerParty.x + ux * halfPush,
-      this.playerParty.y + uy * halfPush,
-    );
-    const enemyTarget = this.clampToWorld(
-      enemy.x - ux * halfPush,
-      enemy.y - uy * halfPush,
-    );
-
-    this.playerParty.x = playerTarget.x;
-    this.playerParty.y = playerTarget.y;
-    enemy.x = enemyTarget.x;
-    enemy.y = enemyTarget.y;
-  }
+  applyEncounterPushback(enemy) { return this.encounterManager.applyEncounterPushback(enemy); }
 
   confirmRosterSelection() { return this.battleManager.confirmRosterSelection(); }
 
@@ -991,38 +918,9 @@ class FallOfCavalry {
   placeBattleUnits(units, side) { return this.battleManager.placeBattleUnits(units, side); }
 
 
-  moveRosterCursor(delta) {
-    if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
-    const next = this.rosterCursorIndex + delta;
-    this.rosterCursorIndex = Math.max(0, Math.min(this.playerRoster.length - 1, next));
-    this.updateTransientUIState();
-    return true;
-  }
+  moveRosterCursor(delta) { return this.encounterManager.moveRosterCursor(delta); }
 
-  toggleRosterSelectionAtCursor() {
-    if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
-    const unit = this.playerRoster[this.rosterCursorIndex];
-    if (!unit || this.getEffectiveCount(unit) <= 0) return false;
-
-    if (unit.selected) {
-      unit.selected = false;
-      if (this.state?.roster) this.state.roster.warning = '';
-      this.updateTransientUIState();
-      return true;
-    }
-
-    const selected = this.getSelectedRosterCount();
-    if (selected >= this.maxUnitsToDeploy) {
-      if (this.state?.roster) this.state.roster.warning = `Deploy limit reached (${this.maxUnitsToDeploy}).`;
-      this.updateTransientUIState();
-      return false;
-    }
-
-    unit.selected = true;
-    if (this.state?.roster) this.state.roster.warning = '';
-    this.updateTransientUIState();
-    return true;
-  }
+  toggleRosterSelectionAtCursor() { return this.encounterManager.toggleRosterSelectionAtCursor(); }
 
   ensureInventoryModel() { return this.economyManager.ensureInventoryModel(); }
   getItemName(itemId) { return this.economyManager.getItemName(itemId); }
@@ -1031,31 +929,7 @@ class FallOfCavalry {
   removeItem(itemId, qty) { return this.economyManager.removeItem(itemId, qty); }
   listInventoryForUI() { return this.economyManager.listInventoryForUI(); }
 
-  buildAftermathPanelData() {
-    const a = this.state?.aftermath;
-    if (!a) return { title: 'Battle Aftermath', body: 'No aftermath data', footer: 'Enter = Continue' };
-
-    const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
-    const lootLines = (a.loot || []).map((l) => `- ${this.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
-
-    return {
-      title: 'Battle Aftermath',
-      body: `Outcome: ${outcomeText}
-
-Casualties
-- Dead: ${a.casualties?.dead ?? 0}
-- Wounded: ${a.casualties?.wounded ?? 0}
-
-Loot
-- Gold gained: +${Math.max(0, Math.floor(a.goldDelta ?? 0))}
-${lootLines}
-
-Renown
-- +${Math.max(0, Math.floor(a.renownDelta ?? 0))} renown
-- New total: ${Math.max(0, Math.floor(a.renownTotal ?? this.playerParty?.renown ?? 0))}`,
-      footer: 'Continue: Enter / Esc / T / L',
-    };
-  }
+  buildAftermathPanelData() { return this.encounterManager.buildAftermathPanelData(); }
 
 
 

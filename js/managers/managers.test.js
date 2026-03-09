@@ -12,6 +12,7 @@ import { PoiManager } from './PoiManager.js';
 import { TuningManager } from './TuningManager.js';
 import { DevManager } from './DevManager.js';
 import { DiplomacyManager } from './DiplomacyManager.js';
+import { EncounterManager } from './EncounterManager.js';
 import * as CONST from '../constants.js';
 
 describe('Managers', () => {
@@ -2343,6 +2344,66 @@ describe('EconomyManager - Phase 5C', () => {
     it('getCityFactionContext returns null when state has no factions', () => {
       const { dm } = makeDM10A();
       expect(dm.getCityFactionContext({ ownerFactionId: 'free_company' })).toBeNull();
+    });
+  });
+
+  // ─── Phase 10B: EncounterManager ─────────────────────────────────────────────
+
+  describe('EncounterManager - Phase 10B', () => {
+    function makeEM10B(stateOverrides = {}, gameOverrides = {}) {
+      const state = { mode: 'encounter', encounter: null, ...stateOverrides };
+      state.setMode = (m) => { state.mode = m; };
+      const em = new EncounterManager(state);
+      const game = {
+        state,
+        enemyParties: [],
+        playerParty: { x: 100, y: 100, roster: [] },
+        playerRoster: [],
+        rosterCursorIndex: 0,
+        maxUnitsToDeploy: 6,
+        getEnemyUnits: () => [],
+        updateTransientUIState: () => {},
+        battleCommandsUI: null,
+        cleanupTemporaryEnemy: () => {},
+        lastEncounterEndTimeByEnemyId: {},
+        encounterPushbackDistance: 60,
+        clampToWorld: (x, y) => ({ x, y }),
+        getEffectiveCount: (u) => u?.count ?? 1,
+        getSelectedRosterCount: () => 0,
+        getItemName: (id) => id,
+        ...gameOverrides,
+      };
+      em.init(game);
+      return { em, state, game };
+    }
+
+    it('instantiates with state and null game', () => {
+      const em = new EncounterManager({});
+      expect(em.state).toBeDefined();
+      expect(em.game).toBeNull();
+    });
+
+    it('resolveEncounter returns false when encounter is null', () => {
+      const { em } = makeEM10B({ encounter: null });
+      expect(em.resolveEncounter('fight')).toBe(false);
+    });
+
+    it('enterRoster returns false when mode is not encounter', () => {
+      const { em } = makeEM10B({ mode: 'map' });
+      expect(em.enterRoster('e1')).toBe(false);
+    });
+
+    it('applyEncounterPushback is a no-op when playerParty is null', () => {
+      const { em, game } = makeEM10B();
+      game.playerParty = null;
+      expect(() => em.applyEncounterPushback({})).not.toThrow();
+    });
+
+    it('buildAftermathPanelData returns default when aftermath is missing', () => {
+      const { em } = makeEM10B();
+      const result = em.buildAftermathPanelData();
+      expect(result.title).toBe('Battle Aftermath');
+      expect(result.body).toBe('No aftermath data');
     });
   });
 });
