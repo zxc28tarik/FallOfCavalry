@@ -584,6 +584,8 @@ class FallOfCavalry {
     this.ensureTuningState();
     this.settings = deserializeSettings(this.state?.settings, CONST.SETTINGS);
     this.state.settings = serializeSettings(this.settings);
+    this.tuningManager = this.tuningManager || new TuningManager(this.state);
+    this.tuningManager.init(this);
     this.ensureFactionState();
     this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
     this.state.devMode = isDevMode();
@@ -607,8 +609,6 @@ class FallOfCavalry {
     this.cityManager.init(this);
     this.poiManager = this.poiManager || new PoiManager(this.state);
     this.poiManager.init(this);
-    this.tuningManager = this.tuningManager || new TuningManager(this.state);
-    this.tuningManager.init(this);
     this.uiManager = this.uiManager || new UIManager(this.state);
     this.uiManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
