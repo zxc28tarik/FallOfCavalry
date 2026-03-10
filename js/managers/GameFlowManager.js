@@ -15,6 +15,7 @@ export class GameFlowManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.startScreen = null;
   }
 
   init(game) {
@@ -25,8 +26,8 @@ export class GameFlowManager {
 
   setupStartFlow() {
     const g = this.game;
-    if (!g.startScreen) {
-      g.startScreen = new StartScreen({
+    if (!this.startScreen) {
+      this.startScreen = new StartScreen({
         state: this.state,
         saveSystem: g.saveSystem,
         onStart: ({ faction, seed }) => {
@@ -56,7 +57,7 @@ export class GameFlowManager {
       });
     }
 
-    g.startScreen.bind({
+    this.startScreen.bind({
       factionGrid: utils.getEl('factionGrid'),
       btnStart: utils.getEl('btnStart'),
       btnContinue: utils.getEl('btnContinue'),
@@ -76,19 +77,19 @@ export class GameFlowManager {
     const canContinue = Boolean(g.saveSystem?.hasSave?.());
     g.hudManager?.setContinueEnabled?.(canContinue);
     if (!canContinue) {
-      g.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
       return false;
     }
 
     const payload = g.saveSystem?.loadLatest?.();
     if (!payload) {
-      g.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
       return false;
     }
 
     const ok = g.applySavePayload(payload, { slot: 'autosave' });
     if (!ok) {
-      g.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
+      this.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
       return false;
     }
 

@@ -53,6 +53,9 @@ export class BattleManager {
     this.floatingTextPool = null;
     this.projectilePool = null;
     this.battleAnimPlayers = new Map();
+    this.battleCommandsUI = null;
+    this.battleDeployMode = null;
+    this.battleDeployUI = null;
   }
 
   init(game) {
@@ -543,7 +546,7 @@ export class BattleManager {
   applyBattleCommand(cmd) {
     const battle = this.state?.battle;
     if (!battle || this.state?.mode !== 'battle') return false;
-    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) return false;
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) return false;
     const playerUnits = battle.playerUnits || [];
     const selectedId = this.state?.battle?.selection?.unitId || null;
     const targets = selectedId ? playerUnits.filter((u) => u.unitId === selectedId) : playerUnits;
@@ -556,7 +559,7 @@ export class BattleManager {
         unit.focusTargetId = null;
       }
     });
-    this.game?.battleCommandsUI?.setActiveCommand?.(cmd);
+    this.battleCommandsUI?.setActiveCommand?.(cmd);
     return true;
   }
 
@@ -570,24 +573,24 @@ export class BattleManager {
       if (!selectedUnit.isRanged) return false;
       const next = forceValue == null ? !Boolean(selectedUnit.holdFire) : Boolean(forceValue);
       selectedUnit.holdFire = next;
-      this.game?.battleCommandsUI?.setToggleState?.('hold-fire', next);
+      this.battleCommandsUI?.setToggleState?.('hold-fire', next);
       return true;
     }
     const rangedUnits = playerUnits.filter((u) => u?.isRanged);
     if (rangedUnits.length === 0) return false;
     const next = forceValue == null ? !rangedUnits.every((u) => Boolean(u.holdFire)) : Boolean(forceValue);
     rangedUnits.forEach((u) => { u.holdFire = next; });
-    this.game?.battleCommandsUI?.setToggleState?.('hold-fire', next);
+    this.battleCommandsUI?.setToggleState?.('hold-fire', next);
     return true;
   }
 
   setupBattleDeployUI() {
-    if (this.game?.battleDeployUI) return;
-    this.game.battleDeployUI = new BattleDeployUI({
+    if (this.battleDeployUI) return;
+    this.battleDeployUI = new BattleDeployUI({
       onStart: () => this.confirmBattleDeployment(),
       onCancel: () => this.cancelBattleDeployment(),
     });
-    this.game.battleDeployUI.bind({
+    this.battleDeployUI.bind({
       root: this.game?.dom?.battleDeployOverlay || utils.getEl('battleDeployOverlay'),
       btnStart: this.game?.dom?.btnDeployStart || utils.getEl('btnDeployStart'),
       btnCancel: this.game?.dom?.btnDeployCancel || utils.getEl('btnDeployCancel'),
@@ -599,31 +602,31 @@ export class BattleManager {
     const battle = this.state?.battle;
     if (!battle) return false;
     this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: true, inBattleFight: false, inEncounter: false });
-    this.game.battleDeployMode = new BattleDeployMode({
+    this.battleDeployMode = new BattleDeployMode({
       state: this.state,
       party: this.game?.playerParty,
       battle,
       camera: this.state?.camera,
     });
-    this.game?.battleDeployUI?.setFormation?.(this.game.battleDeployMode.formation);
-    this.game?.battleDeployUI?.show?.();
+    this.battleDeployUI?.setFormation?.(this.battleDeployMode.formation);
+    this.battleDeployUI?.show?.();
     return true;
   }
 
   confirmBattleDeployment() {
     const battle = this.state?.battle;
-    if (!battle || !this.game?.battleDeployMode?.active) return false;
+    if (!battle || !this.battleDeployMode?.active) return false;
     this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: true, inEncounter: false });
-    this.game.battleDeployMode.applyDeployment(battle.playerUnits || []);
+    this.battleDeployMode.applyDeployment(battle.playerUnits || []);
     battle.phase = 'fight';
-    this.game?.battleDeployUI?.hide?.();
+    this.battleDeployUI?.hide?.();
     return true;
   }
 
   cancelBattleDeployment() {
-    this.game?.battleDeployMode?.cancel?.();
-    this.game?.battleDeployUI?.hide?.();
-    if (this.game) this.game.battleDeployMode = null;
+    this.battleDeployMode?.cancel?.();
+    this.battleDeployUI?.hide?.();
+    this.battleDeployMode = null;
     if (this.state) {
       this.state.battle = null;
       this.state.setMode('map');
@@ -632,14 +635,14 @@ export class BattleManager {
   }
 
   setupBattleCommandsUI() {
-    if (this.game?.battleCommandsUI) return;
-    this.game.battleCommandsUI = new BattleCommandsUI({
+    if (this.battleCommandsUI) return;
+    this.battleCommandsUI = new BattleCommandsUI({
       onCommand: (cmd) => this.applyBattleCommand(cmd),
       onToggle: (toggle, active) => {
         if (toggle === 'hold-fire') this.toggleBattleHoldFire(active);
       },
     });
-    this.game.battleCommandsUI.bind({ root: this.game?.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
+    this.battleCommandsUI.bind({ root: this.game?.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
   }
 
   // --- Core loop, render, resolution (Sub-Step 2D) ---
@@ -656,7 +659,7 @@ export class BattleManager {
       return;
     }
 
-    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
       this.game?.updateTransientUIState?.();
       return;
     }
@@ -676,8 +679,8 @@ export class BattleManager {
       yMax: Number(this.game?.canvas?.height || CONST.BATTLE.BATTLEFIELD_HEIGHT),
     };
 
-    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
-      const preview = this.game.battleDeployMode.computePreviewPositions(playerUnits.length);
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
       const ctx = this.game?.ctx;
       if (ctx) {
         ctx.fillStyle = 'rgba(212,175,55,0.12)';
@@ -685,10 +688,10 @@ export class BattleManager {
         ctx.save();
         ctx.fillStyle = 'rgba(90,180,255,0.45)';
         preview.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill(); });
-        const ax = this.game.battleDeployMode.anchorX;
-        const ay = this.game.battleDeployMode.anchorY;
+        const ax = this.battleDeployMode.anchorX;
+        const ay = this.battleDeployMode.anchorY;
         const len = 42;
-        const rad = (this.game.battleDeployMode.angleDeg * Math.PI) / 180;
+        const rad = (this.battleDeployMode.angleDeg * Math.PI) / 180;
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -930,7 +933,7 @@ export class BattleManager {
 
     const battle = this.state?.battle;
     if (!battle) return;
-    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
       this.game?.updateTransientUIState?.();
       return;
     }
@@ -938,17 +941,17 @@ export class BattleManager {
     const playerUnits = battle.playerUnits || [];
     const enemyUnits = battle.enemyUnits || [];
 
-    if (battle.phase === 'deploy' && this.game?.battleDeployMode?.active) {
-      const preview = this.game.battleDeployMode.computePreviewPositions(playerUnits.length);
+    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
+      const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
       ctx.fillStyle = 'rgba(212,175,55,0.12)';
       ctx.fillRect(40, 60, Math.max(120, (canvas.width / 2) - 80), Math.max(120, canvas.height - 120));
       ctx.save();
       ctx.fillStyle = 'rgba(90,180,255,0.45)';
       preview.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill(); });
-      const ax = this.game.battleDeployMode.anchorX;
-      const ay = this.game.battleDeployMode.anchorY;
+      const ax = this.battleDeployMode.anchorX;
+      const ay = this.battleDeployMode.anchorY;
       const len = 42;
-      const rad = (this.game.battleDeployMode.angleDeg * Math.PI) / 180;
+      const rad = (this.battleDeployMode.angleDeg * Math.PI) / 180;
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -1224,9 +1227,9 @@ export class BattleManager {
 
     if (this.game) this.game.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     this.state.battle = null;
-    this.game?.battleCommandsUI?.hide?.();
-    this.game?.battleDeployUI?.hide?.();
-    if (this.game) this.game.battleDeployMode = null;
+    this.battleCommandsUI?.hide?.();
+    this.battleDeployUI?.hide?.();
+    this.battleDeployMode = null;
   }
 
   // ─── Phase 8A: Roster → battle transition ──────────────────────────────────

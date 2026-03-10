@@ -62,21 +62,12 @@ class FallOfCavalry {
     this.hudManager = null;
     // saveSystem → SaveManager
     this.audioSystem = null;
-    this.startScreen = null;
-    this.cityUI = null;
-    this.campUI = null;
-    this.accountingUI = null;
-    this.battleCommandsUI = null;
-    this.battleDeployMode = null;
-    this.battleDeployUI = null;
-    this.poiUI = null;
-    this.tuningUI = null;
-    this.settingsUI = null;
-    this.codexUI = null;
-    this.helpOverlayVisible = false;
-    this.TuningUIClass = null;
-    this.activePoi = null;
-    this.pendingPoiAmbush = null;
+    // startScreen → GameFlowManager
+    // cityUI → CityManager
+    // campUI, accountingUI, settingsUI, codexUI, poiUI, helpOverlayVisible → UIManager
+    // battleCommandsUI, battleDeployMode, battleDeployUI → BattleManager
+    // tuningUI, TuningUIClass → TuningManager
+    // activePoi, pendingPoiAmbush → PoiManager
     // fogOfWar, _worldSeedCache, _crossingSet, _roadMask, _riverMask → WorldManager
     // _encounterRollByEnemyId → WorldManager
     this.currentTerrainStatus = 'Arazi: normal';
@@ -140,6 +131,38 @@ class FallOfCavalry {
   // backward-compat: smokeResults lives in DevManager
   get smokeResults() { return this.devManager?.smokeResults; }
   set smokeResults(v) { if (this.devManager) this.devManager.smokeResults = v; }
+
+  // backward-compat: UI sub-objects live in their owning managers
+  get startScreen() { return this.gameFlowManager?.startScreen; }
+  set startScreen(v) { if (this.gameFlowManager) this.gameFlowManager.startScreen = v; }
+  get cityUI() { return this.cityManager?.cityUI; }
+  set cityUI(v) { if (this.cityManager) this.cityManager.cityUI = v; }
+  get campUI() { return this.uiManager?.campUI; }
+  set campUI(v) { if (this.uiManager) this.uiManager.campUI = v; }
+  get accountingUI() { return this.uiManager?.accountingUI; }
+  set accountingUI(v) { if (this.uiManager) this.uiManager.accountingUI = v; }
+  get settingsUI() { return this.uiManager?.settingsUI; }
+  set settingsUI(v) { if (this.uiManager) this.uiManager.settingsUI = v; }
+  get codexUI() { return this.uiManager?.codexUI; }
+  set codexUI(v) { if (this.uiManager) this.uiManager.codexUI = v; }
+  get poiUI() { return this.uiManager?.poiUI; }
+  set poiUI(v) { if (this.uiManager) this.uiManager.poiUI = v; }
+  get helpOverlayVisible() { return this.uiManager?.helpOverlayVisible ?? false; }
+  set helpOverlayVisible(v) { if (this.uiManager) this.uiManager.helpOverlayVisible = v; }
+  get battleCommandsUI() { return this.battleManager?.battleCommandsUI; }
+  set battleCommandsUI(v) { if (this.battleManager) this.battleManager.battleCommandsUI = v; }
+  get battleDeployMode() { return this.battleManager?.battleDeployMode; }
+  set battleDeployMode(v) { if (this.battleManager) this.battleManager.battleDeployMode = v; }
+  get battleDeployUI() { return this.battleManager?.battleDeployUI; }
+  set battleDeployUI(v) { if (this.battleManager) this.battleManager.battleDeployUI = v; }
+  get tuningUI() { return this.tuningManager?.tuningUI; }
+  set tuningUI(v) { if (this.tuningManager) this.tuningManager.tuningUI = v; }
+  get TuningUIClass() { return this.tuningManager?.TuningUIClass; }
+  set TuningUIClass(v) { if (this.tuningManager) this.tuningManager.TuningUIClass = v; }
+  get activePoi() { return this.poiManager?.activePoi; }
+  set activePoi(v) { if (this.poiManager) this.poiManager.activePoi = v; }
+  get pendingPoiAmbush() { return this.poiManager?.pendingPoiAmbush; }
+  set pendingPoiAmbush(v) { if (this.poiManager) this.poiManager.pendingPoiAmbush = v; }
 
   ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
 

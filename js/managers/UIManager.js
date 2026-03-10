@@ -71,6 +71,12 @@ export class UIManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.campUI = null;
+    this.accountingUI = null;
+    this.settingsUI = null;
+    this.codexUI = null;
+    this.poiUI = null;
+    this.helpOverlayVisible = false;
   }
 
   init(game) {
@@ -273,8 +279,8 @@ export class UIManager {
       onCloseSettings: () => g.closeSettings(),
       onVolumeChange: (value) => g.applyMasterVolume(value),
       onHudHelp: () => g.toggleHelpOverlay(),
-      onHudSettings: () => g.settingsUI?.toggle?.(),
-      onHudCodex: () => g.codexUI?.toggle?.(),
+      onHudSettings: () => this.settingsUI?.toggle?.(),
+      onHudCodex: () => this.codexUI?.toggle?.(),
     });
 
     g.hudManager?.setRosterHandlers?.({
@@ -303,8 +309,8 @@ export class UIManager {
       }
     }
 
-    if (!g.settingsUI) {
-      g.settingsUI = new SettingsUI({
+    if (!this.settingsUI) {
+      this.settingsUI = new SettingsUI({
         getSettings: () => g.settings,
         cfg: CONST.SETTINGS,
         onApply: (nextSettings) => {
@@ -314,24 +320,24 @@ export class UIManager {
       });
     }
 
-    if (!g.codexUI) g.codexUI = new CodexUI();
+    if (!this.codexUI) this.codexUI = new CodexUI();
   }
 
   setupCampUI() {
     const g = this.game;
-    if (g.campUI) return;
-    g.campUI = new CampUI({
+    if (this.campUI) return;
+    this.campUI = new CampUI({
       state: this.state,
       onClose: () => {
         if (this.state?.camp?.active) campSystem.toggleCamp(this.state);
-        g.campUI?.hide?.();
+        this.campUI?.hide?.();
       },
       onSetWatch: (level) => {
         campSystem.setWatch(this.state, level);
       },
     });
 
-    g.campUI.bind({
+    this.campUI.bind({
       root: utils.getEl('campModal'),
       closeBtn: utils.getEl('campCloseBtn'),
       status: utils.getEl('campStatusText'),
@@ -340,9 +346,9 @@ export class UIManager {
 
   setupAccountingUI() {
     const g = this.game;
-    if (g.accountingUI) return;
-    g.accountingUI = new AccountingUI();
-    g.accountingUI.bind({
+    if (this.accountingUI) return;
+    this.accountingUI = new AccountingUI();
+    this.accountingUI.bind({
       modal: g.dom.accountingModal,
       body: g.dom.accountingBody,
       btnContinue: g.dom.btnAccountingContinue,
@@ -358,9 +364,9 @@ export class UIManager {
 
   setupPoiUI() {
     const g = this.game;
-    if (g.poiUI) return;
-    g.poiUI = new PoiUI();
-    g.poiUI.bind({
+    if (this.poiUI) return;
+    this.poiUI = new PoiUI();
+    this.poiUI.bind({
       modal: g.dom.poiModal,
       title: g.dom.poiTitle,
       desc: g.dom.poiDesc,
@@ -370,11 +376,11 @@ export class UIManager {
       btnInvestigate: g.dom.btnPoiInvestigate,
       btnLeave: g.dom.btnPoiLeave,
     });
-    g.poiUI.onLeave = () => {
+    this.poiUI.onLeave = () => {
       g.resolvePoiFollowup();
       g.activePoi = null;
     };
-    g.poiUI.onInvestigate = () => {
+    this.poiUI.onInvestigate = () => {
       g.investigateActivePoi();
     };
   }
@@ -385,7 +391,7 @@ export class UIManager {
     const g = this.game;
     utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
     if (newMode !== 'map') {
-      g.poiUI?.hide?.();
+      this.poiUI?.hide?.();
       g.activePoi = null;
       if (this.state) this.state.interactHint = '';
     }
@@ -462,8 +468,8 @@ export class UIManager {
 
   toggleHelpOverlay(force = null) {
     const g = this.game;
-    const next = typeof force === 'boolean' ? force : !g.helpOverlayVisible;
-    g.helpOverlayVisible = next;
+    const next = typeof force === 'boolean' ? force : !this.helpOverlayVisible;
+    this.helpOverlayVisible = next;
     if (g.dom?.helpOverlay) g.dom.helpOverlay.classList.toggle('hidden', !next);
   }
 
@@ -503,17 +509,17 @@ export class UIManager {
       const { weight, cap } = g.getLogisticsSpeedMult();
       const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
       const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
-      g.campUI?.show?.({ weight, capacity: cap, raidChance });
+      this.campUI?.show?.({ weight, capacity: cap, raidChance });
       g.setLastEventLog('Kamp kuruldu.');
     } else {
-      g.campUI?.hide?.();
+      this.campUI?.hide?.();
       g.setLastEventLog('Kamptan çıkıldı.');
     }
   }
 
   closeAccountingModal() {
     const g = this.game;
-    g.accountingUI?.hide?.();
+    this.accountingUI?.hide?.();
     this.state.accounting = null;
     this.state.uiPanel = null;
     if (this.state) this.state.paused = false;

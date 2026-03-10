@@ -17,6 +17,7 @@ export class CityManager {
     this.state = gameState;
     this.game = null;
     this.currentCity = null;
+    this.cityUI = null;
   }
 
   init(game) {
@@ -46,8 +47,8 @@ export class CityManager {
 
   setupCityServicesUI() {
     const g = this.game;
-    if (g.cityUI) return;
-    g.cityUI = new CityServicesUI({
+    if (this.cityUI) return;
+    this.cityUI = new CityServicesUI({
       state: this.state,
       party: g.playerParty,
       recruitmentSystem,
@@ -172,7 +173,7 @@ export class CityManager {
       onClose: () => g.exitCityServices(),
     });
 
-    g.cityUI.bind({
+    this.cityUI.bind({
       cityRoot: utils.getEl('settlementModal'),
       btnRecruit: utils.getEl('btnRecruit'),
       btnTrade: utils.getEl('btnTrade'),

@@ -12,6 +12,8 @@ export class PoiManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.activePoi = null;
+    this.pendingPoiAmbush = null;
   }
 
   init(game) {
@@ -22,7 +24,7 @@ export class PoiManager {
 
   investigateActivePoi() {
     const g = this.game;
-    const poi = g.activePoi;
+    const poi = this.activePoi;
     if (!poi || !this.state) return false;
     const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, poi);
     if (!PoiSystem.canInteract(this.state, poi)) {
@@ -149,7 +151,7 @@ export class PoiManager {
         const amount = Math.max(0, Math.floor(loss.amount ?? 0));
         g.playerParty.morale = Math.max(0, Math.floor((g.playerParty.morale ?? 50) - amount));
       }
-      g.pendingPoiAmbush = outcome.enemyId;
+      this.pendingPoiAmbush = outcome.enemyId;
       const lossText = loss?.mode ? `${Math.max(0, Math.floor(loss.amount ?? 0))} ${loss.mode === 'food' ? 'erzak' : (loss.mode === 'gold' ? 'altın' : 'moral')} kaybettin` : 'kayıp yaşandı';
       g.setLastEventLog(`Pusu! ${lossText}.`);
       g.poiUI?.showResult?.({ kind: 'ambush', lines: [`Pusu! ${lossText}.`, 'Kapat ile karşılaşmaya geç.'] });
@@ -188,7 +190,7 @@ export class PoiManager {
     const nearest = g.getNearestInteractablePoi();
     if (!nearest?.poi) return false;
     g.maybeShowTutorialHint({ nearSettlement: false, nearPoi: true, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
-    g.activePoi = nearest.poi;
+    this.activePoi = nearest.poi;
     const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
     const can = PoiSystem.canInteract(this.state, nearest.poi);
     const cooldownText = remainingDays > 0 ? `Tekrar inceleme: ${remainingDays} gün sonra` : '';
@@ -198,8 +200,8 @@ export class PoiManager {
 
   resolvePoiFollowup() {
     const g = this.game;
-    const enemyId = g.pendingPoiAmbush;
-    g.pendingPoiAmbush = null;
+    const enemyId = this.pendingPoiAmbush;
+    this.pendingPoiAmbush = null;
     if (!enemyId) return;
 
     if (Array.isArray(g.enemyParties)) {

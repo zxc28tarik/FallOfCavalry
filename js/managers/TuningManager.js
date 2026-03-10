@@ -9,6 +9,8 @@ export class TuningManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.tuningUI = null;
+    this.TuningUIClass = null;
   }
 
   init(game) {
@@ -279,12 +281,12 @@ export class TuningManager {
   async setupTuningUI() {
     const g = this.game;
     if (!this.state?.devMode) return;
-    if (!g.TuningUIClass) {
+    if (!this.TuningUIClass) {
       const mod = await import('../ui/tuning-ui.js');
-      g.TuningUIClass = mod?.default || null;
+      this.TuningUIClass = mod?.default || null;
     }
-    if (!g.TuningUIClass || g.tuningUI) return;
-    g.tuningUI = new g.TuningUIClass({
+    if (!this.TuningUIClass || this.tuningUI) return;
+    this.tuningUI = new this.TuningUIClass({
       getDefaults: () => this.getTuningDefaults(),
       getCurrent: () => this.getEffectiveTuning(),
       onApply: (draft) => {
@@ -302,7 +304,7 @@ export class TuningManager {
       },
     });
 
-    g.tuningUI.bind({
+    this.tuningUI.bind({
       modal: g.dom?.tuningModal,
       body: g.dom?.tuningBody,
       btnClose: g.dom?.btnCloseTuning,
@@ -324,14 +326,14 @@ export class TuningManager {
     if (!g.dom?.tuningModal) return false;
     g._tuningPauseMode = g.mode;
     g.setPaused(true);
-    g.tuningUI?.show?.();
+    this.tuningUI?.show?.();
     return true;
   }
 
   hideTuningModal() {
     const g = this.game;
     if (!g.dom?.tuningModal || g.dom.tuningModal.classList.contains('hidden')) return false;
-    g.tuningUI?.hide?.();
+    this.tuningUI?.hide?.();
     if (g._tuningPauseMode === 'playing') g.setPaused(false);
     g._tuningPauseMode = null;
     return true;
