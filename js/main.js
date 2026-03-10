@@ -340,56 +340,11 @@ class FallOfCavalry {
   async showTuningModal() { return this.tuningManager.showTuningModal(); }
   hideTuningModal() { return this.tuningManager.hideTuningModal(); }
 
-  updateBuildInfoBadge() {
-    const el = this.dom?.buildInfo;
-    if (!el) return;
+  updateBuildInfoBadge() { return this.uiManager.updateBuildInfoBadge(); }
 
-    const version = typeof CONST.BUILD_INFO?.version === 'string' ? CONST.BUILD_INFO.version.trim() : '';
-    const builtAt = typeof CONST.BUILD_INFO?.builtAt === 'string' ? CONST.BUILD_INFO.builtAt.trim() : '';
+  applyDevOnlyDomLock() { return this.uiManager.applyDevOnlyDomLock(); }
 
-    if (!version && !builtAt) {
-      el.classList.add('hidden');
-      return;
-    }
-
-    const stamp = formatBuildTimestamp(builtAt);
-    const pieces = [];
-    if (version) pieces.push(`v${version}`);
-    if (stamp) pieces.push(stamp);
-    el.textContent = pieces.join(' • ');
-    el.classList.remove('hidden');
-  }
-
-  applyDevOnlyDomLock() {
-    const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel', 'fpsOverlay', 'perfOverlay', 'debugStats'];
-    if (typeof document === 'undefined') return;
-    for (const id of devOnlyIds) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      if (!this.state?.devMode) {
-        el.classList.add('hidden');
-        el.setAttribute('aria-hidden', 'true');
-        el.setAttribute('inert', '');
-        el.style.pointerEvents = 'none';
-      } else {
-        el.removeAttribute('inert');
-        el.style.pointerEvents = '';
-        el.removeAttribute('aria-hidden');
-      }
-    }
-  }
-
-  maybeShowTutorialHint(context = {}) {
-    this.ensureTutorialState();
-    const hint = chooseTutorialHint({ state: this.state, mode: this.state?.mode, ...context });
-    if (!hint) return false;
-    this.state.tutorial.lastShownAt = Date.now();
-    this.state.tutorial.shown[hint.key] = true;
-    if (!this.hudManager?.showTransientHint?.(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS)) {
-      this.setLastEventLog(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS);
-    }
-    return true;
-  }
+  maybeShowTutorialHint(context = {}) { return this.uiManager.maybeShowTutorialHint(context); }
 
   getWeatherRegionId() {
     const tilePos = this.getTilePosition(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
@@ -1059,38 +1014,14 @@ class FallOfCavalry {
   setupKeyboardShortcuts() { return this.inputManager.setupKeyboardShortcuts(); }
 
 
-  ensureHudEventsButton() {
-    if (typeof document === 'undefined') return;
-    let btn = document.getElementById('hudEventsBtn');
-    if (!btn) {
-      const anchor = document.getElementById('hudEvent');
-      if (!anchor || !anchor.parentElement) return;
-      btn = document.createElement('button');
-      btn.id = 'hudEventsBtn';
-      btn.className = 'action-btn btn-dark text-xs mt-2';
-      btn.textContent = 'Events';
-      anchor.parentElement.appendChild(btn);
-    }
-  }
+  ensureHudEventsButton() { return this.uiManager.ensureHudEventsButton(); }
 
   setupDOMReferences() { return this.uiManager.setupDOMReferences(); }
 
   setupSettingsUI() { return this.uiManager.setupSettingsUI(); }
-  setupHelpOverlay() {
-    const body = this.dom?.helpOverlay?.querySelector?.('.frame-dark');
-    if (body) {
-      body.textContent = 'Hotkeys: H Hold, F Focus/Follow, R Retreat, K Skirmish/Camp, X Hold Fire/Cancel, E POI, C City, Esc Pause, J Codex, S Settings, ? Help.';
-    }
-    if (!this.dom?.helpCloseBtn || this.dom.helpCloseBtn.dataset.boundHelpClose === '1') return;
-    this.dom.helpCloseBtn.dataset.boundHelpClose = '1';
-    this.dom.helpCloseBtn.addEventListener('click', () => this.toggleHelpOverlay(false));
-  }
+  setupHelpOverlay() { return this.uiManager.setupHelpOverlay(); }
 
-  toggleHelpOverlay(force = null) {
-    const next = typeof force === 'boolean' ? force : !this.helpOverlayVisible;
-    this.helpOverlayVisible = next;
-    if (this.dom?.helpOverlay) this.dom.helpOverlay.classList.toggle('hidden', !next);
-  }
+  toggleHelpOverlay(force = null) { return this.uiManager.toggleHelpOverlay(force); }
 
   setupDebugSmokePanel() { return this.devManager.setupDebugSmokePanel(); }
   appendSmokeResults(results) {
@@ -1100,29 +1031,7 @@ class FallOfCavalry {
   }
 
   async runSmokeScenarios() { return this.devManager.runSmokeScenarios(); }
-  onModeChanged(oldMode, newMode) {
-    utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
-    if (newMode !== 'map') {
-      this.poiUI?.hide?.();
-      this.activePoi = null;
-      if (this.state) this.state.interactHint = '';
-    }
-    if (newMode === 'start') {
-      utils.safeClass(this.dom.hud, 'add', 'hidden');
-      utils.safeClass(this.dom.startModal, 'remove', 'hidden');
-      utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
-      this.startScreen?.refresh?.();
-      this.battleCommandsUI?.hide?.();
-      return;
-    }
-
-    utils.safeClass(this.dom.hud, 'remove', 'hidden');
-    utils.safeClass(this.dom.startModal, 'add', 'hidden');
-    utils.safeClass(this.dom.mainMenuOverlay, 'add', 'hidden');
-    if (newMode === 'battle') this.battleCommandsUI?.show?.();
-    else this.battleCommandsUI?.hide?.();
-    if (newMode !== 'battle') this.battleDeployUI?.hide?.();
-  }
+  onModeChanged(oldMode, newMode) { return this.uiManager.onModeChanged(oldMode, newMode); }
 
 
 

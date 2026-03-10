@@ -2542,4 +2542,57 @@ describe('EconomyManager - Phase 5C', () => {
       expect(gfm.applyMasterVolume('abc')).toBe(false);
     });
   });
+
+  // ─── Phase 11B: UIManager extensions ─────────────────────────────────────────
+
+  describe('UIManager - Phase 11B extensions', () => {
+    function makeUM11B(stateOverrides = {}, gameOverrides = {}) {
+      const state = { mode: 'map', devMode: false, ...stateOverrides };
+      const um = new UIManager(state);
+      const game = {
+        state,
+        dom: { hud: null, startModal: null, mainMenuOverlay: null, helpOverlay: null, helpCloseBtn: null, buildInfo: null },
+        poiUI: null,
+        activePoi: null,
+        startScreen: null,
+        battleCommandsUI: null,
+        battleDeployUI: null,
+        helpOverlayVisible: false,
+        hudManager: { showTransientHint: () => true },
+        ensureTutorialState: () => {},
+        setLastEventLog: () => {},
+        ...gameOverrides,
+      };
+      um.init(game);
+      return { um, state, game };
+    }
+
+    it('onModeChanged sets interactHint empty for non-map mode', () => {
+      const { um, state } = makeUM11B({ interactHint: 'E: incele' });
+      um.onModeChanged('map', 'battle');
+      expect(state.interactHint).toBe('');
+    });
+
+    it('updateBuildInfoBadge is a no-op when dom.buildInfo is null', () => {
+      const { um } = makeUM11B();
+      expect(() => um.updateBuildInfoBadge()).not.toThrow();
+    });
+
+    it('applyDevOnlyDomLock is a no-op in non-browser env', () => {
+      const { um } = makeUM11B();
+      // document is undefined in Node test env — should not throw
+      expect(() => um.applyDevOnlyDomLock()).not.toThrow();
+    });
+
+    it('ensureHudEventsButton is a no-op in non-browser env', () => {
+      const { um } = makeUM11B();
+      expect(() => um.ensureHudEventsButton()).not.toThrow();
+    });
+
+    it('maybeShowTutorialHint returns false when tutorial not enabled', () => {
+      const { um, state } = makeUM11B();
+      state.tutorial = { enabled: false };
+      expect(um.maybeShowTutorialHint({})).toBe(false);
+    });
+  });
 });

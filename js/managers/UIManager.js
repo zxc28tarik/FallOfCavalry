@@ -17,6 +17,54 @@ import { rollWarEvents } from '../systems/events.js';
 import { ensureWorldParties } from '../systems/world-ai.js';
 import { toggleCurrentEventsModal } from '../ui/modals.js';
 
+// ─── Module-level helpers (Phase 11B) ────────────────────────────────────────
+
+function formatBuildTimestamp(isoString) {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+function chooseTutorialHint({ state, mode, nearSettlement, nearPoi, inCamp, inBattleDeploy, inBattleFight, inEncounter }) {
+  if (!state || typeof state !== 'object') return null;
+  const tutorial = state.tutorial && typeof state.tutorial === 'object' ? state.tutorial : null;
+  if (!tutorial?.enabled) return null;
+
+  const day = Number(state.day ?? 1);
+  const timeSec = Number(state.timeSec ?? 0);
+  const outOfDayWindow = day > CONST.TUTORIAL_HINTS.MAX_DAYS;
+  const outOfTimeWindow = Number.isFinite(timeSec) && timeSec > CONST.TUTORIAL_HINTS.MAX_REALTIME_SEC;
+  if (outOfDayWindow && outOfTimeWindow) return null;
+
+  const now = Date.now();
+  const lastShownAt = Number(tutorial.lastShownAt ?? 0);
+  if (Number.isFinite(lastShownAt) && (now - lastShownAt) < CONST.TUTORIAL_HINTS.COOLDOWN_MS) return null;
+
+  const shown = tutorial.shown && typeof tutorial.shown === 'object' ? tutorial.shown : {};
+  const candidates = [
+    inEncounter ? 'encounter' : null,
+    inBattleDeploy ? 'battleDeploy' : null,
+    inBattleFight ? 'battleCmd' : null,
+    nearSettlement ? 'city' : null,
+    nearPoi ? 'poi' : null,
+    inCamp ? 'camp' : null,
+    mode === 'map' ? 'movement' : null,
+  ].filter(Boolean);
+
+  const key = candidates
+    .filter((candidate) => !shown[candidate] && CONST.HINT_TEXT[candidate])
+    .sort((a, b) => (CONST.TUTORIAL_HINTS.PRIORITY[b] ?? 0) - (CONST.TUTORIAL_HINTS.PRIORITY[a] ?? 0))[0];
+
+  if (!key) return null;
+  return { key, text: CONST.HINT_TEXT[key] };
+}
+
 export class UIManager {
   constructor(gameState) {
     this.state = gameState;
@@ -327,5 +375,117 @@ export class UIManager {
     g.poiUI.onInvestigate = () => {
       g.investigateActivePoi();
     };
+  }
+
+  // ─── Phase 11B: UI state & mode methods ──────────────────────────────────────
+
+  onModeChanged(oldMode, newMode) {
+    const g = this.game;
+    utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
+    if (newMode !== 'map') {
+      g.poiUI?.hide?.();
+      g.activePoi = null;
+      if (this.state) this.state.interactHint = '';
+    }
+    if (newMode === 'start') {
+      utils.safeClass(g.dom.hud, 'add', 'hidden');
+      utils.safeClass(g.dom.startModal, 'remove', 'hidden');
+      utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
+      g.startScreen?.refresh?.();
+      g.battleCommandsUI?.hide?.();
+      return;
+    }
+
+    utils.safeClass(g.dom.hud, 'remove', 'hidden');
+    utils.safeClass(g.dom.startModal, 'add', 'hidden');
+    utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
+    if (newMode === 'battle') g.battleCommandsUI?.show?.();
+    else g.battleCommandsUI?.hide?.();
+    if (newMode !== 'battle') g.battleDeployUI?.hide?.();
+  }
+
+  updateBuildInfoBadge() {
+    const g = this.game;
+    const el = g.dom?.buildInfo;
+    if (!el) return;
+
+    const version = typeof CONST.BUILD_INFO?.version === 'string' ? CONST.BUILD_INFO.version.trim() : '';
+    const builtAt = typeof CONST.BUILD_INFO?.builtAt === 'string' ? CONST.BUILD_INFO.builtAt.trim() : '';
+
+    if (!version && !builtAt) {
+      el.classList.add('hidden');
+      return;
+    }
+
+    const stamp = formatBuildTimestamp(builtAt);
+    const pieces = [];
+    if (version) pieces.push(`v${version}`);
+    if (stamp) pieces.push(stamp);
+    el.textContent = pieces.join(' • ');
+    el.classList.remove('hidden');
+  }
+
+  applyDevOnlyDomLock() {
+    const devOnlyIds = ['tuningModal', 'debugOverlay', 'debugSmokePanel', 'fpsOverlay', 'perfOverlay', 'debugStats'];
+    if (typeof document === 'undefined') return;
+    for (const id of devOnlyIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      if (!this.state?.devMode) {
+        el.classList.add('hidden');
+        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('inert', '');
+        el.style.pointerEvents = 'none';
+      } else {
+        el.removeAttribute('inert');
+        el.style.pointerEvents = '';
+        el.removeAttribute('aria-hidden');
+      }
+    }
+  }
+
+  ensureHudEventsButton() {
+    if (typeof document === 'undefined') return;
+    let btn = document.getElementById('hudEventsBtn');
+    if (!btn) {
+      const anchor = document.getElementById('hudEvent');
+      if (!anchor || !anchor.parentElement) return;
+      btn = document.createElement('button');
+      btn.id = 'hudEventsBtn';
+      btn.className = 'action-btn btn-dark text-xs mt-2';
+      btn.textContent = 'Events';
+      anchor.parentElement.appendChild(btn);
+    }
+  }
+
+  toggleHelpOverlay(force = null) {
+    const g = this.game;
+    const next = typeof force === 'boolean' ? force : !g.helpOverlayVisible;
+    g.helpOverlayVisible = next;
+    if (g.dom?.helpOverlay) g.dom.helpOverlay.classList.toggle('hidden', !next);
+  }
+
+  setupHelpOverlay() {
+    const g = this.game;
+    const body = g.dom?.helpOverlay?.querySelector?.('.frame-dark');
+    if (body) {
+      body.textContent = 'Hotkeys: H Hold, F Focus/Follow, R Retreat, K Skirmish/Camp, X Hold Fire/Cancel, E POI, C City, Esc Pause, J Codex, S Settings, ? Help.';
+    }
+    if (!g.dom?.helpCloseBtn || g.dom.helpCloseBtn.dataset.boundHelpClose === '1') return;
+    g.dom.helpCloseBtn.dataset.boundHelpClose = '1';
+    g.dom.helpCloseBtn.addEventListener('click', () => this.toggleHelpOverlay(false));
+  }
+
+  maybeShowTutorialHint(context = {}) {
+    const g = this.game;
+    g.ensureTutorialState();
+    const hint = chooseTutorialHint({ state: this.state, mode: this.state?.mode, ...context });
+    if (!hint) return false;
+    this.state.tutorial.lastShownAt = Date.now();
+    this.state.tutorial.shown[hint.key] = true;
+    if (!g.hudManager?.showTransientHint?.(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS)) {
+      g.setLastEventLog(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS);
+    }
+    return true;
   }
 }
