@@ -16,6 +16,11 @@ export class WorldManager {
     this.game = null;
     this.aiParties = [];
     this.worldGen = null;
+    this.worldAi = createInitialWorldAiState();
+    this.enemyParties = [];
+    this.worldEncounterPartyByEnemyId = {};
+    this.lastEncounterEndTimeByEnemyId = {};
+    this.currentTerrainStatus = 'Arazi: normal';
     this.fogOfWar = null;
     this._roadMask = null;
     this._riverMask = null;
@@ -450,16 +455,16 @@ export class WorldManager {
 
   initEnemyParties() {
     if (!this.state) return;
-    if (!this.game?.worldAi || typeof this.game.worldAi !== 'object') {
-      if (this.game) this.game.worldAi = createInitialWorldAiState();
+    if (!this.worldAi || typeof this.worldAi !== 'object') {
+      if (this.game) this.worldAi = createInitialWorldAiState();
     }
-    if (!Array.isArray(this.game?.worldAi?.parties)) {
-      if (this.game?.worldAi) this.game.worldAi.parties = [];
+    if (!Array.isArray(this.worldAi?.parties)) {
+      if (this.worldAi) this.worldAi.parties = [];
     }
 
     const worldState = this.state?.map || {};
     ensureWorldParties({
-      aiState: this.game?.worldAi,
+      aiState: this.worldAi,
       worldState,
       factions: this.state?.factions || CONST.FACTIONS,
       cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
@@ -467,13 +472,13 @@ export class WorldManager {
       banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.state?.day ?? 1)),
     });
 
-    this.game.enemyParties = [];
+    this.enemyParties = [];
     if (Array.isArray(this.state.aiParties) && this.state.aiParties.length > 0) {
-      this.game.enemyParties = this.state.aiParties.map((party) => ({
+      this.enemyParties = this.state.aiParties.map((party) => ({
         ...party,
         factionId: party?.factionId || CONST.FACTION.ID.BANDITS,
       }));
-      this.state.aiParties = this.game.enemyParties;
+      this.state.aiParties = this.enemyParties;
       return;
     }
 
@@ -483,7 +488,7 @@ export class WorldManager {
     const baseX = bounds.minX + mapSpanX * 0.35;
     const baseY = bounds.minY + mapSpanY * 0.35;
 
-    this.game.enemyParties = [
+    this.enemyParties = [
       { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDIT },
       { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.HRE },
       { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.OTTOMAN },
@@ -491,8 +496,8 @@ export class WorldManager {
       { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
       { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
     ];
-    this.state.aiParties = this.game.enemyParties;
-    this.state.worldAi = this.game.worldAi;
+    this.state.aiParties = this.enemyParties;
+    this.state.worldAi = this.worldAi;
   }
 
   ensureRosterState() {
@@ -563,14 +568,14 @@ export class WorldManager {
   }
 
   tryTriggerEncounter() {
-    if (this.state?.mode !== 'map' || !this.game?.playerParty || !Array.isArray(this.game?.enemyParties)) return false;
+    if (this.state?.mode !== 'map' || !this.game?.playerParty || !Array.isArray(this.enemyParties)) return false;
     if (this.state.encounter) return false;
 
     const now = Date.now();
-    for (const enemy of this.game.enemyParties) {
+    for (const enemy of this.enemyParties) {
       if (!enemy?.id) continue;
 
-      const cooldownUntil = this.game?.lastEncounterEndTimeByEnemyId?.[enemy.id] ?? 0;
+      const cooldownUntil = this.lastEncounterEndTimeByEnemyId?.[enemy.id] ?? 0;
       if (now - cooldownUntil < this.encounterCooldownMs) continue;
 
       const dist = Math.hypot(this.game.playerParty.x - enemy.x, this.game.playerParty.y - enemy.y);
@@ -623,13 +628,13 @@ export class WorldManager {
 
     const first = encounters.find((entry) => entry?.partyId);
     if (!first) return false;
-    const party = (this.game?.worldAi?.parties || []).find((p) => p?.id === first.partyId);
+    const party = (this.worldAi?.parties || []).find((p) => p?.id === first.partyId);
     if (!party) return false;
 
     const enemyId = `wai-${party.id}`;
-    const existing = (this.game?.enemyParties || []).find((e) => e?.id === enemyId);
+    const existing = (this.enemyParties || []).find((e) => e?.id === enemyId);
     if (!existing) {
-      this.game?.enemyParties?.push({
+      this.enemyParties.push({
         id: enemyId,
         x: Number(party.x ?? first.x ?? 0),
         y: Number(party.y ?? first.y ?? 0),
@@ -643,7 +648,7 @@ export class WorldManager {
       });
     }
 
-    if (this.game) this.game.worldEncounterPartyByEnemyId[enemyId] = party.id;
+    this.worldEncounterPartyByEnemyId[enemyId] = party.id;
     return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12 });
   }
 
@@ -745,7 +750,7 @@ export class WorldManager {
 
     const currentContext = this.getMovementContextAt(party.x, party.y);
     const logistics = this.game?.getLogisticsSpeedMult?.() || { starvingMult: 1, overcapMult: 1, weight: 0, cap: 100 };
-    this.game.currentTerrainStatus = `${currentContext.terrainLabel} | Yük: ${Math.round(logistics.weight)}/${Math.round(logistics.cap)}`;
+    this.currentTerrainStatus = `${currentContext.terrainLabel} | Yük: ${Math.round(logistics.weight)}/${Math.round(logistics.cap)}`;
     if (currentContext.blocked) {
       this.cancelPlayerDestination();
       return;
@@ -778,7 +783,7 @@ export class WorldManager {
   }
 
   updateEnemyParties(dt) {
-    const enemies = this.game?.enemyParties;
+    const enemies = this.enemyParties;
     if (!Array.isArray(enemies) || enemies.length === 0) return;
     if (!Number.isFinite(dt) || dt <= 0 || this.state?.mode !== 'map') return;
 
@@ -845,13 +850,13 @@ export class WorldManager {
   updateMapSimulation(dt) {
     this.game?.updatePoiInteractHint?.();
     this.updateTransientUIState();
-    if (this.state) this.state.worldAi = this.game?.worldAi;
+    if (this.state) this.state.worldAi = this.worldAi;
     if (this.state?.paused || this.state?.accounting) return;
     this.updatePlayerParty(dt);
     if ((this.game?.getEffectiveTuning?.() || {}).WORLD_AI?.ENABLED ?? CONST.WORLD_AI?.ENABLED) {
       const worldState = this.state?.map || {};
       ensureWorldParties({
-        aiState: this.game?.worldAi,
+        aiState: this.worldAi,
         worldState,
         factions: this.state?.factions || CONST.FACTIONS,
         cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
@@ -860,7 +865,7 @@ export class WorldManager {
       });
       this.game?.syncWarStateFromRelations?.();
       const encounters = updateWorldParties({
-        aiState: this.game?.worldAi,
+        aiState: this.worldAi,
         worldState,
         playerParty: this.game?.playerParty,
         factions: this.state?.factions || CONST.FACTIONS,
@@ -897,22 +902,20 @@ export class WorldManager {
   // ─── Phase 11C: Enemy party management ───────────────────────────────────────
 
   cleanupTemporaryEnemy(enemyId, { force = false } = {}) {
-    const g = this.game;
-    if (!enemyId || !Array.isArray(g.enemyParties)) return false;
-    const enemy = g.enemyParties.find((party) => party?.id === enemyId);
+    if (!enemyId || !Array.isArray(this.enemyParties)) return false;
+    const enemy = this.enemyParties.find((party) => party?.id === enemyId);
     if (!enemy) return false;
     if (force || enemy?.temporary) return this.despawnEnemyParty(enemyId);
     return false;
   }
 
   despawnEnemyParty(enemyId) {
-    const g = this.game;
-    if (!enemyId || !Array.isArray(g.enemyParties)) return false;
-    const idx = g.enemyParties.findIndex((party) => party?.id === enemyId);
+    if (!enemyId || !Array.isArray(this.enemyParties)) return false;
+    const idx = this.enemyParties.findIndex((party) => party?.id === enemyId);
     if (idx === -1) return false;
-    g.enemyParties.splice(idx, 1);
+    this.enemyParties.splice(idx, 1);
 
-    if (Array.isArray(this.state?.aiParties) && this.state.aiParties !== g.enemyParties) {
+    if (Array.isArray(this.state?.aiParties) && this.state.aiParties !== this.enemyParties) {
       const stateIdx = this.state.aiParties.findIndex((party) => party?.id === enemyId);
       if (stateIdx >= 0) this.state.aiParties.splice(stateIdx, 1);
     }

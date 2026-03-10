@@ -11,6 +11,7 @@ export class TuningManager {
     this.game = null;
     this.tuningUI = null;
     this.TuningUIClass = null;
+    this._tuningPauseMode = null;
   }
 
   init(game) {
@@ -324,7 +325,7 @@ export class TuningManager {
     if (!this.state?.devMode) return false;
     await this.setupTuningUI();
     if (!g.dom?.tuningModal) return false;
-    g._tuningPauseMode = g.mode;
+    this._tuningPauseMode = g.mode;
     g.setPaused(true);
     this.tuningUI?.show?.();
     return true;
@@ -334,8 +335,8 @@ export class TuningManager {
     const g = this.game;
     if (!g.dom?.tuningModal || g.dom.tuningModal.classList.contains('hidden')) return false;
     this.tuningUI?.hide?.();
-    if (g._tuningPauseMode === 'playing') g.setPaused(false);
-    g._tuningPauseMode = null;
+    if (this._tuningPauseMode === 'playing') g.setPaused(false);
+    this._tuningPauseMode = null;
     return true;
   }
 

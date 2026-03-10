@@ -56,6 +56,9 @@ export class BattleManager {
     this.battleCommandsUI = null;
     this.battleDeployMode = null;
     this.battleDeployUI = null;
+    this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
+    this.defeatPushbackDistance = 120;
+    this.enemyUnitsById = {};
   }
 
   init(game) {
@@ -323,7 +326,7 @@ export class BattleManager {
   // --- Combat, commands, deploy (Sub-Step 2C) ---
 
   getEnemyUnits(enemyId) {
-    if (Array.isArray(this.game?.enemyUnitsById?.[enemyId])) return this.game.enemyUnitsById[enemyId].map((u) => this.applyDifficultyToEnemyUnit(u));
+    if (Array.isArray(this.enemyUnitsById?.[enemyId])) return this.enemyUnitsById[enemyId].map((u) => this.applyDifficultyToEnemyUnit(u));
     const enemyParty = (this.game?.enemyParties || []).find((party) => party.id === enemyId);
     const seedBase = enemyId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 17);
     let total = 4 + (seedBase % 5);
@@ -357,7 +360,7 @@ export class BattleManager {
         isRanged,
       });
     }
-    if (this.game) this.game.enemyUnitsById[enemyId] = units.map((u) => ({ ...u }));
+    this.enemyUnitsById[enemyId] = units.map((u) => ({ ...u }));
     if (enemyParty && !Array.isArray(enemyParty.roster)) {
       enemyParty.roster = units.map((u) => ({ ...u }));
     }
@@ -378,7 +381,7 @@ export class BattleManager {
 
     const variance = 0.9 + (Math.random() * 0.2);
     const type = attacker?.damageType || (attacker?.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT);
-    const terrainMods = this.game?.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+    const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
     const defMult = Number(target?.commandDefMult ? (1 / target.commandDefMult) : 1) / Math.max(0.01, Number(target?.formationDefMult ?? 1));
     const cmdCtx = { defMult, retreating: Boolean(target?.retreating) };
     const atkMult = Math.max(0.01, Number(attacker?.formationAtkMult ?? 1));
@@ -760,7 +763,7 @@ export class BattleManager {
       const dx = target.x - unit.x;
       const dy = target.y - unit.y;
       const dist = Math.hypot(dx, dy) || 0.001;
-      const terrainMods = this.game?.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
+      const terrainMods = this.currentBattleTerrain?.mods || CONST.TERRAIN_MODS.PLAINS;
       const cmdSpeed = Number(unit.commandSpeedMult ?? 1);
       const formationSpeed = Number(unit.formationSpeedMult ?? 1);
       tickSuppression({ unit, dtMs: deltaMs, battleTimeSec: battle.timeSec, cfg: rangedCfg });
@@ -1275,7 +1278,7 @@ export class BattleManager {
       camera: createCamera(),
     };
 
-    g.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
+    this.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
     this.state.setMode('battle');
     g.battleCommandsUI?.show?.();
     g.startBattleDeployment();
@@ -1336,7 +1339,7 @@ export class BattleManager {
     } else if (result === 'defeat') {
       g.cancelPlayerDestination();
       g.cleanupTemporaryEnemy(enemyId);
-      g.applyBattleExit(enemy, enemyId, g.defeatPushbackDistance);
+      g.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
       g.cleanupTemporaryEnemy(enemyId);
       g.applyBattleExit(enemy, enemyId, g.encounterPushbackDistance);

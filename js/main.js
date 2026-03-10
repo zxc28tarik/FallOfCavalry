@@ -15,7 +15,7 @@ import * as campSystem from './systems/camp.js';
 import { createInitialEventState } from './systems/events.js';
 import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
 import SpriteLoader from './rendering/sprite-loader.js';
-import { createInitialWorldAiState } from './systems/world-ai.js';
+// createInitialWorldAiState → WorldManager
 import { createInitialRegionState } from './systems/region-state.js';
 import { serializeSettings, deserializeSettings } from './systems/settings.js';
 import { initWeatherLayer } from './rendering/weather-layer.js';
@@ -64,45 +64,27 @@ class FallOfCavalry {
     this.audioSystem = null;
     // startScreen → GameFlowManager
     // cityUI → CityManager
-    // campUI, accountingUI, settingsUI, codexUI, poiUI, helpOverlayVisible → UIManager
-    // battleCommandsUI, battleDeployMode, battleDeployUI → BattleManager
-    // tuningUI, TuningUIClass → TuningManager
+    // campUI, accountingUI, settingsUI, codexUI, poiUI, helpOverlayVisible, minimapRenderer, listenersBound, weatherState → UIManager
+    // battleCommandsUI, battleDeployMode, battleDeployUI, currentBattleTerrain, defeatPushbackDistance, enemyUnitsById → BattleManager
+    // tuningUI, TuningUIClass, _tuningPauseMode → TuningManager
     // activePoi, pendingPoiAmbush → PoiManager
-    // fogOfWar, _worldSeedCache, _crossingSet, _roadMask, _riverMask → WorldManager
-    // _encounterRollByEnemyId → WorldManager
-    this.currentTerrainStatus = 'Arazi: normal';
-    this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
-    this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
+    // worldAi, enemyParties, worldEncounterPartyByEnemyId, lastEncounterEndTimeByEnemyId, currentTerrainStatus → WorldManager
+    // playerRoster, enemyRoster, rosterCursorIndex, maxUnitsToDeploy, encounterPushbackDistance → EncounterManager
+    // fogOfWar, _worldSeedCache, _crossingSet, _roadMask, _riverMask, _encounterRollByEnemyId, encounterMargin, encounterCooldownMs → WorldManager
+    // keyboardHandler, partyPointerHandler, partyPointerMoveHandler, partyPointerUpHandler, partyContextMenuHandler → InputManager
+    // rightPointerTracking, rightPointerMoved, rightPointerStartX, rightPointerStartY → InputManager
+    // saveLoadRows, saveLoadCursor, saveLoadPreviousMode, autosaveIntervalMs, autosaveTimerId, lastAutosaveHudAt → SaveManager
 
     this.mode = 'menu'; // menu | playing | paused
     this.dom = {};
 
     this.resizeHandler = null;
-    // keyboardHandler, partyPointerHandler, partyPointerMoveHandler,
-    // partyPointerUpHandler, partyContextMenuHandler → InputManager
-    // rightPointerTracking, rightPointerMoved, rightPointerStartX,
-    // rightPointerStartY → InputManager
     this.mouseWorldX = 0;
     this.mouseWorldY = 0;
 
     this.playerParty = null;
-    this.enemyParties = [];
-    this.worldAi = createInitialWorldAiState();
-    this.worldEncounterPartyByEnemyId = {};
-    this.lastEncounterEndTimeByEnemyId = {};
-    // encounterMargin, encounterCooldownMs → WorldManager
-    this.encounterPushbackDistance = 64;
-    this.defeatPushbackDistance = 120;
-    this.maxUnitsToDeploy = 8;
-    this.playerRoster = [];
-    this.enemyRoster = [];
-    this.rosterCursorIndex = 0;
-    this.enemyUnitsById = {};
     this.followParty = false;
-    // saveLoadRows, saveLoadCursor, saveLoadPreviousMode, autosaveIntervalMs, autosaveTimerId, lastAutosaveHudAt → SaveManager
-    this._tuningPauseMode = null;
 
-    this.minimapRenderer = null;
     this.spriteLoader = null;
     this.assetsReady = false;
     this.started = false;
@@ -163,6 +145,50 @@ class FallOfCavalry {
   set activePoi(v) { if (this.poiManager) this.poiManager.activePoi = v; }
   get pendingPoiAmbush() { return this.poiManager?.pendingPoiAmbush; }
   set pendingPoiAmbush(v) { if (this.poiManager) this.poiManager.pendingPoiAmbush = v; }
+
+  // backward-compat: battle state fields live in BattleManager
+  get currentBattleTerrain() { return this.battleManager?.currentBattleTerrain; }
+  set currentBattleTerrain(v) { if (this.battleManager) this.battleManager.currentBattleTerrain = v; }
+  get defeatPushbackDistance() { return this.battleManager?.defeatPushbackDistance ?? 120; }
+  set defeatPushbackDistance(v) { if (this.battleManager) this.battleManager.defeatPushbackDistance = v; }
+  get enemyUnitsById() { return this.battleManager?.enemyUnitsById; }
+  set enemyUnitsById(v) { if (this.battleManager) this.battleManager.enemyUnitsById = v; }
+
+  // backward-compat: encounter/roster fields live in EncounterManager
+  get playerRoster() { return this.encounterManager?.playerRoster; }
+  set playerRoster(v) { if (this.encounterManager) this.encounterManager.playerRoster = v; }
+  get enemyRoster() { return this.encounterManager?.enemyRoster; }
+  set enemyRoster(v) { if (this.encounterManager) this.encounterManager.enemyRoster = v; }
+  get rosterCursorIndex() { return this.encounterManager?.rosterCursorIndex ?? 0; }
+  set rosterCursorIndex(v) { if (this.encounterManager) this.encounterManager.rosterCursorIndex = v; }
+  get maxUnitsToDeploy() { return this.encounterManager?.maxUnitsToDeploy ?? 8; }
+  set maxUnitsToDeploy(v) { if (this.encounterManager) this.encounterManager.maxUnitsToDeploy = v; }
+  get encounterPushbackDistance() { return this.encounterManager?.encounterPushbackDistance ?? 64; }
+  set encounterPushbackDistance(v) { if (this.encounterManager) this.encounterManager.encounterPushbackDistance = v; }
+
+  // backward-compat: world fields live in WorldManager
+  get worldAi() { return this.worldManager?.worldAi; }
+  set worldAi(v) { if (this.worldManager) this.worldManager.worldAi = v; }
+  get enemyParties() { return this.worldManager?.enemyParties; }
+  set enemyParties(v) { if (this.worldManager) this.worldManager.enemyParties = v; }
+  get worldEncounterPartyByEnemyId() { return this.worldManager?.worldEncounterPartyByEnemyId; }
+  set worldEncounterPartyByEnemyId(v) { if (this.worldManager) this.worldManager.worldEncounterPartyByEnemyId = v; }
+  get lastEncounterEndTimeByEnemyId() { return this.worldManager?.lastEncounterEndTimeByEnemyId; }
+  set lastEncounterEndTimeByEnemyId(v) { if (this.worldManager) this.worldManager.lastEncounterEndTimeByEnemyId = v; }
+  get currentTerrainStatus() { return this.worldManager?.currentTerrainStatus ?? 'Arazi: normal'; }
+  set currentTerrainStatus(v) { if (this.worldManager) this.worldManager.currentTerrainStatus = v; }
+
+  // backward-compat: tuning pause state lives in TuningManager
+  get _tuningPauseMode() { return this.tuningManager?._tuningPauseMode ?? null; }
+  set _tuningPauseMode(v) { if (this.tuningManager) this.tuningManager._tuningPauseMode = v; }
+
+  // backward-compat: UI renderer/listener fields live in UIManager
+  get minimapRenderer() { return this.uiManager?.minimapRenderer; }
+  set minimapRenderer(v) { if (this.uiManager) this.uiManager.minimapRenderer = v; }
+  get listenersBound() { return this.uiManager?.listenersBound ?? false; }
+  set listenersBound(v) { if (this.uiManager) this.uiManager.listenersBound = v; }
+  get weatherState() { return this.uiManager?.weatherState; }
+  set weatherState(v) { if (this.uiManager) this.uiManager.weatherState = v; }
 
   ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
 

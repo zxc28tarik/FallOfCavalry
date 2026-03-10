@@ -208,7 +208,8 @@ describe('BattleManager - Phase 2C', () => {
 
   it('getEnemyUnits caches and returns cached units', () => {
     const cached = [{ id: 'e1', hp: 50, maxHp: 50, atk: 10, rangedDamage: 0 }];
-    const bm = createBM({}, { enemyUnitsById: { 'enemy-1': cached }, settings: {} });
+    const bm = createBM({}, { settings: {} });
+    bm.enemyUnitsById = { 'enemy-1': cached };
     const result = bm.getEnemyUnits('enemy-1');
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('e1');
@@ -712,7 +713,8 @@ describe('WorldManager - Phase 3D', () => {
 
   it('updateEnemyParties moves enemies', () => {
     const enemy = { id: 'e1', x: 200, y: 200, radius: 12, speed: 35, vx: 1, vy: 0, factionId: 'bandits' };
-    const wm = createWM({ timeSec: 1 }, { enemyParties: [enemy] });
+    const wm = createWM({ timeSec: 1 });
+    wm.enemyParties = [enemy];
     wm.rebuildMovementMasks();
     const oldX = enemy.x;
     wm.updateEnemyParties(0.1);
@@ -2220,18 +2222,18 @@ describe('EconomyManager - Phase 5C', () => {
     });
 
     it('setupEventListeners() is no-op when listenersBound is true', () => {
-      const { um, game } = makeUM9B();
-      game.listenersBound = true;
+      const { um } = makeUM9B();
+      um.listenersBound = true;
       expect(() => um.setupEventListeners()).not.toThrow();
       // Should not change listenersBound
-      expect(game.listenersBound).toBe(true);
+      expect(um.listenersBound).toBe(true);
     });
 
-    it('setupEventListeners() sets g.listenersBound on first call', () => {
-      const { um, game, state } = makeUM9B();
+    it('setupEventListeners() sets listenersBound on first call', () => {
+      const { um, state } = makeUM9B();
       state.on = (event, cb) => {}; // mock state.on
       um.setupEventListeners();
-      expect(game.listenersBound).toBe(true);
+      expect(um.listenersBound).toBe(true);
     });
 
     it('setupMenuActions() is no-op when hudManager lacks setMenuHandlers', () => {
@@ -2589,11 +2591,11 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('despawnEnemyParty removes party from enemyParties', () => {
       const state = { aiParties: [] };
-      const game = { enemyParties: [{ id: 'e1' }, { id: 'e2' }] };
       const wm = new WorldManager(state);
-      wm.init(game);
+      wm.init({});
+      wm.enemyParties = [{ id: 'e1' }, { id: 'e2' }];
       expect(wm.despawnEnemyParty('e1')).toBe(true);
-      expect(game.enemyParties.length).toBe(1);
+      expect(wm.enemyParties.length).toBe(1);
     });
 
     it('cleanupTemporaryEnemy returns false when enemy is not temporary', () => {
@@ -2618,10 +2620,10 @@ describe('EconomyManager - Phase 5C', () => {
     it('initRosters initialises empty enemyRoster', () => {
       const state = {};
       const em = new EncounterManager(state);
-      const game = { playerRoster: [], playerParty: { roster: [], morale: 60 }, enemyRoster: null };
+      const game = { playerParty: { roster: [], morale: 60 } };
       em.init(game);
       em.initRosters();
-      expect(Array.isArray(game.enemyRoster)).toBe(true);
+      expect(Array.isArray(em.enemyRoster)).toBe(true);
     });
   });
 

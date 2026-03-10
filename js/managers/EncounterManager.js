@@ -7,6 +7,11 @@ export class EncounterManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.playerRoster = [];
+    this.enemyRoster = [];
+    this.rosterCursorIndex = 0;
+    this.maxUnitsToDeploy = 8;
+    this.encounterPushbackDistance = 64;
   }
 
   init(game) {
@@ -33,13 +38,13 @@ export class EncounterManager {
   enterRoster(enemyId) {
     const g = this.game;
     if (!this.state || this.state.mode !== 'encounter') return false;
-    g.playerRoster = (g.playerParty?.roster || []).map((unit, idx) => ({
+    this.playerRoster = (g.playerParty?.roster || []).map((unit, idx) => ({
       ...unit,
       status: unit?.status || 'healthy',
-      selected: idx < g.maxUnitsToDeploy,
+      selected: idx < this.maxUnitsToDeploy,
     }));
-    g.enemyRoster = g.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
-    g.rosterCursorIndex = 0;
+    this.enemyRoster = g.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
+    this.rosterCursorIndex = 0;
 
     if (!this.state.roster || typeof this.state.roster !== 'object') {
       this.state.roster = {};
@@ -47,7 +52,7 @@ export class EncounterManager {
 
     this.state.roster.enemyId = enemyId;
     this.state.roster.warning = '';
-    this.state.roster.maxDeploy = g.maxUnitsToDeploy;
+    this.state.roster.maxDeploy = this.maxUnitsToDeploy;
     this.state.setMode('roster');
     g.updateTransientUIState();
     return true;
@@ -82,7 +87,7 @@ export class EncounterManager {
 
     const ux = dx / dist;
     const uy = dy / dist;
-    const halfPush = g.encounterPushbackDistance / 2;
+    const halfPush = this.encounterPushbackDistance / 2;
 
     const playerTarget = g.clampToWorld(
       g.playerParty.x + ux * halfPush,
@@ -101,17 +106,17 @@ export class EncounterManager {
 
   moveRosterCursor(delta) {
     const g = this.game;
-    if (!Array.isArray(g.playerRoster) || g.playerRoster.length === 0) return false;
-    const next = g.rosterCursorIndex + delta;
-    g.rosterCursorIndex = Math.max(0, Math.min(g.playerRoster.length - 1, next));
+    if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
+    const next = this.rosterCursorIndex + delta;
+    this.rosterCursorIndex = Math.max(0, Math.min(this.playerRoster.length - 1, next));
     g.updateTransientUIState();
     return true;
   }
 
   toggleRosterSelectionAtCursor() {
     const g = this.game;
-    if (!Array.isArray(g.playerRoster) || g.playerRoster.length === 0) return false;
-    const unit = g.playerRoster[g.rosterCursorIndex];
+    if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
+    const unit = this.playerRoster[this.rosterCursorIndex];
     if (!unit || g.getEffectiveCount(unit) <= 0) return false;
 
     if (unit.selected) {
@@ -122,8 +127,8 @@ export class EncounterManager {
     }
 
     const selected = g.getSelectedRosterCount();
-    if (selected >= g.maxUnitsToDeploy) {
-      if (this.state?.roster) this.state.roster.warning = `Deploy limit reached (${g.maxUnitsToDeploy}).`;
+    if (selected >= this.maxUnitsToDeploy) {
+      if (this.state?.roster) this.state.roster.warning = `Deploy limit reached (${this.maxUnitsToDeploy}).`;
       g.updateTransientUIState();
       return false;
     }
@@ -165,8 +170,8 @@ Renown
 
   initRosters() {
     const g = this.game;
-    if (Array.isArray(g.playerRoster) && g.playerRoster.length > 0) return;
-    g.playerRoster = (g.playerParty?.roster || []).map((stack, idx) => ({
+    if (Array.isArray(this.playerRoster) && this.playerRoster.length > 0) return;
+    this.playerRoster = (g.playerParty?.roster || []).map((stack, idx) => ({
       id: stack.id,
       name: stack.name,
       type: stack.id === 'archers' ? 'ranged' : 'melee',
@@ -180,7 +185,7 @@ Renown
       status: stack?.status || 'healthy',
       selected: idx < 2,
     }));
-    g.enemyRoster = [];
+    this.enemyRoster = [];
 
     if (this.state) {
       this.state.roster = {

@@ -77,6 +77,9 @@ export class UIManager {
     this.codexUI = null;
     this.poiUI = null;
     this.helpOverlayVisible = false;
+    this.minimapRenderer = null;
+    this.listenersBound = false;
+    this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
   }
 
   init(game) {
@@ -186,7 +189,7 @@ export class UIManager {
       document.getElementById('saveTransferModal')?.classList.add('hidden');
     });
 
-    g.minimapRenderer = new MinimapSimple(
+    this.minimapRenderer = new MinimapSimple(
       document.getElementById('hudMiniMap')
     );
 
@@ -215,7 +218,7 @@ export class UIManager {
 
   setupEventListeners() {
     const g = this.game;
-    if (g.listenersBound || !this.state) return;
+    if (this.listenersBound || !this.state) return;
 
     this.state.on('mode:changed', ({ old, new: newMode }) => g.onModeChanged(old, newMode));
     this.state.on('day:advanced', (day) => {
@@ -264,7 +267,7 @@ export class UIManager {
       const events = g.refreshCurrentEventsSummary(this.state?.day ?? 1);
       toggleCurrentEventsModal({ events, currentDay: this.state?.day ?? 1 });
     });
-    g.listenersBound = true;
+    this.listenersBound = true;
   }
 
   setupMenuActions() {
@@ -566,7 +569,7 @@ export class UIManager {
       dayIndex,
       regionId: this.getWeatherRegionId(),
     });
-    g.weatherState = weather;
+    this.weatherState = weather;
     this.state.weatherState = weather;
     setWeatherState(weather);
   }
