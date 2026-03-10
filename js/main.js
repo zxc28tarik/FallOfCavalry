@@ -467,6 +467,8 @@ class FallOfCavalry {
     this.tuningManager.init(this);
     this.diplomacyManager = this.diplomacyManager || new DiplomacyManager(this.state);
     this.diplomacyManager.init(this);
+    this.uiManager = this.uiManager || new UIManager(this.state);
+    this.uiManager.init(this);
     this.ensureFactionState();
     this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
     this.state.devMode = isDevMode();
@@ -492,8 +494,6 @@ class FallOfCavalry {
     this.poiManager.init(this);
     this.encounterManager = this.encounterManager || new EncounterManager(this.state);
     this.encounterManager.init(this);
-    this.uiManager = this.uiManager || new UIManager(this.state);
-    this.uiManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
     this.devManager.init(this);
     this.gameFlowManager = this.gameFlowManager || new GameFlowManager(this.state);
