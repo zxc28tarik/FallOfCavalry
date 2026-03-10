@@ -2687,6 +2687,44 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
+  describe('Phase 12C misc manager extensions', () => {
+    it('DevManager.appendSmokeResults is a no-op when dom.smokeResults absent', () => {
+      const dm = new DevManager({});
+      dm.init({ dom: {} });
+      expect(() => dm.appendSmokeResults([{ ok: true, name: 't', msg: 'ok' }])).not.toThrow();
+    });
+
+    it('PoiManager.getPoiSpriteKey returns poi_camp for camp type', () => {
+      const pm = new PoiManager({});
+      pm.init({});
+      expect(pm.getPoiSpriteKey('camp')).toBe('poi_camp');
+    });
+
+    it('PoiManager.getNearestInteractablePoi returns null when no map', () => {
+      const state = { map: null };
+      const pm = new PoiManager(state);
+      pm.init({ playerParty: { x: 0, y: 0 } });
+      expect(pm.getNearestInteractablePoi()).toBeNull();
+    });
+
+    it('TuningManager.ensureTuningState initialises tuning object', () => {
+      const state = {};
+      const tm = new TuningManager(state);
+      tm.init({});
+      tm.ensureTuningState();
+      expect(typeof state.tuning).toBe('object');
+    });
+
+    it('UIManager.ensureTutorialState populates tutorial object', () => {
+      const state = {};
+      const um = new UIManager(state);
+      um.init({});
+      um.ensureTutorialState();
+      expect(typeof state.tutorial).toBe('object');
+      expect(state.tutorial).toHaveProperty('shown');
+    });
+  });
+
   describe('WorldManager - Phase 12A region methods', () => {
     it('getRegionIdAtTile returns wild: prefix when no settlement', () => {
       const state = {};

@@ -379,4 +379,58 @@ export class GameFlowManager {
     if (g.mode === 'paused') return this.setPaused(false);
     return true;
   }
+
+  // ─── Phase 12C: destroy ───────────────────────────────────────────────────────
+
+  destroy() {
+    const g = this.game;
+    this.stop();
+
+    if (typeof window !== 'undefined' && g.resizeHandler && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('resize', g.resizeHandler);
+    }
+
+    if (typeof document !== 'undefined' && g.keyboardHandler && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('keydown', g.keyboardHandler);
+    }
+
+    if (g.canvas && typeof g.canvas.removeEventListener === 'function') {
+      if (g.partyPointerHandler) g.canvas.removeEventListener('mousedown', g.partyPointerHandler);
+      if (g.partyPointerMoveHandler) g.canvas.removeEventListener('mousemove', g.partyPointerMoveHandler);
+      if (g.partyPointerUpHandler) g.canvas.removeEventListener('mouseup', g.partyPointerUpHandler);
+      if (g.partyContextMenuHandler) g.canvas.removeEventListener('contextmenu', g.partyContextMenuHandler);
+    }
+
+    const destroyables = [g.input, g.gameLoop, g.renderer, g.hudManager];
+    destroyables.forEach((sys) => sys?.destroy?.());
+
+    g.resizeHandler = null;
+    g.keyboardHandler = null;
+    g.partyPointerHandler = null;
+    g.partyPointerMoveHandler = null;
+    g.partyPointerUpHandler = null;
+    g.partyContextMenuHandler = null;
+    g.rightPointerTracking = false;
+    g.rightPointerMoved = false;
+    g.rightPointerStartX = 0;
+    g.rightPointerStartY = 0;
+    g.listenersBound = false;
+    g.started = false;
+    g.initialized = false;
+
+    g.input = null;
+    g.gameLoop = null;
+    g.hudManager = null;
+    g.saveSystem = null;
+    g.audioSystem = null;
+    g.state = null;
+    g.ctx = null;
+    g.canvas = null;
+    g.mode = 'menu';
+    g.playerParty = null;
+    g.followParty = false;
+    g.stopAutosaveLoop();
+
+    return true;
+  }
 }

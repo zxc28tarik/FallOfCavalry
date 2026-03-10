@@ -7,6 +7,7 @@
 
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import * as CONST from '../constants.js';
+import * as utils from '../utils.js';
 import { getWeatherTint } from '../systems/weather.js';
 import { renderWeatherOverlay } from '../rendering/weather-layer.js';
 
@@ -423,5 +424,27 @@ export class RenderManager {
       if (infoEl) infoEl.textContent = lines.join('\n');
       else g.dom.debugOverlay.textContent = lines.join('\n');
     }
+  }
+
+  // ─── Phase 12C: Sprite loading ────────────────────────────────────────────────
+
+  async loadSpriteAssets() {
+    const g = this.game;
+    if (!g.spriteLoader) return false;
+    try {
+      await g.spriteLoader.loadAll();
+      g.assetsReady = true;
+    } catch {
+      if (this.state?.devMode) utils.devLog(this.state, '[Assets] Sprite pipeline disabled; using fallback rendering.');
+      g.assetsReady = false;
+    }
+    return g.assetsReady;
+  }
+
+  async reloadSpriteAssets() {
+    const g = this.game;
+    g.assetsReady = false;
+    g.battleAnimPlayers.clear();
+    return this.loadSpriteAssets();
   }
 }

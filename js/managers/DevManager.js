@@ -222,4 +222,13 @@ export class DevManager {
       }
     }
   }
+
+  // ─── Phase 12C: appendSmokeResults ───────────────────────────────────────────
+
+  appendSmokeResults(results) {
+    const g = this.game;
+    if (!g.dom?.smokeResults) return;
+    const rows = (results || []).map((r) => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.msg}`);
+    g.dom.smokeResults.textContent = rows.join('\n');
+  }
 }

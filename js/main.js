@@ -307,21 +307,9 @@ class FallOfCavalry {
     utils.warnOnce(key, message);
   }
 
-  ensureTutorialState() {
-    if (!this.state || typeof this.state !== 'object') return;
-    const current = this.state.tutorial && typeof this.state.tutorial === 'object' ? this.state.tutorial : {};
-    const shown = current.shown && typeof current.shown === 'object' ? current.shown : {};
-    this.state.tutorial = {
-      enabled: typeof current.enabled === 'boolean' ? current.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
-      lastShownAt: Number.isFinite(current.lastShownAt) ? current.lastShownAt : 0,
-      shown,
-    };
-  }
+  ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
 
-  ensureTuningState() {
-    if (!this.state || typeof this.state !== 'object') return;
-    if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
-  }
+  ensureTuningState() { return this.tuningManager.ensureTuningState(); }
   ensureFactionState() { return this.diplomacyManager.ensureFactionState(); }
 
   getFactionName(factionId) { return this.diplomacyManager.getFactionName(factionId); }
@@ -346,33 +334,12 @@ class FallOfCavalry {
 
   maybeShowTutorialHint(context = {}) { return this.uiManager.maybeShowTutorialHint(context); }
 
-  getWeatherRegionId() {
-    const tilePos = this.getTilePosition(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
-    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
-    if (nearestSettlement?.id) return String(nearestSettlement.id);
-    return `${tilePos.tx}:${tilePos.ty}`;
-  }
+  getWeatherRegionId() { return this.uiManager.getWeatherRegionId(); }
 
-  refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) {
-    const weatherCfg = this.getWeatherConfig();
-    if (!weatherCfg?.ENABLED) return;
-    const weather = computeWeatherForDay({
-      worldSeed: this.state?.seed ?? 1337,
-      dayIndex,
-      regionId: this.getWeatherRegionId(),
-    });
-    this.weatherState = weather;
-    this.state.weatherState = weather;
-    setWeatherState(weather);
-  }
+  refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) { return this.uiManager.refreshWeatherState(dayIndex); }
 
 
-  getWeatherConfig() {
-    return {
-      ...CONST.WEATHER,
-      ENABLED: Boolean(CONST.WEATHER?.ENABLED) && Boolean(this.settings?.weatherEnabled),
-    };
-  }
+  getWeatherConfig() { return this.uiManager.getWeatherConfig(); }
 
   getBattleFxConfig() {
     return this.battleManager.getBattleFxConfig();
@@ -510,28 +477,11 @@ class FallOfCavalry {
     return true;
   }
 
-  async loadSpriteAssets() {
-    if (!this.spriteLoader) return false;
-    try {
-      await this.spriteLoader.loadAll();
-      this.assetsReady = true;
-    } catch {
-      if (this.state?.devMode) utils.devLog(this.state, '[Assets] Sprite pipeline disabled; using fallback rendering.');
-      this.assetsReady = false;
-    }
-    return this.assetsReady;
-  }
+  async loadSpriteAssets() { return this.renderManager.loadSpriteAssets(); }
 
-  async reloadSpriteAssets() {
-    this.assetsReady = false;
-    this.battleAnimPlayers.clear();
-    return this.loadSpriteAssets();
-  }
+  async reloadSpriteAssets() { return this.renderManager.reloadSpriteAssets(); }
 
-  getPoiSpriteKey(poiType) {
-    if (poiType === 'camp') return 'poi_camp';
-    return 'poi_ruin';
-  }
+  getPoiSpriteKey(poiType) { return this.poiManager.getPoiSpriteKey(poiType); }
 
   ensureBattleUnitFx(unit) {
     return this.battleManager.ensureBattleUnitFx(unit);
@@ -553,20 +503,7 @@ class FallOfCavalry {
     return this.battleManager.drawUnitSpriteOrFallback(ctx, unit, x, y, size, now);
   }
 
-  setupCanvas() {
-    if (this.resizeHandler || !this.canvas) return;
-    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
-
-    const resize = () => {
-      this.canvas.width = typeof window.innerWidth === 'number' ? window.innerWidth : this.canvas.width;
-      this.canvas.height = typeof window.innerHeight === 'number' ? window.innerHeight : this.canvas.height;
-      utils.devLog(this.state, `[Canvas] Resized to ${this.canvas.width}x${this.canvas.height}`);
-    };
-
-    this.resizeHandler = resize;
-    resize();
-    window.addEventListener('resize', resize);
-  }
+  setupCanvas() { return this.uiManager.setupCanvas(); }
 
   setupEventListeners() { return this.uiManager.setupEventListeners(); }
 
@@ -791,11 +728,7 @@ class FallOfCavalry {
   closeAccountingModal() { return this.uiManager.closeAccountingModal(); }
 
   setupPoiUI() { return this.uiManager.setupPoiUI(); }
-  getNearestInteractablePoi() {
-    const nearest = PoiSystem.getNearestPoi(this.state?.map, this.playerParty?.x, this.playerParty?.y, CONST.WORLD.TILE_SIZE);
-    if (!nearest || nearest.distTiles > CONST.POI.INTERACT_RADIUS_TILES) return null;
-    return nearest;
-  }
+  getNearestInteractablePoi() { return this.poiManager.getNearestInteractablePoi(); }
 
   updatePoiInteractHint() { return this.poiManager.updatePoiInteractHint(); }
 
@@ -870,11 +803,7 @@ class FallOfCavalry {
   toggleHelpOverlay(force = null) { return this.uiManager.toggleHelpOverlay(force); }
 
   setupDebugSmokePanel() { return this.devManager.setupDebugSmokePanel(); }
-  appendSmokeResults(results) {
-    if (!this.dom?.smokeResults) return;
-    const rows = (results || []).map((r) => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.msg}`);
-    this.dom.smokeResults.textContent = rows.join('\n');
-  }
+  appendSmokeResults(results) { return this.devManager.appendSmokeResults(results); }
 
   async runSmokeScenarios() { return this.devManager.runSmokeScenarios(); }
   onModeChanged(oldMode, newMode) { return this.uiManager.onModeChanged(oldMode, newMode); }
@@ -913,64 +842,7 @@ class FallOfCavalry {
     return this.mode === 'paused';
   }
 
-  destroy() {
-    this.stop();
-
-    if (typeof window !== 'undefined' && this.resizeHandler && typeof window.removeEventListener === 'function') {
-      window.removeEventListener('resize', this.resizeHandler);
-    }
-
-    if (typeof document !== 'undefined' && this.keyboardHandler && typeof document.removeEventListener === 'function') {
-      document.removeEventListener('keydown', this.keyboardHandler);
-    }
-
-    if (this.canvas && typeof this.canvas.removeEventListener === 'function') {
-      if (this.partyPointerHandler) {
-        this.canvas.removeEventListener('mousedown', this.partyPointerHandler);
-      }
-      if (this.partyPointerMoveHandler) {
-        this.canvas.removeEventListener('mousemove', this.partyPointerMoveHandler);
-      }
-      if (this.partyPointerUpHandler) {
-        this.canvas.removeEventListener('mouseup', this.partyPointerUpHandler);
-      }
-      if (this.partyContextMenuHandler) {
-        this.canvas.removeEventListener('contextmenu', this.partyContextMenuHandler);
-      }
-    }
-
-    const destroyables = [this.input, this.gameLoop, this.renderer, this.hudManager];
-    destroyables.forEach((sys) => sys?.destroy?.());
-
-    this.resizeHandler = null;
-    this.keyboardHandler = null;
-    this.partyPointerHandler = null;
-    this.partyPointerMoveHandler = null;
-    this.partyPointerUpHandler = null;
-    this.partyContextMenuHandler = null;
-    this.rightPointerTracking = false;
-    this.rightPointerMoved = false;
-    this.rightPointerStartX = 0;
-    this.rightPointerStartY = 0;
-    this.listenersBound = false;
-    this.started = false;
-    this.initialized = false;
-
-    this.input = null;
-    this.gameLoop = null;
-    this.hudManager = null;
-    this.saveSystem = null;
-    this.audioSystem = null;
-    this.state = null;
-    this.ctx = null;
-    this.canvas = null;
-    this.mode = 'menu';
-    this.playerParty = null;
-    this.followParty = false;
-    this.stopAutosaveLoop();
-
-    return true;
-  }
+  destroy() { return this.gameFlowManager.destroy(); }
 
   toggleDebug() { return this.devManager.toggleDebug(); }
   buildSavePayload() { return this.saveManager.buildSavePayload(); }

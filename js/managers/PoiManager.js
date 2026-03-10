@@ -221,4 +221,18 @@ export class PoiManager {
     else if (typeof g.startEncounter === 'function') g.startEncounter(enemyId);
     else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
   }
+
+  // ─── Phase 12C: getNearestInteractablePoi + getPoiSpriteKey ──────────────────
+
+  getNearestInteractablePoi() {
+    const g = this.game;
+    const nearest = PoiSystem.getNearestPoi(this.state?.map, g.playerParty?.x, g.playerParty?.y, CONST.WORLD.TILE_SIZE);
+    if (!nearest || nearest.distTiles > CONST.POI.INTERACT_RADIUS_TILES) return null;
+    return nearest;
+  }
+
+  getPoiSpriteKey(poiType) {
+    if (poiType === 'camp') return 'poi_camp';
+    return 'poi_ruin';
+  }
 }

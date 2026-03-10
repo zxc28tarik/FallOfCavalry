@@ -5,6 +5,8 @@
 
 import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
+import { computeWeatherForDay } from '../systems/weather.js';
+import { setWeatherState } from '../rendering/weather-layer.js';
 import MinimapSimple from '../rendering/minimap-simple.js';
 import SettingsUI from '../ui/settings.js';
 import CodexUI from '../ui/codex.js';
@@ -518,5 +520,64 @@ export class UIManager {
     g.updateTransientUIState();
     g.runAutosave('accounting-close');
     return true;
+  }
+
+  // ─── Phase 12C: Weather, canvas, tutorial state ───────────────────────────────
+
+  ensureTutorialState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    const current = this.state.tutorial && typeof this.state.tutorial === 'object' ? this.state.tutorial : {};
+    const shown = current.shown && typeof current.shown === 'object' ? current.shown : {};
+    this.state.tutorial = {
+      enabled: typeof current.enabled === 'boolean' ? current.enabled : CONST.TUTORIAL_HINTS.ENABLED_DEFAULT,
+      lastShownAt: Number.isFinite(current.lastShownAt) ? current.lastShownAt : 0,
+      shown,
+    };
+  }
+
+  getWeatherConfig() {
+    const g = this.game;
+    return {
+      ...CONST.WEATHER,
+      ENABLED: Boolean(CONST.WEATHER?.ENABLED) && Boolean(g.settings?.weatherEnabled),
+    };
+  }
+
+  getWeatherRegionId() {
+    const g = this.game;
+    const tilePos = g.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
+    const nearestSettlement = g.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    if (nearestSettlement?.id) return String(nearestSettlement.id);
+    return `${tilePos.tx}:${tilePos.ty}`;
+  }
+
+  refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) {
+    const g = this.game;
+    const weatherCfg = this.getWeatherConfig();
+    if (!weatherCfg?.ENABLED) return;
+    const weather = computeWeatherForDay({
+      worldSeed: this.state?.seed ?? 1337,
+      dayIndex,
+      regionId: this.getWeatherRegionId(),
+    });
+    g.weatherState = weather;
+    this.state.weatherState = weather;
+    setWeatherState(weather);
+  }
+
+  setupCanvas() {
+    const g = this.game;
+    if (g.resizeHandler || !g.canvas) return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+
+    const resize = () => {
+      g.canvas.width = typeof window.innerWidth === 'number' ? window.innerWidth : g.canvas.width;
+      g.canvas.height = typeof window.innerHeight === 'number' ? window.innerHeight : g.canvas.height;
+      utils.devLog(this.state, `[Canvas] Resized to ${g.canvas.width}x${g.canvas.height}`);
+    };
+
+    g.resizeHandler = resize;
+    resize();
+    window.addEventListener('resize', resize);
   }
 }

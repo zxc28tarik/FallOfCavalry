@@ -336,4 +336,11 @@ export class TuningManager {
     g._tuningPauseMode = null;
     return true;
   }
+
+  // ─── Phase 12C: ensureTuningState ────────────────────────────────────────────
+
+  ensureTuningState() {
+    if (!this.state || typeof this.state !== 'object') return;
+    if (!this.state.tuning || typeof this.state.tuning !== 'object' || Array.isArray(this.state.tuning)) this.state.tuning = {};
+  }
 }
