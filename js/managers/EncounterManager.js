@@ -160,4 +160,33 @@ Renown
       footer: 'Continue: Enter / Esc / T / L',
     };
   }
+
+  // ─── Phase 11C: Roster initialization ────────────────────────────────────────
+
+  initRosters() {
+    const g = this.game;
+    if (Array.isArray(g.playerRoster) && g.playerRoster.length > 0) return;
+    g.playerRoster = (g.playerParty?.roster || []).map((stack, idx) => ({
+      id: stack.id,
+      name: stack.name,
+      type: stack.id === 'archers' ? 'ranged' : 'melee',
+      count: stack.count,
+      hp: 100,
+      atk: stack.id === 'archers' ? 13 : 15,
+      morale: g.playerParty?.morale ?? 60,
+      fatigue: 10,
+      injured: stack.wounded ?? 0,
+      dead: (stack.count ?? 0) <= 0,
+      status: stack?.status || 'healthy',
+      selected: idx < 2,
+    }));
+    g.enemyRoster = [];
+
+    if (this.state) {
+      this.state.roster = {
+        warning: '',
+        enemyId: null,
+      };
+    }
+  }
 }

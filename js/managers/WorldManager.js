@@ -891,4 +891,29 @@ export class WorldManager {
     this.updateFogFromPlayer();
     tickWeatherLayer(dt, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
   }
+
+  // ─── Phase 11C: Enemy party management ───────────────────────────────────────
+
+  cleanupTemporaryEnemy(enemyId, { force = false } = {}) {
+    const g = this.game;
+    if (!enemyId || !Array.isArray(g.enemyParties)) return false;
+    const enemy = g.enemyParties.find((party) => party?.id === enemyId);
+    if (!enemy) return false;
+    if (force || enemy?.temporary) return this.despawnEnemyParty(enemyId);
+    return false;
+  }
+
+  despawnEnemyParty(enemyId) {
+    const g = this.game;
+    if (!enemyId || !Array.isArray(g.enemyParties)) return false;
+    const idx = g.enemyParties.findIndex((party) => party?.id === enemyId);
+    if (idx === -1) return false;
+    g.enemyParties.splice(idx, 1);
+
+    if (Array.isArray(this.state?.aiParties) && this.state.aiParties !== g.enemyParties) {
+      const stateIdx = this.state.aiParties.findIndex((party) => party?.id === enemyId);
+      if (stateIdx >= 0) this.state.aiParties.splice(stateIdx, 1);
+    }
+    return true;
+  }
 }

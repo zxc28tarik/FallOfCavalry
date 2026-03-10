@@ -488,4 +488,35 @@ export class UIManager {
     }
     return true;
   }
+
+  // ─── Phase 11C: Camp & accounting UI ─────────────────────────────────────────
+
+  toggleCampMode() {
+    const g = this.game;
+    campSystem.ensureCampState(this.state);
+    const active = campSystem.toggleCamp(this.state);
+    if (active) g.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: true, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
+    if (active) {
+      g.cancelPlayerDestination();
+      const { weight, cap } = g.getLogisticsSpeedMult();
+      const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
+      const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
+      g.campUI?.show?.({ weight, capacity: cap, raidChance });
+      g.setLastEventLog('Kamp kuruldu.');
+    } else {
+      g.campUI?.hide?.();
+      g.setLastEventLog('Kamptan çıkıldı.');
+    }
+  }
+
+  closeAccountingModal() {
+    const g = this.game;
+    g.accountingUI?.hide?.();
+    this.state.accounting = null;
+    this.state.uiPanel = null;
+    if (this.state) this.state.paused = false;
+    g.updateTransientUIState();
+    g.runAutosave('accounting-close');
+    return true;
+  }
 }

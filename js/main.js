@@ -696,31 +696,7 @@ class FallOfCavalry {
 
   ensureRosterState() { return this.worldManager.ensureRosterState(); }
 
-  initRosters() {
-    if (Array.isArray(this.playerRoster) && this.playerRoster.length > 0) return;
-    this.playerRoster = (this.playerParty?.roster || []).map((stack, idx) => ({
-      id: stack.id,
-      name: stack.name,
-      type: stack.id === 'archers' ? 'ranged' : 'melee',
-      count: stack.count,
-      hp: 100,
-      atk: stack.id === 'archers' ? 13 : 15,
-      morale: this.playerParty?.morale ?? 60,
-      fatigue: 10,
-      injured: stack.wounded ?? 0,
-      dead: (stack.count ?? 0) <= 0,
-      status: stack?.status || 'healthy',
-      selected: idx < 2,
-    }));
-    this.enemyRoster = [];
-
-    if (this.state) {
-      this.state.roster = {
-        warning: '',
-        enemyId: null,
-      };
-    }
-  }
+  initRosters() { return this.encounterManager.initRosters(); }
 
   getEnemyUnits(enemyId) { return this.battleManager.getEnemyUnits(enemyId); }
 
@@ -878,22 +854,7 @@ class FallOfCavalry {
   getLogisticsSpeedMult() { return this.economyManager.getLogisticsSpeedMult(); }
 
   setupCampUI() { return this.uiManager.setupCampUI(); }
-  toggleCampMode() {
-    campSystem.ensureCampState(this.state);
-    const active = campSystem.toggleCamp(this.state);
-    if (active) this.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: true, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
-    if (active) {
-      this.cancelPlayerDestination();
-      const { weight, cap } = this.getLogisticsSpeedMult();
-      const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
-      const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
-      this.campUI?.show?.({ weight, capacity: cap, raidChance });
-      this.setLastEventLog('Kamp kuruldu.');
-    } else {
-      this.campUI?.hide?.();
-      this.setLastEventLog('Kamptan çıkıldı.');
-    }
-  }
+  toggleCampMode() { return this.uiManager.toggleCampMode(); }
 
 
   setupBattleDeployUI() { return this.battleManager.setupBattleDeployUI(); }
@@ -913,15 +874,7 @@ class FallOfCavalry {
 
 
   setupAccountingUI() { return this.uiManager.setupAccountingUI(); }
-  closeAccountingModal() {
-    this.accountingUI?.hide?.();
-    this.state.accounting = null;
-    this.state.uiPanel = null;
-    if (this.state) this.state.paused = false;
-    this.updateTransientUIState();
-    this.runAutosave('accounting-close');
-    return true;
-  }
+  closeAccountingModal() { return this.uiManager.closeAccountingModal(); }
 
   setupPoiUI() { return this.uiManager.setupPoiUI(); }
   getNearestInteractablePoi() {
@@ -974,26 +927,9 @@ class FallOfCavalry {
 
   applyBattleExit(enemy, enemyId, pushbackDistance) { return this.battleManager.applyBattleExit(enemy, enemyId, pushbackDistance); }
 
-  cleanupTemporaryEnemy(enemyId, { force = false } = {}) {
-    if (!enemyId || !Array.isArray(this.enemyParties)) return false;
-    const enemy = this.enemyParties.find((party) => party?.id === enemyId);
-    if (!enemy) return false;
-    if (force || enemy?.temporary) return this.despawnEnemyParty(enemyId);
-    return false;
-  }
+  cleanupTemporaryEnemy(enemyId, opts) { return this.worldManager.cleanupTemporaryEnemy(enemyId, opts); }
 
-  despawnEnemyParty(enemyId) {
-    if (!enemyId || !Array.isArray(this.enemyParties)) return false;
-    const idx = this.enemyParties.findIndex((party) => party?.id === enemyId);
-    if (idx === -1) return false;
-    this.enemyParties.splice(idx, 1);
-
-    if (Array.isArray(this.state?.aiParties) && this.state.aiParties !== this.enemyParties) {
-      const stateIdx = this.state.aiParties.findIndex((party) => party?.id === enemyId);
-      if (stateIdx >= 0) this.state.aiParties.splice(stateIdx, 1);
-    }
-    return true;
-  }
+  despawnEnemyParty(enemyId) { return this.worldManager.despawnEnemyParty(enemyId); }
 
   setLastEventLog(message, durationMs = 3000) {
     if (!this.state) return;

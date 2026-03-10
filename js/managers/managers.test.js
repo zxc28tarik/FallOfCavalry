@@ -2595,4 +2595,51 @@ describe('EconomyManager - Phase 5C', () => {
       expect(um.maybeShowTutorialHint({})).toBe(false);
     });
   });
+
+  // ─── Phase 11C: WorldManager + EncounterManager + UIManager misc ─────────────
+
+  describe('WorldManager - Phase 11C extensions', () => {
+    it('despawnEnemyParty returns false when enemyId is null', () => {
+      const wm = new WorldManager({});
+      wm.init({ enemyParties: [{ id: 'e1' }] });
+      expect(wm.despawnEnemyParty(null)).toBe(false);
+    });
+
+    it('despawnEnemyParty removes party from enemyParties', () => {
+      const state = { aiParties: [] };
+      const game = { enemyParties: [{ id: 'e1' }, { id: 'e2' }] };
+      const wm = new WorldManager(state);
+      wm.init(game);
+      expect(wm.despawnEnemyParty('e1')).toBe(true);
+      expect(game.enemyParties.length).toBe(1);
+    });
+
+    it('cleanupTemporaryEnemy returns false when enemy is not temporary', () => {
+      const state = {};
+      const game = { enemyParties: [{ id: 'e1', temporary: false }] };
+      const wm = new WorldManager(state);
+      wm.init(game);
+      expect(wm.cleanupTemporaryEnemy('e1')).toBe(false);
+    });
+  });
+
+  describe('EncounterManager - Phase 11C initRosters', () => {
+    it('initRosters skips when playerRoster already populated', () => {
+      const state = {};
+      const em = new EncounterManager(state);
+      const game = { playerRoster: [{ id: 'swords' }], playerParty: null };
+      em.init(game);
+      em.initRosters();
+      expect(game.playerRoster.length).toBe(1); // unchanged
+    });
+
+    it('initRosters initialises empty enemyRoster', () => {
+      const state = {};
+      const em = new EncounterManager(state);
+      const game = { playerRoster: [], playerParty: { roster: [], morale: 60 }, enemyRoster: null };
+      em.init(game);
+      em.initRosters();
+      expect(Array.isArray(game.enemyRoster)).toBe(true);
+    });
+  });
 });
