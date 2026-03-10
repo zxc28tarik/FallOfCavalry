@@ -387,47 +387,15 @@ class FallOfCavalry {
     this.state.settings = serializeSettings(this.settings);
     if (this.settingsUI?.visible) this.settingsUI.syncFromState();
   }
-  getRegionIdAtTile(tx, ty) {
-    const nearestSettlement = this.getNearestSettlementAt(tx, ty);
-    if (nearestSettlement?.id) return String(nearestSettlement.id);
-    return `wild:${Math.floor(Number(tx) || 0)}:${Math.floor(Number(ty) || 0)}`;
-  }
+  getRegionIdAtTile(tx, ty) { return this.worldManager.getRegionIdAtTile(tx, ty); }
 
-  getCurrentRegionContext() {
-    const tilePos = this.getTilePosition(this.playerParty?.x ?? 0, this.playerParty?.y ?? 0);
-    const regionId = this.getRegionIdAtTile(tilePos.tx, tilePos.ty);
-    const nearestSettlement = this.getNearestSettlementAt(tilePos.tx, tilePos.ty);
-    return {
-      regionId,
-      regionName: nearestSettlement?.name || regionId,
-      tilePos,
-      settlement: nearestSettlement,
-    };
-  }
+  getCurrentRegionContext() { return this.worldManager.getCurrentRegionContext(); }
 
-  getCurrentRegionModifiers(day = this.state?.day) {
-    const ctx = this.getCurrentRegionContext();
-    if (!this.state?.regionState) this.state.regionState = createInitialRegionState();
-    this.state.currentRegionId = ctx.regionId;
-    this.state.currentRegionName = ctx.regionName;
-    return getActiveRegionModifiers(this.state.regionState, ctx.regionId, day);
-  }
+  getCurrentRegionModifiers(day = this.state?.day) { return this.worldManager.getCurrentRegionModifiers(day); }
 
-  getWorldAiCfgWithRegionMods() {
-    const base = this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
-    const mods = this.getCurrentRegionModifiers(this.state?.day);
-    const banditMult = mods.reduce((mult, mod) => (mod?.id === 'high_banditry' ? (mult * Number(CONST.REGION_MODIFIERS.HIGH_BANDITRY.banditSpawnMult || 1.5)) : mult), 1);
-    if (banditMult === 1) return base;
-    return {
-      ...base,
-      MAX_BANDIT_PARTIES: Math.max(1, Math.floor(Number(base.MAX_BANDIT_PARTIES ?? 0) * banditMult)),
-    };
-  }
+  getWorldAiCfgWithRegionMods() { return this.worldManager.getWorldAiCfgWithRegionMods(); }
 
-  getRenownGainMultAtCurrentRegion() {
-    const mods = this.getCurrentRegionModifiers(this.state?.day);
-    return mods.reduce((mult, mod) => (mod?.id === 'pilgrimage' ? (mult * Number(CONST.REGION_MODIFIERS.PILGRIMAGE.renownGainMult || 1.2)) : mult), 1);
-  }
+  getRenownGainMultAtCurrentRegion() { return this.worldManager.getRenownGainMultAtCurrentRegion(); }
 
   init() {
     if (this.initialized) {
@@ -623,12 +591,9 @@ class FallOfCavalry {
 
   applyDailyEventEffects(day, activeEvents) { return this.gameFlowManager.applyDailyEventEffects(day, activeEvents); }
 
-  getBanditCapWithEvents(worldEvents) {
-    const worldCfg = this.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
-    const eventsCfg = this.getEffectiveTuning().EVENTS || CONST.EVENTS;
-    const baseCap = Number(worldCfg.MAX_BANDIT_PARTIES ?? CONST.WORLD_AI.MAX_BANDIT_PARTIES);
-    return getBanditCap(worldEvents, getBanditCapFromEvents(worldEvents, baseCap, eventsCfg), eventsCfg);
-  }
+  getBanditCapWithEvents(worldEvents) { return this.worldManager.getBanditCapWithEvents(worldEvents); }
+
+  processDailyEconomy
 
   processDailyEconomy(day) { return this.economyManager.processDailyEconomy(day); }
 

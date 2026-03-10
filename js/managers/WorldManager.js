@@ -3,10 +3,12 @@ import WorldGenerator from '../world/world-generator.js';
 import FogOfWar from '../world/fog-of-war.js';
 import { assignInitialSettlementOwners, getStance } from '../systems/factions.js';
 import { computeRiskMultiplier, riskLabel } from '../systems/encounter-risk.js';
-import { ensureWorldParties, createInitialWorldAiState, updateWorldParties } from '../systems/world-ai.js';
+import { ensureWorldParties, createInitialWorldAiState, updateWorldParties, getBanditCap } from '../systems/world-ai.js';
+import { getBanditCapFromEvents } from '../systems/events.js';
 import { tickWeatherLayer } from '../rendering/weather-layer.js';
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import { setContractsRuntimeContext } from '../systems/contracts.js';
+import { createInitialRegionState, getActiveRegionModifiers } from '../systems/region-state.js';
 
 export class WorldManager {
   constructor(gameState) {
@@ -915,5 +917,61 @@ export class WorldManager {
       if (stateIdx >= 0) this.state.aiParties.splice(stateIdx, 1);
     }
     return true;
+  }
+
+  // ─── Phase 12A: Region & bandit-cap methods ───────────────────────────────────
+
+  getRegionIdAtTile(tx, ty) {
+    const g = this.game;
+    const nearestSettlement = g.getNearestSettlementAt(tx, ty);
+    if (nearestSettlement?.id) return String(nearestSettlement.id);
+    return `wild:${Math.floor(Number(tx) || 0)}:${Math.floor(Number(ty) || 0)}`;
+  }
+
+  getCurrentRegionContext() {
+    const g = this.game;
+    const tilePos = g.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
+    const regionId = this.getRegionIdAtTile(tilePos.tx, tilePos.ty);
+    const nearestSettlement = g.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    return {
+      regionId,
+      regionName: nearestSettlement?.name || regionId,
+      tilePos,
+      settlement: nearestSettlement,
+    };
+  }
+
+  getCurrentRegionModifiers(day = this.state?.day) {
+    const g = this.game;
+    const ctx = this.getCurrentRegionContext();
+    if (!this.state?.regionState) this.state.regionState = createInitialRegionState();
+    this.state.currentRegionId = ctx.regionId;
+    this.state.currentRegionName = ctx.regionName;
+    return getActiveRegionModifiers(this.state.regionState, ctx.regionId, day);
+  }
+
+  getWorldAiCfgWithRegionMods() {
+    const g = this.game;
+    const base = g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
+    const mods = this.getCurrentRegionModifiers(this.state?.day);
+    const banditMult = mods.reduce((mult, mod) => (mod?.id === 'high_banditry' ? (mult * Number(CONST.REGION_MODIFIERS.HIGH_BANDITRY.banditSpawnMult || 1.5)) : mult), 1);
+    if (banditMult === 1) return base;
+    return {
+      ...base,
+      MAX_BANDIT_PARTIES: Math.max(1, Math.floor(Number(base.MAX_BANDIT_PARTIES ?? 0) * banditMult)),
+    };
+  }
+
+  getRenownGainMultAtCurrentRegion() {
+    const mods = this.getCurrentRegionModifiers(this.state?.day);
+    return mods.reduce((mult, mod) => (mod?.id === 'pilgrimage' ? (mult * Number(CONST.REGION_MODIFIERS.PILGRIMAGE.renownGainMult || 1.2)) : mult), 1);
+  }
+
+  getBanditCapWithEvents(worldEvents) {
+    const g = this.game;
+    const worldCfg = g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
+    const eventsCfg = g.getEffectiveTuning().EVENTS || CONST.EVENTS;
+    const baseCap = Number(worldCfg.MAX_BANDIT_PARTIES ?? CONST.WORLD_AI.MAX_BANDIT_PARTIES);
+    return getBanditCap(worldEvents, getBanditCapFromEvents(worldEvents, baseCap, eventsCfg), eventsCfg);
   }
 }

@@ -2642,4 +2642,63 @@ describe('EconomyManager - Phase 5C', () => {
       expect(Array.isArray(game.enemyRoster)).toBe(true);
     });
   });
+
+  describe('WorldManager - Phase 12A region methods', () => {
+    it('getRegionIdAtTile returns wild: prefix when no settlement', () => {
+      const state = {};
+      const wm = new WorldManager(state);
+      const game = { getNearestSettlementAt: () => null };
+      wm.init(game);
+      const result = wm.getRegionIdAtTile(5, 10);
+      expect(result).toBe('wild:5:10');
+    });
+
+    it('getRegionIdAtTile returns settlement id when settlement found', () => {
+      const state = {};
+      const wm = new WorldManager(state);
+      const game = { getNearestSettlementAt: () => ({ id: 'city1', name: 'Rome' }) };
+      wm.init(game);
+      const result = wm.getRegionIdAtTile(5, 10);
+      expect(result).toBe('city1');
+    });
+
+    it('getCurrentRegionContext returns region context object', () => {
+      const state = {};
+      const wm = new WorldManager(state);
+      const game = {
+        playerParty: { x: 0, y: 0 },
+        getTilePosition: () => ({ tx: 3, ty: 7 }),
+        getNearestSettlementAt: () => ({ id: 'town1', name: 'Vienna' }),
+      };
+      wm.init(game);
+      const ctx = wm.getCurrentRegionContext();
+      expect(ctx.regionId).toBe('town1');
+      expect(ctx.regionName).toBe('Vienna');
+    });
+
+    it('getRenownGainMultAtCurrentRegion returns 1 when no pilgrimage mod', () => {
+      const state = { day: 1, regionState: {} };
+      const wm = new WorldManager(state);
+      const game = {
+        playerParty: { x: 0, y: 0 },
+        getTilePosition: () => ({ tx: 0, ty: 0 }),
+        getNearestSettlementAt: () => null,
+      };
+      wm.init(game);
+      const mult = wm.getRenownGainMultAtCurrentRegion();
+      expect(typeof mult).toBe('number');
+      expect(mult).toBeGreaterThanOrEqual(1);
+    });
+
+    it('getBanditCapWithEvents returns a number', () => {
+      const state = {};
+      const wm = new WorldManager(state);
+      const game = {
+        getEffectiveTuning: () => ({ WORLD_AI: { MAX_BANDIT_PARTIES: 5 }, EVENTS: {} }),
+      };
+      wm.init(game);
+      const cap = wm.getBanditCapWithEvents([]);
+      expect(typeof cap).toBe('number');
+    });
+  });
 });
