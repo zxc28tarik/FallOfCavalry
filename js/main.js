@@ -382,11 +382,7 @@ class FallOfCavalry {
     return this.battleManager.getBattleCameraConfig();
   }
 
-  applyGameSettingsPatch(patch = {}) {
-    this.settings = applySettingsPatch(this.settings, patch, CONST.SETTINGS);
-    this.state.settings = serializeSettings(this.settings);
-    if (this.settingsUI?.visible) this.settingsUI.syncFromState();
-  }
+  applyGameSettingsPatch(patch = {}) { return this.gameFlowManager.applyGameSettingsPatch(patch); }
   getRegionIdAtTile(tx, ty) { return this.worldManager.getRegionIdAtTile(tx, ty); }
 
   getCurrentRegionContext() { return this.worldManager.getCurrentRegionContext(); }
@@ -574,70 +570,23 @@ class FallOfCavalry {
 
   setupEventListeners() { return this.uiManager.setupEventListeners(); }
 
-  getCurrentEvents(day = Number(this.state?.day ?? 1)) {
-    this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
-    return getActiveEvents(this.state.events, day);
-  }
+  getCurrentEvents(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.getCurrentEvents(day); }
 
-  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) {
-    const activeEvents = this.getCurrentEvents(day);
-    const summary = activeEvents.slice(0, 3).map((event) => {
-      const suffix = event?.cityId || event?.regionId || 'Active';
-      return `${getEventTypeLabel(event?.type)} (${suffix})`;
-    }).join(', ');
-    this.state.currentEventsSummary = summary ? `Events: ${summary}` : 'Events: None';
-    return activeEvents;
-  }
+  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.refreshCurrentEventsSummary(day); }
 
   applyDailyEventEffects(day, activeEvents) { return this.gameFlowManager.applyDailyEventEffects(day, activeEvents); }
 
   getBanditCapWithEvents(worldEvents) { return this.worldManager.getBanditCapWithEvents(worldEvents); }
 
-  processDailyEconomy
-
   processDailyEconomy(day) { return this.economyManager.processDailyEconomy(day); }
 
-  evaluateCampaignOutcome() {
-    if (!this.playerParty || this.state?.campaignEnded) return null;
-    if ((this.playerParty.renown ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_RENOWN) return 'win';
-    if ((this.playerParty.gold ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_GOLD) return 'win';
+  evaluateCampaignOutcome() { return this.gameFlowManager.evaluateCampaignOutcome(); }
 
-    const livingUnits = (this.playerParty.roster || []).filter((unit) => (unit?.hp ?? 0) > 0);
-    if (livingUnits.length === 0) return 'lose';
-    if ((this.playerParty.gold ?? 0) <= CONST.CAMPAIGN_OBJECTIVES.LOSE_GOLD
-      && (this.playerParty.starveDays ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.LOSE_STARVE_DAYS) return 'lose';
-    return null;
-  }
+  restartRun() { return this.gameFlowManager.restartRun(); }
 
-  restartRun() {
-    if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
-      window.location.reload();
-      return true;
-    }
-    return false;
-  }
+  showCampaignWin() { return this.gameFlowManager.showCampaignWin(); }
 
-  showCampaignWin() {
-    if (this.state?.campaignEnded) return;
-    if (this.state) this.state.campaignEnded = 'win';
-    this.setPaused(true);
-    showWinScreen({
-      party: this.playerParty,
-      day: this.state?.day ?? 1,
-      onNewRun: () => this.restartRun(),
-    });
-  }
-
-  showCampaignLose() {
-    if (this.state?.campaignEnded) return;
-    if (this.state) this.state.campaignEnded = 'lose';
-    this.setPaused(true);
-    showLoseScreen({
-      party: this.playerParty,
-      day: this.state?.day ?? 1,
-      onNewRun: () => this.restartRun(),
-    });
-  }
+  showCampaignLose() { return this.gameFlowManager.showCampaignLose(); }
 
   getCameraSafe() { return this.worldManager.getCameraSafe(); }
 
@@ -896,11 +845,7 @@ class FallOfCavalry {
 
   despawnEnemyParty(enemyId) { return this.worldManager.despawnEnemyParty(enemyId); }
 
-  setLastEventLog(message, durationMs = 3000) {
-    if (!this.state) return;
-    this.state.lastEventLog = typeof message === 'string' ? message : '';
-    this.state.lastEventLogUntil = Date.now() + durationMs;
-  }
+  setLastEventLog(message, durationMs = 3000) { return this.gameFlowManager.setLastEventLog(message, durationMs); }
 
   setPlayerDestination(worldX, worldY) { return this.worldManager.setPlayerDestination(worldX, worldY); }
 
@@ -946,20 +891,9 @@ class FallOfCavalry {
 
   continueGame() { return this.gameFlowManager.continueGame(); }
 
-  openSettings() {
-    if (this.mode === 'menu') {
-      this.hudManager?.setSettingsVisible?.(true);
-      return true;
-    }
-    this.settingsUI?.show?.();
-    return true;
-  }
+  openSettings() { return this.gameFlowManager.openSettings(); }
 
-  closeSettings() {
-    this.hudManager?.setSettingsVisible?.(false);
-    this.settingsUI?.hide?.();
-    return true;
-  }
+  closeSettings() { return this.gameFlowManager.closeSettings(); }
 
   applyMasterVolume(value) { return this.gameFlowManager.applyMasterVolume(value); }
 
@@ -973,11 +907,7 @@ class FallOfCavalry {
 
   setPaused(isPaused) { return this.gameFlowManager.setPaused(isPaused); }
 
-  togglePaused() {
-    if (this.mode === 'playing') return this.setPaused(true);
-    if (this.mode === 'paused') return this.setPaused(false);
-    return true;
-  }
+  togglePaused() { return this.gameFlowManager.togglePaused(); }
 
   isPaused() {
     return this.mode === 'paused';

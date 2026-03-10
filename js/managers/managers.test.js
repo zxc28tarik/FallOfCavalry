@@ -2643,6 +2643,50 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
+  describe('GameFlowManager - Phase 12B campaign/settings/events', () => {
+    it('getCurrentEvents returns array', () => {
+      const state = { day: 1 };
+      const gfm = new GameFlowManager(state);
+      gfm.init({ });
+      const result = gfm.getCurrentEvents(1);
+      expect(Array.isArray(result)).toBe(true);
+    });
+
+    it('refreshCurrentEventsSummary sets state.currentEventsSummary', () => {
+      const state = { day: 1 };
+      const gfm = new GameFlowManager(state);
+      gfm.init({ });
+      gfm.refreshCurrentEventsSummary(1);
+      expect(typeof state.currentEventsSummary).toBe('string');
+      expect(state.currentEventsSummary).toMatch(/Events:/);
+    });
+
+    it('evaluateCampaignOutcome returns null when no player party', () => {
+      const state = {};
+      const gfm = new GameFlowManager(state);
+      gfm.init({ playerParty: null });
+      expect(gfm.evaluateCampaignOutcome()).toBeNull();
+    });
+
+    it('setLastEventLog sets state.lastEventLog', () => {
+      const state = {};
+      const gfm = new GameFlowManager(state);
+      gfm.init({});
+      gfm.setLastEventLog('Test message');
+      expect(state.lastEventLog).toBe('Test message');
+      expect(typeof state.lastEventLogUntil).toBe('number');
+    });
+
+    it('togglePaused sets mode to paused when mode is playing', () => {
+      const state = {};
+      const gfm = new GameFlowManager(state);
+      const game = { mode: 'playing', started: false };
+      gfm.init(game);
+      gfm.togglePaused();
+      expect(game.mode).toBe('paused');
+    });
+  });
+
   describe('WorldManager - Phase 12A region methods', () => {
     it('getRegionIdAtTile returns wild: prefix when no settlement', () => {
       const state = {};

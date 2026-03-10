@@ -7,7 +7,9 @@ import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
 import StartScreen from '../ui/start-screen.js';
 import { getRelation, setRelation } from '../systems/factions.js';
-import { EVENT_TYPES } from '../systems/events.js';
+import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
+import { showWinScreen, showLoseScreen } from '../ui/modals.js';
+import { applySettingsPatch, serializeSettings } from '../systems/settings.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -275,6 +277,106 @@ export class GameFlowManager {
     if (typeof g.audioSystem?.setSfxVolume === 'function') {
       g.audioSystem.setSfxVolume(normalized);
     }
+    return true;
+  }
+
+  // ─── Phase 12B: Campaign, settings, and event methods ────────────────────────
+
+  getCurrentEvents(day = Number(this.state?.day ?? 1)) {
+    const g = this.game;
+    this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
+    return getActiveEvents(this.state.events, day);
+  }
+
+  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) {
+    const activeEvents = this.getCurrentEvents(day);
+    const summary = activeEvents.slice(0, 3).map((event) => {
+      const suffix = event?.cityId || event?.regionId || 'Active';
+      return `${getEventTypeLabel(event?.type)} (${suffix})`;
+    }).join(', ');
+    this.state.currentEventsSummary = summary ? `Events: ${summary}` : 'Events: None';
+    return activeEvents;
+  }
+
+  evaluateCampaignOutcome() {
+    const g = this.game;
+    if (!g.playerParty || this.state?.campaignEnded) return null;
+    if ((g.playerParty.renown ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_RENOWN) return 'win';
+    if ((g.playerParty.gold ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.WIN_GOLD) return 'win';
+
+    const livingUnits = (g.playerParty.roster || []).filter((unit) => (unit?.hp ?? 0) > 0);
+    if (livingUnits.length === 0) return 'lose';
+    if ((g.playerParty.gold ?? 0) <= CONST.CAMPAIGN_OBJECTIVES.LOSE_GOLD
+      && (g.playerParty.starveDays ?? 0) >= CONST.CAMPAIGN_OBJECTIVES.LOSE_STARVE_DAYS) return 'lose';
+    return null;
+  }
+
+  restartRun() {
+    if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+      window.location.reload();
+      return true;
+    }
+    return false;
+  }
+
+  showCampaignWin() {
+    const g = this.game;
+    if (this.state?.campaignEnded) return;
+    if (this.state) this.state.campaignEnded = 'win';
+    g.setPaused(true);
+    showWinScreen({
+      party: g.playerParty,
+      day: this.state?.day ?? 1,
+      onNewRun: () => this.restartRun(),
+    });
+  }
+
+  showCampaignLose() {
+    const g = this.game;
+    if (this.state?.campaignEnded) return;
+    if (this.state) this.state.campaignEnded = 'lose';
+    g.setPaused(true);
+    showLoseScreen({
+      party: g.playerParty,
+      day: this.state?.day ?? 1,
+      onNewRun: () => this.restartRun(),
+    });
+  }
+
+  openSettings() {
+    const g = this.game;
+    if (g.mode === 'menu') {
+      g.hudManager?.setSettingsVisible?.(true);
+      return true;
+    }
+    g.settingsUI?.show?.();
+    return true;
+  }
+
+  closeSettings() {
+    const g = this.game;
+    g.hudManager?.setSettingsVisible?.(false);
+    g.settingsUI?.hide?.();
+    return true;
+  }
+
+  applyGameSettingsPatch(patch = {}) {
+    const g = this.game;
+    g.settings = applySettingsPatch(g.settings, patch, CONST.SETTINGS);
+    this.state.settings = serializeSettings(g.settings);
+    if (g.settingsUI?.visible) g.settingsUI.syncFromState();
+  }
+
+  setLastEventLog(message, durationMs = 3000) {
+    if (!this.state) return;
+    this.state.lastEventLog = typeof message === 'string' ? message : '';
+    this.state.lastEventLogUntil = Date.now() + durationMs;
+  }
+
+  togglePaused() {
+    const g = this.game;
+    if (g.mode === 'playing') return this.setPaused(true);
+    if (g.mode === 'paused') return this.setPaused(false);
     return true;
   }
 }
