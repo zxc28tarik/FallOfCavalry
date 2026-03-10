@@ -34,6 +34,7 @@ import { DevManager } from './managers/DevManager.js';
 import { DiplomacyManager } from './managers/DiplomacyManager.js';
 import { EncounterManager } from './managers/EncounterManager.js';
 import { GameFlowManager } from './managers/GameFlowManager.js';
+
 window.__FOC_BOOT_OK__ = true;
 
 const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
@@ -308,7 +309,6 @@ class FallOfCavalry {
     this.setupPartyInputHandlers();
     this.setupDOMReferences();
     this.ensureHudEventsButton();
-    this.setupDOMReferences();
     this.hudManager?.setupElements?.();
     this.hudManager?.setupListeners?.();
     this.updateBuildInfoBadge();

@@ -3,7 +3,6 @@ import { EconomyManager } from './EconomyManager.js';
 import { GameInputManager } from './InputManager.js';
 import { BattleManager } from './BattleManager.js';
 import { WorldManager } from './WorldManager.js';
-import { StateManager } from './StateManager.js';
 import { CityManager } from './CityManager.js';
 import { SaveManager } from './SaveManager.js';
 import { UIManager } from './UIManager.js';
@@ -32,13 +31,6 @@ describe('Managers', () => {
     expect(manager.aiParties).toEqual([]);
   });
 
-  it('should instantiate StateManager', () => {
-    const manager = new StateManager();
-    expect(manager).toBeDefined();
-    expect(manager.state).toBeDefined();
-    expect(manager.mode).toBe('start');
-  });
-
   it('should instantiate CityManager', () => {
     const mockState = { mode: 'map' };
     const manager = new CityManager(mockState);
@@ -52,12 +44,6 @@ describe('Managers', () => {
     const manager = new UIManager(mockState);
     expect(manager).toBeDefined();
     expect(manager.state).toBe(mockState);
-  });
-
-  it('StateManager.setMode should update mode', () => {
-    const manager = new StateManager();
-    manager.setMode('map');
-    expect(manager.mode).toBe('map');
   });
 
   it('CityManager.enterCity / exitCity should change mode', () => {

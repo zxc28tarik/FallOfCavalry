@@ -969,8 +969,9 @@ export class WorldManager {
 
   getBanditCapWithEvents(worldEvents) {
     const g = this.game;
-    const worldCfg = g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
-    const eventsCfg = g.getEffectiveTuning().EVENTS || CONST.EVENTS;
+    const tuning = g.getEffectiveTuning();
+    const worldCfg = tuning.WORLD_AI || CONST.WORLD_AI;
+    const eventsCfg = tuning.EVENTS || CONST.EVENTS;
     const baseCap = Number(worldCfg.MAX_BANDIT_PARTIES ?? CONST.WORLD_AI.MAX_BANDIT_PARTIES);
     return getBanditCap(worldEvents, getBanditCapFromEvents(worldEvents, baseCap, eventsCfg), eventsCfg);
   }

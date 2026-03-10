@@ -423,13 +423,13 @@ export class GameFlowManager {
     g.hudManager = null;
     g.saveSystem = null;
     g.audioSystem = null;
+    g.stopAutosaveLoop();
     g.state = null;
     g.ctx = null;
     g.canvas = null;
     g.mode = 'menu';
     g.playerParty = null;
     g.followParty = false;
-    g.stopAutosaveLoop();
 
     return true;
   }
