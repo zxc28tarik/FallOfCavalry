@@ -1128,44 +1128,11 @@ class FallOfCavalry {
 
   setupStartFlow() { return this.gameFlowManager.setupStartFlow(); }
 
-  enterStart() {
-    this.mode = 'menu';
-    this.hudManager?.setMenuVisible?.(false);
-    this.hudManager?.setSettingsVisible?.(false);
-
-    if (this.state?.mode !== 'start') {
-      this.state.setMode('start');
-    } else {
-      this.onModeChanged('menu', 'start');
-    }
-
-    document.getElementById('mainMenuOverlay')?.classList.add('hidden');
-  }
+  enterStart() { return this.gameFlowManager.enterStart(); }
   setupMenuActions() { return this.uiManager.setupMenuActions(); }
-  enterMenu() {
-    this.stop();
-    this.mode = 'menu';
+  enterMenu() { return this.gameFlowManager.enterMenu(); }
 
-    this.hudManager?.setPaused?.(false);
-    this.hudManager?.setMenuVisible?.(true);
-    this.hudManager?.setSettingsVisible?.(false);
-
-    const canContinue = Boolean(this.saveSystem?.hasSave?.());
-    this.hudManager?.setContinueEnabled?.(canContinue);
-    return true;
-  }
-
-  startNewGame() {
-    const started = this.start();
-    if (!started) return false;
-
-    this.mode = 'playing';
-    this.startAutosaveLoop();
-    this.hudManager?.setMenuVisible?.(false);
-    this.hudManager?.setSettingsVisible?.(false);
-    this.hudManager?.setPaused?.(false);
-    return true;
-  }
+  startNewGame() { return this.gameFlowManager.startNewGame(); }
 
   continueGame() { return this.gameFlowManager.continueGame(); }
 
@@ -1184,70 +1151,15 @@ class FallOfCavalry {
     return true;
   }
 
-  applyMasterVolume(value) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return false;
-    const normalized = numeric > 1 ? numeric / 100 : numeric;
-
-    if (typeof this.audioSystem?.setMasterVolume === 'function') {
-      this.audioSystem.setMasterVolume(normalized);
-      return true;
-    }
-
-    if (typeof this.audioSystem?.setMusicVolume === 'function') {
-      this.audioSystem.setMusicVolume(normalized);
-    }
-    if (typeof this.audioSystem?.setSfxVolume === 'function') {
-      this.audioSystem.setSfxVolume(normalized);
-    }
-    return true;
-  }
+  applyMasterVolume(value) { return this.gameFlowManager.applyMasterVolume(value); }
 
   quitToMenu() {
     return this.enterMenu();
   }
 
-  start() {
-    if (!this.initialized) {
-      const ready = this.init();
-      if (!ready) return false;
-    }
+  start() { return this.gameFlowManager.start(); }
 
-    if (this.started) {
-      this.warnOnce('game:start-duplicate', '[Game] start() already running');
-      return true;
-    }
-
-    if (!this.state || !this.gameLoop || typeof this.gameLoop.start !== 'function') {
-      this.warnOnce('game:start-unavailable', '[Game] start() unavailable');
-      return false;
-    }
-
-    if (!Array.isArray(this.state?.map?.tiles) || this.state.map.tiles.length === 0) {
-      this.ensureWorldGenerated(this.state?.seed);
-    }
-
-    if (this.state.mode !== 'map') {
-      this.state.setMode('map');
-    }
-
-    this.updateTransientUIState();
-
-    this.gameLoop.start();
-    this.started = true;
-    return true;
-  }
-
-  stop() {
-    if (!this.started) {
-      this.warnOnce('game:stop-duplicate', '[Game] stop() already stopped');
-      return true;
-    }
-
-    this.gameLoop?.stop?.();
-    this.started = false;
-    return true;
-  }
+  stop() { return this.gameFlowManager.stop(); }
 
   setPaused(isPaused) { return this.gameFlowManager.setPaused(isPaused); }
 

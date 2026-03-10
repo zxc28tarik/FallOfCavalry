@@ -167,4 +167,114 @@ export class GameFlowManager {
       g.setLastEventLog(`Day ${day}: ${warTaxActive ? 'War tax applied. ' : ''}${refugeeEvents.length > 0 ? 'Refugees supported.' : ''}`.trim());
     }
   }
+
+  // ─── Phase 11A: Game loop & flow methods ─────────────────────────────────────
+
+  start() {
+    const g = this.game;
+    if (!g.initialized) {
+      const ready = g.init();
+      if (!ready) return false;
+    }
+
+    if (g.started) {
+      g.warnOnce('game:start-duplicate', '[Game] start() already running');
+      return true;
+    }
+
+    if (!this.state || !g.gameLoop || typeof g.gameLoop.start !== 'function') {
+      g.warnOnce('game:start-unavailable', '[Game] start() unavailable');
+      return false;
+    }
+
+    if (!Array.isArray(this.state?.map?.tiles) || this.state.map.tiles.length === 0) {
+      g.ensureWorldGenerated(this.state?.seed);
+    }
+
+    if (this.state.mode !== 'map') {
+      this.state.setMode('map');
+    }
+
+    g.updateTransientUIState();
+
+    g.gameLoop.start();
+    g.started = true;
+    return true;
+  }
+
+  stop() {
+    const g = this.game;
+    if (!g.started) {
+      g.warnOnce('game:stop-duplicate', '[Game] stop() already stopped');
+      return true;
+    }
+
+    g.gameLoop?.stop?.();
+    g.started = false;
+    return true;
+  }
+
+  enterStart() {
+    const g = this.game;
+    g.mode = 'menu';
+    g.hudManager?.setMenuVisible?.(false);
+    g.hudManager?.setSettingsVisible?.(false);
+
+    if (this.state?.mode !== 'start') {
+      this.state.setMode('start');
+    } else {
+      g.onModeChanged('menu', 'start');
+    }
+
+    if (typeof document !== 'undefined') {
+      document.getElementById('mainMenuOverlay')?.classList.add('hidden');
+    }
+  }
+
+  enterMenu() {
+    const g = this.game;
+    this.stop();
+    g.mode = 'menu';
+
+    g.hudManager?.setPaused?.(false);
+    g.hudManager?.setMenuVisible?.(true);
+    g.hudManager?.setSettingsVisible?.(false);
+
+    const canContinue = Boolean(g.saveSystem?.hasSave?.());
+    g.hudManager?.setContinueEnabled?.(canContinue);
+    return true;
+  }
+
+  startNewGame() {
+    const g = this.game;
+    const started = this.start();
+    if (!started) return false;
+
+    g.mode = 'playing';
+    g.startAutosaveLoop();
+    g.hudManager?.setMenuVisible?.(false);
+    g.hudManager?.setSettingsVisible?.(false);
+    g.hudManager?.setPaused?.(false);
+    return true;
+  }
+
+  applyMasterVolume(value) {
+    const g = this.game;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return false;
+    const normalized = numeric > 1 ? numeric / 100 : numeric;
+
+    if (typeof g.audioSystem?.setMasterVolume === 'function') {
+      g.audioSystem.setMasterVolume(normalized);
+      return true;
+    }
+
+    if (typeof g.audioSystem?.setMusicVolume === 'function') {
+      g.audioSystem.setMusicVolume(normalized);
+    }
+    if (typeof g.audioSystem?.setSfxVolume === 'function') {
+      g.audioSystem.setSfxVolume(normalized);
+    }
+    return true;
+  }
 }

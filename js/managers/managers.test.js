@@ -2483,4 +2483,63 @@ describe('EconomyManager - Phase 5C', () => {
       expect(() => pm.resolvePoiFollowup()).not.toThrow();
     });
   });
+
+  // ─── Phase 11A: GameFlowManager extensions ───────────────────────────────────
+
+  describe('GameFlowManager - Phase 11A extensions', () => {
+    function makeGFM11A(gameOverrides = {}) {
+      const state = { mode: 'map', map: { tiles: [1] } };
+      state.setMode = (m) => { state.mode = m; };
+      const gfm = new GameFlowManager(state);
+      const game = {
+        mode: 'playing',
+        started: false,
+        initialized: true,
+        state,
+        gameLoop: { start: () => {}, stop: () => {} },
+        hudManager: { setMenuVisible: () => {}, setSettingsVisible: () => {}, setPaused: () => {}, setContinueEnabled: () => {} },
+        saveSystem: null,
+        startAutosaveLoop: () => {},
+        ensureWorldGenerated: () => {},
+        updateTransientUIState: () => {},
+        warnOnce: () => {},
+        onModeChanged: () => {},
+        audioSystem: null,
+        ...gameOverrides,
+      };
+      gfm.init(game);
+      return { gfm, state, game };
+    }
+
+    it('stop() returns true when game not started (already stopped)', () => {
+      const { gfm, game } = makeGFM11A({ started: false });
+      expect(gfm.stop()).toBe(true);
+    });
+
+    it('stop() stops gameLoop and sets started=false', () => {
+      let stopped = false;
+      const { gfm, game } = makeGFM11A({ started: true, gameLoop: { stop: () => { stopped = true; } } });
+      gfm.stop();
+      expect(stopped).toBe(true);
+      expect(game.started).toBe(false);
+    });
+
+    it('enterMenu() returns true and sets mode=menu', () => {
+      const { gfm, game } = makeGFM11A({ started: false });
+      const result = gfm.enterMenu();
+      expect(result).toBe(true);
+      expect(game.mode).toBe('menu');
+    });
+
+    it('startNewGame() returns false when start() fails', () => {
+      const { gfm, game } = makeGFM11A({ initialized: false });
+      game.init = () => false;
+      expect(gfm.startNewGame()).toBe(false);
+    });
+
+    it('applyMasterVolume() returns false for non-finite value', () => {
+      const { gfm } = makeGFM11A();
+      expect(gfm.applyMasterVolume('abc')).toBe(false);
+    });
+  });
 });
