@@ -7,112 +7,18 @@ import GameState from './core/state.js';
 import InputManager from './core/input.js';
 import GameLoop from './core/game-loop.js';
 import HUDManager from './ui/hud.js';
-// SaveSystem → SaveManager
 import AudioSystem from './systems/audio-system.js';
 import * as CONST from './constants.js';
-import MinimapSimple from './rendering/minimap-simple.js';
-import StartScreen from './ui/start-screen.js';
-import WorldGenerator from './world/world-generator.js';
-import FogOfWar from './world/fog-of-war.js';
-import * as recruitmentSystem from './systems/recruitment.js';
-import * as tradeSystem from './systems/trade.js';
-import { buyTruce, canBuyTruce, improveRelations, declareWar, applyContractRelationBonus, applyTradeCaravanAttackPenalty } from './systems/diplomacy.js';
-import {
-  createInitialFactionState,
-  ensureFactionState,
-  getRelation,
-  getStance,
-  applyBattleOutcomeToRelations,
-  assignInitialSettlementOwners,
-  setRelation,
-} from './systems/factions.js';
-import CityServicesUI from './ui/city-services.js';
-import { showWinScreen, showLoseScreen, toggleCurrentEventsModal, isCurrentEventsModalOpen, renderCurrentEventsModal } from './ui/modals.js';
-import {
-  setContractsRuntimeContext,
-  generateContractsForCity,
-  acceptContract,
-  completeContract,
-  emitContractEvent,
-} from './systems/contracts.js';
-import * as suppliesSystem from './systems/supplies.js';
-import * as capacitySystem from './systems/capacity.js';
-import * as campSystem from './systems/camp.js';
-import CampUI from './ui/camp-ui.js';
-import AccountingUI from './ui/accounting-ui.js';
-import { computeDamage, applyCommandEffects } from './systems/combat-rules.js';
-import { getBattleTerrainContext } from './systems/terrain-effects.js';
-import {
-  getBattleMoraleConfig,
-  clampMorale,
-  applyMoraleDamage,
-  applyAllyDeathShock,
-} from './systems/battle-morale.js';
-import BattleCommandsUI from './ui/battle-commands.js';
-import BattleDeployMode from './game-modes/battle-deploy-mode.js';
-import BattleDeployUI from './ui/battle-deploy-ui.js';
-import PoiUI from './ui/poi-ui.js';
 import * as PoiSystem from './systems/poi-system.js';
-import { computeRiskMultiplier, riskLabel } from './systems/encounter-risk.js';
-import {
-  createInitialEventState,
-  getActiveEvents,
-  rollWarEvents,
-  EVENT_TYPES,
-  getBanditCapFromEvents,
-  getEventTypeLabel,
-} from './systems/events.js';
+import * as suppliesSystem from './systems/supplies.js';
+import * as campSystem from './systems/camp.js';
+import { createInitialEventState } from './systems/events.js';
 import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
-import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from './systems/flank.js';
 import SpriteLoader from './rendering/sprite-loader.js';
-import AnimationPlayer from './rendering/animation.js';
-import { computeUnitCohesion, getFormationMultipliers } from './systems/formation.js';
-import { updateEnemyAI, clampToBattleBounds, computeSkirmishKiteStep } from './systems/battle-ai.js';
-import { inferUnitRole, getCounterEffect, computeChargeState, isBracedSpearman } from './systems/battle-counters.js';
-import {
-  initBattleAmmoFromParty,
-  consumeAmmo,
-  canUnitFireRanged,
-  applySuppressionOnHit,
-  tickSuppression,
-  shouldUseMeleeFallback,
-} from './systems/battle-ranged.js';
-import {
-  createBattleRng,
-  computeEnemyPower,
-  generateBattleLoot as generateRewardLoot,
-  computeRenownDelta,
-} from './systems/battle-rewards.js';
-import { applyBattleOutcomes, tickHealing } from './systems/casualties.js';
-import { computeWeatherForDay, getWeatherTint } from './systems/weather.js';
-import { initWeatherLayer, setWeatherState, renderWeatherOverlay } from './rendering/weather-layer.js';
-import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from './rendering/battle-fx.js';
-import { createCamera, setCameraTarget, updateCamera, applyCameraTransform, addCameraShake } from './rendering/camera.js';
-import { createDefaultSettings, applySettingsPatch, serializeSettings, deserializeSettings } from './systems/settings.js';
-import SettingsUI from './ui/settings.js';
-import CodexUI from './ui/codex.js';
-import {
-  createInitialRegionState,
-  getActiveRegionModifiers,
-  applyPOIOutcomeToRegion,
-} from './systems/region-state.js';
-import {
-  createInitialWorldAiState,
-  ensureWorldParties,
-
-  removeWorldParty,
-  getBanditCap,
-} from './systems/world-ai.js';
-import {
-  createInitialWarState,
-  ensureWar,
-  markPeace,
-  updateCrisisFlag,
-  onBattleResolved,
-  captureCity,
-  findWar,
-} from './systems/faction-wars.js';
-
+import { createInitialWorldAiState } from './systems/world-ai.js';
+import { createInitialRegionState } from './systems/region-state.js';
+import { serializeSettings, deserializeSettings } from './systems/settings.js';
+import { initWeatherLayer } from './rendering/weather-layer.js';
 import * as utils from './utils.js';
 import { BattleManager } from './managers/BattleManager.js';
 import { WorldManager } from './managers/WorldManager.js';
@@ -128,7 +34,6 @@ import { DevManager } from './managers/DevManager.js';
 import { DiplomacyManager } from './managers/DiplomacyManager.js';
 import { EncounterManager } from './managers/EncounterManager.js';
 import { GameFlowManager } from './managers/GameFlowManager.js';
-
 window.__FOC_BOOT_OK__ = true;
 
 const ROOT_SCOPE = typeof window !== 'undefined' ? window : globalThis;
@@ -145,51 +50,6 @@ function warnBootstrapOnce(message) {
   console.warn(message);
 }
 
-function formatBuildTimestamp(isoString) {
-  if (!isoString) return '';
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return '';
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
-}
-
-function chooseTutorialHint({ state, mode, nearSettlement, nearPoi, inCamp, inBattleDeploy, inBattleFight, inEncounter }) {
-  if (!state || typeof state !== 'object') return null;
-  const tutorial = state.tutorial && typeof state.tutorial === 'object' ? state.tutorial : null;
-  if (!tutorial?.enabled) return null;
-
-  const day = Number(state.day ?? 1);
-  const timeSec = Number(state.timeSec ?? 0);
-  const outOfDayWindow = day > CONST.TUTORIAL_HINTS.MAX_DAYS;
-  const outOfTimeWindow = Number.isFinite(timeSec) && timeSec > CONST.TUTORIAL_HINTS.MAX_REALTIME_SEC;
-  if (outOfDayWindow && outOfTimeWindow) return null;
-
-  const now = Date.now();
-  const lastShownAt = Number(tutorial.lastShownAt ?? 0);
-  if (Number.isFinite(lastShownAt) && (now - lastShownAt) < CONST.TUTORIAL_HINTS.COOLDOWN_MS) return null;
-
-  const shown = tutorial.shown && typeof tutorial.shown === 'object' ? tutorial.shown : {};
-  const candidates = [
-    inEncounter ? 'encounter' : null,
-    inBattleDeploy ? 'battleDeploy' : null,
-    inBattleFight ? 'battleCmd' : null,
-    nearSettlement ? 'city' : null,
-    nearPoi ? 'poi' : null,
-    inCamp ? 'camp' : null,
-    mode === 'map' ? 'movement' : null,
-  ].filter(Boolean);
-
-  const key = candidates
-    .filter((candidate) => !shown[candidate] && CONST.HINT_TEXT[candidate])
-    .sort((a, b) => (CONST.TUTORIAL_HINTS.PRIORITY[b] ?? 0) - (CONST.TUTORIAL_HINTS.PRIORITY[a] ?? 0))[0];
-
-  if (!key) return null;
-  return { key, text: CONST.HINT_TEXT[key] };
-}
 
 class ObjectPool {
   constructor(size, factory, resetter = null) {
