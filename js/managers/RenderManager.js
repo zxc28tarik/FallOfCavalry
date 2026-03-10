@@ -444,7 +444,7 @@ export class RenderManager {
   async reloadSpriteAssets() {
     const g = this.game;
     g.assetsReady = false;
-    g.battleAnimPlayers.clear();
+    g.battleManager?.battleAnimPlayers?.clear();
     return this.loadSpriteAssets();
   }
 }

@@ -15,6 +15,7 @@ export class DevManager {
   constructor(gameState) {
     this.state = gameState;
     this.game = null;
+    this.smokeResults = [];
   }
 
   init(game) {
@@ -203,7 +204,7 @@ export class DevManager {
 
     if (prevMode === 'start') g.enterStart();
 
-    g.smokeResults = out;
+    this.smokeResults = out;
     g.appendSmokeResults(out);
     return out;
   }

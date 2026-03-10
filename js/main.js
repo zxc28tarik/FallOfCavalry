@@ -52,26 +52,6 @@ function warnBootstrapOnce(message) {
 }
 
 
-class ObjectPool {
-  constructor(size, factory, resetter = null) {
-    this.size = Math.max(1, size | 0);
-    this.factory = typeof factory === 'function' ? factory : (() => ({}));
-    this.resetter = typeof resetter === 'function' ? resetter : null;
-    this.free = [];
-    for (let i = 0; i < this.size; i += 1) this.free.push(this.factory());
-  }
-
-  acquire() {
-    return this.free.pop() || this.factory();
-  }
-
-  release(obj) {
-    if (!obj || this.free.length >= this.size) return;
-    if (this.resetter) this.resetter(obj);
-    this.free.push(obj);
-  }
-}
-
 class FallOfCavalry {
   constructor() {
     this.canvas = null;
@@ -127,21 +107,6 @@ class FallOfCavalry {
     this.enemyRoster = [];
     this.rosterCursorIndex = 0;
     this.enemyUnitsById = {};
-    this.itemCatalog = [
-      { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4, baseSell: 2 },
-      { id: 'wood', name: 'Wood', unitValue: 5, baseBuy: 5, baseSell: 3 },
-      { id: 'leather', name: 'Leather', unitValue: 7, baseBuy: 7, baseSell: 4 },
-      { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11, baseSell: 7 },
-      { id: 'arrows', name: 'Arrows', unitValue: 5, baseBuy: 5, baseSell: 3 },
-      { id: 'cloth', name: 'Cloth', unitValue: 6, baseBuy: 6, baseSell: 4 },
-      { id: 'tools', name: 'Tools', unitValue: 9, baseBuy: 9, baseSell: 6 },
-    ];
-    this.battleProjectiles = [];
-    this.floatingTexts = [];
-    this.battleRecoveryTimer = 0;
-    this.battleDragUnitId = null;
-    this.battleDragOffsetX = 0;
-    this.battleDragOffsetY = 0;
     this.followParty = false;
     // saveLoadRows, saveLoadCursor, saveLoadPreviousMode, autosaveIntervalMs, autosaveTimerId, lastAutosaveHudAt → SaveManager
     this._tuningPauseMode = null;
@@ -149,11 +114,6 @@ class FallOfCavalry {
     this.minimapRenderer = null;
     this.spriteLoader = null;
     this.assetsReady = false;
-    this.battleAnimPlayers = new Map();
-    this.lastBattleDt = 1 / 60;
-    this.projectilePool = new ObjectPool(CONST.PERF.PROJECTILE_POOL, () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2, attackDirX: 0, attackDirY: 0 }), (p) => { p.ttl = 0; p.attackDirX = 0; p.attackDirY = 0; });
-    this.floatingTextPool = new ObjectPool(CONST.PERF.FLOATTEXT_POOL, () => ({ x: 0, y: 0, text: '', color: '#fff', ttl: 0, vy: -18 }), (t) => { t.ttl = 0; t.text = ''; });
-    this.smokeResults = [];
     this.started = false;
     this.initialized = false;
     this.listenersBound = false;
@@ -167,6 +127,19 @@ class FallOfCavalry {
     this.warnedKeys.add(key);
     utils.warnOnce(key, message);
   }
+
+  // backward-compat: battle pools/state live in BattleManager
+  get floatingTexts() { return this.battleManager?.floatingTexts; }
+  get floatingTextPool() { return this.battleManager?.floatingTextPool; }
+  get projectilePool() { return this.battleManager?.projectilePool; }
+  get battleAnimPlayers() { return this.battleManager?.battleAnimPlayers; }
+
+  // backward-compat: itemCatalog lives in EconomyManager
+  get itemCatalog() { return this.economyManager?.itemCatalog; }
+
+  // backward-compat: smokeResults lives in DevManager
+  get smokeResults() { return this.devManager?.smokeResults; }
+  set smokeResults(v) { if (this.devManager) this.devManager.smokeResults = v; }
 
   ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
 

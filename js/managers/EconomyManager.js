@@ -20,6 +20,15 @@ export class EconomyManager {
     this.cityCursor = 0;
     this.cityMarketCursor = 0;
     this.cityHealerCursor = 0;
+    this.itemCatalog = [
+      { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4, baseSell: 2 },
+      { id: 'wood', name: 'Wood', unitValue: 5, baseBuy: 5, baseSell: 3 },
+      { id: 'leather', name: 'Leather', unitValue: 7, baseBuy: 7, baseSell: 4 },
+      { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11, baseSell: 7 },
+      { id: 'arrows', name: 'Arrows', unitValue: 5, baseBuy: 5, baseSell: 3 },
+      { id: 'cloth', name: 'Cloth', unitValue: 6, baseBuy: 6, baseSell: 4 },
+      { id: 'tools', name: 'Tools', unitValue: 9, baseBuy: 9, baseSell: 6 },
+    ];
   }
 
   init(game) {
@@ -91,7 +100,7 @@ export class EconomyManager {
     }
 
     if (!Array.isArray(inv.items)) {
-      const itemCatalog = this.game?.itemCatalog || [];
+      const itemCatalog = this.itemCatalog;
       const mapped = [];
       Object.entries(inv).forEach(([id, qty]) => {
         if (id === 'items' || id === 'capacity' || id === 'gold') return;
@@ -109,7 +118,7 @@ export class EconomyManager {
   }
 
   getItemName(itemId) {
-    return (this.game?.itemCatalog || []).find((item) => item.id === itemId)?.name || itemId;
+    return (this.itemCatalog).find((item) => item.id === itemId)?.name || itemId;
   }
 
   getItemQty(itemId) {
@@ -123,7 +132,7 @@ export class EconomyManager {
     this.ensureInventoryModel();
     const playerParty = this.game?.playerParty;
     if (!itemId || !Number.isFinite(qty) || qty <= 0 || !playerParty?.inventory?.items) return false;
-    const itemCatalog = this.game?.itemCatalog || [];
+    const itemCatalog = this.itemCatalog;
     const list = playerParty.inventory.items;
     const existing = list.find((entry) => entry.id === itemId);
     const amount = Math.floor(qty);
@@ -159,7 +168,7 @@ export class EconomyManager {
 
   listInventoryForUI() {
     this.ensureInventoryModel();
-    const itemCatalog = this.game?.itemCatalog || [];
+    const itemCatalog = this.itemCatalog;
     return itemCatalog.map((item) => {
       const invItem = (this.game?.playerParty?.inventory?.items || []).find((entry) => entry.id === item.id);
       return {
@@ -247,7 +256,7 @@ export class EconomyManager {
   ensureSettlementMarketState(settlement) {
     if (!settlement || typeof settlement !== 'object') return;
     const tier = this.getSettlementTier(settlement);
-    const itemCatalog = this.game?.itemCatalog || [];
+    const itemCatalog = this.itemCatalog;
     if (!Array.isArray(settlement.marketStock)) {
       settlement.marketStock = itemCatalog.map((item, idx) => ({
         id: item.id,
@@ -367,7 +376,7 @@ Up/Down select, Enter hire 1, Shift+Enter hire max, Esc back`,
 
     if (submode === 'market') {
       this.ensureSettlementMarketState(city);
-      const itemCatalog = this.game?.itemCatalog || [];
+      const itemCatalog = this.itemCatalog;
       const stockMap = new Map((city.marketStock || []).map((s) => [s.id, s.qty]));
       const lines = itemCatalog.map((item, i) => {
         const mark = i === this.cityMarketCursor ? '>' : ' ';
@@ -460,7 +469,7 @@ Up/Down select, Enter heal, Esc back`,
   }
 
   tradeCurrentItem(deltaQty) {
-    const itemCatalog = this.game?.itemCatalog || [];
+    const itemCatalog = this.itemCatalog;
     const entry = itemCatalog[this.cityMarketCursor];
     const qty = Math.max(1, Math.floor(Math.abs(deltaQty || 1)));
     if (!entry) return false;

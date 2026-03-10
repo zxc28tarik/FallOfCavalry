@@ -98,12 +98,7 @@ export class GameInputManager {
     };
 
     this.partyPointerUpHandler = (event) => {
-      if (g.state?.mode === 'battle') {
-        g.battleDragUnitId = null;
-        g.battleDragOffsetX = 0;
-        g.battleDragOffsetY = 0;
-        return;
-      }
+      if (g.state?.mode === 'battle') return;
 
       if (event?.button !== 2 || !this.rightPointerTracking || !g.playerParty || g.mode === 'menu' || g.state?.mode !== 'map') return;
 

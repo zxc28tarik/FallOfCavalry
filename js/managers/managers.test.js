@@ -162,12 +162,11 @@ describe('BattleManager - Phase 2B', () => {
     expect(unit.moraleState).toBe('shaken');
   });
 
-  it('spawnFloatingText adds to game.floatingTexts', () => {
-    const texts = [];
-    const bm = createBM({ floatingTexts: texts, floatingTextPool: { acquire: () => ({}) } });
+  it('spawnFloatingText adds to bm.floatingTexts', () => {
+    const bm = createBM();
     bm.spawnFloatingText(10, 20, 'Hit!', '#ff0000');
-    expect(texts).toHaveLength(1);
-    expect(texts[0].text).toBe('Hit!');
+    expect(bm.floatingTexts).toHaveLength(1);
+    expect(bm.floatingTexts[0].text).toBe('Hit!');
   });
 
   it('drawBattleUnitFallback does not throw', () => {
@@ -1095,10 +1094,10 @@ describe('EconomyManager - Phase 5A', () => {
     const state = { day: 1, status: {}, ...stateOverrides };
     const em = new EconomyManager(state);
     em.init({
-      itemCatalog: CATALOG,
       playerParty: { x: 0, y: 0, inventory: { items: [], capacity: null } },
       ...gameOverrides,
     });
+    em.itemCatalog = CATALOG;
     return em;
   }
 
@@ -1218,10 +1217,10 @@ describe('EconomyManager - Phase 5B', () => {
     const state = { day: 1, markets: {}, ...stateOverrides };
     const em = new EconomyManager(state);
     em.init({
-      itemCatalog: CATALOG,
       playerParty: { x: 50, y: 50, inventory: { items: [], capacity: null } },
       ...gameOverrides,
     });
+    em.itemCatalog = CATALOG;
     return em;
   }
 
@@ -1303,7 +1302,6 @@ describe('EconomyManager - Phase 5C', () => {
     };
     const em = new EconomyManager(state);
     em.init({
-      itemCatalog: CATALOG,
       playerParty: { x: 50, y: 50, gold: 200, roster: [], inventory: { items: [], capacity: null } },
       getWoundedUnits: () => [],
       setLastEventLog: () => {},
@@ -1386,7 +1384,6 @@ describe('EconomyManager - Phase 5C', () => {
   it('healCurrentUnit deducts gold and heals unit', () => {
     const unit = { name: 'Soldier', hp: 50, maxHp: 100, status: 'wounded', healProgress: 0 };
     const em = createEM({}, {
-      itemCatalog: CATALOG,
       playerParty: { x: 0, y: 0, gold: 500, roster: [], inventory: { items: [], capacity: null } },
       getWoundedUnits: () => [unit],
       setLastEventLog: () => {},
@@ -1423,7 +1420,6 @@ describe('EconomyManager - Phase 5C', () => {
     const em = new EconomyManager(state);
     em.init({
       playerParty: party,
-      itemCatalog: CATALOG,
       setLastEventLog: () => {},
       updateTransientUIState: () => {},
       refreshCurrentEventsSummary: () => [],

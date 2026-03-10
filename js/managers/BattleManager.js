@@ -25,6 +25,26 @@ import BattleDeployMode from '../game-modes/battle-deploy-mode.js';
 import BattleDeployUI from '../ui/battle-deploy-ui.js';
 import * as utils from '../utils.js';
 
+class ObjectPool {
+  constructor(size, factory, resetter = null) {
+    this.size = Math.max(1, size | 0);
+    this.factory = typeof factory === 'function' ? factory : (() => ({}));
+    this.resetter = typeof resetter === 'function' ? resetter : null;
+    this.free = [];
+    for (let i = 0; i < this.size; i += 1) this.free.push(this.factory());
+  }
+
+  acquire() {
+    return this.free.pop() || this.factory();
+  }
+
+  release(obj) {
+    if (!obj || this.free.length >= this.size) return;
+    if (this.resetter) this.resetter(obj);
+    this.free.push(obj);
+  }
+}
+
 export class BattleManager {
   constructor(gameState) {
     this.state = gameState;
@@ -37,6 +57,16 @@ export class BattleManager {
 
   init(game) {
     this.game = game;
+    this.projectilePool = new ObjectPool(
+      CONST.PERF.PROJECTILE_POOL,
+      () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2, attackDirX: 0, attackDirY: 0 }),
+      (p) => { p.ttl = 0; p.attackDirX = 0; p.attackDirY = 0; },
+    );
+    this.floatingTextPool = new ObjectPool(
+      CONST.PERF.FLOATTEXT_POOL,
+      () => ({ x: 0, y: 0, text: '', color: '#fff', ttl: 0, vy: -18 }),
+      (t) => { t.ttl = 0; t.text = ''; },
+    );
   }
 
   // --- Pure utility methods (Sub-Step 2A) ---
@@ -182,7 +212,7 @@ export class BattleManager {
     const sin = Math.sin(spread);
     const nx = (dx / dist) * cos - (dy / dist) * sin;
     const ny = (dx / dist) * sin + (dy / dist) * cos;
-    const projectile = this.game?.projectilePool?.acquire() || {};
+    const projectile = this.projectilePool?.acquire() || {};
     projectile.x = shooter.x;
     projectile.y = shooter.y;
     projectile.vx = nx * speed;
@@ -199,26 +229,26 @@ export class BattleManager {
   }
 
   spawnFloatingText(x, y, text, color = '#ffffff') {
-    const ft = this.game?.floatingTextPool?.acquire() || {};
+    const ft = this.floatingTextPool?.acquire() || {};
     ft.x = x;
     ft.y = y;
     ft.text = String(text || '');
     ft.color = color;
     ft.ttl = 0.8;
     ft.vy = -20;
-    this.game?.floatingTexts?.push(ft);
+    this.floatingTexts?.push(ft);
   }
 
   updateFloatingTexts(dt) {
-    if (!this.game || !Number.isFinite(dt) || dt <= 0) return;
+    if (!Number.isFinite(dt) || dt <= 0) return;
     const next = [];
-    for (const ft of this.game.floatingTexts || []) {
+    for (const ft of this.floatingTexts || []) {
       ft.ttl -= dt;
       ft.y += ft.vy * dt;
-      if (ft.ttl <= 0) this.game.floatingTextPool?.release(ft);
+      if (ft.ttl <= 0) this.floatingTextPool?.release(ft);
       else next.push(ft);
     }
-    this.game.floatingTexts = next;
+    this.floatingTexts = next;
   }
 
   updateUnitMoraleState(unit, moraleCfg) {
@@ -631,7 +661,6 @@ export class BattleManager {
       return;
     }
 
-    if (this.game) this.game.lastBattleDt = Math.max(1 / 120, dt);
     const deltaMs = (typeof dt === 'number' && dt < 5) ? (dt * 1000) : dt;
     battle.playerUnits = (battle.playerUnits || []).filter((u) => !u?._remove);
     battle.enemyUnits = (battle.enemyUnits || []).filter((u) => !u?._remove);
@@ -869,7 +898,7 @@ export class BattleManager {
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       projectile.ttl -= dt;
-      if (projectile.ttl <= 0) { this.game?.projectilePool?.release(projectile); continue; }
+      if (projectile.ttl <= 0) { this.projectilePool?.release(projectile); continue; }
       const targets = projectile.side === 'player' ? enemyUnits : playerUnits;
       let hit = false;
       for (const unit of targets) {
@@ -880,7 +909,7 @@ export class BattleManager {
           this.applyUnitDamage(projectile, unit, projectile.damage);
           applySuppressionOnHit({ target: unit, battleTimeSec: Number(battle.timeSec || 0), cfg: rangedCfg });
           hit = true;
-          this.game?.projectilePool?.release(projectile);
+          this.projectilePool?.release(projectile);
           break;
         }
       }
@@ -996,7 +1025,7 @@ export class BattleManager {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.font = '12px Arial';
-    for (const ft of this.game?.floatingTexts || []) {
+    for (const ft of this.floatingTexts || []) {
       ctx.globalAlpha = Math.max(0, Math.min(1, ft.ttl / 0.8));
       ctx.fillStyle = ft.color || '#ffffff';
       ctx.fillText(ft.text || '', ft.x, ft.y);
