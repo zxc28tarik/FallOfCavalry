@@ -1,6 +1,17 @@
 # Release / Export Build
 
-## Node ile tek komut
+## npm Script Sözleşmesi (Önerilen)
+
+```bash
+npm run dev           # Vite dev server (port 5173)
+npm run build         # Vite production build → dist/
+npm run build:export  # Export build + BUILD_INFO damgası
+npm run test:unit     # Sadece manager unit testleri (vitest)
+npm run test:smoke    # Sadece smoke testleri (node --test)
+npm test              # Tüm testler (unit + smoke)
+```
+
+## Node ile doğrudan çalıştırma
 
 Repo kökünden çalıştırın:
 
