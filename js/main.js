@@ -8,16 +8,7 @@ import InputManager from './core/input.js';
 import GameLoop from './core/game-loop.js';
 import HUDManager from './ui/hud.js';
 import AudioSystem from './systems/audio-system.js';
-import * as CONST from './constants.js';
-import * as PoiSystem from './systems/poi-system.js';
-import * as suppliesSystem from './systems/supplies.js';
-import * as campSystem from './systems/camp.js';
-import { createInitialEventState } from './systems/events.js';
-import { isDevMode, loadTuningFromStorage } from './systems/dev-gate.js';
-import SpriteLoader from './rendering/sprite-loader.js';
-// createInitialWorldAiState → WorldManager
-import { createInitialRegionState } from './systems/region-state.js';
-import { serializeSettings, deserializeSettings } from './systems/settings.js';
+import { isDevMode } from './systems/dev-gate.js';
 import { initWeatherLayer } from './rendering/weather-layer.js';
 import * as utils from './utils.js';
 import { BattleManager } from './managers/BattleManager.js';
@@ -237,46 +228,32 @@ class FallOfCavalry {
     this.battleManager.init(this);
     this.worldManager = this.worldManager || new WorldManager(this.state);
     this.worldManager.init(this);
-    if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
-    if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
-    if (!this.state.regionState || typeof this.state.regionState !== 'object') this.state.regionState = createInitialRegionState();
-    if (!this.state.dailyLedger || typeof this.state.dailyLedger !== 'object') this.state.dailyLedger = { tradePL: 0 };
-    suppliesSystem.ensureSuppliesState(this.state);
-    campSystem.ensureCampState(this.state);
-    if (this.state) PoiSystem.ensurePoiState(this.state);
+    this.economyManager = this.economyManager || new EconomyManager(this.state);
+    this.economyManager.init(this);
+    this.poiManager = this.poiManager || new PoiManager(this.state);
+    this.poiManager.init(this);
     this.tuningManager = this.tuningManager || new TuningManager(this.state);
     this.tuningManager.init(this);
     this.uiManager = this.uiManager || new UIManager(this.state);
     this.uiManager.init(this);
     this.ensureTutorialState();
     this.ensureTuningState();
-    this.settings = deserializeSettings(this.state?.settings, CONST.SETTINGS);
-    this.state.settings = serializeSettings(this.settings);
     this.diplomacyManager = this.diplomacyManager || new DiplomacyManager(this.state);
     this.diplomacyManager.init(this);
     this.ensureFactionState();
-    this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
     this.state.devMode = isDevMode();
     this.applyDevOnlyDomLock();
-    const storageTuning = loadTuningFromStorage();
-    if (storageTuning) {
-      this.state.tuning = { ...(this.state.tuning || {}), ...storageTuning };
-    }
     this.input = this.input || new InputManager(this.canvas);
     this.gameLoop = this.gameLoop || new GameLoop(this.state, this.input, null);
     this.hudManager = this.hudManager || new HUDManager(this.state);
     this.saveManager = this.saveManager || new SaveManager(this.state);
     this.saveManager.init(this);
-    this.economyManager = this.economyManager || new EconomyManager(this.state);
-    this.economyManager.init(this);
     this.inputManager = this.inputManager || new GameInputManager(this.state);
     this.inputManager.init(this);
     this.renderManager = this.renderManager || new RenderManager(this.state);
     this.renderManager.init(this);
     this.cityManager = this.cityManager || new CityManager(this.state);
     this.cityManager.init(this);
-    this.poiManager = this.poiManager || new PoiManager(this.state);
-    this.poiManager.init(this);
     this.encounterManager = this.encounterManager || new EncounterManager(this.state);
     this.encounterManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
@@ -284,15 +261,6 @@ class FallOfCavalry {
     this.gameFlowManager = this.gameFlowManager || new GameFlowManager(this.state);
     this.gameFlowManager.init(this);
     this.audioSystem = this.audioSystem || new AudioSystem();
-    const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
-      ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
-      : '';
-    const manifestUrl = manifestOverride || 'assets/manifest.json';
-    this.spriteLoader = this.spriteLoader || new SpriteLoader(manifestUrl, {
-      devMode: this.state?.devMode,
-      warnOnce: utils.warnOnce,
-      devLog: utils.devLog,
-    });
 
     this.setupCanvas();
     initWeatherLayer(this.getWeatherConfig());

@@ -4,6 +4,7 @@
  */
 
 import * as CONST from '../constants.js';
+import { loadTuningFromStorage } from '../systems/dev-gate.js';
 
 export class TuningManager {
   constructor(gameState) {
@@ -16,6 +17,10 @@ export class TuningManager {
 
   init(game) {
     this.game = game;
+    const storageTuning = loadTuningFromStorage();
+    if (storageTuning) {
+      this.state.tuning = { ...(this.state.tuning || {}), ...storageTuning };
+    }
   }
 
   // ─── Phase 9A: Tuning methods ────────────────────────────────────────────────

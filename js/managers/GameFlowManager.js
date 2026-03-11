@@ -9,7 +9,7 @@ import StartScreen from '../ui/start-screen.js';
 import { getRelation, setRelation } from '../systems/factions.js';
 import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
 import { showWinScreen, showLoseScreen } from '../ui/modals.js';
-import { applySettingsPatch, serializeSettings } from '../systems/settings.js';
+import { applySettingsPatch, serializeSettings, deserializeSettings } from '../systems/settings.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -20,6 +20,10 @@ export class GameFlowManager {
 
   init(game) {
     this.game = game;
+    this.state.events = this.state.events && typeof this.state.events === 'object'
+      ? this.state.events : createInitialEventState();
+    if (!game.settings) game.settings = deserializeSettings(this.state?.settings, CONST.SETTINGS);
+    this.state.settings = serializeSettings(game.settings);
   }
 
   // ─── Phase 10C: Game flow methods ────────────────────────────────────────────

@@ -33,6 +33,11 @@ export class EconomyManager {
 
   init(game) {
     this.game = game;
+    if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
+    if (!this.state.marketOpportunities || typeof this.state.marketOpportunities !== 'object') this.state.marketOpportunities = {};
+    if (!this.state.dailyLedger || typeof this.state.dailyLedger !== 'object') this.state.dailyLedger = { tradePL: 0 };
+    suppliesSystem.ensureSuppliesState(this.state);
+    campSystem.ensureCampState(this.state);
   }
 
   // ── Phase 5A: Pure economy utilities & inventory ──────────────────

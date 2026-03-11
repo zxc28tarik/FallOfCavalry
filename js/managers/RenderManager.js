@@ -10,6 +10,7 @@ import * as CONST from '../constants.js';
 import * as utils from '../utils.js';
 import { getWeatherTint } from '../systems/weather.js';
 import { renderWeatherOverlay } from '../rendering/weather-layer.js';
+import SpriteLoader from '../rendering/sprite-loader.js';
 
 export class RenderManager {
   constructor(gameState) {
@@ -19,6 +20,15 @@ export class RenderManager {
 
   init(game) {
     this.game = game;
+    const manifestOverride = this.state?.devMode && typeof window !== 'undefined'
+      ? (new URL(window.location.href).searchParams.get('manifest') || '').trim()
+      : '';
+    const manifestUrl = manifestOverride || 'assets/manifest.json';
+    this.game.spriteLoader = this.game.spriteLoader || new SpriteLoader(manifestUrl, {
+      devMode: this.state?.devMode,
+      warnOnce: utils.warnOnce,
+      devLog: utils.devLog,
+    });
   }
 
   // ─── 7A: Simple render screens ──────────────────────────────────────────────

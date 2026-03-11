@@ -33,6 +33,8 @@ export class WorldManager {
 
   init(game) {
     this.game = game;
+    if (!this.state.regionState || typeof this.state.regionState !== 'object')
+      this.state.regionState = createInitialRegionState();
   }
 
   // ─── 3A: Pure Coordinate & Utility Methods ─────────────────────

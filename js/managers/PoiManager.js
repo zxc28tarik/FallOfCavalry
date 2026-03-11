@@ -18,6 +18,7 @@ export class PoiManager {
 
   init(game) {
     this.game = game;
+    if (this.state) PoiSystem.ensurePoiState(this.state);
   }
 
   // ─── Phase 8C: POI investigation ────────────────────────────────────────────
