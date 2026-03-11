@@ -8,8 +8,8 @@
     "build":        "vite build",
     "build:export": "node tools/export-build.mjs",
     "test:unit":    "vitest run js/managers/managers.test.js",
-    "test:smoke":   "node --test js/systems/*.smoke.test.mjs js/rendering/*.smoke.test.mjs js/core/*.smoke.test.mjs",
-    "test":         "npm run test:unit && npm run test:smoke"
+    "test:smoke":   "vitest run tests/smoke/",
+    "test":         "vitest run"
   },
   "devDependencies": {
     "vite":   "^5.4.21",

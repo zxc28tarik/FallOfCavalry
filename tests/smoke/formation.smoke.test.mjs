@@ -1,10 +1,10 @@
-import test from 'node:test';
+import { it } from 'vitest';
 import assert from 'node:assert/strict';
 
-import * as CONST from '../constants.js';
-import { computeUnitCohesion, getFormationMultipliers } from './formation.js';
+import * as CONST from '../../js/constants.js';
+import { computeUnitCohesion, getFormationMultipliers } from '../../js/systems/formation.js';
 
-test('formation cohesion increases with nearby allies', () => {
+it('formation cohesion increases with nearby allies', () => {
   const unit = { x: 0, y: 0, hp: 10, dead: false };
   const alliesFar = [
     unit,
@@ -26,7 +26,7 @@ test('formation cohesion increases with nearby allies', () => {
   assert.equal(nearCohesion, 1);
 });
 
-test('line formation defense multiplier scales with cohesion', () => {
+it('line formation defense multiplier scales with cohesion', () => {
   const baseUnit = { formation: CONST.FORMATION.LINE, formSlot: 0 };
   const low = getFormationMultipliers(baseUnit, 0.1);
   const high = getFormationMultipliers(baseUnit, 1);

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { it } from 'vitest';
 import assert from 'node:assert/strict';
 
 import {
@@ -7,9 +7,9 @@ import {
   updateCamera,
   addCameraShake,
   applyCameraTransform,
-} from './camera.js';
+} from '../../js/rendering/camera.js';
 
-test('updateCamera follows target over time', () => {
+it('updateCamera follows target over time', () => {
   const cam = createCamera();
   setCameraTarget(cam, 100, 50);
 
@@ -29,7 +29,7 @@ test('updateCamera follows target over time', () => {
   assert.ok(cam.y < 50);
 });
 
-test('camera shake decays and offsets reduce', () => {
+it('camera shake decays and offsets reduce', () => {
   const cam = createCamera();
   addCameraShake(cam, 10, 0.18);
 
@@ -46,7 +46,7 @@ test('camera shake decays and offsets reduce', () => {
   assert.ok(laterOffset <= firstOffset || cam.shakeTime === 0);
 });
 
-test('applyCameraTransform uses ctx methods without throwing', () => {
+it('applyCameraTransform uses ctx methods without throwing', () => {
   const calls = [];
   const ctx = {
     canvas: { width: 1280, height: 720 },
