@@ -4,15 +4,23 @@
   "description": "FallOfCavalry — browser-based tactical strategy game",
   "type": "module",
   "scripts": {
-    "dev":          "vite",
-    "build":        "vite build",
+    "dev": "vite",
+    "build": "vite build",
     "build:export": "node tools/export-build.mjs",
-    "test:unit":    "vitest run js/managers/managers.test.js",
-    "test:smoke":   "vitest run tests/smoke/",
-    "test":         "vitest run"
+    "test:unit": "vitest run js/managers/managers.test.js",
+    "test:smoke": "vitest run tests/smoke/",
+    "test": "vitest run",
+    "lint": "eslint js/ tests/",
+    "lint:fix": "eslint js/ tests/ --fix",
+    "format": "prettier --write \"js/**/*.js\" \"tests/**/*.{js,mjs}\"",
+    "format:check": "prettier --check \"js/**/*.js\" \"tests/**/*.{js,mjs}\""
   },
   "devDependencies": {
-    "vite":   "^5.4.21",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
+    "vite": "^5.4.21",
     "vitest": "^1.6.1"
   },
   "engines": {

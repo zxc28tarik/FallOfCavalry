@@ -70,12 +70,13 @@ export class AIParty {
         }
         break;
         
-      case 'flee':
+      case 'flee': {
         // Flee from player
         const fleeAngle = Math.atan2(this.y - player.y, this.x - player.x);
         this.tx = this.x + Math.cos(fleeAngle) * 10;
         this.ty = this.y + Math.sin(fleeAngle) * 10;
         break;
+      }
         
       case 'idle':
         // Do nothing

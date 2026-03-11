@@ -106,7 +106,8 @@ export class MapRenderer {
       ctx.fill();
     }
     
-    // Grid (debug)
+    // Grid (debug) — intentionally disabled
+    // eslint-disable-next-line no-constant-condition
     if (false) {
       ctx.strokeStyle = 'rgba(255,255,255,0.1)';
       ctx.strokeRect(px, py, TILE, TILE);

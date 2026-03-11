@@ -314,7 +314,7 @@ export class BattleManager {
     const selectedUnit = selectedId ? playerUnits.find((u) => u.unitId === selectedId) : null;
     if (selectedUnit) {
       if (!selectedUnit.isRanged) return false;
-      const next = forceValue == null ? !Boolean(selectedUnit.holdFire) : Boolean(forceValue);
+      const next = forceValue == null ? !selectedUnit.holdFire : Boolean(forceValue);
       selectedUnit.holdFire = next;
       this.battleCommandsUI?.setToggleState?.('hold-fire', next);
       return true;

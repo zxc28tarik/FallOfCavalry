@@ -28,7 +28,7 @@ export default class BattleCommandsUI {
       const toggleBtn = e.target?.closest?.('[data-toggle]');
       if (toggleBtn) {
         const toggle = toggleBtn.dataset.toggle;
-        const next = !Boolean(this.toggles.holdFire);
+        const next = !this.toggles.holdFire;
         this.setToggleState(toggle, next);
         this.onToggle?.(toggle, next);
         return;

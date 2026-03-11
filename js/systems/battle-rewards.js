@@ -64,6 +64,6 @@ export function computeRenownDelta({ cfg, enemyPower, casualtiesInfo, routingInf
   const deadCount = Math.max(0, Number(casualtiesInfo?.deadCount ?? 0));
   let delta = Number(rewardCfg.RENOWN_BASE ?? 0) + (Math.max(0, Number(enemyPower ?? 0)) * Number(rewardCfg.RENOWN_PER_ENEMY_POWER ?? 0));
   delta -= deadCount * Number(rewardCfg.RENOWN_CASUALTY_PENALTY ?? 0);
-  if (Boolean(routingInfo?.manyRouted)) delta -= Number(rewardCfg.RENOWN_ROUTING_PENALTY ?? 0);
+  if (routingInfo?.manyRouted) delta -= Number(rewardCfg.RENOWN_ROUTING_PENALTY ?? 0);
   return Math.max(0, Math.floor(delta));
 }
