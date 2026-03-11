@@ -2,28 +2,23 @@ import * as CONST from '../constants.js';
 import { getBattleMoraleConfig, clampMorale, applyMoraleDamage, applyAllyDeathShock } from '../systems/battle-morale.js';
 import { computeDamage, applyCommandEffects } from '../systems/combat-rules.js';
 import { classifyAttackSide, resolveFlankBonuses, getAttackDirectionAgainstDefender, ATTACK_SIDE } from '../systems/flank.js';
-import { inferUnitRole, getCounterEffect, isBracedSpearman, computeChargeState } from '../systems/battle-counters.js';
-import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from '../rendering/battle-fx.js';
-import { createCamera, addCameraShake, setCameraTarget, updateCamera, applyCameraTransform } from '../rendering/camera.js';
-import { tickWeatherLayer, renderWeatherOverlay } from '../rendering/weather-layer.js';
-import { getWeatherTint } from '../systems/weather.js';
+import { getCounterEffect, isBracedSpearman, computeChargeState } from '../systems/battle-counters.js';
+import { spawnFx, tickBattleFx } from '../rendering/battle-fx.js';
+import { addCameraShake, setCameraTarget, updateCamera } from '../rendering/camera.js';
+import { tickWeatherLayer } from '../rendering/weather-layer.js';
 import { computeUnitCohesion, getFormationMultipliers } from '../systems/formation.js';
 import { updateEnemyAI, clampToBattleBounds, computeSkirmishKiteStep } from '../systems/battle-ai.js';
-import { initBattleAmmoFromParty, canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMeleeFallback, consumeAmmo } from '../systems/battle-ranged.js';
-import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
+import { canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMeleeFallback, consumeAmmo } from '../systems/battle-ranged.js';
 import { createBattleRng, computeEnemyPower, generateBattleLoot as generateRewardLoot, computeRenownDelta } from '../systems/battle-rewards.js';
 import { applyBattleOutcomes } from '../systems/casualties.js';
-import { getBattleTerrainContext } from '../systems/terrain-effects.js';
 import { removeWorldParty } from '../systems/world-ai.js';
 import { emitContractEvent } from '../systems/contracts.js';
 import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
-import AnimationPlayer from '../rendering/animation.js';
-import BattleCommandsUI from '../ui/battle-commands.js';
-import BattleDeployMode from '../game-modes/battle-deploy-mode.js';
-import BattleDeployUI from '../ui/battle-deploy-ui.js';
 import * as utils from '../utils.js';
+import { BattleFxManager } from './BattleFxManager.js';
+import { BattleRosterManager } from './BattleRosterManager.js';
 
 class ObjectPool {
   constructor(size, factory, resetter = null) {
@@ -59,10 +54,16 @@ export class BattleManager {
     this.currentBattleTerrain = { terrainKey: 'PLAINS', mods: CONST.TERRAIN_MODS.PLAINS };
     this.defeatPushbackDistance = 120;
     this.enemyUnitsById = {};
+    this.fxManager = null;
+    this.rosterManager = null;
   }
 
   init(game) {
     this.game = game;
+    this.fxManager = new BattleFxManager();
+    this.fxManager.init(this, game);
+    this.rosterManager = new BattleRosterManager();
+    this.rosterManager.init(this, game);
     this.projectilePool = new ObjectPool(
       CONST.PERF.PROJECTILE_POOL,
       () => ({ x: 0, y: 0, vx: 0, vy: 0, side: 'player', damage: 0, ttl: 0, radius: 2, attackDirX: 0, attackDirY: 0 }),
@@ -91,171 +92,24 @@ export class BattleManager {
     return best;
   }
 
-  ensureBattleUnitFx(unit) {
-    if (!unit) return;
-    if (!unit.fx) unit.fx = { hitUntil: 0, deathStartedAt: null };
-    if (!Number.isFinite(unit.fx.hitUntil)) unit.fx.hitUntil = 0;
-    if (unit.fx.deathStartedAt !== null && !Number.isFinite(unit.fx.deathStartedAt)) unit.fx.deathStartedAt = null;
-  }
+  ensureBattleUnitFx(unit) { return this.fxManager.ensureBattleUnitFx(unit); }
+  getUnitAnimationKey(unit) { return this.fxManager.getUnitAnimationKey(unit); }
 
-  getUnitAnimationKey(unit) {
-    if (!unit) return null;
-    if (unit.command === CONST.BATTLE_COMMANDS.ATTACK) return 'infantry_attack';
-    const moving = Math.hypot(Number(unit.vx) || 0, Number(unit.vy) || 0) > 0.01;
-    return moving ? 'infantry_walk' : 'infantry_idle';
-  }
-
-  ensureRosterUnitState(unit) {
-    if (!unit || typeof unit !== 'object') return unit;
-    if (!Number.isFinite(unit.healProgress)) unit.healProgress = 0;
-    unit.healProgress = Math.max(0, Math.min(1, Number(unit.healProgress)));
-    const status = typeof unit.status === 'string' ? unit.status : 'healthy';
-    unit.status = ['healthy', 'wounded', 'dead'].includes(status) ? status : 'healthy';
-    if (unit.status === 'healthy') unit.healProgress = 0;
-    return unit;
-  }
-
-  applyDifficultyToEnemyUnit(unit) {
-    const mult = Number(this.game?.settings?.difficultyMult ?? 1);
-    if (!Number.isFinite(mult) || Math.abs(mult - 1) < 0.001) return unit;
-    const next = { ...unit };
-    next.maxHp = Math.max(1, Math.round(Number(next.maxHp ?? next.hp ?? 1) * mult));
-    next.hp = Math.max(1, Math.round(Number(next.hp ?? next.maxHp ?? 1) * mult));
-    next.atk = Math.max(1, Math.round(Number(next.atk ?? 1) * mult));
-    if (Number.isFinite(next.rangedDamage)) next.rangedDamage = Math.max(1, Math.round(Number(next.rangedDamage) * mult));
-    return next;
-  }
-
-  getBattleFxConfig() {
-    const tuning = this.game?.getEffectiveTuning?.() || {};
-    const cfg = { ...(tuning.BATTLE_FX || CONST.BATTLE_FX) };
-    cfg.ENABLED = Boolean(cfg.ENABLED) && Boolean(this.game?.settings?.fxEnabled);
-    return cfg;
-  }
-
-  getBattleCameraConfig() {
-    const tuning = this.game?.getEffectiveTuning?.() || {};
-    const cfg = { ...(tuning.BATTLE_CAMERA || CONST.BATTLE_CAMERA) };
-    cfg.SHAKE_ENABLED = Boolean(cfg.SHAKE_ENABLED) && Boolean(this.game?.settings?.cameraShakeEnabled);
-    return cfg;
-  }
-
-  getWoundedUnits() {
-    return (this.game?.playerParty?.roster || []).filter((u) => u?.status === 'wounded');
-  }
+  ensureRosterUnitState(unit) { return this.rosterManager.ensureRosterUnitState(unit); }
+  applyDifficultyToEnemyUnit(unit) { return this.rosterManager.applyDifficultyToEnemyUnit(unit); }
+  getBattleFxConfig() { return this.fxManager.getBattleFxConfig(); }
+  getBattleCameraConfig() { return this.fxManager.getBattleCameraConfig(); }
+  getWoundedUnits() { return this.rosterManager.getWoundedUnits(); }
 
   // --- Effects, pools, morale, render helpers (Sub-Step 2B) ---
 
-  getBattleAnimPlayer(unit) {
-    if (!unit) return null;
-    const id = unit.unitId || `${unit.side}:${unit.id || `${unit.x}:${unit.y}`}`;
-    let player = this.battleAnimPlayers.get(id);
-    if (!player) {
-      player = new AnimationPlayer(this.game?.spriteLoader, 'infantry_idle');
-      this.battleAnimPlayers.set(id, player);
-    }
-    return player;
-  }
+  getBattleAnimPlayer(unit) { return this.fxManager.getBattleAnimPlayer(unit); }
+  drawBattleUnitFallback(ctx, unit, x, y, size) { return this.fxManager.drawBattleUnitFallback(ctx, unit, x, y, size); }
+  drawUnitSpriteOrFallback(ctx, unit, x, y, size, now) { return this.fxManager.drawUnitSpriteOrFallback(ctx, unit, x, y, size, now); }
 
-  drawBattleUnitFallback(ctx, unit, x, y, size) {
-    ctx.fillStyle = unit.side === 'player' ? '#4aa3ff' : '#d9534f';
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  drawUnitSpriteOrFallback(ctx, unit, x, y, size, now) {
-    if (!ctx || !unit) return;
-    this.ensureBattleUnitFx(unit);
-
-    if (unit.fx.deathStartedAt) {
-      const t = (now - unit.fx.deathStartedAt) / CONST.BATTLE_FX.DEATH_FADE_DURATION;
-      if (t >= 1) {
-        unit._remove = true;
-        return;
-      }
-      const scale = 1 - (t * (1 - CONST.BATTLE_FX.DEATH_SHRINK_FACTOR));
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, 1 - t);
-      ctx.translate(x, y);
-      ctx.scale(scale, scale);
-      ctx.translate(-x, -y);
-      this.drawUnitSpriteOrFallback(ctx, { ...unit, fx: { ...unit.fx, deathStartedAt: null } }, x, y, size, now);
-      ctx.restore();
-      return;
-    }
-
-    let spriteDrawn = false;
-    if (this.game?.assetsReady && this.game?.spriteLoader) {
-      const player = this.getBattleAnimPlayer(unit);
-      const spriteKey = unit.animKey || 'infantry_idle';
-      if (player?.hasAnimation?.(spriteKey)) {
-        spriteDrawn = player.drawFrame(ctx, spriteKey, x, y, size * 2 * CONST.SPRITES.BATTLE_UNIT_SCALE, { anchor: 'center' });
-      }
-    }
-
-    if (!spriteDrawn) this.drawBattleUnitFallback(ctx, unit, x, y, size);
-
-    if (unit.fx.hitUntil > now) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = CONST.BATTLE_FX.HIT_FLASH_COLOR;
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  spawnProjectile(shooter, target, list) {
-    if (!list) return;
-    const dx = (target.x || 0) - (shooter.x || 0);
-    const dy = (target.y || 0) - (shooter.y || 0);
-    const dist = Math.hypot(dx, dy) || 1;
-    const speed = 340;
-    const spread = (Math.random() - 0.5) * 0.08;
-    const cos = Math.cos(spread);
-    const sin = Math.sin(spread);
-    const nx = (dx / dist) * cos - (dy / dist) * sin;
-    const ny = (dx / dist) * sin + (dy / dist) * cos;
-    const projectile = this.projectilePool?.acquire() || {};
-    projectile.x = shooter.x;
-    projectile.y = shooter.y;
-    projectile.vx = nx * speed;
-    projectile.vy = ny * speed;
-    projectile.side = shooter.side;
-    projectile.isRanged = true;
-    projectile.damageType = shooter.damageType || CONST.DAMAGE_TYPE.PIERCE;
-    projectile.damage = Math.max(1, Math.floor(shooter.rangedDamage || shooter.atk || 8));
-    projectile.attackDirX = nx;
-    projectile.attackDirY = ny;
-    projectile.ttl = 1.5;
-    projectile.radius = 2;
-    list.push(projectile);
-  }
-
-  spawnFloatingText(x, y, text, color = '#ffffff') {
-    const ft = this.floatingTextPool?.acquire() || {};
-    ft.x = x;
-    ft.y = y;
-    ft.text = String(text || '');
-    ft.color = color;
-    ft.ttl = 0.8;
-    ft.vy = -20;
-    this.floatingTexts?.push(ft);
-  }
-
-  updateFloatingTexts(dt) {
-    if (!Number.isFinite(dt) || dt <= 0) return;
-    const next = [];
-    for (const ft of this.floatingTexts || []) {
-      ft.ttl -= dt;
-      ft.y += ft.vy * dt;
-      if (ft.ttl <= 0) this.floatingTextPool?.release(ft);
-      else next.push(ft);
-    }
-    this.floatingTexts = next;
-  }
+  spawnProjectile(shooter, target, list) { return this.fxManager.spawnProjectile(shooter, target, list); }
+  spawnFloatingText(x, y, text, color = '#ffffff') { return this.fxManager.spawnFloatingText(x, y, text, color); }
+  updateFloatingTexts(dt) { return this.fxManager.updateFloatingTexts(dt); }
 
   updateUnitMoraleState(unit, moraleCfg) {
     if (!unit || unit.dead || unit.hp <= 0) return;
@@ -325,47 +179,7 @@ export class BattleManager {
 
   // --- Combat, commands, deploy (Sub-Step 2C) ---
 
-  getEnemyUnits(enemyId) {
-    if (Array.isArray(this.enemyUnitsById?.[enemyId])) return this.enemyUnitsById[enemyId].map((u) => this.applyDifficultyToEnemyUnit(u));
-    const enemyParty = (this.game?.enemyParties || []).find((party) => party.id === enemyId);
-    const seedBase = enemyId.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 17);
-    let total = 4 + (seedBase % 5);
-    let archers = 1 + (seedBase % 3);
-    if (enemyParty?.worldPartyKind === 'bandit') {
-      total = 5 + (seedBase % 4);
-      archers = 2 + (seedBase % 2);
-    } else if (enemyParty?.worldPartyKind === 'patrol') {
-      total = 6 + (seedBase % 3);
-      archers = 1 + (seedBase % 2);
-    } else if (enemyParty?.worldPartyKind === 'caravan') {
-      total = 3 + (seedBase % 3);
-      archers = 1;
-    }
-    const units = [];
-    for (let i = 0; i < total; i += 1) {
-      const isRanged = i < archers;
-      units.push({
-        id: `${enemyId}-u${i + 1}`,
-        name: isRanged ? `Raider Archer ${i + 1}` : `Raider ${i + 1}`,
-        class: isRanged ? 'archer' : 'infantry',
-        hp: isRanged ? 74 : 96,
-        maxHp: isRanged ? 74 : 96,
-        atk: isRanged ? 10 : 13,
-        def: isRanged ? 4 : 7,
-        speed: isRanged ? 66 : 70,
-        meleeRange: isRanged ? 12 : 20,
-        rangedRange: isRanged ? 210 : 0,
-        rangedDamage: isRanged ? 11 : 0,
-        rangedCooldown: isRanged ? 1.3 : 0,
-        isRanged,
-      });
-    }
-    this.enemyUnitsById[enemyId] = units.map((u) => ({ ...u }));
-    if (enemyParty && !Array.isArray(enemyParty.roster)) {
-      enemyParty.roster = units.map((u) => ({ ...u }));
-    }
-    return units.map((u) => this.applyDifficultyToEnemyUnit(u));
-  }
+  getEnemyUnits(enemyId) { return this.rosterManager.getEnemyUnits(enemyId); }
 
   applyUnitDamage(attacker, target, baseDamage, context = {}) {
     if (!target || target.dead || target.hp <= 0) return 0;
@@ -468,83 +282,9 @@ export class BattleManager {
     return finalDamage;
   }
 
-  createBattleUnitsFromRoster(roster, side) {
-    const moraleCfg = getBattleMoraleConfig(this.game);
-    const casualtyCfg = (this.game?.getEffectiveTuning?.() || {}).BATTLE_CASUALTIES || {};
-    return (roster || []).map((entry, idx) => {
-      const wounded = entry?.status === 'wounded';
-      const maxHpBase = Math.max(1, Math.floor(entry.maxHp ?? entry.hp ?? 100));
-      const maxHp = wounded ? Math.max(1, Math.floor(maxHpBase * Number(casualtyCfg.WOUNDED_HP_MAX_MULT))) : maxHpBase;
-      const atkBase = Math.max(1, Math.floor(entry.atk ?? 10));
-      const atk = wounded ? Math.max(1, Math.floor(atkBase * Number(casualtyCfg.WOUNDED_ATK_MULT))) : atkBase;
-      const hp = Math.min(maxHp, Math.max(1, Math.floor(entry.hp ?? maxHp)));
-      const role = inferUnitRole(entry);
-      const lineRole = role === 'elite_cav'
-        ? 'flanker'
-        : (role === 'archer' ? 'reserve' : ((role === 'siege' || role === 'heavy_inf' || role === 'spearman') ? 'frontline' : ((idx % 3) === 0 ? 'reserve' : 'frontline')));
-      const isHighValueTarget = role === 'siege' || role === 'elite_cav' || /champion|hero|captain/i.test(String(entry.name || entry.label || entry.id || ''));
-      return {
-        unitId: `${side}-${entry.id}-${idx}`,
-        sourceId: entry.id,
-        rosterId: entry.id,
-        side,
-        name: entry.name,
-        class: entry.class || (entry.isRanged ? 'archer' : 'infantry'),
-        role,
-        x: 0, y: 0, vx: 0, vy: 0,
-        hp, maxHp, atk,
-        def: Math.max(0, Math.floor(entry.def ?? 0)),
-        speed: Math.max(20, Math.floor(entry.speed ?? 70)),
-        meleeRange: Math.max(8, Math.floor(entry.meleeRange ?? 18)),
-        isRanged: Boolean(entry.isRanged),
-        rangedRange: Math.max(0, Math.floor(entry.rangedRange ?? 0)),
-        rangedDamage: Math.max(1, Math.floor(entry.rangedDamage ?? entry.atk ?? 8)),
-        rangedCooldown: Math.max(0.3, Number(entry.rangedCooldown ?? 1.2)),
-        rangedTimer: 0,
-        targetId: null,
-        armorType: entry.armorType || (entry.isRanged ? CONST.ARMOR_TYPE.LIGHT : (String(entry.class || '').includes('cav') ? CONST.ARMOR_TYPE.HEAVY : CONST.ARMOR_TYPE.MEDIUM)),
-        damageType: entry.damageType || (entry.isRanged ? CONST.DAMAGE_TYPE.PIERCE : CONST.DAMAGE_TYPE.CUT),
-        command: null, commandSpeedMult: 1, commandDefMult: 1,
-        formation: CONST.DEPLOY.DEFAULT_FORMATION,
-        formSlot: idx, formationCohesion: 0,
-        formationAtkMult: 1, formationDefMult: 1, formationSpeedMult: 1,
-        formationRangedTakenMult: 1, formationMoraleShockMult: 1,
-        focusTargetId: null,
-        lineRole, isHighValueTarget,
-        retreating: false, skirmish: false,
-        aiApproachPoint: null, aiApproachSetAtSec: 0, aiLastApproachDist: 0,
-        aiApproachLastCheckAtSec: 0, aiStallSec: 0, aiNextRetargetAtSec: 0,
-        facing: side === 'player' ? 0 : Math.PI,
-        moraleMax: Math.max(1, Number(moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
-        morale: Math.max(1, Number(entry.morale ?? moraleCfg.MORALE_MAX ?? CONST.BATTLE_MORALE.MORALE_MAX)),
-        chargeMeter: 0, chargeReady: false, chargeCooldownRemaining: 0,
-        lastPosX: 0, lastPosY: 0,
-        moraleState: 'steady', lastDamageAt: -999, attackTimer: 0,
-        holdFire: false, suppressedUntil: 0, suppressionSpeedMult: 1,
-        radius: 9, dead: false,
-        fx: { hitUntil: 0, deathStartedAt: null },
-      };
-    });
-  }
+  createBattleUnitsFromRoster(roster, side) { return this.rosterManager.createBattleUnitsFromRoster(roster, side); }
 
-  placeBattleUnits(units, side) {
-    const sideUnits = (units || []).filter((unit) => unit.side === side);
-    if (sideUnits.length === 0) return;
-    const width = Number.isFinite(this.game?.canvas?.width) ? this.game.canvas.width : 1280;
-    const height = Number.isFinite(this.game?.canvas?.height) ? this.game.canvas.height : 720;
-    const xBase = side === 'player' ? Math.max(100, width * 0.2) : Math.min(width - 100, width * 0.8);
-    const minY = 90;
-    const maxY = Math.max(minY + 1, height - 90);
-    const spacing = sideUnits.length > 1 ? (maxY - minY) / (sideUnits.length - 1) : 0;
-    sideUnits.forEach((unit, idx) => {
-      unit.x = xBase + ((idx % 2) * (side === 'player' ? -22 : 22));
-      unit.y = Math.max(minY, Math.min(maxY, minY + (spacing * idx)));
-      unit.formSlot = idx;
-      unit.formation = unit.formation || CONST.DEPLOY.DEFAULT_FORMATION;
-      unit.facing = side === 'enemy' ? 180 : (Number(unit.facing) || 0);
-      if (side === 'enemy') unit.formation = CONST.FORMATION.LINE;
-    });
-  }
+  placeBattleUnits(units, side) { return this.rosterManager.placeBattleUnits(units, side); }
 
   applyBattleCommand(cmd) {
     const battle = this.state?.battle;
@@ -587,66 +327,11 @@ export class BattleManager {
     return true;
   }
 
-  setupBattleDeployUI() {
-    if (this.battleDeployUI) return;
-    this.battleDeployUI = new BattleDeployUI({
-      onStart: () => this.confirmBattleDeployment(),
-      onCancel: () => this.cancelBattleDeployment(),
-    });
-    this.battleDeployUI.bind({
-      root: this.game?.dom?.battleDeployOverlay || utils.getEl('battleDeployOverlay'),
-      btnStart: this.game?.dom?.btnDeployStart || utils.getEl('btnDeployStart'),
-      btnCancel: this.game?.dom?.btnDeployCancel || utils.getEl('btnDeployCancel'),
-      hintText: this.game?.dom?.deployHint || utils.getEl('deployHint'),
-    });
-  }
-
-  startBattleDeployment() {
-    const battle = this.state?.battle;
-    if (!battle) return false;
-    this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: true, inBattleFight: false, inEncounter: false });
-    this.battleDeployMode = new BattleDeployMode({
-      state: this.state,
-      party: this.game?.playerParty,
-      battle,
-      camera: this.state?.camera,
-    });
-    this.battleDeployUI?.setFormation?.(this.battleDeployMode.formation);
-    this.battleDeployUI?.show?.();
-    return true;
-  }
-
-  confirmBattleDeployment() {
-    const battle = this.state?.battle;
-    if (!battle || !this.battleDeployMode?.active) return false;
-    this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: true, inEncounter: false });
-    this.battleDeployMode.applyDeployment(battle.playerUnits || []);
-    battle.phase = 'fight';
-    this.battleDeployUI?.hide?.();
-    return true;
-  }
-
-  cancelBattleDeployment() {
-    this.battleDeployMode?.cancel?.();
-    this.battleDeployUI?.hide?.();
-    this.battleDeployMode = null;
-    if (this.state) {
-      this.state.battle = null;
-      this.state.setMode('map');
-    }
-    return true;
-  }
-
-  setupBattleCommandsUI() {
-    if (this.battleCommandsUI) return;
-    this.battleCommandsUI = new BattleCommandsUI({
-      onCommand: (cmd) => this.applyBattleCommand(cmd),
-      onToggle: (toggle, active) => {
-        if (toggle === 'hold-fire') this.toggleBattleHoldFire(active);
-      },
-    });
-    this.battleCommandsUI.bind({ root: this.game?.dom?.battleCommandBar || utils.getEl('battleCommandBar') });
-  }
+  setupBattleDeployUI() { return this.rosterManager.setupBattleDeployUI(); }
+  startBattleDeployment() { return this.rosterManager.startBattleDeployment(); }
+  confirmBattleDeployment() { return this.rosterManager.confirmBattleDeployment(); }
+  cancelBattleDeployment() { return this.rosterManager.cancelBattleDeployment(); }
+  setupBattleCommandsUI() { return this.rosterManager.setupBattleCommandsUI(); }
 
   // --- Core loop, render, resolution (Sub-Step 2D) ---
 
@@ -927,125 +612,7 @@ export class BattleManager {
     this.game?.updateTransientUIState?.();
   }
 
-  renderBattle() {
-    const ctx = this.game?.ctx;
-    const canvas = this.game?.canvas;
-    if (!ctx || !canvas) return;
-    ctx.fillStyle = '#1f1f24';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const battle = this.state?.battle;
-    if (!battle) return;
-    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
-      this.game?.updateTransientUIState?.();
-      return;
-    }
-
-    const playerUnits = battle.playerUnits || [];
-    const enemyUnits = battle.enemyUnits || [];
-
-    if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
-      const preview = this.battleDeployMode.computePreviewPositions(playerUnits.length);
-      ctx.fillStyle = 'rgba(212,175,55,0.12)';
-      ctx.fillRect(40, 60, Math.max(120, (canvas.width / 2) - 80), Math.max(120, canvas.height - 120));
-      ctx.save();
-      ctx.fillStyle = 'rgba(90,180,255,0.45)';
-      preview.forEach((p) => { ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, Math.PI * 2); ctx.fill(); });
-      const ax = this.battleDeployMode.anchorX;
-      const ay = this.battleDeployMode.anchorY;
-      const len = 42;
-      const rad = (this.battleDeployMode.angleDeg * Math.PI) / 180;
-      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax + Math.cos(rad) * len, ay + Math.sin(rad) * len);
-      ctx.stroke();
-      ctx.restore();
-    }
-    const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0).length;
-    const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0).length;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R/X Commands`, canvas.width / 2, 30);
-    const ammoNow = Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)));
-    const ammoStart = Math.max(0, Math.floor(Number(battle.playerAmmoStart ?? 0)));
-    ctx.font = '14px Arial';
-    ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, canvas.width / 2, 50);
-
-    const cameraCfg = this.getBattleCameraConfig();
-    ctx.save();
-    if (cameraCfg.ENABLED && battle.camera) applyCameraTransform(ctx, battle.camera);
-
-    const now = performance.now();
-    for (const unit of [...playerUnits, ...enemyUnits]) {
-      this.ensureBattleUnitFx(unit);
-      if (unit.hp <= 0 && !unit.fx.deathStartedAt) unit.fx.deathStartedAt = now;
-      const isRenderable = !unit._remove && (!unit.dead || unit.fx.deathStartedAt);
-      if (!isRenderable) continue;
-      this.drawUnitSpriteOrFallback(ctx, unit, unit.x, unit.y, unit.radius || 9, now);
-
-      if (unit.isRanged && !unit._remove) {
-        ctx.fillStyle = '#f2c94c';
-        ctx.beginPath();
-        ctx.arc(unit.x, unit.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      if (!unit.dead && unit.hp > 0) {
-        const hpRatio = Math.max(0, Math.min(1, unit.hp / Math.max(1, unit.maxHp)));
-        const moraleRatio = Math.max(0, Math.min(1, (unit.morale || 0) / Math.max(1, unit.moraleMax || 1)));
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillRect(unit.x - 12, unit.y - 21, 24, 3);
-        ctx.fillStyle = unit.moraleState === 'routing' ? '#ff6b6b' : (unit.moraleState === 'shaken' ? '#f2c94c' : '#6bdc87');
-        ctx.fillRect(unit.x - 12, unit.y - 21, 24 * moraleRatio, 3);
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        ctx.fillRect(unit.x - 12, unit.y - 16, 24, 3);
-        ctx.fillStyle = '#89d38d';
-        ctx.fillRect(unit.x - 12, unit.y - 16, 24 * hpRatio, 3);
-
-        if (unit.isRanged) {
-          ctx.fillStyle = '#e6e6e6';
-          ctx.font = '10px Arial';
-          ctx.textAlign = 'left';
-          const ammoText = unit.side === 'player' ? `A: ${Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)))}` : 'A: ∞';
-          ctx.fillText(ammoText, unit.x + 10, unit.y - 10);
-          if (this.state?.devMode && unit.holdFire === true) ctx.fillText('X', unit.x + 10, unit.y + 2);
-          ctx.textAlign = 'center';
-        }
-      }
-    }
-
-    for (const projectile of (battle.projectiles || [])) {
-      ctx.fillStyle = projectile.side === 'player' ? '#c6defd' : '#ffc5c2';
-      ctx.beginPath();
-      ctx.arc(projectile.x, projectile.y, projectile.radius || 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    const battleFxCfg = this.getBattleFxConfig();
-    if (battleFxCfg.ENABLED) renderBattleFx(ctx);
-
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.font = '12px Arial';
-    for (const ft of this.floatingTexts || []) {
-      ctx.globalAlpha = Math.max(0, Math.min(1, ft.ttl / 0.8));
-      ctx.fillStyle = ft.color || '#ffffff';
-      ctx.fillText(ft.text || '', ft.x, ft.y);
-    }
-    ctx.restore();
-    ctx.restore();
-
-    const weatherTint = getWeatherTint(this.game?.weatherState || this.state?.weatherState, this.game?.getWeatherConfig?.());
-    renderWeatherOverlay(ctx, canvas.width, canvas.height, weatherTint);
-
-    const currentEvents = this.game?.refreshCurrentEventsSummary?.(this.state?.day);
-    if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
-    this.game?.hudManager?.update?.();
-  }
+  renderBattle() { return this.fxManager.renderBattle(); }
 
   resolveBattle(result) {
     if (!this.state || this.state.mode !== 'battle') return false;
@@ -1237,54 +804,7 @@ export class BattleManager {
 
   // ─── Phase 8A: Roster → battle transition ──────────────────────────────────
 
-  confirmRosterSelection() {
-    const g = this.game;
-    if (!this.state || this.state.mode !== 'roster') return false;
-    const selected = g.playerRoster.filter((unit) => unit.selected && g.getEffectiveCount(unit) > 0);
-    if (selected.length < 1) {
-      this.state.roster.warning = 'Select at least 1 unit to deploy.';
-      g.updateTransientUIState();
-      return false;
-    }
-
-    const enemyId = this.state.roster?.enemyId ?? this.state.encounter?.enemyId ?? 'enemy-unknown';
-    const enemyParty = (g.enemyParties || []).find((party) => party?.id === enemyId) || null;
-    const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
-    const playerUnits = g.createBattleUnitsFromRoster(selected, 'player');
-    const enemyUnits = g.createBattleUnitsFromRoster(g.enemyRoster, 'enemy');
-    g.placeBattleUnits(enemyUnits, 'enemy');
-
-    const battleAmmo = initBattleAmmoFromParty({ party: g.playerParty, cfg: g.getEffectiveTuning().BATTLE_RANGED });
-
-    g.cancelPlayerDestination();
-    this.state.encounter = null;
-    this.state.roster.warning = '';
-    initBattleFx(this.getBattleFxConfig());
-    this.state.battle = {
-      enemyId,
-      enemyFactionId,
-      startedAt: Date.now(),
-      result: null,
-      resolvedAt: null,
-      playerUnits,
-      enemyUnits,
-      projectiles: [],
-      playerAmmoStart: battleAmmo.startAmmo,
-      playerAmmo: battleAmmo.ammo,
-      targetRetargetTimer: 0,
-      settlement: g.getActiveSettlementForCity(),
-      context: { nearCityId: g.findNearestCityId(g.playerParty?.x, g.playerParty?.y) },
-      phase: 'deploy',
-      camera: createCamera(),
-    };
-
-    this.currentBattleTerrain = getBattleTerrainContext(this.state, this.state.battle);
-    this.state.setMode('battle');
-    g.battleCommandsUI?.show?.();
-    g.startBattleDeployment();
-    g.updateTransientUIState();
-    return true;
-  }
+  confirmRosterSelection() { return this.rosterManager.confirmRosterSelection(); }
 
   exitAftermathToMap(takeLoot = true) {
     const g = this.game;
