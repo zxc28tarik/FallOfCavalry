@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { DIPLOMACY_ACTIONS, DIPLOMACY_RELATIONS } from '../constants.js';
-import { ensureFactionState, getRelation } from './factions.js';
+import { ensureFactionState, getRelation, setRelation } from './factions.js';
 import {
   buyTruce,
   improveRelations,
@@ -15,17 +15,19 @@ function makeState() {
 
 (function testBuyTruce() {
   const factions = makeState();
-  factions.relations['hre|player'] = -60;
+  // Use setRelation API (relKey uses ':' separator, not '|').
+  // Set well below WAR_THRESHOLD (-80) to ensure WAR stance.
+  setRelation(factions, 'player', 'hre', -85, DIPLOMACY_RELATIONS);
   const party = { gold: 200 };
   const ok = buyTruce({ factions, targetFactionId: 'hre', party, cfg: DIPLOMACY_ACTIONS });
   assert.equal(ok, true);
   assert.equal(party.gold, 50);
-  assert.ok(getRelation(factions, 'player', 'hre', DIPLOMACY_RELATIONS) > DIPLOMACY_RELATIONS.WAR_THRESHOLD);
+  assert.ok(getRelation(factions, 'player', 'hre') > DIPLOMACY_RELATIONS.WAR_THRESHOLD);
 })();
 
 (function testImproveRelations() {
   const factions = makeState();
-  factions.relations['ottoman|player'] = -20;
+  setRelation(factions, 'player', 'ottoman', -20, DIPLOMACY_RELATIONS);
   const party = { gold: 120 };
   const ok = improveRelations({ factions, targetFactionId: 'ottoman', party, cfg: DIPLOMACY_ACTIONS });
   assert.equal(ok, true);
@@ -35,7 +37,7 @@ function makeState() {
 
 (function testDeclareWar() {
   const factions = makeState();
-  factions.relations['player|venice'] = 20;
+  setRelation(factions, 'player', 'venice', 20, DIPLOMACY_RELATIONS);
   declareWar({ factions, targetFactionId: 'venice', cfg: DIPLOMACY_ACTIONS });
   assert.ok(getRelation(factions, 'player', 'venice', DIPLOMACY_RELATIONS) <= DIPLOMACY_RELATIONS.WAR_THRESHOLD);
 })();

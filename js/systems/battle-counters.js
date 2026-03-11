@@ -13,10 +13,12 @@ function toRoleToken(entry) {
 export function inferUnitRole(entry) {
   if (entry?.isRanged) return 'archer';
   const token = toRoleToken(entry);
-  if (token.includes('heavy') || token.includes('guard') || token.includes('legion')) return 'heavy_inf';
+  // elite_cav / knight checked before generic cav
   if (token.includes('elite_cav') || token.includes('elite cav') || token.includes('knight')) return 'elite_cav';
-  if (token.includes('siege') || token.includes('breaker') || token.includes('shock')) return 'siege';
+  // cav checked before heavy so 'heavy_cav' → cavalry (not heavy_inf)
   if (token.includes('cav')) return 'cavalry';
+  if (token.includes('heavy') || token.includes('guard') || token.includes('legion')) return 'heavy_inf';
+  if (token.includes('siege') || token.includes('breaker') || token.includes('shock')) return 'siege';
   if (token.includes('spear') || token.includes('pike')) return 'spearman';
   return 'infantry';
 }

@@ -59,13 +59,14 @@ export function improveRelations({ factions, targetFactionId, party, cfg } = {})
 
 export function declareWar({ factions, targetFactionId, cfg } = {}) {
   const actionCfg = resolveCfg(cfg, CONST.DIPLOMACY_ACTIONS);
-  const next = adjustRelation(
+  adjustRelation(
     factions,
     'player',
     targetFactionId,
     Number(actionCfg.DECLARE_WAR_RELATION_DELTA ?? 0),
     CONST.DIPLOMACY_RELATIONS,
   );
+  const next = getRelation(factions, 'player', targetFactionId);
 
   const warThreshold = Number(CONST.DIPLOMACY_RELATIONS.WAR_THRESHOLD ?? -35);
   if (next > warThreshold) {

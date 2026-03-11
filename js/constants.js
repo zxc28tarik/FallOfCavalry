@@ -982,6 +982,8 @@ export const DIPLOMACY_RELATIONS = Object.freeze({
   ALLIED: 80,
   HOSTILE: -50,
   WAR: -80,
+  WAR_THRESHOLD: -80,  // alias for WAR — used by getStance() and buyTruce()
+  ALLY_THRESHOLD: 50,  // alias for FRIENDLY — used by getStance()
 });
 
 // =============================================================================
