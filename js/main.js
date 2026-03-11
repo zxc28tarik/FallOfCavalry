@@ -89,28 +89,37 @@ class FallOfCavalry {
     utils.warnOnce(key, message);
   }
 
-  ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
-  ensureTuningState() { return this.tuningManager.ensureTuningState(); }
+  // ── DiplomacyManager ─────────────────────────────────────────────────────
   ensureFactionState() { return this.diplomacyManager.ensureFactionState(); }
   getFactionName(factionId) { return this.diplomacyManager.getFactionName(factionId); }
   getCityFactionContext(settlement) { return this.diplomacyManager.getCityFactionContext(settlement); }
-  findNearestCityId(x, y, radiusTiles) { return this.worldManager.findNearestCityId(x, y, radiusTiles); }
   syncWarStateFromRelations() { return this.diplomacyManager.syncWarStateFromRelations(); }
+
+  // ── TuningManager ────────────────────────────────────────────────────────
+  ensureTuningState() { return this.tuningManager.ensureTuningState(); }
   getTuningDefaults() { return this.tuningManager.getTuningDefaults(); }
   getEffectiveTuning() { return this.tuningManager.getEffectiveTuning(); }
   applyTuningDraft(draft) { return this.tuningManager.applyTuningDraft(draft); }
   async setupTuningUI() { return this.tuningManager.setupTuningUI(); }
   async showTuningModal() { return this.tuningManager.showTuningModal(); }
   hideTuningModal() { return this.tuningManager.hideTuningModal(); }
+  applyGameSettingsPatch(patch = {}) { return this.gameFlowManager.applyGameSettingsPatch(patch); }
+
+  // ── UIManager ────────────────────────────────────────────────────────────
+  ensureTutorialState() { return this.uiManager.ensureTutorialState(); }
   updateBuildInfoBadge() { return this.uiManager.updateBuildInfoBadge(); }
   applyDevOnlyDomLock() { return this.uiManager.applyDevOnlyDomLock(); }
   maybeShowTutorialHint(context = {}) { return this.uiManager.maybeShowTutorialHint(context); }
   getWeatherRegionId() { return this.uiManager.getWeatherRegionId(); }
   refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) { return this.uiManager.refreshWeatherState(dayIndex); }
   getWeatherConfig() { return this.uiManager.getWeatherConfig(); }
+
+  // ── BattleManager ────────────────────────────────────────────────────────
   getBattleFxConfig() { return this.battleManager.getBattleFxConfig(); }
   getBattleCameraConfig() { return this.battleManager.getBattleCameraConfig(); }
-  applyGameSettingsPatch(patch = {}) { return this.gameFlowManager.applyGameSettingsPatch(patch); }
+
+  // ── WorldManager (region / sim) ──────────────────────────────────────────
+  findNearestCityId(x, y, radiusTiles) { return this.worldManager.findNearestCityId(x, y, radiusTiles); }
   getRegionIdAtTile(tx, ty) { return this.worldManager.getRegionIdAtTile(tx, ty); }
   getCurrentRegionContext() { return this.worldManager.getCurrentRegionContext(); }
   getCurrentRegionModifiers(day = this.state?.day) { return this.worldManager.getCurrentRegionModifiers(day); }
@@ -210,88 +219,39 @@ class FallOfCavalry {
     return true;
   }
 
+  // ── RenderManager ────────────────────────────────────────────────────────
   async loadSpriteAssets() { return this.renderManager.loadSpriteAssets(); }
   async reloadSpriteAssets() { return this.renderManager.reloadSpriteAssets(); }
-  getPoiSpriteKey(poiType) { return this.poiManager.getPoiSpriteKey(poiType); }
+  renderStart() { return this.renderManager.renderStart(); }
+  renderMap() { return this.renderManager.renderMap(); }
+  renderWorldTerrain(ctx, camera) { return this.renderManager.renderWorldTerrain(ctx, camera); }
+  renderWorldOverlays(ctx, camera) { return this.renderManager.renderWorldOverlays(ctx, camera); }
+  renderEncounter() { return this.renderManager.renderEncounter(); }
+  renderCity() { return this.renderManager.renderCity(); }
+  renderDebugInfo() { return this.renderManager.renderDebugInfo(); }
+
+  // ── BattleManager (FX / roster / simulation / render) ───────────────────
+  renderBattle() { return this.battleManager.renderBattle(); }
   ensureBattleUnitFx(unit) { return this.battleManager.ensureBattleUnitFx(unit); }
   getUnitAnimationKey(unit) { return this.battleManager.getUnitAnimationKey(unit); }
   getBattleAnimPlayer(unit) { return this.battleManager.getBattleAnimPlayer(unit); }
   drawBattleUnitFallback(ctx, unit, x, y, size) { return this.battleManager.drawBattleUnitFallback(ctx, unit, x, y, size); }
   drawUnitSpriteOrFallback(ctx, unit, x, y, size, now) { return this.battleManager.drawUnitSpriteOrFallback(ctx, unit, x, y, size, now); }
-  setupCanvas() { return this.uiManager.setupCanvas(); }
-  setupEventListeners() { return this.uiManager.setupEventListeners(); }
-  getCurrentEvents(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.getCurrentEvents(day); }
-  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.refreshCurrentEventsSummary(day); }
-  applyDailyEventEffects(day, activeEvents) { return this.gameFlowManager.applyDailyEventEffects(day, activeEvents); }
-  getBanditCapWithEvents(worldEvents) { return this.worldManager.getBanditCapWithEvents(worldEvents); }
-  processDailyEconomy(day) { return this.economyManager.processDailyEconomy(day); }
-  evaluateCampaignOutcome() { return this.gameFlowManager.evaluateCampaignOutcome(); }
-  restartRun() { return this.gameFlowManager.restartRun(); }
-  showCampaignWin() { return this.gameFlowManager.showCampaignWin(); }
-  showCampaignLose() { return this.gameFlowManager.showCampaignLose(); }
-  getCameraSafe() { return this.worldManager.getCameraSafe(); }
-  getWorldBounds() { return this.worldManager.getWorldBounds(); }
-  clampToWorld(x, y) { return this.worldManager.clampToWorld(x, y); }
-  clampCameraToWorld() { return this.worldManager.clampCameraToWorld(); }
-  centerCameraOnParty() { return this.worldManager.centerCameraOnParty(); }
-  screenToWorld(screenX, screenY) { return this.worldManager.screenToWorld(screenX, screenY); }
-  updatePointerWorldState(screenX, screenY) { return this.worldManager.updatePointerWorldState(screenX, screenY); }
-  initPlayerParty() { return this.worldManager.initPlayerParty(); }
-  ensureRosterUnitState(unit) { return this.battleManager.ensureRosterUnitState(unit); }
-  ensureRosterState() { return this.worldManager.ensureRosterState(); }
-  initRosters() { return this.encounterManager.initRosters(); }
-  getEnemyUnits(enemyId) { return this.battleManager.getEnemyUnits(enemyId); }
-  applyDifficultyToEnemyUnit(unit) { return this.battleManager.applyDifficultyToEnemyUnit(unit); }
-  getEffectiveCount(entry) { return this.worldManager.getEffectiveCount(entry); }
-  initEnemyParties() { return this.worldManager.initEnemyParties(); }
-  updateMapSimulation(dt) { return this.worldManager.updateMapSimulation(dt); }
-  ensureWorldGenerated(seed) { return this.worldManager.ensureWorldGenerated(seed); }
-  updateFogFromPlayer() { return this.worldManager.updateFogFromPlayer(); }
-  rebuildMovementMasks() { return this.worldManager.rebuildMovementMasks(); }
-  getTilePosition(x, y) { return this.worldManager.getTilePosition(x, y); }
-  getMovementContextAt(x, y) { return this.worldManager.getMovementContextAt(x, y); }
-  getBiomeKeyAtTile(tx, ty) { return this.worldManager.getBiomeKeyAtTile(tx, ty); }
-  getNearestSettlementTierAt(tx, ty) { return this.worldManager.getNearestSettlementTierAt(tx, ty); }
-  getNearestSettlementAt(tx, ty) { return this.worldManager.getNearestSettlementAt(tx, ty); }
-  computeEncounterRiskContext() { return this.worldManager.computeEncounterRiskContext(); }
-  updateTransientUIState() { return this.worldManager.updateTransientUIState(); }
-  updateBattleSimulation(dt) { return this.battleManager.updateBattleSimulation(dt); }
-  findNearestEnemy(unit, enemies) { return this.battleManager.findNearestEnemy(unit, enemies); }
-  applyUnitDamage(attacker, target, baseDamage, context = {}) { return this.battleManager.applyUnitDamage(attacker, target, baseDamage, context); }
   spawnProjectile(shooter, target, list) { return this.battleManager.spawnProjectile(shooter, target, list); }
   spawnFloatingText(x, y, text, color = '#ffffff') { return this.battleManager.spawnFloatingText(x, y, text, color); }
   updateFloatingTexts(dt) { return this.battleManager.updateFloatingTexts(dt); }
-  updatePlayerParty(dt) { return this.worldManager.updatePlayerParty(dt); }
-  updateEnemyParties(dt) { return this.worldManager.updateEnemyParties(dt); }
-  processWorldAiEncounters(encounters) { return this.worldManager.processWorldAiEncounters(encounters); }
-  tryTriggerEncounter() { return this.worldManager.tryTriggerEncounter(); }
-  triggerEncounter(enemy) { return this.worldManager.triggerEncounter(enemy); }
-
-  resolveEncounter(action) { return this.encounterManager.resolveEncounter(action); }
-  enterRoster(enemyId) { return this.encounterManager.enterRoster(enemyId); }
-  finishEncounterToMap(enemy, enemyId) { return this.encounterManager.finishEncounterToMap(enemy, enemyId); }
-  applyEncounterPushback(enemy) { return this.encounterManager.applyEncounterPushback(enemy); }
-  confirmRosterSelection() { return this.battleManager.confirmRosterSelection(); }
+  ensureRosterUnitState(unit) { return this.battleManager.ensureRosterUnitState(unit); }
+  getEnemyUnits(enemyId) { return this.battleManager.getEnemyUnits(enemyId); }
+  applyDifficultyToEnemyUnit(unit) { return this.battleManager.applyDifficultyToEnemyUnit(unit); }
   createBattleUnitsFromRoster(roster, side) { return this.battleManager.createBattleUnitsFromRoster(roster, side); }
+  placeBattleUnits(units, side) { return this.battleManager.placeBattleUnits(units, side); }
+  getWoundedUnits() { return this.battleManager.getWoundedUnits(); }
+  confirmRosterSelection() { return this.battleManager.confirmRosterSelection(); }
+  updateBattleSimulation(dt) { return this.battleManager.updateBattleSimulation(dt); }
+  findNearestEnemy(unit, enemies) { return this.battleManager.findNearestEnemy(unit, enemies); }
+  applyUnitDamage(attacker, target, baseDamage, context = {}) { return this.battleManager.applyUnitDamage(attacker, target, baseDamage, context); }
   updateUnitMoraleState(unit, moraleCfg) { return this.battleManager.updateUnitMoraleState(unit, moraleCfg); }
   tickBattleMorale(units, battle, dt, moraleCfg) { return this.battleManager.tickBattleMorale(units, battle, dt, moraleCfg); }
-  placeBattleUnits(units, side) { return this.battleManager.placeBattleUnits(units, side); }
-  moveRosterCursor(delta) { return this.encounterManager.moveRosterCursor(delta); }
-  toggleRosterSelectionAtCursor() { return this.encounterManager.toggleRosterSelectionAtCursor(); }
-  ensureInventoryModel() { return this.economyManager.ensureInventoryModel(); }
-  getItemName(itemId) { return this.economyManager.getItemName(itemId); }
-  getItemQty(itemId) { return this.economyManager.getItemQty(itemId); }
-  addItem(itemId, name, qty = 1, unitValue = null) { return this.economyManager.addItem(itemId, name, qty, unitValue); }
-  removeItem(itemId, qty) { return this.economyManager.removeItem(itemId, qty); }
-  listInventoryForUI() { return this.economyManager.listInventoryForUI(); }
-  buildAftermathPanelData() { return this.encounterManager.buildAftermathPanelData(); }
-  setupCityServicesUI() { return this.cityManager.setupCityServicesUI(); }
-  getOrCreateMarketForSettlement(settlement) { return this.economyManager.getOrCreateMarketForSettlement(settlement); }
-  enterCityServices() { return this.economyManager.enterCityServices(); }
-  exitCityServices() { return this.economyManager.exitCityServices(); }
-  getLogisticsSpeedMult() { return this.economyManager.getLogisticsSpeedMult(); }
-  setupCampUI() { return this.uiManager.setupCampUI(); }
-  toggleCampMode() { return this.uiManager.toggleCampMode(); }
   setupBattleDeployUI() { return this.battleManager.setupBattleDeployUI(); }
   startBattleDeployment() { return this.battleManager.startBattleDeployment(); }
   confirmBattleDeployment() { return this.battleManager.confirmBattleDeployment(); }
@@ -299,14 +259,70 @@ class FallOfCavalry {
   setupBattleCommandsUI() { return this.battleManager.setupBattleCommandsUI(); }
   applyBattleCommand(cmd) { return this.battleManager.applyBattleCommand(cmd); }
   toggleBattleHoldFire(forceValue = null) { return this.battleManager.toggleBattleHoldFire(forceValue); }
-  setupAccountingUI() { return this.uiManager.setupAccountingUI(); }
-  closeAccountingModal() { return this.uiManager.closeAccountingModal(); }
-  setupPoiUI() { return this.uiManager.setupPoiUI(); }
-  getNearestInteractablePoi() { return this.poiManager.getNearestInteractablePoi(); }
-  updatePoiInteractHint() { return this.poiManager.updatePoiInteractHint(); }
-  openPoiModal() { return this.poiManager.openPoiModal(); }
-  investigateActivePoi() { return this.poiManager.investigateActivePoi(); }
-  resolvePoiFollowup() { return this.poiManager.resolvePoiFollowup(); }
+  generateBattleLoot(result, battle) { return this.battleManager.generateBattleLoot(result, battle); }
+  applyRosterOutcomeFromBattle(battle) { return this.battleManager.applyRosterOutcomeFromBattle(battle); }
+  resolveBattle(result) { return this.battleManager.resolveBattle(result); }
+  exitAftermathToMap(takeLoot = true) { return this.battleManager.exitAftermathToMap(takeLoot); }
+  applyBattleExit(enemy, enemyId, pushbackDistance) { return this.battleManager.applyBattleExit(enemy, enemyId, pushbackDistance); }
+
+  // ── WorldManager (gen / sim / navigation) ───────────────────────────────
+  getCameraSafe() { return this.worldManager.getCameraSafe(); }
+  getWorldBounds() { return this.worldManager.getWorldBounds(); }
+  clampToWorld(x, y) { return this.worldManager.clampToWorld(x, y); }
+  clampCameraToWorld() { return this.worldManager.clampCameraToWorld(); }
+  centerCameraOnParty() { return this.worldManager.centerCameraOnParty(); }
+  screenToWorld(screenX, screenY) { return this.worldManager.screenToWorld(screenX, screenY); }
+  updatePointerWorldState(screenX, screenY) { return this.worldManager.updatePointerWorldState(screenX, screenY); }
+  getTilePosition(x, y) { return this.worldManager.getTilePosition(x, y); }
+  getMovementContextAt(x, y) { return this.worldManager.getMovementContextAt(x, y); }
+  getBiomeKeyAtTile(tx, ty) { return this.worldManager.getBiomeKeyAtTile(tx, ty); }
+  getNearestSettlementTierAt(tx, ty) { return this.worldManager.getNearestSettlementTierAt(tx, ty); }
+  getNearestSettlementAt(tx, ty) { return this.worldManager.getNearestSettlementAt(tx, ty); }
+  ensureWorldGenerated(seed) { return this.worldManager.ensureWorldGenerated(seed); }
+  updateFogFromPlayer() { return this.worldManager.updateFogFromPlayer(); }
+  rebuildMovementMasks() { return this.worldManager.rebuildMovementMasks(); }
+  getEffectiveCount(entry) { return this.worldManager.getEffectiveCount(entry); }
+  initPlayerParty() { return this.worldManager.initPlayerParty(); }
+  initEnemyParties() { return this.worldManager.initEnemyParties(); }
+  ensureRosterState() { return this.worldManager.ensureRosterState(); }
+  computeEncounterRiskContext() { return this.worldManager.computeEncounterRiskContext(); }
+  updateTransientUIState() { return this.worldManager.updateTransientUIState(); }
+  updateMapSimulation(dt) { return this.worldManager.updateMapSimulation(dt); }
+  updatePlayerParty(dt) { return this.worldManager.updatePlayerParty(dt); }
+  updateEnemyParties(dt) { return this.worldManager.updateEnemyParties(dt); }
+  processWorldAiEncounters(encounters) { return this.worldManager.processWorldAiEncounters(encounters); }
+  tryTriggerEncounter() { return this.worldManager.tryTriggerEncounter(); }
+  triggerEncounter(enemy) { return this.worldManager.triggerEncounter(enemy); }
+  getBanditCapWithEvents(worldEvents) { return this.worldManager.getBanditCapWithEvents(worldEvents); }
+  cleanupTemporaryEnemy(enemyId, opts) { return this.worldManager.cleanupTemporaryEnemy(enemyId, opts); }
+  despawnEnemyParty(enemyId) { return this.worldManager.despawnEnemyParty(enemyId); }
+  setPlayerDestination(worldX, worldY) { return this.worldManager.setPlayerDestination(worldX, worldY); }
+  completePlayerArrival() { return this.worldManager.completePlayerArrival(); }
+  cancelPlayerDestination() { return this.worldManager.cancelPlayerDestination(); }
+  isWorldPointOnParty(worldX, worldY, margin) { return this.worldManager.isWorldPointOnParty(worldX, worldY, margin); }
+
+  // ── EncounterManager ─────────────────────────────────────────────────────
+  resolveEncounter(action) { return this.encounterManager.resolveEncounter(action); }
+  enterRoster(enemyId) { return this.encounterManager.enterRoster(enemyId); }
+  finishEncounterToMap(enemy, enemyId) { return this.encounterManager.finishEncounterToMap(enemy, enemyId); }
+  applyEncounterPushback(enemy) { return this.encounterManager.applyEncounterPushback(enemy); }
+  moveRosterCursor(delta) { return this.encounterManager.moveRosterCursor(delta); }
+  toggleRosterSelectionAtCursor() { return this.encounterManager.toggleRosterSelectionAtCursor(); }
+  buildAftermathPanelData() { return this.encounterManager.buildAftermathPanelData(); }
+  initRosters() { return this.encounterManager.initRosters(); }
+
+  // ── EconomyManager ───────────────────────────────────────────────────────
+  processDailyEconomy(day) { return this.economyManager.processDailyEconomy(day); }
+  ensureInventoryModel() { return this.economyManager.ensureInventoryModel(); }
+  getItemName(itemId) { return this.economyManager.getItemName(itemId); }
+  getItemQty(itemId) { return this.economyManager.getItemQty(itemId); }
+  addItem(itemId, name, qty = 1, unitValue = null) { return this.economyManager.addItem(itemId, name, qty, unitValue); }
+  removeItem(itemId, qty) { return this.economyManager.removeItem(itemId, qty); }
+  listInventoryForUI() { return this.economyManager.listInventoryForUI(); }
+  getOrCreateMarketForSettlement(settlement) { return this.economyManager.getOrCreateMarketForSettlement(settlement); }
+  enterCityServices() { return this.economyManager.enterCityServices(); }
+  exitCityServices() { return this.economyManager.exitCityServices(); }
+  getLogisticsSpeedMult() { return this.economyManager.getLogisticsSpeedMult(); }
   getSettlementTier(settlement) { return this.economyManager.getSettlementTier(settlement); }
   getSettlementOpportunityKey(settlement) { return this.economyManager.getSettlementOpportunityKey(settlement); }
   cleanupExpiredMarketOpportunities(day = this.state?.day) { return this.economyManager.cleanupExpiredMarketOpportunities(day); }
@@ -315,51 +331,43 @@ class FallOfCavalry {
   ensureSettlementRecruitState(settlement, dayNow) { return this.economyManager.ensureSettlementRecruitState(settlement, dayNow); }
   ensureSettlementMarketState(settlement) { return this.economyManager.ensureSettlementMarketState(settlement); }
   ensureCityOffers() { return this.economyManager.ensureCityOffers(); }
-  getWoundedUnits() { return this.battleManager.getWoundedUnits(); }
   buildCityPanelData() { return this.economyManager.buildCityPanelData(); }
   recruitCurrentUnit(hireMax = false) { return this.economyManager.recruitCurrentUnit(hireMax); }
   tradeCurrentItem(deltaQty) { return this.economyManager.tradeCurrentItem(deltaQty); }
   healCurrentUnit() { return this.economyManager.healCurrentUnit(); }
-  generateBattleLoot(result, battle) { return this.battleManager.generateBattleLoot(result, battle); }
-  applyRosterOutcomeFromBattle(battle) { return this.battleManager.applyRosterOutcomeFromBattle(battle); }
-  resolveBattle(result) { return this.battleManager.resolveBattle(result); }
-  exitAftermathToMap(takeLoot = true) { return this.battleManager.exitAftermathToMap(takeLoot); }
-  applyBattleExit(enemy, enemyId, pushbackDistance) { return this.battleManager.applyBattleExit(enemy, enemyId, pushbackDistance); }
-  cleanupTemporaryEnemy(enemyId, opts) { return this.worldManager.cleanupTemporaryEnemy(enemyId, opts); }
-  despawnEnemyParty(enemyId) { return this.worldManager.despawnEnemyParty(enemyId); }
-  setLastEventLog(message, durationMs = 3000) { return this.gameFlowManager.setLastEventLog(message, durationMs); }
-  setPlayerDestination(worldX, worldY) { return this.worldManager.setPlayerDestination(worldX, worldY); }
-  completePlayerArrival() { return this.worldManager.completePlayerArrival(); }
-  cancelPlayerDestination() { return this.worldManager.cancelPlayerDestination(); }
-  isWorldPointOnParty(worldX, worldY, margin) { return this.worldManager.isWorldPointOnParty(worldX, worldY, margin); }
-  setupPartyInputHandlers() { return this.inputManager.setupPartyInputHandlers(); }
-  setupKeyboardShortcuts() { return this.inputManager.setupKeyboardShortcuts(); }
+
+  // ── UIManager ────────────────────────────────────────────────────────────
+  setupCanvas() { return this.uiManager.setupCanvas(); }
+  setupEventListeners() { return this.uiManager.setupEventListeners(); }
+  setupCampUI() { return this.uiManager.setupCampUI(); }
+  toggleCampMode() { return this.uiManager.toggleCampMode(); }
+  setupAccountingUI() { return this.uiManager.setupAccountingUI(); }
+  closeAccountingModal() { return this.uiManager.closeAccountingModal(); }
+  setupPoiUI() { return this.uiManager.setupPoiUI(); }
   ensureHudEventsButton() { return this.uiManager.ensureHudEventsButton(); }
   setupDOMReferences() { return this.uiManager.setupDOMReferences(); }
   setupSettingsUI() { return this.uiManager.setupSettingsUI(); }
   setupHelpOverlay() { return this.uiManager.setupHelpOverlay(); }
   toggleHelpOverlay(force = null) { return this.uiManager.toggleHelpOverlay(force); }
-  setupDebugSmokePanel() { return this.devManager.setupDebugSmokePanel(); }
-  appendSmokeResults(results) { return this.devManager.appendSmokeResults(results); }
-  async runSmokeScenarios() { return this.devManager.runSmokeScenarios(); }
   onModeChanged(oldMode, newMode) { return this.uiManager.onModeChanged(oldMode, newMode); }
-  setupStartFlow() { return this.gameFlowManager.setupStartFlow(); }
-  enterStart() { return this.gameFlowManager.enterStart(); }
   setupMenuActions() { return this.uiManager.setupMenuActions(); }
-  enterMenu() { return this.gameFlowManager.enterMenu(); }
-  startNewGame() { return this.gameFlowManager.startNewGame(); }
-  continueGame() { return this.gameFlowManager.continueGame(); }
-  openSettings() { return this.gameFlowManager.openSettings(); }
-  closeSettings() { return this.gameFlowManager.closeSettings(); }
-  applyMasterVolume(value) { return this.gameFlowManager.applyMasterVolume(value); }
-  quitToMenu() { return this.enterMenu(); }
-  start() { return this.gameFlowManager.start(); }
-  stop() { return this.gameFlowManager.stop(); }
-  setPaused(isPaused) { return this.gameFlowManager.setPaused(isPaused); }
-  togglePaused() { return this.gameFlowManager.togglePaused(); }
-  isPaused() { return this.mode === 'paused'; }
-  destroy() { return this.gameFlowManager.destroy(); }
-  toggleDebug() { return this.devManager.toggleDebug(); }
+
+  // ── PoiManager ───────────────────────────────────────────────────────────
+  getPoiSpriteKey(poiType) { return this.poiManager.getPoiSpriteKey(poiType); }
+  getNearestInteractablePoi() { return this.poiManager.getNearestInteractablePoi(); }
+  updatePoiInteractHint() { return this.poiManager.updatePoiInteractHint(); }
+  openPoiModal() { return this.poiManager.openPoiModal(); }
+  investigateActivePoi() { return this.poiManager.investigateActivePoi(); }
+  resolvePoiFollowup() { return this.poiManager.resolvePoiFollowup(); }
+
+  // ── CityManager ──────────────────────────────────────────────────────────
+  setupCityServicesUI() { return this.cityManager.setupCityServicesUI(); }
+
+  // ── InputManager ─────────────────────────────────────────────────────────
+  setupPartyInputHandlers() { return this.inputManager.setupPartyInputHandlers(); }
+  setupKeyboardShortcuts() { return this.inputManager.setupKeyboardShortcuts(); }
+
+  // ── SaveManager ──────────────────────────────────────────────────────────
   buildSavePayload() { return this.saveManager.buildSavePayload(); }
   applySavePayload(payload, opts) { return this.saveManager.applySavePayload(payload, opts); }
   getSelectedSaveSlot() { return this.saveManager.getSelectedSaveSlot(); }
@@ -375,14 +383,36 @@ class FallOfCavalry {
   runAutosave(trigger) { return this.saveManager.runAutosave(trigger); }
   quickSave() { return this.saveManager.quickSave(); }
   quickLoad() { return this.saveManager.quickLoad(); }
-  renderStart() { return this.renderManager.renderStart(); }
-  renderMap() { return this.renderManager.renderMap(); }
-  renderWorldTerrain(ctx, camera) { return this.renderManager.renderWorldTerrain(ctx, camera); }
-  renderWorldOverlays(ctx, camera) { return this.renderManager.renderWorldOverlays(ctx, camera); }
-  renderEncounter() { return this.renderManager.renderEncounter(); }
-  renderCity() { return this.renderManager.renderCity(); }
-  renderBattle() { return this.battleManager.renderBattle(); }
-  renderDebugInfo() { return this.renderManager.renderDebugInfo(); }
+
+  // ── GameFlowManager ──────────────────────────────────────────────────────
+  getCurrentEvents(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.getCurrentEvents(day); }
+  refreshCurrentEventsSummary(day = Number(this.state?.day ?? 1)) { return this.gameFlowManager.refreshCurrentEventsSummary(day); }
+  applyDailyEventEffects(day, activeEvents) { return this.gameFlowManager.applyDailyEventEffects(day, activeEvents); }
+  evaluateCampaignOutcome() { return this.gameFlowManager.evaluateCampaignOutcome(); }
+  restartRun() { return this.gameFlowManager.restartRun(); }
+  showCampaignWin() { return this.gameFlowManager.showCampaignWin(); }
+  showCampaignLose() { return this.gameFlowManager.showCampaignLose(); }
+  setLastEventLog(message, durationMs = 3000) { return this.gameFlowManager.setLastEventLog(message, durationMs); }
+  setupStartFlow() { return this.gameFlowManager.setupStartFlow(); }
+  enterStart() { return this.gameFlowManager.enterStart(); }
+  enterMenu() { return this.gameFlowManager.enterMenu(); }
+  startNewGame() { return this.gameFlowManager.startNewGame(); }
+  continueGame() { return this.gameFlowManager.continueGame(); }
+  openSettings() { return this.gameFlowManager.openSettings(); }
+  closeSettings() { return this.gameFlowManager.closeSettings(); }
+  applyMasterVolume(value) { return this.gameFlowManager.applyMasterVolume(value); }
+  quitToMenu() { return this.enterMenu(); }
+  start() { return this.gameFlowManager.start(); }
+  stop() { return this.gameFlowManager.stop(); }
+  setPaused(isPaused) { return this.gameFlowManager.setPaused(isPaused); }
+  togglePaused() { return this.gameFlowManager.togglePaused(); }
+  destroy() { return this.gameFlowManager.destroy(); }
+
+  // ── DevManager ───────────────────────────────────────────────────────────
+  setupDebugSmokePanel() { return this.devManager.setupDebugSmokePanel(); }
+  appendSmokeResults(results) { return this.devManager.appendSmokeResults(results); }
+  async runSmokeScenarios() { return this.devManager.runSmokeScenarios(); }
+  toggleDebug() { return this.devManager.toggleDebug(); }
 }
 
 export function bootstrapFallOfCavalry() {
