@@ -333,13 +333,13 @@ describe('BattleManager - Phase 2D', () => {
     const state = { mode: 'battle', battle: { phase: 'fight' } };
     const bm = new BattleManager(state);
     bm.init({
-      lastEncounterEndTimeByEnemyId: {},
+      worldManager: { lastEncounterEndTimeByEnemyId: {} },
       battleCommandsUI: { hide: () => {} },
       battleDeployUI: { hide: () => {} },
     });
     bm.applyBattleExit({}, 'enemy-1', 0);
     expect(state.battle).toBeNull();
-    expect(bm.game.lastEncounterEndTimeByEnemyId['enemy-1']).toBeDefined();
+    expect(bm.game.worldManager.lastEncounterEndTimeByEnemyId['enemy-1']).toBeDefined();
   });
 });
 
@@ -742,10 +742,12 @@ describe('SaveManager - Phase 4A', () => {
     const sm = new SaveManager(state);
     sm.init({
       playerParty: { gold: 100, roster: [{ id: 'u1' }, { id: 'u2' }] },
-      enemyParties: [],
-      worldAi: { lastRespawnDay: 0, parties: [] },
-      lastEncounterEndTimeByEnemyId: {},
-      worldEncounterPartyByEnemyId: {},
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+      },
       itemCatalog: [],
       settings: {},
       setLastEventLog: () => {},
@@ -882,10 +884,12 @@ describe('SaveManager - Phase 4B', () => {
     const sm = new SaveManager(state);
     sm.init({
       playerParty: { gold: 100, roster: [{ id: 'u1' }] },
-      enemyParties: [],
-      worldAi: { lastRespawnDay: 0, parties: [] },
-      lastEncounterEndTimeByEnemyId: {},
-      worldEncounterPartyByEnemyId: {},
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+      },
       itemCatalog: [],
       settings: {},
       setLastEventLog: () => {},
@@ -980,10 +984,12 @@ describe('SaveManager - Phase 4C', () => {
     const sm = new SaveManager(state);
     sm.init({
       playerParty: { gold: 100, roster: [{ id: 'u1' }] },
-      enemyParties: [],
-      worldAi: { lastRespawnDay: 0, parties: [] },
-      lastEncounterEndTimeByEnemyId: {},
-      worldEncounterPartyByEnemyId: {},
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+      },
       itemCatalog: [],
       settings: {},
       setLastEventLog: () => {},
@@ -1541,21 +1547,31 @@ describe('EconomyManager - Phase 5C', () => {
         state: { mode: 'map', devMode: false },
         mode: 'playing',
         dom: {},
-        settingsUI: null,
-        codexUI: null,
-        helpOverlayVisible: false,
+        uiManager: {
+          settingsUI: null,
+          codexUI: null,
+          helpOverlayVisible: false,
+        },
+        saveManager: {
+          saveLoadCursor: 0,
+          saveLoadRows: [],
+        },
+        encounterManager: {
+          playerRoster: [],
+          maxUnitsToDeploy: 6,
+        },
+        economyManager: {
+          cityOffers: [],
+          cityCursor: 0,
+          cityMarketCursor: 0,
+          cityHealerCursor: 0,
+          itemCatalog: [],
+        },
+        battleManager: {
+          battleDeployMode: null,
+          battleDeployUI: null,
+        },
         followParty: false,
-        saveLoadCursor: 0,
-        saveLoadRows: [],
-        playerRoster: [],
-        maxUnitsToDeploy: 6,
-        cityOffers: [],
-        cityCursor: 0,
-        cityMarketCursor: 0,
-        cityHealerCursor: 0,
-        itemCatalog: [],
-        battleDeployMode: null,
-        battleDeployUI: null,
         toggleHelpOverlay: vi.fn(),
         toggleCampMode: vi.fn(),
         setPaused: vi.fn(),
@@ -1839,17 +1855,21 @@ describe('EconomyManager - Phase 5C', () => {
         ctx: mockCtx,
         canvas: mockCanvas,
         state,
-        weatherState: null,
+        uiManager: {
+          weatherState: null,
+          minimapRenderer: { render: vi.fn() },
+        },
+        worldManager: {
+          encounterMargin: 50,
+          worldAi: null,
+          enemyParties: [],
+        },
         followParty: false,
         playerParty: null,
         mouseWorldX: 0,
         mouseWorldY: 0,
-        encounterMargin: 50,
-        worldAi: null,
-        enemyParties: [],
         mode: 'map',
         hudManager: { update: vi.fn() },
-        minimapRenderer: { render: vi.fn() },
         refreshCurrentEventsSummary: vi.fn(() => []),
         getCameraSafe: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
         clampCameraToWorld: vi.fn(),
@@ -1899,7 +1919,7 @@ describe('EconomyManager - Phase 5C', () => {
     it('renderWorldOverlays() draws enemyParties circles', () => {
       const { rm, game, mockCtx } = makeRMMap();
       game.playerParty = { x: 0, y: 0, radius: 10, selected: false, hovered: false, hasDestination: false, arrivalFeedbackTimer: 0 };
-      game.enemyParties = [{ x: 200, y: 200, radius: 15 }];
+      game.worldManager.enemyParties = [{ x: 200, y: 200, radius: 15 }];
       rm.renderWorldOverlays(mockCtx, camera);
       // arc called for player (radius 10) and for enemy (radius 15)
       const arcCalls = mockCtx.arc.mock.calls.map(c => c[2]);
@@ -1926,16 +1946,22 @@ describe('EconomyManager - Phase 5C', () => {
       const bm = new BattleManager(state);
       const game = {
         state,
-        playerRoster: [],
-        enemyRoster: [],
+        encounterManager: {
+          playerRoster: [],
+          enemyRoster: [],
+          encounterPushbackDistance: 64,
+        },
+        worldManager: {
+          enemyParties: [],
+          worldAi: { parties: [] },
+          worldEncounterPartyByEnemyId: {},
+        },
         playerParty: { x: 0, y: 0 },
-        enemyParties: [],
-        worldAi: { parties: [] },
-        worldEncounterPartyByEnemyId: {},
-        encounterPushbackDistance: 64,
         defeatPushbackDistance: 120,
         currentBattleTerrain: null,
-        battleCommandsUI: { show: vi.fn(), hide: vi.fn() },
+        battleManager: {
+          battleCommandsUI: { show: vi.fn(), hide: vi.fn() },
+        },
         getEffectiveCount: vi.fn(() => 0),
         createBattleUnitsFromRoster: vi.fn(() => []),
         placeBattleUnits: vi.fn(),
@@ -1963,14 +1989,14 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('confirmRosterSelection() returns false when no units selected (0 effective count)', () => {
       const { bm, game } = makeBM8A();
-      game.playerRoster = [{ selected: true }];
+      game.encounterManager.playerRoster = [{ selected: true }];
       game.getEffectiveCount.mockReturnValue(0);
       expect(bm.confirmRosterSelection()).toBe(false);
     });
 
     it('confirmRosterSelection() sets state.battle and transitions to battle', () => {
       const { bm, game, state } = makeBM8A();
-      game.playerRoster = [{ selected: true }];
+      game.encounterManager.playerRoster = [{ selected: true }];
       game.getEffectiveCount.mockReturnValue(2);
       bm.confirmRosterSelection();
       expect(state.setMode).toHaveBeenCalledWith('battle');
@@ -1987,7 +2013,7 @@ describe('EconomyManager - Phase 5C', () => {
         mode: 'aftermath',
         aftermath: { enemyId: 'e1', result: 'defeat', goldDelta: 0, renownDelta: 0 },
       });
-      game.enemyParties = [{ id: 'e1', x: 0, y: 0 }];
+      game.worldManager.enemyParties = [{ id: 'e1', x: 0, y: 0 }];
       bm.exitAftermathToMap();
       expect(state.aftermath).toBeNull();
       expect(game.runAutosave).toHaveBeenCalledWith('aftermath-close');
@@ -2341,17 +2367,20 @@ describe('EconomyManager - Phase 5C', () => {
       const em = new EncounterManager(state);
       const game = {
         state,
-        enemyParties: [],
+        worldManager: {
+          enemyParties: [],
+          lastEncounterEndTimeByEnemyId: {},
+        },
+        encounterManager: {
+          encounterPushbackDistance: 60,
+        },
+        battleManager: {
+          battleCommandsUI: null,
+        },
         playerParty: { x: 100, y: 100, roster: [] },
-        playerRoster: [],
-        rosterCursorIndex: 0,
-        maxUnitsToDeploy: 6,
         getEnemyUnits: () => [],
         updateTransientUIState: () => {},
-        battleCommandsUI: null,
         cleanupTemporaryEnemy: () => {},
-        lastEncounterEndTimeByEnemyId: {},
-        encounterPushbackDistance: 60,
         clampToWorld: (x, y) => ({ x, y }),
         getEffectiveCount: (u) => u?.count ?? 1,
         getSelectedRosterCount: () => 0,
@@ -2402,9 +2431,10 @@ describe('EconomyManager - Phase 5C', () => {
       const game = {
         mode: 'playing',
         started: false,
-        saveSystem: null,
+        saveManager: { saveSystem: null },
         hudManager: { setContinueEnabled: () => {}, setPaused: () => {}, setMenuVisible: () => {}, setSettingsVisible: () => {} },
-        startScreen: null,
+        gameFlowManager: { startScreen: null },
+        uiManager: { settingsUI: null },
         gameLoop: null,
         applySavePayload: () => false,
         startAutosaveLoop: () => {},
@@ -2482,7 +2512,7 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         gameLoop: { start: () => {}, stop: () => {} },
         hudManager: { setMenuVisible: () => {}, setSettingsVisible: () => {}, setPaused: () => {}, setContinueEnabled: () => {} },
-        saveSystem: null,
+        saveManager: { saveSystem: null },
         startAutosaveLoop: () => {},
         ensureWorldGenerated: () => {},
         updateTransientUIState: () => {},
@@ -2536,12 +2566,13 @@ describe('EconomyManager - Phase 5C', () => {
       const game = {
         state,
         dom: { hud: null, startModal: null, mainMenuOverlay: null, helpOverlay: null, helpCloseBtn: null, buildInfo: null },
-        poiUI: null,
-        activePoi: null,
-        startScreen: null,
-        battleCommandsUI: null,
-        battleDeployUI: null,
-        helpOverlayVisible: false,
+        poiManager: { activePoi: null },
+        gameFlowManager: { startScreen: null },
+        battleManager: {
+          battleCommandsUI: null,
+          battleDeployUI: null,
+        },
+        uiManager: { helpOverlayVisible: false },
         hudManager: { showTransientHint: () => true },
         ensureTutorialState: () => {},
         setLastEventLog: () => {},

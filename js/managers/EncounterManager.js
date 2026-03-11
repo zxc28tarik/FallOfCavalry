@@ -25,7 +25,7 @@ export class EncounterManager {
     if (!encounter?.enemyId || this.state?.mode !== 'encounter') return false;
 
     const g = this.game;
-    const enemy = g.enemyParties.find((party) => party.id === encounter.enemyId);
+    const enemy = g.worldManager.enemyParties.find((party) => party.id === encounter.enemyId);
     if (action === 'fight') {
       this.enterRoster(encounter.enemyId);
       return true;
@@ -62,10 +62,10 @@ export class EncounterManager {
     const g = this.game;
     this.applyEncounterPushback(enemy);
     g.cleanupTemporaryEnemy(enemyId);
-    g.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
+    g.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
-      g.battleCommandsUI?.hide?.();
+      g.battleManager.battleCommandsUI?.hide?.();
       this.state.setMode('map');
     }
   }

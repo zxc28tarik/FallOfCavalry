@@ -170,8 +170,8 @@ export class UIManager {
     if (btnLoad) btnLoad.addEventListener('click', () => g.openSaveLoadPanel());
     if (btnReset) btnReset.addEventListener('click', () => {
       if (confirm('Oyunu sıfırlamak istediğine emin misin?')) {
-        g.saveSystem?.deleteSave?.();
-        g.saveSystem?.deleteAutosave?.();
+        g.saveManager.saveSystem?.deleteSave?.();
+        g.saveManager.saveSystem?.deleteAutosave?.();
         location.reload();
       }
     });
@@ -236,7 +236,7 @@ export class UIManager {
       const rolledEvents = g.refreshCurrentEventsSummary(day);
       if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
         ensureWorldParties({
-          aiState: g.worldAi,
+          aiState: g.worldManager.worldAi,
           worldState: this.state?.map || {},
           factions: this.state?.factions || CONST.FACTIONS,
           cfg: g.getWorldAiCfgWithRegionMods(),
@@ -289,7 +289,7 @@ export class UIManager {
     g.hudManager?.setRosterHandlers?.({
       onToggleUnit: (index) => {
         if (!Number.isInteger(index)) return;
-        g.rosterCursorIndex = index;
+        g.encounterManager.rosterCursorIndex = index;
         g.toggleRosterSelectionAtCursor();
       },
     });
@@ -381,7 +381,7 @@ export class UIManager {
     });
     this.poiUI.onLeave = () => {
       g.resolvePoiFollowup();
-      g.activePoi = null;
+      g.poiManager.activePoi = null;
     };
     this.poiUI.onInvestigate = () => {
       g.investigateActivePoi();
@@ -395,24 +395,24 @@ export class UIManager {
     utils.devLog(this.state, `[Game] Mode changed: ${oldMode} → ${newMode}`);
     if (newMode !== 'map') {
       this.poiUI?.hide?.();
-      g.activePoi = null;
+      g.poiManager.activePoi = null;
       if (this.state) this.state.interactHint = '';
     }
     if (newMode === 'start') {
       utils.safeClass(g.dom.hud, 'add', 'hidden');
       utils.safeClass(g.dom.startModal, 'remove', 'hidden');
       utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
-      g.startScreen?.refresh?.();
-      g.battleCommandsUI?.hide?.();
+      g.gameFlowManager.startScreen?.refresh?.();
+      g.battleManager.battleCommandsUI?.hide?.();
       return;
     }
 
     utils.safeClass(g.dom.hud, 'remove', 'hidden');
     utils.safeClass(g.dom.startModal, 'add', 'hidden');
     utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
-    if (newMode === 'battle') g.battleCommandsUI?.show?.();
-    else g.battleCommandsUI?.hide?.();
-    if (newMode !== 'battle') g.battleDeployUI?.hide?.();
+    if (newMode === 'battle') g.battleManager.battleCommandsUI?.show?.();
+    else g.battleManager.battleCommandsUI?.hide?.();
+    if (newMode !== 'battle') g.battleManager.battleDeployUI?.hide?.();
   }
 
   updateBuildInfoBadge() {

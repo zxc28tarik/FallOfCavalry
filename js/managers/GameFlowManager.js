@@ -33,7 +33,7 @@ export class GameFlowManager {
     if (!this.startScreen) {
       this.startScreen = new StartScreen({
         state: this.state,
-        saveSystem: g.saveSystem,
+        saveSystem: g.saveManager.saveSystem,
         onStart: ({ faction, seed }) => {
           this.state.seed = seed;
           this.state.selectedFaction = {
@@ -78,14 +78,14 @@ export class GameFlowManager {
 
   continueGame() {
     const g = this.game;
-    const canContinue = Boolean(g.saveSystem?.hasSave?.());
+    const canContinue = Boolean(g.saveManager.saveSystem?.hasSave?.());
     g.hudManager?.setContinueEnabled?.(canContinue);
     if (!canContinue) {
       this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
       return false;
     }
 
-    const payload = g.saveSystem?.loadLatest?.();
+    const payload = g.saveManager.saveSystem?.loadLatest?.();
     if (!payload) {
       this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
       return false;
@@ -247,7 +247,7 @@ export class GameFlowManager {
     g.hudManager?.setMenuVisible?.(true);
     g.hudManager?.setSettingsVisible?.(false);
 
-    const canContinue = Boolean(g.saveSystem?.hasSave?.());
+    const canContinue = Boolean(g.saveManager.saveSystem?.hasSave?.());
     g.hudManager?.setContinueEnabled?.(canContinue);
     return true;
   }
@@ -354,14 +354,14 @@ export class GameFlowManager {
       g.hudManager?.setSettingsVisible?.(true);
       return true;
     }
-    g.settingsUI?.show?.();
+    g.uiManager.settingsUI?.show?.();
     return true;
   }
 
   closeSettings() {
     const g = this.game;
     g.hudManager?.setSettingsVisible?.(false);
-    g.settingsUI?.hide?.();
+    g.uiManager.settingsUI?.hide?.();
     return true;
   }
 
@@ -369,7 +369,7 @@ export class GameFlowManager {
     const g = this.game;
     g.settings = applySettingsPatch(g.settings, patch, CONST.SETTINGS);
     this.state.settings = serializeSettings(g.settings);
-    if (g.settingsUI?.visible) g.settingsUI.syncFromState();
+    if (g.uiManager.settingsUI?.visible) g.uiManager.settingsUI.syncFromState();
   }
 
   setLastEventLog(message, durationMs = 3000) {
@@ -395,38 +395,38 @@ export class GameFlowManager {
       window.removeEventListener('resize', g.resizeHandler);
     }
 
-    if (typeof document !== 'undefined' && g.keyboardHandler && typeof document.removeEventListener === 'function') {
-      document.removeEventListener('keydown', g.keyboardHandler);
+    if (typeof document !== 'undefined' && g.inputManager.keyboardHandler && typeof document.removeEventListener === 'function') {
+      document.removeEventListener('keydown', g.inputManager.keyboardHandler);
     }
 
     if (g.canvas && typeof g.canvas.removeEventListener === 'function') {
-      if (g.partyPointerHandler) g.canvas.removeEventListener('mousedown', g.partyPointerHandler);
-      if (g.partyPointerMoveHandler) g.canvas.removeEventListener('mousemove', g.partyPointerMoveHandler);
-      if (g.partyPointerUpHandler) g.canvas.removeEventListener('mouseup', g.partyPointerUpHandler);
-      if (g.partyContextMenuHandler) g.canvas.removeEventListener('contextmenu', g.partyContextMenuHandler);
+      if (g.inputManager.partyPointerHandler) g.canvas.removeEventListener('mousedown', g.inputManager.partyPointerHandler);
+      if (g.inputManager.partyPointerMoveHandler) g.canvas.removeEventListener('mousemove', g.inputManager.partyPointerMoveHandler);
+      if (g.inputManager.partyPointerUpHandler) g.canvas.removeEventListener('mouseup', g.inputManager.partyPointerUpHandler);
+      if (g.inputManager.partyContextMenuHandler) g.canvas.removeEventListener('contextmenu', g.inputManager.partyContextMenuHandler);
     }
 
     const destroyables = [g.input, g.gameLoop, g.renderer, g.hudManager];
     destroyables.forEach((sys) => sys?.destroy?.());
 
     g.resizeHandler = null;
-    g.keyboardHandler = null;
-    g.partyPointerHandler = null;
-    g.partyPointerMoveHandler = null;
-    g.partyPointerUpHandler = null;
-    g.partyContextMenuHandler = null;
-    g.rightPointerTracking = false;
-    g.rightPointerMoved = false;
-    g.rightPointerStartX = 0;
-    g.rightPointerStartY = 0;
-    g.listenersBound = false;
+    g.inputManager.keyboardHandler = null;
+    g.inputManager.partyPointerHandler = null;
+    g.inputManager.partyPointerMoveHandler = null;
+    g.inputManager.partyPointerUpHandler = null;
+    g.inputManager.partyContextMenuHandler = null;
+    g.inputManager.rightPointerTracking = false;
+    g.inputManager.rightPointerMoved = false;
+    g.inputManager.rightPointerStartX = 0;
+    g.inputManager.rightPointerStartY = 0;
+    g.uiManager.listenersBound = false;
     g.started = false;
     g.initialized = false;
 
     g.input = null;
     g.gameLoop = null;
     g.hudManager = null;
-    g.saveSystem = null;
+    g.saveManager.saveSystem = null;
     g.audioSystem = null;
     g.stopAutosaveLoop();
     g.state = null;

@@ -87,7 +87,7 @@ export class PoiManager {
       if (renownGain > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + renownGain);
       const rareSuffix = outcome.rare ? ' (Nadir!)' : '';
       g.setLastEventLog(`Ganimet: +${gold} altın, +${food} erzak, +${itemLabel} x${itemQty}${rareSuffix}${renownGain > 0 ? `, +${renownGain} şan` : ''}`);
-      g.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
+      g.uiManager.poiUI?.showResult?.({ kind: 'loot', lines: [`+${gold} altın`, `+${food} erzak`, `${itemLabel} x${itemQty}${rareSuffix}`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
       if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
       return true;
     }
@@ -125,7 +125,7 @@ export class PoiManager {
         };
       }
       g.setLastEventLog(`İpucu bulundu: ${clueLabel}. +${gold} altın, +${food} erzak${renownGain > 0 ? `, +${renownGain} şan` : ''}.`);
-      g.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
+      g.uiManager.poiUI?.showResult?.({ kind: 'clue', lines: [`İpucu: ${clueLabel}`, `Ödül: +${gold} altın, +${food} erzak`, ...(renownGain > 0 ? [`+${renownGain} renown`] : [])] });
       if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
       return true;
     }
@@ -133,7 +133,7 @@ export class PoiManager {
     if (outcome.kind === CONST.POI.OUTCOME.NOTHING) {
       const msg = outcome?.message || 'Burada kayda değer bir şey yok...';
       g.setLastEventLog(msg);
-      g.poiUI?.showResult?.({ kind: 'nothing', lines: [msg] });
+      g.uiManager.poiUI?.showResult?.({ kind: 'nothing', lines: [msg] });
       if (poi.type === 'ruin') emitContractEvent({ type: 'POI_EXPLORED', poiType: 'ruin', poiId: poi.id }, g.playerParty);
       return true;
     }
@@ -155,7 +155,7 @@ export class PoiManager {
       this.pendingPoiAmbush = outcome.enemyId;
       const lossText = loss?.mode ? `${Math.max(0, Math.floor(loss.amount ?? 0))} ${loss.mode === 'food' ? 'erzak' : (loss.mode === 'gold' ? 'altın' : 'moral')} kaybettin` : 'kayıp yaşandı';
       g.setLastEventLog(`Pusu! ${lossText}.`);
-      g.poiUI?.showResult?.({ kind: 'ambush', lines: [`Pusu! ${lossText}.`, 'Kapat ile karşılaşmaya geç.'] });
+      g.uiManager.poiUI?.showResult?.({ kind: 'ambush', lines: [`Pusu! ${lossText}.`, 'Kapat ile karşılaşmaya geç.'] });
       return true;
     }
 
@@ -187,7 +187,7 @@ export class PoiManager {
     if (this.state?.mode !== 'map') return false;
     const map = this.state?.map;
     if (!map || !Array.isArray(map.pois) || map.pois.length === 0) return false;
-    if (!g.poiUI || typeof g.poiUI.show !== 'function') return false;
+    if (!g.uiManager.poiUI || typeof g.uiManager.poiUI.show !== 'function') return false;
     const nearest = g.getNearestInteractablePoi();
     if (!nearest?.poi) return false;
     g.maybeShowTutorialHint({ nearSettlement: false, nearPoi: true, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
@@ -195,7 +195,7 @@ export class PoiManager {
     const remainingDays = PoiSystem.getCooldownRemainingDays(this.state, nearest.poi);
     const can = PoiSystem.canInteract(this.state, nearest.poi);
     const cooldownText = remainingDays > 0 ? `Tekrar inceleme: ${remainingDays} gün sonra` : '';
-    g.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText, remainingDays });
+    g.uiManager.poiUI?.show?.({ poi: nearest.poi, canInvestigate: can, cooldownText, remainingDays });
     return true;
   }
 
@@ -205,8 +205,8 @@ export class PoiManager {
     this.pendingPoiAmbush = null;
     if (!enemyId) return;
 
-    if (Array.isArray(g.enemyParties)) {
-      g.enemyParties.push({
+    if (Array.isArray(g.worldManager.enemyParties)) {
+      g.worldManager.enemyParties.push({
         id: enemyId,
         x: (g.playerParty?.x ?? 0) + 60,
         y: (g.playerParty?.y ?? 0) + 40,
@@ -217,7 +217,7 @@ export class PoiManager {
         temporary: Boolean(CONST.POI.AMBUSH_TEMPORARY),
         factionId: CONST.FACTION.ID.BANDITS,
       });
-      this.state.aiParties = g.enemyParties;
+      this.state.aiParties = g.worldManager.enemyParties;
     }
     this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
     if (typeof g.enterEncounter === 'function') g.enterEncounter(enemyId);

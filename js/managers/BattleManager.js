@@ -789,13 +789,13 @@ export class BattleManager {
 
   applyBattleExit(enemy, enemyId, pushbackDistance) {
     if (Number.isFinite(pushbackDistance) && pushbackDistance > 0) {
-      const previousDistance = this.game?.encounterPushbackDistance;
-      if (this.game) this.game.encounterPushbackDistance = pushbackDistance;
+      const previousDistance = this.game?.encounterManager?.encounterPushbackDistance;
+      if (this.game) this.game.encounterManager.encounterPushbackDistance = pushbackDistance;
       this.game?.applyEncounterPushback?.(enemy);
-      if (this.game) this.game.encounterPushbackDistance = previousDistance;
+      if (this.game) this.game.encounterManager.encounterPushbackDistance = previousDistance;
     }
 
-    if (this.game) this.game.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
+    if (this.game) this.game.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     this.state.battle = null;
     this.battleCommandsUI?.hide?.();
     this.battleDeployUI?.hide?.();
@@ -812,8 +812,8 @@ export class BattleManager {
     const aftermath = this.state.aftermath;
     const enemyId = aftermath.enemyId;
     const result = aftermath.result;
-    const enemy = g.enemyParties.find((party) => party?.id === enemyId) || null;
-    const linkedWorldPartyId = g.worldEncounterPartyByEnemyId?.[enemyId] || null;
+    const enemy = g.worldManager.enemyParties.find((party) => party?.id === enemyId) || null;
+    const linkedWorldPartyId = g.worldManager.worldEncounterPartyByEnemyId?.[enemyId] || null;
 
     if (takeLoot) {
       g.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
@@ -822,8 +822,8 @@ export class BattleManager {
     }
 
     if (linkedWorldPartyId) {
-      removeWorldParty(g.worldAi, linkedWorldPartyId);
-      delete g.worldEncounterPartyByEnemyId[enemyId];
+      removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
+      delete g.worldManager.worldEncounterPartyByEnemyId[enemyId];
     }
 
     if (result === 'victory') {
@@ -855,14 +855,14 @@ export class BattleManager {
       const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
       emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, g.playerParty);
       g.cleanupTemporaryEnemy(enemyId, { force: true });
-      g.applyBattleExit(enemy, enemyId, g.encounterPushbackDistance);
+      g.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     } else if (result === 'defeat') {
       g.cancelPlayerDestination();
       g.cleanupTemporaryEnemy(enemyId);
       g.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
       g.cleanupTemporaryEnemy(enemyId);
-      g.applyBattleExit(enemy, enemyId, g.encounterPushbackDistance);
+      g.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     }
 
     this.state.uiPanel = null;

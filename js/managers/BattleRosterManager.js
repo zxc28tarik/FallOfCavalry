@@ -223,7 +223,7 @@ export class BattleRosterManager {
   confirmRosterSelection() {
     const g = this.game;
     if (!this.battle.state || this.battle.state.mode !== 'roster') return false;
-    const selected = g.playerRoster.filter((unit) => unit.selected && g.getEffectiveCount(unit) > 0);
+    const selected = g.encounterManager.playerRoster.filter((unit) => unit.selected && g.getEffectiveCount(unit) > 0);
     if (selected.length < 1) {
       this.battle.state.roster.warning = 'Select at least 1 unit to deploy.';
       g.updateTransientUIState();
@@ -231,10 +231,10 @@ export class BattleRosterManager {
     }
 
     const enemyId = this.battle.state.roster?.enemyId ?? this.battle.state.encounter?.enemyId ?? 'enemy-unknown';
-    const enemyParty = (g.enemyParties || []).find((party) => party?.id === enemyId) || null;
+    const enemyParty = (g.worldManager.enemyParties || []).find((party) => party?.id === enemyId) || null;
     const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
     const playerUnits = g.createBattleUnitsFromRoster(selected, 'player');
-    const enemyUnits = g.createBattleUnitsFromRoster(g.enemyRoster, 'enemy');
+    const enemyUnits = g.createBattleUnitsFromRoster(g.encounterManager.enemyRoster, 'enemy');
     g.placeBattleUnits(enemyUnits, 'enemy');
 
     const battleAmmo = initBattleAmmoFromParty({ party: g.playerParty, cfg: g.getEffectiveTuning().BATTLE_RANGED });
@@ -263,7 +263,7 @@ export class BattleRosterManager {
 
     this.battle.currentBattleTerrain = getBattleTerrainContext(this.battle.state, this.battle.state.battle);
     this.battle.state.setMode('battle');
-    g.battleCommandsUI?.show?.();
+    g.battleManager.battleCommandsUI?.show?.();
     g.startBattleDeployment();
     g.updateTransientUIState();
     return true;

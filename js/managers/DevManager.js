@@ -97,10 +97,10 @@ export class DevManager {
     push('14) computeDamage finite', Number.isFinite(dmgTest), `damage=${dmgTest}`);
 
     this.state.battle = this.state.battle || { playerUnits: [{ unitId: 'p1' }], enemyUnits: [], phase: 'deploy', projectiles: [] };
-    g.battleDeployMode = new BattleDeployMode({ state: this.state, party: g.playerParty, battle: this.state.battle, camera: this.state?.camera });
-    g.battleDeployUI?.show?.();
+    g.battleManager.battleDeployMode = new BattleDeployMode({ state: this.state, party: g.playerParty, battle: this.state.battle, camera: this.state?.camera });
+    g.battleManager.battleDeployUI?.show?.();
     push('15) Deployment overlay shows on battle start', !(g.dom?.battleDeployOverlay?.classList?.contains('hidden')), g.dom?.battleDeployOverlay?.classList?.contains('hidden') ? 'hidden' : 'visible');
-    const previewCount = g.battleDeployMode.computePreviewPositions((this.state.battle.playerUnits || []).length).length;
+    const previewCount = g.battleManager.battleDeployMode.computePreviewPositions((this.state.battle.playerUnits || []).length).length;
     push('16) Formation preview count matches units', previewCount === (this.state.battle.playerUnits || []).length, `preview=${previewCount}`);
 
     const mapPois = this.state?.map?.pois || [];
@@ -114,7 +114,7 @@ export class DevManager {
 
       const poiKey = PoiSystem.keyOfPoi(p);
       const prevVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
-      g.activePoi = p;
+      g.poiManager.activePoi = p;
       g.investigateActivePoi();
       const nowVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
       const expectedDay = Number(this.state?.day ?? 1);

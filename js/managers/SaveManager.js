@@ -390,7 +390,7 @@ Esc close`,
     })).filter((u) => u.status !== 'dead');
     this.game?.ensureRosterState?.();
 
-    this.game.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).filter((e) => !e?.temporary).map((e) => ({
+    this.game.worldManager.enemyParties = (Array.isArray(game.enemies) ? game.enemies : []).filter((e) => !e?.temporary).map((e) => ({
       id: e.id,
       x: Number.isFinite(e.x) ? e.x : 0,
       y: Number.isFinite(e.y) ? e.y : 0,
@@ -401,14 +401,14 @@ Esc close`,
       temporary: false,
       factionId: e.factionId || CONST.FACTION.ID.BANDITS,
     }));
-    this.state.aiParties = this.game.enemyParties;
+    this.state.aiParties = this.game.worldManager.enemyParties;
 
-    this.game.lastEncounterEndTimeByEnemyId = game.enemyCooldowns && typeof game.enemyCooldowns === 'object'
+    this.game.worldManager.lastEncounterEndTimeByEnemyId = game.enemyCooldowns && typeof game.enemyCooldowns === 'object'
       ? game.enemyCooldowns
       : {};
 
     const savedWorldAi = game.worldAi && typeof game.worldAi === 'object' ? game.worldAi : {};
-    this.game.worldAi = {
+    this.game.worldManager.worldAi = {
       lastRespawnDay: Number.isFinite(savedWorldAi.lastRespawnDay) ? savedWorldAi.lastRespawnDay : 0,
       parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties.map((party) => ({
         id: party.id,
@@ -423,8 +423,8 @@ Esc close`,
         homeCityId: party.homeCityId || null,
       })) : [],
     };
-    this.game.worldEncounterPartyByEnemyId = {};
-    this.state.worldAi = this.game.worldAi;
+    this.game.worldManager.worldEncounterPartyByEnemyId = {};
+    this.state.worldAi = this.game.worldManager.worldAi;
 
     const recruitBySettlement = new Map((Array.isArray(game.settlementsRecruit) ? game.settlementsRecruit : []).map((r) => [r.settlementId, r]));
     const settlements = this.state.map?.settlements || [];
@@ -493,7 +493,7 @@ Esc close`,
     this.game?.refreshCurrentEventsSummary?.(this.state.day);
     if ((this.game?.getEffectiveTuning?.() || {}).WORLD_AI?.ENABLED ?? CONST.WORLD_AI?.ENABLED) {
       ensureWorldParties({
-        aiState: this.game.worldAi,
+        aiState: this.game.worldManager.worldAi,
         worldState: this.state?.map || {},
         factions: this.state?.factions || CONST.FACTIONS,
         cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},

@@ -102,7 +102,7 @@ export class RenderManager {
 
     g.ctx.restore();
 
-    const weatherTint = getWeatherTint(g.weatherState || this.state?.weatherState, g.getWeatherConfig());
+    const weatherTint = getWeatherTint(g.uiManager.weatherState || this.state?.weatherState, g.getWeatherConfig());
     renderWeatherOverlay(g.ctx, g.canvas.width, g.canvas.height, weatherTint);
 
     if (g.followParty) {
@@ -121,7 +121,7 @@ export class RenderManager {
       renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     }
     g.hudManager?.update?.();
-    g.minimapRenderer?.render(g);
+    g.uiManager.minimapRenderer?.render(g);
   }
 
   renderWorldOverlays(ctx, camera) {
@@ -192,7 +192,7 @@ export class RenderManager {
     }
 
     if (party.selected) {
-      const encounterRadius = party.radius + g.encounterMargin;
+      const encounterRadius = party.radius + g.worldManager.encounterMargin;
       ctx.strokeStyle = 'rgba(255,120,120,0.2)';
       ctx.lineWidth = lineBase;
       ctx.beginPath();
@@ -206,9 +206,9 @@ export class RenderManager {
       ctx.stroke();
     }
 
-    if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(g.worldAi?.parties)) {
+    if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(g.worldManager.worldAi?.parties)) {
       const iconSize = Math.max(6, 10 / camera.zoom);
-      g.worldAi.parties.forEach((party) => {
+      g.worldManager.worldAi.parties.forEach((party) => {
         if (!party || !Number.isFinite(party.x) || !Number.isFinite(party.y)) return;
         if (party.kind === 'bandit') {
           ctx.strokeStyle = '#ff4d4d';
@@ -243,8 +243,8 @@ export class RenderManager {
       });
     }
 
-    if (Array.isArray(g.enemyParties)) {
-      g.enemyParties.forEach((enemy) => {
+    if (Array.isArray(g.worldManager.enemyParties)) {
+      g.worldManager.enemyParties.forEach((enemy) => {
         if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
         const enemyRadius = Number.isFinite(enemy.radius) ? enemy.radius : 12;
         ctx.fillStyle = '#d9534f';
