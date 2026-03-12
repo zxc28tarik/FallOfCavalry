@@ -502,16 +502,16 @@ export class WorldSimManager {
 
   getRegionIdAtTile(tx, ty) {
     const g = this.game;
-    const nearestSettlement = g.getNearestSettlementAt(tx, ty);
+    const nearestSettlement = g.worldManager.getNearestSettlementAt(tx, ty);
     if (nearestSettlement?.id) return String(nearestSettlement.id);
     return `wild:${Math.floor(Number(tx) || 0)}:${Math.floor(Number(ty) || 0)}`;
   }
 
   getCurrentRegionContext() {
     const g = this.game;
-    const tilePos = g.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
+    const tilePos = g.worldManager.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
     const regionId = this.getRegionIdAtTile(tilePos.tx, tilePos.ty);
-    const nearestSettlement = g.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    const nearestSettlement = g.worldManager.getNearestSettlementAt(tilePos.tx, tilePos.ty);
     return {
       regionId,
       regionName: nearestSettlement?.name || regionId,
@@ -531,7 +531,7 @@ export class WorldSimManager {
 
   getWorldAiCfgWithRegionMods() {
     const g = this.game;
-    const base = g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
+    const base = g.tuningManager.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI;
     const mods = this.getCurrentRegionModifiers(this.world.state?.day);
     const banditMult = mods.reduce((mult, mod) => (mod?.id === 'high_banditry' ? (mult * Number(CONST.REGION_MODIFIERS.HIGH_BANDITRY.banditSpawnMult || 1.5)) : mult), 1);
     if (banditMult === 1) return base;
@@ -548,7 +548,7 @@ export class WorldSimManager {
 
   getBanditCapWithEvents(worldEvents) {
     const g = this.game;
-    const tuning = g.getEffectiveTuning();
+    const tuning = g.tuningManager.getEffectiveTuning();
     const worldCfg = tuning.WORLD_AI || CONST.WORLD_AI;
     const eventsCfg = tuning.EVENTS || CONST.EVENTS;
     const baseCap = Number(worldCfg.MAX_BANDIT_PARTIES ?? CONST.WORLD_AI.MAX_BANDIT_PARTIES);

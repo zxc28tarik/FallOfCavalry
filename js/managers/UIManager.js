@@ -166,8 +166,8 @@ export class UIManager {
     const btnImport = document.getElementById('btnImportSave');
     const btnCloseTransfer = document.getElementById('btnCloseSaveTransfer');
 
-    if (btnSave) btnSave.addEventListener('click', () => g.quickSave());
-    if (btnLoad) btnLoad.addEventListener('click', () => g.openSaveLoadPanel());
+    if (btnSave) btnSave.addEventListener('click', () => g.saveManager.quickSave());
+    if (btnLoad) btnLoad.addEventListener('click', () => g.saveManager.openSaveLoadPanel());
     if (btnReset) btnReset.addEventListener('click', () => {
       if (confirm('Oyunu sıfırlamak istediğine emin misin?')) {
         g.saveManager.saveSystem?.deleteSave?.();
@@ -179,10 +179,10 @@ export class UIManager {
       document.getElementById('saveTransferModal')?.classList.remove('hidden');
     });
     if (btnExport) btnExport.addEventListener('click', () => {
-      g.exportSelectedSaveToTextarea('manual1');
+      g.saveManager.exportSelectedSaveToTextarea('manual1');
     });
     if (btnImport) btnImport.addEventListener('click', () => {
-      g.importTextareaToSlotAndLoad('manual1');
+      g.saveManager.importTextareaToSlotAndLoad('manual1');
       document.getElementById('saveTransferModal')?.classList.add('hidden');
     });
     if (btnCloseTransfer) btnCloseTransfer.addEventListener('click', () => {
@@ -209,62 +209,62 @@ export class UIManager {
     const btnBattlePause = document.getElementById('btnBattlePause');
     if (btnBattlePause) {
       btnBattlePause.addEventListener('click', () => {
-        if (this.state?.mode === 'battle') g.togglePaused();
+        if (this.state?.mode === 'battle') g.gameFlowManager.togglePaused();
       });
     }
 
-    g.setupDebugSmokePanel();
+    g.devManager.setupDebugSmokePanel();
   }
 
   setupEventListeners() {
     const g = this.game;
     if (this.listenersBound || !this.state) return;
 
-    this.state.on('mode:changed', ({ old, new: newMode }) => g.onModeChanged(old, newMode));
+    this.state.on('mode:changed', ({ old, new: newMode }) => g.uiManager.onModeChanged(old, newMode));
     this.state.on('day:advanced', (day) => {
       this.state.dailyLedger = { tradePL: 0 };
-      g.refreshWeatherState(day);
-      const activeEvents = g.refreshCurrentEventsSummary(day);
+      g.uiManager.refreshWeatherState(day);
+      const activeEvents = g.gameFlowManager.refreshCurrentEventsSummary(day);
       rollWarEvents({
         eventState: this.state.events,
         warState: this.state.warState,
         factionsState: this.state.factions,
         worldState: this.state?.map || {},
         currentDay: day,
-        cfg: g.getEffectiveTuning().EVENTS || CONST.EVENTS,
+        cfg: g.tuningManager.getEffectiveTuning().EVENTS || CONST.EVENTS,
       });
-      const rolledEvents = g.refreshCurrentEventsSummary(day);
-      if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
+      const rolledEvents = g.gameFlowManager.refreshCurrentEventsSummary(day);
+      if ((g.tuningManager.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED) {
         ensureWorldParties({
           aiState: g.worldManager.worldAi,
           worldState: this.state?.map || {},
           factions: this.state?.factions || CONST.FACTIONS,
-          cfg: g.getWorldAiCfgWithRegionMods(),
+          cfg: g.worldManager.getWorldAiCfgWithRegionMods(),
           currentDay: day,
-          banditCapOverride: g.getBanditCapWithEvents(rolledEvents.length ? rolledEvents : activeEvents),
+          banditCapOverride: g.worldManager.getBanditCapWithEvents(rolledEvents.length ? rolledEvents : activeEvents),
         });
       }
-      g.getCurrentRegionModifiers(day);
+      g.worldManager.getCurrentRegionModifiers(day);
       utils.devLog(this.state, `[Game] Day ${day} started`);
     });
     this.state.on('player:gold:changed', ({ old, new: newGold, delta }) => {
       utils.devLog(this.state, `[Game] Gold: ${old} → ${newGold} (${delta >= 0 ? '+' : ''}${delta})`);
     });
 
-    this.state.on('render:start', () => g.renderStart());
-    this.state.on('render:map', () => g.renderMap());
-    this.state.on('render:city', () => g.renderCity());
-    this.state.on('render:battle', () => g.renderBattle());
-    this.state.on('render:encounter', () => g.renderEncounter());
-    this.state.on('map:update', (dt) => g.updateMapSimulation(dt));
-    this.state.on('encounter:update', () => g.updateTransientUIState());
-    this.state.on('battle:update', (dt) => g.updateBattleSimulation(dt));
-    this.state.on('city:update', () => g.updateTransientUIState());
+    this.state.on('render:start', () => g.renderManager.renderStart());
+    this.state.on('render:map', () => g.renderManager.renderMap());
+    this.state.on('render:city', () => g.renderManager.renderCity());
+    this.state.on('render:battle', () => g.battleManager.renderBattle());
+    this.state.on('render:encounter', () => g.renderManager.renderEncounter());
+    this.state.on('map:update', (dt) => g.worldManager.updateMapSimulation(dt));
+    this.state.on('encounter:update', () => g.worldManager.updateTransientUIState());
+    this.state.on('battle:update', (dt) => g.battleManager.updateBattleSimulation(dt));
+    this.state.on('city:update', () => g.worldManager.updateTransientUIState());
 
-    g.setupKeyboardShortcuts();
-    this.state.on('day:tick', (day) => g.processDailyEconomy(day));
+    g.inputManager.setupKeyboardShortcuts();
+    this.state.on('day:tick', (day) => g.economyManager.processDailyEconomy(day));
     this.state.on('ui:events:toggle', () => {
-      const events = g.refreshCurrentEventsSummary(this.state?.day ?? 1);
+      const events = g.gameFlowManager.refreshCurrentEventsSummary(this.state?.day ?? 1);
       toggleCurrentEventsModal({ events, currentDay: this.state?.day ?? 1 });
     });
     this.listenersBound = true;
@@ -275,13 +275,13 @@ export class UIManager {
     if (!g.hudManager || typeof g.hudManager.setMenuHandlers !== 'function') return;
 
     g.hudManager.setMenuHandlers({
-      onStart: () => g.enterStart(),
-      onContinue: () => g.continueGame(),
-      onQuitToMenu: () => g.quitToMenu(),
-      onSettings: () => g.openSettings(),
-      onCloseSettings: () => g.closeSettings(),
-      onVolumeChange: (value) => g.applyMasterVolume(value),
-      onHudHelp: () => g.toggleHelpOverlay(),
+      onStart: () => g.gameFlowManager.enterStart(),
+      onContinue: () => g.gameFlowManager.continueGame(),
+      onQuitToMenu: () => g.gameFlowManager.enterMenu(),
+      onSettings: () => g.gameFlowManager.openSettings(),
+      onCloseSettings: () => g.gameFlowManager.closeSettings(),
+      onVolumeChange: (value) => g.gameFlowManager.applyMasterVolume(value),
+      onHudHelp: () => g.uiManager.toggleHelpOverlay(),
       onHudSettings: () => this.settingsUI?.toggle?.(),
       onHudCodex: () => this.codexUI?.toggle?.(),
     });
@@ -290,7 +290,7 @@ export class UIManager {
       onToggleUnit: (index) => {
         if (!Number.isInteger(index)) return;
         g.encounterManager.rosterCursorIndex = index;
-        g.toggleRosterSelectionAtCursor();
+        g.encounterManager.toggleRosterSelectionAtCursor();
       },
     });
   }
@@ -298,13 +298,13 @@ export class UIManager {
   setupSettingsUI() {
     const g = this.game;
     const toggleHints = g.dom?.toggleHints;
-    g.ensureTutorialState();
+    g.uiManager.ensureTutorialState();
     if (toggleHints) {
       toggleHints.checked = Boolean(this.state?.tutorial?.enabled);
       if (toggleHints.dataset.boundHintToggle !== '1') {
         toggleHints.dataset.boundHintToggle = '1';
         toggleHints.addEventListener('change', (event) => {
-          g.ensureTutorialState();
+          g.uiManager.ensureTutorialState();
           const checked = Boolean(event?.target?.checked);
           this.state.tutorial.enabled = checked;
           if (!checked) this.state.tutorial.lastShownAt = 0;
@@ -360,7 +360,7 @@ export class UIManager {
     if (g.dom.btnAccountingContinue && !g._accountingContinueBound) {
       g._accountingContinueBound = true;
       g.dom.btnAccountingContinue.addEventListener('click', () => {
-        g.closeAccountingModal();
+        g.uiManager.closeAccountingModal();
       });
     }
   }
@@ -380,11 +380,11 @@ export class UIManager {
       btnLeave: g.dom.btnPoiLeave,
     });
     this.poiUI.onLeave = () => {
-      g.resolvePoiFollowup();
+      g.poiManager.resolvePoiFollowup();
       g.poiManager.activePoi = null;
     };
     this.poiUI.onInvestigate = () => {
-      g.investigateActivePoi();
+      g.poiManager.investigateActivePoi();
     };
   }
 
@@ -489,13 +489,13 @@ export class UIManager {
 
   maybeShowTutorialHint(context = {}) {
     const g = this.game;
-    g.ensureTutorialState();
+    g.uiManager.ensureTutorialState();
     const hint = chooseTutorialHint({ state: this.state, mode: this.state?.mode, ...context });
     if (!hint) return false;
     this.state.tutorial.lastShownAt = Date.now();
     this.state.tutorial.shown[hint.key] = true;
     if (!g.hudManager?.showTransientHint?.(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS)) {
-      g.setLastEventLog(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS);
+      g.gameFlowManager.setLastEventLog(hint.text, CONST.TUTORIAL_HINTS.COOLDOWN_MS);
     }
     return true;
   }
@@ -506,17 +506,17 @@ export class UIManager {
     const g = this.game;
     campSystem.ensureCampState(this.state);
     const active = campSystem.toggleCamp(this.state);
-    if (active) g.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: true, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
+    if (active) g.uiManager.maybeShowTutorialHint({ nearSettlement: false, nearPoi: false, inCamp: true, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
     if (active) {
-      g.cancelPlayerDestination();
-      const { weight, cap } = g.getLogisticsSpeedMult();
+      g.worldManager.cancelPlayerDestination();
+      const { weight, cap } = g.economyManager.getLogisticsSpeedMult();
       const mult = CONST.CAMP.WATCH_MULT[this.state?.camp?.watch || 'med'] ?? 1;
       const raidChance = `${Math.round(CONST.CAMP.RAID_BASE_CHANCE * mult * 100)}%`;
       this.campUI?.show?.({ weight, capacity: cap, raidChance });
-      g.setLastEventLog('Kamp kuruldu.');
+      g.gameFlowManager.setLastEventLog('Kamp kuruldu.');
     } else {
       this.campUI?.hide?.();
-      g.setLastEventLog('Kamptan çıkıldı.');
+      g.gameFlowManager.setLastEventLog('Kamptan çıkıldı.');
     }
   }
 
@@ -526,8 +526,8 @@ export class UIManager {
     this.state.accounting = null;
     this.state.uiPanel = null;
     if (this.state) this.state.paused = false;
-    g.updateTransientUIState();
-    g.runAutosave('accounting-close');
+    g.worldManager.updateTransientUIState();
+    g.saveManager.runAutosave('accounting-close');
     return true;
   }
 
@@ -554,8 +554,8 @@ export class UIManager {
 
   getWeatherRegionId() {
     const g = this.game;
-    const tilePos = g.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
-    const nearestSettlement = g.getNearestSettlementAt(tilePos.tx, tilePos.ty);
+    const tilePos = g.worldManager.getTilePosition(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
+    const nearestSettlement = g.worldManager.getNearestSettlementAt(tilePos.tx, tilePos.ty);
     if (nearestSettlement?.id) return String(nearestSettlement.id);
     return `${tilePos.tx}:${tilePos.ty}`;
   }

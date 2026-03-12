@@ -223,23 +223,23 @@ export class BattleRosterManager {
   confirmRosterSelection() {
     const g = this.game;
     if (!this.battle.state || this.battle.state.mode !== 'roster') return false;
-    const selected = g.encounterManager.playerRoster.filter((unit) => unit.selected && g.getEffectiveCount(unit) > 0);
+    const selected = g.encounterManager.playerRoster.filter((unit) => unit.selected && g.worldManager.getEffectiveCount(unit) > 0);
     if (selected.length < 1) {
       this.battle.state.roster.warning = 'Select at least 1 unit to deploy.';
-      g.updateTransientUIState();
+      g.worldManager.updateTransientUIState();
       return false;
     }
 
     const enemyId = this.battle.state.roster?.enemyId ?? this.battle.state.encounter?.enemyId ?? 'enemy-unknown';
     const enemyParty = (g.worldManager.enemyParties || []).find((party) => party?.id === enemyId) || null;
     const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
-    const playerUnits = g.createBattleUnitsFromRoster(selected, 'player');
-    const enemyUnits = g.createBattleUnitsFromRoster(g.encounterManager.enemyRoster, 'enemy');
-    g.placeBattleUnits(enemyUnits, 'enemy');
+    const playerUnits = g.battleManager.createBattleUnitsFromRoster(selected, 'player');
+    const enemyUnits = g.battleManager.createBattleUnitsFromRoster(g.encounterManager.enemyRoster, 'enemy');
+    g.battleManager.placeBattleUnits(enemyUnits, 'enemy');
 
-    const battleAmmo = initBattleAmmoFromParty({ party: g.playerParty, cfg: g.getEffectiveTuning().BATTLE_RANGED });
+    const battleAmmo = initBattleAmmoFromParty({ party: g.playerParty, cfg: g.tuningManager.getEffectiveTuning().BATTLE_RANGED });
 
-    g.cancelPlayerDestination();
+    g.worldManager.cancelPlayerDestination();
     this.battle.state.encounter = null;
     this.battle.state.roster.warning = '';
     initBattleFx(this.battle.getBattleFxConfig());
@@ -255,8 +255,8 @@ export class BattleRosterManager {
       playerAmmoStart: battleAmmo.startAmmo,
       playerAmmo: battleAmmo.ammo,
       targetRetargetTimer: 0,
-      settlement: g.getActiveSettlementForCity(),
-      context: { nearCityId: g.findNearestCityId(g.playerParty?.x, g.playerParty?.y) },
+      settlement: g.economyManager.getActiveSettlementForCity(),
+      context: { nearCityId: g.worldManager.findNearestCityId(g.playerParty?.x, g.playerParty?.y) },
       phase: 'deploy',
       camera: createCamera(),
     };
@@ -264,8 +264,8 @@ export class BattleRosterManager {
     this.battle.currentBattleTerrain = getBattleTerrainContext(this.battle.state, this.battle.state.battle);
     this.battle.state.setMode('battle');
     g.battleManager.battleCommandsUI?.show?.();
-    g.startBattleDeployment();
-    g.updateTransientUIState();
+    g.battleManager.startBattleDeployment();
+    g.worldManager.updateTransientUIState();
     return true;
   }
 

@@ -8,7 +8,7 @@ export class MinimapSimple {
     if (!this.ctx || !this.canvas) return;
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const bounds = game.getWorldBounds();
+    const bounds = game.worldManager.getWorldBounds();
     const maxX = Math.max(1, bounds.maxX);
     const maxY = Math.max(1, bounds.maxY);
     const sx = w / maxX;
@@ -36,7 +36,7 @@ export class MinimapSimple {
       this.ctx.fill();
     }
 
-    const cam = game.getCameraSafe();
+    const cam = game.worldManager.getCameraSafe();
     const cw = ((game.canvas?.width || 800) / cam.zoom) * sx;
     const ch = ((game.canvas?.height || 600) / cam.zoom) * sy;
     this.ctx.strokeStyle = 'rgba(255,255,255,0.35)';

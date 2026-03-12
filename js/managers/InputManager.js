@@ -53,15 +53,15 @@ export class GameInputManager {
         : { left: 0, top: 0 };
       const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
       const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
-      const world = g.updatePointerWorldState(screenX, screenY);
+      const world = g.worldManager.updatePointerWorldState(screenX, screenY);
 
       if (event?.button === 0) {
         if (event?.shiftKey) {
-          g.setPlayerDestination(world.x, world.y);
+          g.worldManager.setPlayerDestination(world.x, world.y);
           return;
         }
 
-        if (g.isWorldPointOnParty(world.x, world.y)) {
+        if (g.worldManager.isWorldPointOnParty(world.x, world.y)) {
           g.playerParty.selected = !g.playerParty.selected;
         } else {
           g.playerParty.selected = false;
@@ -94,7 +94,7 @@ export class GameInputManager {
       if (moved > 8) {
         this.rightPointerMoved = true;
       }
-      g.updatePointerWorldState(screenX, screenY);
+      g.worldManager.updatePointerWorldState(screenX, screenY);
     };
 
     this.partyPointerUpHandler = (event) => {
@@ -113,14 +113,14 @@ export class GameInputManager {
         : { left: 0, top: 0 };
       const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
       const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
-      const world = g.updatePointerWorldState(screenX, screenY);
+      const world = g.worldManager.updatePointerWorldState(screenX, screenY);
 
-      if (g.isWorldPointOnParty(world.x, world.y)) {
-        g.cancelPlayerDestination();
+      if (g.worldManager.isWorldPointOnParty(world.x, world.y)) {
+        g.worldManager.cancelPlayerDestination();
         return;
       }
 
-      g.setPlayerDestination(world.x, world.y);
+      g.worldManager.setPlayerDestination(world.x, world.y);
     };
 
     this.partyContextMenuHandler = (event) => {
@@ -137,10 +137,10 @@ export class GameInputManager {
       g.canvas.addEventListener('wheel', (e) => {
         if (g.state?.mode !== 'map') return;
         e.preventDefault();
-        const cam = g.getCameraSafe();
+        const cam = g.worldManager.getCameraSafe();
         const factor = e.deltaY < 0 ? 1.1 : 0.9;
         cam.zoom = Math.max(0.3, Math.min(3.0, cam.zoom * factor));
-        g.clampCameraToWorld();
+        g.worldManager.clampCameraToWorld();
       }, { passive: false });
     }
   }
@@ -155,15 +155,15 @@ export class GameInputManager {
 
       if (g.state?.devMode && e.shiftKey && (e.key === 'T' || e.key === 't')) {
         e.preventDefault?.();
-        if (g.dom?.tuningModal && !g.dom.tuningModal.classList.contains('hidden')) g.hideTuningModal();
-        else { g.showTuningModal(); }
+        if (g.dom?.tuningModal && !g.dom.tuningModal.classList.contains('hidden')) g.tuningManager.hideTuningModal();
+        else { g.tuningManager.showTuningModal(); }
         return;
       }
 
       if (g.dom?.tuningModal && !g.dom.tuningModal.classList.contains('hidden')) {
         if (e.key === 'Escape') {
           e.preventDefault?.();
-          g.hideTuningModal();
+          g.tuningManager.hideTuningModal();
         }
         return;
       }
@@ -182,13 +182,13 @@ export class GameInputManager {
 
       if (g.uiManager.helpOverlayVisible && e.key === 'Escape') {
         e.preventDefault?.();
-        g.toggleHelpOverlay(false);
+        g.uiManager.toggleHelpOverlay(false);
         return;
       }
 
       if (e.key === '?' || e.key === '/' || e.key === 'F1') {
         e.preventDefault?.();
-        g.toggleHelpOverlay();
+        g.uiManager.toggleHelpOverlay();
         return;
       }
 
@@ -206,26 +206,26 @@ export class GameInputManager {
 
       if (g.state?.devMode && !e.shiftKey && (e.key === 'r' || e.key === 'R')) {
         e.preventDefault?.();
-        g.reloadSpriteAssets();
+        g.renderManager.reloadSpriteAssets();
         return;
       }
 
       if (e.key === 'Enter' && g.mode === 'menu') {
         e.preventDefault?.();
-        g.enterStart();
+        g.gameFlowManager.enterStart();
         return;
       }
 
       if ((e.key === 'k' || e.key === 'K') && g.state?.mode === 'map') {
         e.preventDefault?.();
-        g.toggleCampMode();
+        g.uiManager.toggleCampMode();
         return;
       }
 
       if (g.state?.accounting) {
         if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar' || e.key === 'Escape') {
           e.preventDefault?.();
-          g.closeAccountingModal();
+          g.uiManager.closeAccountingModal();
           return;
         }
         return;
@@ -236,25 +236,25 @@ export class GameInputManager {
           e.preventDefault?.();
           if (g.state.roster) g.state.roster.warning = '';
           g.state.setMode('encounter');
-          g.updateTransientUIState();
+          g.worldManager.updateTransientUIState();
           return;
         }
 
         if (g.state?.mode === 'battle') {
           e.preventDefault?.();
-          g.togglePaused();
+          g.gameFlowManager.togglePaused();
           return;
         }
 
         if (g.state?.mode === 'aftermath') {
           e.preventDefault?.();
-          g.exitAftermathToMap(false);
+          g.battleManager.exitAftermathToMap(false);
           return;
         }
 
         if (g.state?.saveLoadOpen) {
           e.preventDefault?.();
-          g.closeSaveLoadPanel();
+          g.saveManager.closeSaveLoadPanel();
           return;
         }
 
@@ -262,26 +262,26 @@ export class GameInputManager {
           e.preventDefault?.();
           if ((g.state.citySubmode || 'menu') !== 'menu') {
             g.state.citySubmode = 'menu';
-            g.updateTransientUIState();
+            g.worldManager.updateTransientUIState();
             return;
           }
           g.state.uiPanel = null;
           g.state.setMode('map');
-          g.updateTransientUIState();
+          g.worldManager.updateTransientUIState();
           return;
         }
 
         e.preventDefault?.();
         if (g.mode === 'playing') {
-          g.setPaused(true);
+          g.gameFlowManager.setPaused(true);
           return;
         }
         if (g.mode === 'paused') {
-          g.setPaused(false);
+          g.gameFlowManager.setPaused(false);
           return;
         }
         if (g.mode === 'menu') {
-          g.closeSettings();
+          g.gameFlowManager.closeSettings();
         }
         return;
       }
@@ -290,46 +290,46 @@ export class GameInputManager {
         if (e.key === 'ArrowUp') {
           e.preventDefault?.();
           g.saveManager.saveLoadCursor = Math.max(0, g.saveManager.saveLoadCursor - 1);
-          g.state.uiPanel = g.buildSaveLoadPanelData();
-          g.updateTransientUIState();
+          g.state.uiPanel = g.saveManager.buildSaveLoadPanelData();
+          g.worldManager.updateTransientUIState();
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault?.();
           g.saveManager.saveLoadCursor = Math.min(g.saveManager.saveLoadRows.length - 1, g.saveManager.saveLoadCursor + 1);
-          g.state.uiPanel = g.buildSaveLoadPanelData();
-          g.updateTransientUIState();
+          g.state.uiPanel = g.saveManager.buildSaveLoadPanelData();
+          g.worldManager.updateTransientUIState();
           return;
         }
 
-        const slot = g.getSelectedSaveSlot();
+        const slot = g.saveManager.getSelectedSaveSlot();
         if (e.key === 's' || e.key === 'S') {
           e.preventDefault?.();
-          g.saveToSlot(slot);
-          g.state.uiPanel = g.buildSaveLoadPanelData();
-          g.updateTransientUIState();
+          g.saveManager.saveToSlot(slot);
+          g.state.uiPanel = g.saveManager.buildSaveLoadPanelData();
+          g.worldManager.updateTransientUIState();
           return;
         }
         if (e.key === 'l' || e.key === 'L') {
           e.preventDefault?.();
-          g.loadFromSlot(slot);
-          g.closeSaveLoadPanel();
+          g.saveManager.loadFromSlot(slot);
+          g.saveManager.closeSaveLoadPanel();
           return;
         }
         if (e.key === 'e' || e.key === 'E') {
           e.preventDefault?.();
-          g.exportSelectedSaveToTextarea(slot);
-          g.state.uiPanel = g.buildSaveLoadPanelData();
-          g.updateTransientUIState();
+          g.saveManager.exportSelectedSaveToTextarea(slot);
+          g.state.uiPanel = g.saveManager.buildSaveLoadPanelData();
+          g.worldManager.updateTransientUIState();
           return;
         }
         if (e.key === 'i' || e.key === 'I') {
           e.preventDefault?.();
-          const loaded = g.importTextareaToSlotAndLoad(slot);
-          if (loaded) g.closeSaveLoadPanel();
+          const loaded = g.saveManager.importTextareaToSlotAndLoad(slot);
+          if (loaded) g.saveManager.closeSaveLoadPanel();
           else {
-            g.state.uiPanel = g.buildSaveLoadPanelData();
-            g.updateTransientUIState();
+            g.state.uiPanel = g.saveManager.buildSaveLoadPanelData();
+            g.worldManager.updateTransientUIState();
           }
           return;
         }
@@ -340,12 +340,12 @@ export class GameInputManager {
       if (g.state?.mode === 'encounter') {
         if (e.key === 'c' || e.key === 'C') {
           e.preventDefault?.();
-          g.resolveEncounter('continue');
+          g.encounterManager.resolveEncounter('continue');
           return;
         }
         if (e.key === 'f' || e.key === 'F') {
           e.preventDefault?.();
-          g.resolveEncounter('fight');
+          g.encounterManager.resolveEncounter('fight');
           return;
         }
       }
@@ -353,42 +353,42 @@ export class GameInputManager {
       if (g.state?.mode === 'roster') {
         if (e.key === 'ArrowUp') {
           e.preventDefault?.();
-          g.moveRosterCursor(-1);
+          g.encounterManager.moveRosterCursor(-1);
           return;
         }
         if (e.key === 'ArrowDown') {
           e.preventDefault?.();
-          g.moveRosterCursor(1);
+          g.encounterManager.moveRosterCursor(1);
           return;
         }
         if (e.key === ' ' || e.key === 'Spacebar') {
           e.preventDefault?.();
-          g.toggleRosterSelectionAtCursor();
+          g.encounterManager.toggleRosterSelectionAtCursor();
           return;
         }
         if (e.key === 'a' || e.key === 'A') {
           e.preventDefault?.();
           let selected = 0;
           g.encounterManager.playerRoster.forEach((unit) => {
-            if (selected < g.encounterManager.maxUnitsToDeploy && g.getEffectiveCount(unit) > 0) {
+            if (selected < g.encounterManager.maxUnitsToDeploy && g.worldManager.getEffectiveCount(unit) > 0) {
               unit.selected = true;
               selected += 1;
             } else {
               unit.selected = false;
             }
           });
-          g.updateTransientUIState();
+          g.worldManager.updateTransientUIState();
           return;
         }
         if (e.key === 'c' || e.key === 'C') {
           e.preventDefault?.();
           g.encounterManager.playerRoster.forEach((unit) => { unit.selected = false; });
-          g.updateTransientUIState();
+          g.worldManager.updateTransientUIState();
           return;
         }
         if (e.key === 'Enter') {
           e.preventDefault?.();
-          g.confirmRosterSelection();
+          g.battleManager.confirmRosterSelection();
           return;
         }
       }
@@ -401,24 +401,24 @@ export class GameInputManager {
           if (e.key === '4') { e.preventDefault?.(); g.battleManager.battleDeployMode.setFormation(CONST.FORMATION.SCATTER); g.battleManager.battleDeployUI?.setFormation?.(CONST.FORMATION.SCATTER); return; }
           if (e.key === 'q' || e.key === 'Q') { e.preventDefault?.(); g.battleManager.battleDeployMode.rotate(-1); return; }
           if (e.key === 'e' || e.key === 'E') { e.preventDefault?.(); g.battleManager.battleDeployMode.rotate(1); return; }
-          if (e.key === 'Enter') { e.preventDefault?.(); g.confirmBattleDeployment(); return; }
-          if (e.key === 'Escape') { e.preventDefault?.(); g.cancelBattleDeployment(); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); g.battleManager.confirmBattleDeployment(); return; }
+          if (e.key === 'Escape') { e.preventDefault?.(); g.battleManager.cancelBattleDeployment(); return; }
           return;
         }
 
-        if (e.key === 'h' || e.key === 'H') { e.preventDefault?.(); g.applyBattleCommand(CONST.BATTLE_COMMANDS.HOLD); return; }
-        if (e.key === 'f' || e.key === 'F') { e.preventDefault?.(); g.applyBattleCommand(CONST.BATTLE_COMMANDS.FOCUS); return; }
-        if (e.key === 'r' || e.key === 'R') { e.preventDefault?.(); g.applyBattleCommand(CONST.BATTLE_COMMANDS.RETREAT); return; }
-        if (e.key === 'k' || e.key === 'K') { e.preventDefault?.(); g.applyBattleCommand(CONST.BATTLE_COMMANDS.SKIRMISH); return; }
-        if (e.key === 'x' || e.key === 'X') { e.preventDefault?.(); g.toggleBattleHoldFire(); return; }
+        if (e.key === 'h' || e.key === 'H') { e.preventDefault?.(); g.battleManager.applyBattleCommand(CONST.BATTLE_COMMANDS.HOLD); return; }
+        if (e.key === 'f' || e.key === 'F') { e.preventDefault?.(); g.battleManager.applyBattleCommand(CONST.BATTLE_COMMANDS.FOCUS); return; }
+        if (e.key === 'r' || e.key === 'R') { e.preventDefault?.(); g.battleManager.applyBattleCommand(CONST.BATTLE_COMMANDS.RETREAT); return; }
+        if (e.key === 'k' || e.key === 'K') { e.preventDefault?.(); g.battleManager.applyBattleCommand(CONST.BATTLE_COMMANDS.SKIRMISH); return; }
+        if (e.key === 'x' || e.key === 'X') { e.preventDefault?.(); g.battleManager.toggleBattleHoldFire(); return; }
         if (e.key === 'v' || e.key === 'V') {
           e.preventDefault?.();
-          g.resolveBattle('victory');
+          g.battleManager.resolveBattle('victory');
           return;
         }
         if (e.key === 'd' || e.key === 'D') {
           e.preventDefault?.();
-          g.resolveBattle('defeat');
+          g.battleManager.resolveBattle('defeat');
           return;
         }
       }
@@ -426,12 +426,12 @@ export class GameInputManager {
       if (g.state?.mode === 'aftermath') {
         if (e.key === 'Enter' || e.key === 't' || e.key === 'T') {
           e.preventDefault?.();
-          g.exitAftermathToMap(true);
+          g.battleManager.exitAftermathToMap(true);
           return;
         }
         if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') {
           e.preventDefault?.();
-          g.exitAftermathToMap(false);
+          g.battleManager.exitAftermathToMap(false);
           return;
         }
       }
@@ -439,36 +439,36 @@ export class GameInputManager {
       if (g.state?.mode === 'city') {
         const submode = g.state.citySubmode || 'menu';
         if (submode === 'menu') {
-          if (e.key === '1' || e.key === 'r' || e.key === 'R') { g.state.citySubmode = 'recruit'; g.economyManager.cityCursor = 0; g.updateTransientUIState(); return; }
-          if (e.key === '2' || e.key === 't' || e.key === 'T') { g.state.citySubmode = 'market'; g.economyManager.cityMarketCursor = 0; g.updateTransientUIState(); return; }
-          if (e.key === 'h' || e.key === 'H') { g.state.citySubmode = 'healer'; g.economyManager.cityHealerCursor = 0; g.updateTransientUIState(); return; }
-          if (e.key === 'e' || e.key === 'E') { g.state.uiPanel = null; g.state.setMode('map'); g.updateTransientUIState(); return; }
+          if (e.key === '1' || e.key === 'r' || e.key === 'R') { g.state.citySubmode = 'recruit'; g.economyManager.cityCursor = 0; g.worldManager.updateTransientUIState(); return; }
+          if (e.key === '2' || e.key === 't' || e.key === 'T') { g.state.citySubmode = 'market'; g.economyManager.cityMarketCursor = 0; g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'h' || e.key === 'H') { g.state.citySubmode = 'healer'; g.economyManager.cityHealerCursor = 0; g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'e' || e.key === 'E') { g.state.uiPanel = null; g.state.setMode('map'); g.worldManager.updateTransientUIState(); return; }
         }
 
         if (submode === 'recruit') {
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityCursor = Math.max(0, g.economyManager.cityCursor - 1); g.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityCursor = Math.min(Math.max(0, g.economyManager.cityOffers.length - 1), g.economyManager.cityCursor + 1); g.updateTransientUIState(); return; }
-          if (e.key === 'Enter') { e.preventDefault?.(); g.recruitCurrentUnit(Boolean(e.shiftKey)); g.updateTransientUIState(); return; }
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityCursor = Math.max(0, g.economyManager.cityCursor - 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityCursor = Math.min(Math.max(0, g.economyManager.cityOffers.length - 1), g.economyManager.cityCursor + 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); g.economyManager.recruitCurrentUnit(Boolean(e.shiftKey)); g.worldManager.updateTransientUIState(); return; }
         }
 
         if (submode === 'market') {
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.max(0, g.economyManager.cityMarketCursor - 1); g.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.min(Math.max(0, g.economyManager.itemCatalog.length - 1), g.economyManager.cityMarketCursor + 1); g.updateTransientUIState(); return; }
-          if (e.key === 'b' || e.key === 'B' || e.key === 'Enter') { e.preventDefault?.(); g.tradeCurrentItem(e.shiftKey ? 5 : 1); g.updateTransientUIState(); return; }
-          if (e.key === 's' || e.key === 'S' || e.key === 'Backspace') { e.preventDefault?.(); g.tradeCurrentItem(e.shiftKey ? -5 : -1); g.updateTransientUIState(); return; }
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.max(0, g.economyManager.cityMarketCursor - 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.min(Math.max(0, g.economyManager.itemCatalog.length - 1), g.economyManager.cityMarketCursor + 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'b' || e.key === 'B' || e.key === 'Enter') { e.preventDefault?.(); g.economyManager.tradeCurrentItem(e.shiftKey ? 5 : 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 's' || e.key === 'S' || e.key === 'Backspace') { e.preventDefault?.(); g.economyManager.tradeCurrentItem(e.shiftKey ? -5 : -1); g.worldManager.updateTransientUIState(); return; }
         }
 
         if (submode === 'healer') {
-          const wounded = g.getWoundedUnits();
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.max(0, g.economyManager.cityHealerCursor - 1); g.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.min(Math.max(0, wounded.length - 1), g.economyManager.cityHealerCursor + 1); g.updateTransientUIState(); return; }
-          if (e.key === 'Enter') { e.preventDefault?.(); g.healCurrentUnit(); g.updateTransientUIState(); return; }
+          const wounded = g.battleManager.getWoundedUnits();
+          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.max(0, g.economyManager.cityHealerCursor - 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.min(Math.max(0, wounded.length - 1), g.economyManager.cityHealerCursor + 1); g.worldManager.updateTransientUIState(); return; }
+          if (e.key === 'Enter') { e.preventDefault?.(); g.economyManager.healCurrentUnit(); g.worldManager.updateTransientUIState(); return; }
         }
       }
 
       if ((e.key === 'x' || e.key === 'Backspace') && g.mode !== 'menu' && g.state?.mode === 'map') {
         e.preventDefault?.();
-        g.cancelPlayerDestination();
+        g.worldManager.cancelPlayerDestination();
         return;
       }
 
@@ -476,20 +476,20 @@ export class GameInputManager {
         e.preventDefault?.();
         g.followParty = !g.followParty;
         if (g.followParty) {
-          g.centerCameraOnParty();
+          g.worldManager.centerCameraOnParty();
         }
         return;
       }
 
       if ((e.key === 'c' || e.key === 'C') && g.state?.mode === 'map') {
         e.preventDefault?.();
-        g.enterCityServices();
+        g.economyManager.enterCityServices();
         return;
       }
 
       if ((e.key === 'e' || e.key === 'E') && g.state?.mode === 'map' && e.shiftKey) {
         e.preventDefault?.();
-        const events = g.refreshCurrentEventsSummary(g.state?.day ?? 1);
+        const events = g.gameFlowManager.refreshCurrentEventsSummary(g.state?.day ?? 1);
         toggleCurrentEventsModal({ events, currentDay: g.state?.day ?? 1 });
         return;
       }
@@ -501,7 +501,7 @@ export class GameInputManager {
           if (g.state) g.state.interactHint = '';
           return;
         }
-        g.openPoiModal();
+        g.poiManager.openPoiModal();
         return;
       }
 
@@ -514,21 +514,21 @@ export class GameInputManager {
 
       if (g.state?.devMode && e.key === 'F3') {
         e.preventDefault?.();
-        g.toggleDebug();
+        g.devManager.toggleDebug();
       }
 
       if (e.key === 'F5') {
         e.preventDefault?.();
         if (g.state?.mode === 'map') {
-          g.openSaveLoadPanel();
+          g.saveManager.openSaveLoadPanel();
           return;
         }
-        g.quickSave();
+        g.saveManager.quickSave();
       }
 
       if (e.key === 'F9') {
         e.preventDefault?.();
-        g.quickLoad();
+        g.saveManager.quickLoad();
       }
     };
 

@@ -41,7 +41,7 @@ export class DevManager {
 
     if (g.dom.btnOpenTuning && !g._tuningDebugBtnBound) {
       g._tuningDebugBtnBound = true;
-      g.dom.btnOpenTuning.addEventListener('click', () => { g.showTuningModal(); });
+      g.dom.btnOpenTuning.addEventListener('click', () => { g.tuningManager.showTuningModal(); });
     }
 
     if (g.dom.btnRunSmoke && !g._smokeBtnBound) {
@@ -67,28 +67,28 @@ export class DevManager {
     push('3) Start button state exists', Boolean(g.dom?.btnStart), g.dom?.btnStart?.disabled ? 'disabled' : 'enabled');
 
     const prevMode = this.state?.mode;
-    g.startNewGame();
+    g.gameFlowManager.startNewGame();
     push('4) Start enters map', this.state?.mode === 'map', `mode=${this.state?.mode}`);
 
-    const nearSettlement = g.getActiveSettlementForCity();
+    const nearSettlement = g.economyManager.getActiveSettlementForCity();
     push('5) Settlement nearby query', Boolean(nearSettlement), nearSettlement ? (nearSettlement.name || nearSettlement.id) : 'none');
 
     const prevCamp = Boolean(this.state?.camp?.active);
-    if (!prevCamp) g.toggleCampMode();
+    if (!prevCamp) g.uiManager.toggleCampMode();
     push('6) Camp can activate', Boolean(this.state?.camp?.active), `active=${this.state?.camp?.active}`);
-    if (this.state?.camp?.active) g.toggleCampMode();
+    if (this.state?.camp?.active) g.uiManager.toggleCampMode();
     push('7) Camp can deactivate', !this.state?.camp?.active, `active=${this.state?.camp?.active}`);
 
-    const movementCtx = g.getMovementContextAt(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
+    const movementCtx = g.worldManager.getMovementContextAt(g.playerParty?.x ?? 0, g.playerParty?.y ?? 0);
     push('8) Movement context valid', Number.isFinite(movementCtx?.speedMult), `speedMult=${movementCtx?.speedMult}`);
 
     const foodBefore = this.state?.supplies?.food ?? 0;
-    g.processDailyEconomy((this.state?.day ?? 1) + 1);
+    g.economyManager.processDailyEconomy((this.state?.day ?? 1) + 1);
     push('9) End day opens accounting', Boolean(this.state?.accounting), this.state?.accounting ? 'opened' : 'not opened');
     push('10) Food consumed/unchanged', (this.state?.supplies?.food ?? 0) <= foodBefore, `${foodBefore}→${this.state?.supplies?.food ?? 0}`);
 
-    const saveOk = g.saveToSlot('manual2');
-    const loadOk = g.loadFromSlot('manual2');
+    const saveOk = g.saveManager.saveToSlot('manual2');
+    const loadOk = g.saveManager.loadFromSlot('manual2');
     push('11) Save+Load works', Boolean(saveOk && loadOk), `save=${saveOk} load=${loadOk}`);
     push('12) lastAccounting exists', Boolean(this.state?.lastAccounting), this.state?.lastAccounting ? 'present' : 'missing');
 
@@ -109,22 +109,22 @@ export class DevManager {
       const tileSize = CONST.WORLD.TILE_SIZE;
       g.playerParty.x = p.x * tileSize + tileSize * 0.5;
       g.playerParty.y = p.y * tileSize + tileSize * 0.5;
-      g.updatePoiInteractHint();
+      g.poiManager.updatePoiInteractHint();
       push('17) POI interaction hint appears near POI', Boolean(this.state?.interactHint), this.state?.interactHint || 'missing');
 
       const poiKey = PoiSystem.keyOfPoi(p);
       const prevVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
       g.poiManager.activePoi = p;
-      g.investigateActivePoi();
+      g.poiManager.investigateActivePoi();
       const nowVisited = this.state.poiState?.[poiKey]?.lastVisitedDay;
       const expectedDay = Number(this.state?.day ?? 1);
       push('18) POI investigate updates poiState', nowVisited === expectedDay || nowVisited === prevVisited, `lastVisited=${nowVisited}`);
 
-      const moveCtxAtPoi = g.getMovementContextAt(g.playerParty.x, g.playerParty.y);
+      const moveCtxAtPoi = g.worldManager.getMovementContextAt(g.playerParty.x, g.playerParty.y);
       const testCtx = {
         onRoad: Boolean(moveCtxAtPoi?.onRoad),
-        biomeKey: g.getBiomeKeyAtTile(p.x, p.y),
-        settlementTier: g.getNearestSettlementTierAt(p.x, p.y),
+        biomeKey: g.worldManager.getBiomeKeyAtTile(p.x, p.y),
+        settlementTier: g.worldManager.getNearestSettlementTierAt(p.x, p.y),
         map: this.state?.map,
       };
       const first = PoiSystem.rollOutcome({ seed: this.state.seed, day: this.state.day, poi: p, context: testCtx, tuning: this.state?.tuning });
@@ -138,8 +138,8 @@ export class DevManager {
 
     const firstSettlement = this.state?.map?.settlements?.[0] || null;
     if (firstSettlement) {
-      const settlementKey = g.getSettlementOpportunityKey(firstSettlement);
-      const market = g.getOrCreateMarketForSettlement(firstSettlement);
+      const settlementKey = g.economyManager.getSettlementOpportunityKey(firstSettlement);
+      const market = g.economyManager.getOrCreateMarketForSettlement(firstSettlement);
       const itemId = (CONST.TRADE_ITEMS?.[0]?.id) || null;
       if (settlementKey && itemId) {
         const baseSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
@@ -152,7 +152,7 @@ export class DevManager {
           ownerFactionId: firstSettlement?.ownerFactionId || firstSettlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, g.getRegionIdAtTile(firstSettlement.tx, firstSettlement.ty), this.state?.day),
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, g.worldManager.getRegionIdAtTile(firstSettlement.tx, firstSettlement.ty), this.state?.day),
         });
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) + 2 };
         const boostedSell = tradeSystem.getPrice(firstSettlement, market, itemId, 'sell', {
@@ -165,13 +165,13 @@ export class DevManager {
           ownerFactionId: firstSettlement?.ownerFactionId || firstSettlement?.owner || null,
           diplomacyCfg: CONST.DIPLOMACY_ACTIONS,
           diplomacyRelations: CONST.DIPLOMACY_RELATIONS,
-          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, g.getRegionIdAtTile(firstSettlement.tx, firstSettlement.ty), this.state?.day),
+          activeRegionModifiers: getActiveRegionModifiers(this.state?.regionState, g.worldManager.getRegionIdAtTile(firstSettlement.tx, firstSettlement.ty), this.state?.day),
         });
         push('20) Opportunity modifies sell price when active', boostedSell > baseSell, `${baseSell}→${boostedSell}`);
 
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) - 1 };
-        g.cleanupExpiredMarketOpportunities(this.state.day);
-        const currentEvents = g.refreshCurrentEventsSummary(this.state.day);
+        g.economyManager.cleanupExpiredMarketOpportunities(this.state.day);
+        const currentEvents = g.gameFlowManager.refreshCurrentEventsSummary(this.state.day);
         push('21) Expired opportunities are cleaned', !this.state.marketOpportunities[settlementKey], this.state.marketOpportunities[settlementKey] ? 'not cleaned' : 'cleaned');
       } else {
         push('20) Opportunity modifies sell price when active', true, 'PASS (missing settlementKey/itemId)');
@@ -202,10 +202,10 @@ export class DevManager {
     });
     push('23) Tuning override affects encounterRisk', tunedRisk !== baseRisk, `${baseRisk}→${tunedRisk}`);
 
-    if (prevMode === 'start') g.enterStart();
+    if (prevMode === 'start') g.gameFlowManager.enterStart();
 
     this.smokeResults = out;
-    g.appendSmokeResults(out);
+    g.devManager.appendSmokeResults(out);
     return out;
   }
 

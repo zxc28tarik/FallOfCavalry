@@ -241,7 +241,7 @@ export class TuningManager {
   getEffectiveTuning() {
     const g = this.game;
     const defaults = this.getTuningDefaults();
-    g.ensureTuningState();
+    g.tuningManager.ensureTuningState();
     const tuning = this.state?.tuning || {};
     Object.keys(defaults).forEach((group) => {
       defaults[group] = { ...defaults[group], ...(tuning[group] || {}) };
@@ -252,7 +252,7 @@ export class TuningManager {
   applyTuningDraft(draft) {
     const g = this.game;
     if (!draft || typeof draft !== 'object') return;
-    g.ensureTuningState();
+    g.tuningManager.ensureTuningState();
     [
       'ENCOUNTER_RISK',
       'POI',
@@ -297,16 +297,16 @@ export class TuningManager {
       getCurrent: () => this.getEffectiveTuning(),
       onApply: (draft) => {
         this.applyTuningDraft(draft);
-        g.updateTransientUIState();
+        g.worldManager.updateTransientUIState();
       },
       onSave: (draft) => {
         this.state.tuning = draft && typeof draft === 'object' ? draft : {};
-        g.runAutosave('tuning');
+        g.saveManager.runAutosave('tuning');
       },
       onReset: () => {
         this.state.tuning = {};
         this.state.tuningDraft = null;
-        g.updateTransientUIState();
+        g.worldManager.updateTransientUIState();
       },
     });
 
@@ -326,12 +326,12 @@ export class TuningManager {
 
   async showTuningModal() {
     const g = this.game;
-    g.ensureTuningState();
+    g.tuningManager.ensureTuningState();
     if (!this.state?.devMode) return false;
     await this.setupTuningUI();
     if (!g.dom?.tuningModal) return false;
     this._tuningPauseMode = g.mode;
-    g.setPaused(true);
+    g.gameFlowManager.setPaused(true);
     this.tuningUI?.show?.();
     return true;
   }
@@ -340,7 +340,7 @@ export class TuningManager {
     const g = this.game;
     if (!g.dom?.tuningModal || g.dom.tuningModal.classList.contains('hidden')) return false;
     this.tuningUI?.hide?.();
-    if (this._tuningPauseMode === 'playing') g.setPaused(false);
+    if (this._tuningPauseMode === 'playing') g.gameFlowManager.setPaused(false);
     this._tuningPauseMode = null;
     return true;
   }

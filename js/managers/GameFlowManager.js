@@ -53,11 +53,11 @@ export class GameFlowManager {
             g.playerParty.factionId = faction.id;
           }
 
-          g.ensureWorldGenerated(seed);
-          g.startNewGame();
+          g.worldManager.ensureWorldGenerated(seed);
+          g.gameFlowManager.startNewGame();
         },
         onContinue: () => this.continueGame(),
-        onLoad: () => g.openSaveLoadPanel(),
+        onLoad: () => g.saveManager.openSaveLoadPanel(),
       });
     }
 
@@ -91,7 +91,7 @@ export class GameFlowManager {
       return false;
     }
 
-    const ok = g.applySavePayload(payload, { slot: 'autosave' });
+    const ok = g.saveManager.applySavePayload(payload, { slot: 'autosave' });
     if (!ok) {
       this.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
       return false;
@@ -104,14 +104,14 @@ export class GameFlowManager {
 
     g.mode = 'playing';
     if (this.state?.mode !== 'map') this.state.setMode('map');
-    g.startAutosaveLoop();
+    g.saveManager.startAutosaveLoop();
     g.hudManager?.setPaused?.(false);
     g.hudManager?.setMenuVisible?.(false);
     g.hudManager?.setSettingsVisible?.(false);
     utils.safeClass(g.dom.startModal, 'add', 'hidden');
     utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
-    g.clampCameraToWorld();
-    g.updateTransientUIState();
+    g.worldManager.clampCameraToWorld();
+    g.worldManager.updateTransientUIState();
     return true;
   }
 
@@ -151,7 +151,7 @@ export class GameFlowManager {
   applyDailyEventEffects(day, activeEvents) {
     const g = this.game;
     if (!g.playerParty || !Array.isArray(activeEvents) || !activeEvents.length) return;
-    const eventsCfg = g.getEffectiveTuning().EVENTS || CONST.EVENTS;
+    const eventsCfg = g.tuningManager.getEffectiveTuning().EVENTS || CONST.EVENTS;
     const warTaxActive = activeEvents.some((event) => event?.type === EVENT_TYPES.WAR_TAX);
     if (warTaxActive) {
       g.playerParty.gold = Math.max(0, Math.floor(Number(g.playerParty.gold ?? 0) / Number(eventsCfg.WAR_TAX_GOLD_MULT ?? 1.15)));
@@ -171,7 +171,7 @@ export class GameFlowManager {
     }
 
     if (warTaxActive || refugeeEvents.length > 0) {
-      g.setLastEventLog(`Day ${day}: ${warTaxActive ? 'War tax applied. ' : ''}${refugeeEvents.length > 0 ? 'Refugees supported.' : ''}`.trim());
+      g.gameFlowManager.setLastEventLog(`Day ${day}: ${warTaxActive ? 'War tax applied. ' : ''}${refugeeEvents.length > 0 ? 'Refugees supported.' : ''}`.trim());
     }
   }
 
@@ -195,14 +195,14 @@ export class GameFlowManager {
     }
 
     if (!Array.isArray(this.state?.map?.tiles) || this.state.map.tiles.length === 0) {
-      g.ensureWorldGenerated(this.state?.seed);
+      g.worldManager.ensureWorldGenerated(this.state?.seed);
     }
 
     if (this.state.mode !== 'map') {
       this.state.setMode('map');
     }
 
-    g.updateTransientUIState();
+    g.worldManager.updateTransientUIState();
 
     g.gameLoop.start();
     g.started = true;
@@ -230,7 +230,7 @@ export class GameFlowManager {
     if (this.state?.mode !== 'start') {
       this.state.setMode('start');
     } else {
-      g.onModeChanged('menu', 'start');
+      g.uiManager.onModeChanged('menu', 'start');
     }
 
     if (typeof document !== 'undefined') {
@@ -258,7 +258,7 @@ export class GameFlowManager {
     if (!started) return false;
 
     g.mode = 'playing';
-    g.startAutosaveLoop();
+    g.saveManager.startAutosaveLoop();
     g.hudManager?.setMenuVisible?.(false);
     g.hudManager?.setSettingsVisible?.(false);
     g.hudManager?.setPaused?.(false);
@@ -328,7 +328,7 @@ export class GameFlowManager {
     const g = this.game;
     if (this.state?.campaignEnded) return;
     if (this.state) this.state.campaignEnded = 'win';
-    g.setPaused(true);
+    g.gameFlowManager.setPaused(true);
     showWinScreen({
       party: g.playerParty,
       day: this.state?.day ?? 1,
@@ -340,7 +340,7 @@ export class GameFlowManager {
     const g = this.game;
     if (this.state?.campaignEnded) return;
     if (this.state) this.state.campaignEnded = 'lose';
-    g.setPaused(true);
+    g.gameFlowManager.setPaused(true);
     showLoseScreen({
       party: g.playerParty,
       day: this.state?.day ?? 1,
@@ -428,7 +428,7 @@ export class GameFlowManager {
     g.hudManager = null;
     g.saveManager.saveSystem = null;
     g.audioSystem = null;
-    g.stopAutosaveLoop();
+    g.saveManager.stopAutosaveLoop();
     g.state = null;
     g.ctx = null;
     g.canvas = null;

@@ -816,9 +816,9 @@ export class BattleManager {
     const linkedWorldPartyId = g.worldManager.worldEncounterPartyByEnemyId?.[enemyId] || null;
 
     if (takeLoot) {
-      g.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
+      g.gameFlowManager.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
     } else {
-      g.setLastEventLog('Aftermath continued');
+      g.gameFlowManager.setLastEventLog('Aftermath continued');
     }
 
     if (linkedWorldPartyId) {
@@ -854,21 +854,21 @@ export class BattleManager {
       }
       const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
       emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, g.playerParty);
-      g.cleanupTemporaryEnemy(enemyId, { force: true });
-      g.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
+      g.worldManager.cleanupTemporaryEnemy(enemyId, { force: true });
+      g.battleManager.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     } else if (result === 'defeat') {
-      g.cancelPlayerDestination();
-      g.cleanupTemporaryEnemy(enemyId);
-      g.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
+      g.worldManager.cancelPlayerDestination();
+      g.worldManager.cleanupTemporaryEnemy(enemyId);
+      g.battleManager.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
-      g.cleanupTemporaryEnemy(enemyId);
-      g.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
+      g.worldManager.cleanupTemporaryEnemy(enemyId);
+      g.battleManager.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     }
 
     this.state.uiPanel = null;
     this.state.aftermath = null;
     this.state.setMode('map');
-    g.runAutosave('aftermath-close');
+    g.saveManager.runAutosave('aftermath-close');
     return true;
   }
 }

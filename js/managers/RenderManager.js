@@ -63,7 +63,7 @@ export class RenderManager {
     g.ctx.font = '18px Arial';
     g.ctx.fillText('F = Battle Prep, C = Continue', g.canvas.width / 2, g.canvas.height / 2 + 56);
     if (isCurrentEventsModalOpen()) {
-      const currentEvents = g.refreshCurrentEventsSummary(this.state?.day ?? 1);
+      const currentEvents = g.gameFlowManager.refreshCurrentEventsSummary(this.state?.day ?? 1);
       renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     }
     g.hudManager?.update?.();
@@ -80,7 +80,7 @@ export class RenderManager {
     g.ctx.fillText('City Services', g.canvas.width / 2, g.canvas.height / 2 - 12);
     g.ctx.font = '16px Arial';
     g.ctx.fillText('R Recruit  T Market  H Healer  |  E/Esc leave city', g.canvas.width / 2, g.canvas.height / 2 + 18);
-    g.updateTransientUIState();
+    g.worldManager.updateTransientUIState();
   }
 
   // ─── 7C: Map orchestrator + world overlays ──────────────────────────────────
@@ -88,8 +88,8 @@ export class RenderManager {
   renderMap() {
     const g = this.game;
     if (!g.ctx || !g.canvas) return;
-    const camera = g.getCameraSafe();
-    g.clampCameraToWorld();
+    const camera = g.worldManager.getCameraSafe();
+    g.worldManager.clampCameraToWorld();
     g.ctx.fillStyle = '#1a1a1a';
     g.ctx.fillRect(0, 0, g.canvas.width, g.canvas.height);
 
@@ -102,7 +102,7 @@ export class RenderManager {
 
     g.ctx.restore();
 
-    const weatherTint = getWeatherTint(g.uiManager.weatherState || this.state?.weatherState, g.getWeatherConfig());
+    const weatherTint = getWeatherTint(g.uiManager.weatherState || this.state?.weatherState, g.uiManager.getWeatherConfig());
     renderWeatherOverlay(g.ctx, g.canvas.width, g.canvas.height, weatherTint);
 
     if (g.followParty) {
@@ -117,7 +117,7 @@ export class RenderManager {
     }
 
     if (isCurrentEventsModalOpen()) {
-      const currentEvents = g.refreshCurrentEventsSummary(this.state?.day ?? 1);
+      const currentEvents = g.gameFlowManager.refreshCurrentEventsSummary(this.state?.day ?? 1);
       renderCurrentEventsModal({ events: currentEvents, currentDay: this.state?.day ?? 1 });
     }
     g.hudManager?.update?.();
@@ -206,7 +206,7 @@ export class RenderManager {
       ctx.stroke();
     }
 
-    if ((g.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(g.worldManager.worldAi?.parties)) {
+    if ((g.tuningManager.getEffectiveTuning().WORLD_AI || CONST.WORLD_AI).ENABLED && Array.isArray(g.worldManager.worldAi?.parties)) {
       const iconSize = Math.max(6, 10 / camera.zoom);
       g.worldManager.worldAi.parties.forEach((party) => {
         if (!party || !Number.isFinite(party.x) || !Number.isFinite(party.y)) return;
@@ -346,7 +346,7 @@ export class RenderManager {
       ctx.fillStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
       ctx.lineWidth = Math.max(1, 1.6 / camera.zoom);
 
-      const poiSpriteKey = g.getPoiSpriteKey(poi.type);
+      const poiSpriteKey = g.poiManager.getPoiSpriteKey(poi.type);
       const poiScale = Math.max(0.65, (1 / camera.zoom) * CONST.SPRITES.MAP_MARKER_SCALE);
       if (g.assetsReady) {
         const drawn = g.spriteLoader?.drawSprite(ctx, poiSpriteKey, px, py, { scale: poiScale, anchor: 'center' });

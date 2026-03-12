@@ -35,7 +35,7 @@ export class DiplomacyManager {
       : CONST.FACTIONS.map((f) => f.id);
     const next = createInitialFactionState({
       factions: knownIds.map((id) => ({ id })),
-      cfg: g.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
+      cfg: g.tuningManager.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS,
     });
     if (loaded?.relations && typeof loaded.relations === 'object') {
       Object.entries(loaded.relations).forEach(([key, value]) => {
@@ -48,7 +48,7 @@ export class DiplomacyManager {
       buyTruce: (args = {}) => {
         const ok = buyTruce(args);
         if (ok) {
-          const floor = Number(g.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
+          const floor = Number(g.tuningManager.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
           setRelation(this.state.factions, 'player', args.targetFactionId, floor, CONST.DIPLOMACY_RELATIONS);
           markPeace(this.state.warState, 'player', args.targetFactionId);
         }
@@ -59,7 +59,7 @@ export class DiplomacyManager {
         const ok = improveRelations(args);
         if (ok) {
           const rel = getRelation(this.state.factions, 'player', args.targetFactionId, CONST.DIPLOMACY_RELATIONS);
-          const floor = Number(g.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
+          const floor = Number(g.tuningManager.getEffectiveTuning().FACTION_WAR?.PEACE_TRUCE_THRESHOLD ?? CONST.FACTION_WAR.PEACE_TRUCE_THRESHOLD);
           if (rel >= floor) markPeace(this.state.warState, 'player', args.targetFactionId);
         }
         return ok;
@@ -72,14 +72,14 @@ export class DiplomacyManager {
     if (g.playerParty && typeof g.playerParty === 'object' && !g.playerParty.factionId) {
       g.playerParty.factionId = this.state?.selectedFaction?.id || 'player';
     }
-    updateCrisisFlag(this.state.warState, this.state.factions, g.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR);
+    updateCrisisFlag(this.state.warState, this.state.factions, g.tuningManager.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR);
   }
 
   getCityFactionContext(settlement) {
     const g = this.game;
     const ownerFactionId = settlement?.ownerFactionId || null;
     if (!ownerFactionId || !this.state?.factions) return null;
-    const dipCfg = g.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS;
+    const dipCfg = g.tuningManager.getEffectiveTuning().DIPLOMACY_RELATIONS || CONST.DIPLOMACY_RELATIONS;
     const relation = getRelation(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId);
     const stance = getStance(this.state.factions, CONST.FACTION.ID.PLAYER, ownerFactionId, dipCfg);
     const war = findWar(this.state?.warState, CONST.FACTION.ID.PLAYER, ownerFactionId);
@@ -97,7 +97,7 @@ export class DiplomacyManager {
     const g = this.game;
     if (!this.state?.factions) return;
     this.state.warState = this.state.warState && typeof this.state.warState === 'object' ? this.state.warState : createInitialWarState();
-    const cfg = g.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR;
+    const cfg = g.tuningManager.getEffectiveTuning().FACTION_WAR || CONST.FACTION_WAR;
     const warThreshold = Number(cfg.WAR_DECL_THRESHOLD ?? -40);
     const peaceThreshold = Number(cfg.PEACE_TRUCE_THRESHOLD ?? -5);
     const known = this.state?.factions?.knownFactions || CONST.FACTIONS.map((f) => f.id);

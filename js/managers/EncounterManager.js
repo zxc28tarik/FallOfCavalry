@@ -43,7 +43,7 @@ export class EncounterManager {
       status: unit?.status || 'healthy',
       selected: idx < this.maxUnitsToDeploy,
     }));
-    this.enemyRoster = g.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
+    this.enemyRoster = g.battleManager.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
     this.rosterCursorIndex = 0;
 
     if (!this.state.roster || typeof this.state.roster !== 'object') {
@@ -54,14 +54,14 @@ export class EncounterManager {
     this.state.roster.warning = '';
     this.state.roster.maxDeploy = this.maxUnitsToDeploy;
     this.state.setMode('roster');
-    g.updateTransientUIState();
+    g.worldManager.updateTransientUIState();
     return true;
   }
 
   finishEncounterToMap(enemy, enemyId) {
     const g = this.game;
     this.applyEncounterPushback(enemy);
-    g.cleanupTemporaryEnemy(enemyId);
+    g.worldManager.cleanupTemporaryEnemy(enemyId);
     g.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
@@ -89,11 +89,11 @@ export class EncounterManager {
     const uy = dy / dist;
     const halfPush = this.encounterPushbackDistance / 2;
 
-    const playerTarget = g.clampToWorld(
+    const playerTarget = g.worldManager.clampToWorld(
       g.playerParty.x + ux * halfPush,
       g.playerParty.y + uy * halfPush,
     );
-    const enemyTarget = g.clampToWorld(
+    const enemyTarget = g.worldManager.clampToWorld(
       enemy.x - ux * halfPush,
       enemy.y - uy * halfPush,
     );
@@ -109,7 +109,7 @@ export class EncounterManager {
     if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
     const next = this.rosterCursorIndex + delta;
     this.rosterCursorIndex = Math.max(0, Math.min(this.playerRoster.length - 1, next));
-    g.updateTransientUIState();
+    g.worldManager.updateTransientUIState();
     return true;
   }
 
@@ -117,25 +117,25 @@ export class EncounterManager {
     const g = this.game;
     if (!Array.isArray(this.playerRoster) || this.playerRoster.length === 0) return false;
     const unit = this.playerRoster[this.rosterCursorIndex];
-    if (!unit || g.getEffectiveCount(unit) <= 0) return false;
+    if (!unit || g.worldManager.getEffectiveCount(unit) <= 0) return false;
 
     if (unit.selected) {
       unit.selected = false;
       if (this.state?.roster) this.state.roster.warning = '';
-      g.updateTransientUIState();
+      g.worldManager.updateTransientUIState();
       return true;
     }
 
     const selected = g.getSelectedRosterCount();
     if (selected >= this.maxUnitsToDeploy) {
       if (this.state?.roster) this.state.roster.warning = `Deploy limit reached (${this.maxUnitsToDeploy}).`;
-      g.updateTransientUIState();
+      g.worldManager.updateTransientUIState();
       return false;
     }
 
     unit.selected = true;
     if (this.state?.roster) this.state.roster.warning = '';
-    g.updateTransientUIState();
+    g.worldManager.updateTransientUIState();
     return true;
   }
 
@@ -145,7 +145,7 @@ export class EncounterManager {
     if (!a) return { title: 'Battle Aftermath', body: 'No aftermath data', footer: 'Enter = Continue' };
 
     const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
-    const lootLines = (a.loot || []).map((l) => `- ${g.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
+    const lootLines = (a.loot || []).map((l) => `- ${g.economyManager.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
 
     return {
       title: 'Battle Aftermath',

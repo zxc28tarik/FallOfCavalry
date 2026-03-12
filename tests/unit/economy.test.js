@@ -473,14 +473,38 @@ describe('EconomyManager - Phase 5C', () => {
           settingsUI: null,
           codexUI: null,
           helpOverlayVisible: false,
+          toggleHelpOverlay: vi.fn(),
+          toggleCampMode: vi.fn(),
+          closeAccountingModal: vi.fn(),
+          setupPoiUI: vi.fn(),
         },
         saveManager: {
           saveLoadCursor: 0,
           saveLoadRows: [],
+          closeSaveLoadPanel: vi.fn(),
+          openSaveLoadPanel: vi.fn(),
+          quickSave: vi.fn(),
+          quickLoad: vi.fn(),
+          buildSaveLoadPanelData: vi.fn(() => ({})),
+          getSelectedSaveSlot: vi.fn(() => 'slot1'),
+          saveToSlot: vi.fn(),
+          loadFromSlot: vi.fn(),
+          exportSelectedSaveToTextarea: vi.fn(),
+          importTextareaToSlotAndLoad: vi.fn(() => false),
+        },
+        gameFlowManager: {
+          setPaused: vi.fn(),
+          togglePaused: vi.fn(),
+          enterStart: vi.fn(),
+          closeSettings: vi.fn(),
+          refreshCurrentEventsSummary: vi.fn(() => []),
         },
         encounterManager: {
           playerRoster: [],
           maxUnitsToDeploy: 6,
+          resolveEncounter: vi.fn(),
+          moveRosterCursor: vi.fn(),
+          toggleRosterSelectionAtCursor: vi.fn(),
         },
         economyManager: {
           cityOffers: [],
@@ -488,51 +512,41 @@ describe('EconomyManager - Phase 5C', () => {
           cityMarketCursor: 0,
           cityHealerCursor: 0,
           itemCatalog: [],
+          recruitCurrentUnit: vi.fn(),
+          tradeCurrentItem: vi.fn(),
+          healCurrentUnit: vi.fn(),
+          enterCityServices: vi.fn(),
         },
         battleManager: {
           battleDeployMode: null,
           battleDeployUI: null,
+          confirmRosterSelection: vi.fn(),
+          applyBattleCommand: vi.fn(),
+          toggleBattleHoldFire: vi.fn(),
+          resolveBattle: vi.fn(),
+          exitAftermathToMap: vi.fn(),
+          getWoundedUnits: vi.fn(() => []),
+        },
+        worldManager: {
+          cancelPlayerDestination: vi.fn(),
+          centerCameraOnParty: vi.fn(),
+          updateTransientUIState: vi.fn(),
+        },
+        poiManager: {
+          openPoiModal: vi.fn(),
+        },
+        tuningManager: {
+          showTuningModal: vi.fn(),
+          hideTuningModal: vi.fn(),
+        },
+        devManager: {
+          toggleDebug: vi.fn(),
+          reloadSpriteAssets: vi.fn(),
+        },
+        renderManager: {
+          reloadSpriteAssets: vi.fn(),
         },
         followParty: false,
-        toggleHelpOverlay: vi.fn(),
-        toggleCampMode: vi.fn(),
-        setPaused: vi.fn(),
-        togglePaused: vi.fn(),
-        closeAccountingModal: vi.fn(),
-        closeSaveLoadPanel: vi.fn(),
-        openSaveLoadPanel: vi.fn(),
-        quickSave: vi.fn(),
-        quickLoad: vi.fn(),
-        enterStart: vi.fn(),
-        closeSettings: vi.fn(),
-        resolveEncounter: vi.fn(),
-        moveRosterCursor: vi.fn(),
-        toggleRosterSelectionAtCursor: vi.fn(),
-        confirmRosterSelection: vi.fn(),
-        updateTransientUIState: vi.fn(),
-        buildSaveLoadPanelData: vi.fn(() => ({})),
-        getSelectedSaveSlot: vi.fn(() => 'slot1'),
-        saveToSlot: vi.fn(),
-        loadFromSlot: vi.fn(),
-        exportSelectedSaveToTextarea: vi.fn(),
-        importTextareaToSlotAndLoad: vi.fn(() => false),
-        exitAftermathToMap: vi.fn(),
-        applyBattleCommand: vi.fn(),
-        toggleBattleHoldFire: vi.fn(),
-        resolveBattle: vi.fn(),
-        recruitCurrentUnit: vi.fn(),
-        tradeCurrentItem: vi.fn(),
-        healCurrentUnit: vi.fn(),
-        getWoundedUnits: vi.fn(() => []),
-        cancelPlayerDestination: vi.fn(),
-        centerCameraOnParty: vi.fn(),
-        enterCityServices: vi.fn(),
-        refreshCurrentEventsSummary: vi.fn(() => []),
-        openPoiModal: vi.fn(),
-        toggleDebug: vi.fn(),
-        reloadSpriteAssets: vi.fn(),
-        showTuningModal: vi.fn(),
-        hideTuningModal: vi.fn(),
         ...gameOverride,
       };
       const im = new GameInputManager({});
@@ -570,21 +584,21 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('Escape in mode=paused calls game.setPaused(false)', () => {
       const setPaused = vi.fn();
-      const im = makeIMWithHandler({ mode: 'paused', state: { mode: 'map' }, setPaused });
+      const im = makeIMWithHandler({ mode: 'paused', state: { mode: 'map' }, gameFlowManager: { setPaused, togglePaused: vi.fn(), enterStart: vi.fn(), closeSettings: vi.fn(), refreshCurrentEventsSummary: vi.fn(() => []) } });
       im.keyboardHandler({ key: 'Escape', preventDefault: () => {} });
       expect(setPaused).toHaveBeenCalledWith(false);
     });
 
     it('k key in state.mode=map calls game.toggleCampMode()', () => {
       const toggleCampMode = vi.fn();
-      const im = makeIMWithHandler({ state: { mode: 'map' }, toggleCampMode });
+      const im = makeIMWithHandler({ state: { mode: 'map' }, uiManager: { settingsUI: null, codexUI: null, helpOverlayVisible: false, toggleHelpOverlay: vi.fn(), toggleCampMode, closeAccountingModal: vi.fn(), setupPoiUI: vi.fn() } });
       im.keyboardHandler({ key: 'k', preventDefault: () => {} });
       expect(toggleCampMode).toHaveBeenCalled();
     });
 
     it('F5 in state.mode=map calls game.openSaveLoadPanel()', () => {
       const openSaveLoadPanel = vi.fn();
-      const im = makeIMWithHandler({ state: { mode: 'map' }, openSaveLoadPanel });
+      const im = makeIMWithHandler({ state: { mode: 'map' }, saveManager: { saveLoadCursor: 0, saveLoadRows: [], closeSaveLoadPanel: vi.fn(), openSaveLoadPanel, quickSave: vi.fn(), quickLoad: vi.fn(), buildSaveLoadPanelData: vi.fn(() => ({})), getSelectedSaveSlot: vi.fn(() => 'slot1'), saveToSlot: vi.fn(), loadFromSlot: vi.fn(), exportSelectedSaveToTextarea: vi.fn(), importTextareaToSlotAndLoad: vi.fn(() => false) } });
       im.keyboardHandler({ key: 'F5', preventDefault: () => {} });
       expect(openSaveLoadPanel).toHaveBeenCalled();
     });
@@ -620,8 +634,8 @@ describe('EconomyManager - Phase 5C', () => {
         dom: mockDom,
         state,
         hudManager: { update: vi.fn() },
-        updateTransientUIState: vi.fn(),
-        refreshCurrentEventsSummary: vi.fn(() => []),
+        worldManager: { updateTransientUIState: vi.fn() },
+        gameFlowManager: { refreshCurrentEventsSummary: vi.fn(() => []) },
         ...gameOverride,
       };
       rm.init(game);
@@ -658,7 +672,7 @@ describe('EconomyManager - Phase 5C', () => {
     it('renderCity() calls game.updateTransientUIState()', () => {
       const { rm, game } = makeRM();
       rm.renderCity();
-      expect(game.updateTransientUIState).toHaveBeenCalled();
+      expect(game.worldManager.updateTransientUIState).toHaveBeenCalled();
     });
 
     it('renderDebugInfo() is no-op when input is null', () => {
@@ -780,11 +794,20 @@ describe('EconomyManager - Phase 5C', () => {
         uiManager: {
           weatherState: null,
           minimapRenderer: { render: vi.fn() },
+          getWeatherConfig: vi.fn(() => ({})),
         },
         worldManager: {
           encounterMargin: 50,
           worldAi: null,
           enemyParties: [],
+          getCameraSafe: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
+          clampCameraToWorld: vi.fn(),
+        },
+        tuningManager: {
+          getEffectiveTuning: vi.fn(() => ({ WORLD_AI: { ENABLED: false } })),
+        },
+        gameFlowManager: {
+          refreshCurrentEventsSummary: vi.fn(() => []),
         },
         followParty: false,
         playerParty: null,
@@ -792,11 +815,6 @@ describe('EconomyManager - Phase 5C', () => {
         mouseWorldY: 0,
         mode: 'map',
         hudManager: { update: vi.fn() },
-        refreshCurrentEventsSummary: vi.fn(() => []),
-        getCameraSafe: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),
-        clampCameraToWorld: vi.fn(),
-        getWeatherConfig: vi.fn(() => ({})),
-        getEffectiveTuning: vi.fn(() => ({ WORLD_AI: { ENABLED: false } })),
         ...gameOverride,
       };
       rm.init(game);
@@ -814,8 +832,8 @@ describe('EconomyManager - Phase 5C', () => {
     it('renderMap() calls getCameraSafe and clampCameraToWorld', () => {
       const { rm, game } = makeRMMap();
       rm.renderMap();
-      expect(game.getCameraSafe).toHaveBeenCalled();
-      expect(game.clampCameraToWorld).toHaveBeenCalled();
+      expect(game.worldManager.getCameraSafe).toHaveBeenCalled();
+      expect(game.worldManager.clampCameraToWorld).toHaveBeenCalled();
     });
 
     it('renderMap() calls hudManager.update()', () => {
@@ -877,27 +895,35 @@ describe('EconomyManager - Phase 5C', () => {
           enemyParties: [],
           worldAi: { parties: [] },
           worldEncounterPartyByEnemyId: {},
+          getEffectiveCount: vi.fn(() => 0),
+          cancelPlayerDestination: vi.fn(),
+          updateTransientUIState: vi.fn(),
+          cleanupTemporaryEnemy: vi.fn(),
+          findNearestCityId: vi.fn(() => null),
+        },
+        tuningManager: {
+          getEffectiveTuning: vi.fn(() => ({ BATTLE_RANGED: {} })),
+        },
+        economyManager: {
+          getActiveSettlementForCity: vi.fn(() => null),
+        },
+        gameFlowManager: {
+          setLastEventLog: vi.fn(),
+        },
+        saveManager: {
+          runAutosave: vi.fn(),
         },
         playerParty: { x: 0, y: 0 },
         defeatPushbackDistance: 120,
         currentBattleTerrain: null,
         battleManager: {
           battleCommandsUI: { show: vi.fn(), hide: vi.fn() },
+          createBattleUnitsFromRoster: vi.fn(() => []),
+          placeBattleUnits: vi.fn(),
+          getBattleFxConfig: vi.fn(() => ({})),
+          startBattleDeployment: vi.fn(),
+          applyBattleExit: vi.fn(),
         },
-        getEffectiveCount: vi.fn(() => 0),
-        createBattleUnitsFromRoster: vi.fn(() => []),
-        placeBattleUnits: vi.fn(),
-        cancelPlayerDestination: vi.fn(),
-        getEffectiveTuning: vi.fn(() => ({ BATTLE_RANGED: {} })),
-        getActiveSettlementForCity: vi.fn(() => null),
-        findNearestCityId: vi.fn(() => null),
-        getBattleFxConfig: vi.fn(() => ({})),
-        startBattleDeployment: vi.fn(),
-        updateTransientUIState: vi.fn(),
-        setLastEventLog: vi.fn(),
-        cleanupTemporaryEnemy: vi.fn(),
-        applyBattleExit: vi.fn(),
-        runAutosave: vi.fn(),
         ...gameOverride,
       };
       bm.init(game);
@@ -912,14 +938,14 @@ describe('EconomyManager - Phase 5C', () => {
     it('confirmRosterSelection() returns false when no units selected (0 effective count)', () => {
       const { bm, game } = makeBM8A();
       game.encounterManager.playerRoster = [{ selected: true }];
-      game.getEffectiveCount.mockReturnValue(0);
+      game.worldManager.getEffectiveCount.mockReturnValue(0);
       expect(bm.confirmRosterSelection()).toBe(false);
     });
 
     it('confirmRosterSelection() sets state.battle and transitions to battle', () => {
       const { bm, game, state } = makeBM8A();
       game.encounterManager.playerRoster = [{ selected: true }];
-      game.getEffectiveCount.mockReturnValue(2);
+      game.worldManager.getEffectiveCount.mockReturnValue(2);
       bm.confirmRosterSelection();
       expect(state.setMode).toHaveBeenCalledWith('battle');
       expect(state.battle).toBeDefined();
@@ -938,7 +964,7 @@ describe('EconomyManager - Phase 5C', () => {
       game.worldManager.enemyParties = [{ id: 'e1', x: 0, y: 0 }];
       bm.exitAftermathToMap();
       expect(state.aftermath).toBeNull();
-      expect(game.runAutosave).toHaveBeenCalledWith('aftermath-close');
+      expect(game.saveManager.runAutosave).toHaveBeenCalledWith('aftermath-close');
     });
   });
 
@@ -951,16 +977,22 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         cityUI: null,
         playerParty: { gold: 100, renown: 0 },
-        setLastEventLog: vi.fn(),
-        runAutosave: vi.fn(),
-        getOrCreateMarketForSettlement: vi.fn(() => ({})),
-        getSettlementOpportunityKey: vi.fn(() => 'key'),
-        ensureInventoryModel: vi.fn(),
-        getRenownGainMultAtCurrentRegion: vi.fn(() => 1),
-        ensureFactionState: vi.fn(),
-        getCityFactionContext: vi.fn(() => ({})),
-        exitCityServices: vi.fn(),
-        getRegionIdAtTile: vi.fn(() => 'region-1'),
+        gameFlowManager: { setLastEventLog: vi.fn() },
+        saveManager: { runAutosave: vi.fn() },
+        economyManager: {
+          getOrCreateMarketForSettlement: vi.fn(() => ({})),
+          getSettlementOpportunityKey: vi.fn(() => 'key'),
+          ensureInventoryModel: vi.fn(),
+          exitCityServices: vi.fn(),
+        },
+        worldManager: {
+          getRenownGainMultAtCurrentRegion: vi.fn(() => 1),
+          getRegionIdAtTile: vi.fn(() => 'region-1'),
+        },
+        diplomacyManager: {
+          ensureFactionState: vi.fn(),
+          getCityFactionContext: vi.fn(() => ({})),
+        },
         ...gameOverride,
       };
       cm.init(game);
@@ -1005,17 +1037,21 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         activePoi: null,
         playerParty: { gold: 200, renown: 0, morale: 50 },
-        poiUI: { showResult: vi.fn() },
+        uiManager: { poiUI: { showResult: vi.fn() } },
         pendingPoiAmbush: null,
-        setLastEventLog: vi.fn(),
-        getMovementContextAt: vi.fn(() => ({ onRoad: false })),
-        getBiomeKeyAtTile: vi.fn(() => 'plains'),
-        getNearestSettlementTierAt: vi.fn(() => 0),
-        getNearestSettlementAt: vi.fn(() => null),
-        getRegionIdAtTile: vi.fn(() => 'region-1'),
-        getItemName: vi.fn((id) => id),
-        getRenownGainMultAtCurrentRegion: vi.fn(() => 1),
-        addItem: vi.fn(),
+        gameFlowManager: { setLastEventLog: vi.fn() },
+        worldManager: {
+          getMovementContextAt: vi.fn(() => ({ onRoad: false })),
+          getBiomeKeyAtTile: vi.fn(() => 'plains'),
+          getNearestSettlementTierAt: vi.fn(() => 0),
+          getNearestSettlementAt: vi.fn(() => null),
+          getRegionIdAtTile: vi.fn(() => 'region-1'),
+          getRenownGainMultAtCurrentRegion: vi.fn(() => 1),
+        },
+        economyManager: {
+          getItemName: vi.fn((id) => id),
+          addItem: vi.fn(),
+        },
         ...gameOverride,
       };
       pm.init(game);
@@ -1063,16 +1099,24 @@ describe('EconomyManager - Phase 5C', () => {
       const state = { tuning: {}, tuningDraft: null, devMode: false };
       const tm = new TuningManager(state);
       const game = {
-        ensureTuningState: () => {
-          if (!state.tuning) state.tuning = {};
+        tuningManager: {
+          ensureTuningState: () => {
+            if (!state.tuning) state.tuning = {};
+          },
         },
-        updateTransientUIState: () => {},
-        runAutosave: () => {},
+        worldManager: {
+          updateTransientUIState: () => {},
+        },
+        saveManager: {
+          runAutosave: () => {},
+        },
+        gameFlowManager: {
+          setPaused: () => {},
+        },
         TuningUIClass: null,
         tuningUI: null,
         dom: {},
         mode: 'start',
-        setPaused: () => {},
         _tuningPauseMode: null,
       };
       tm.init(game);
@@ -1127,33 +1171,52 @@ describe('EconomyManager - Phase 5C', () => {
       const game = {
         listenersBound: false,
         hudManager: null,
-        settingsUI: null,
-        codexUI: null,
-        campUI: null,
-        accountingUI: null,
-        poiUI: null,
         dom: {},
         warnOnce: () => {},
-        ensureTutorialState: () => {},
-        setupKeyboardShortcuts: () => {},
-        setupDebugSmokePanel: () => {},
-        getEffectiveTuning: () => ({ EVENTS: {}, WORLD_AI: { ENABLED: false } }),
-        refreshWeatherState: () => {},
-        refreshCurrentEventsSummary: () => [],
-        getWorldAiCfgWithRegionMods: () => ({}),
-        getBanditCapWithEvents: () => 5,
-        getCurrentRegionModifiers: () => [],
-        onModeChanged: () => {},
-        renderStart: () => {},
-        renderMap: () => {},
-        renderCity: () => {},
-        renderBattle: () => {},
-        renderEncounter: () => {},
-        updateMapSimulation: () => {},
-        updateTransientUIState: () => {},
-        updateBattleSimulation: () => {},
-        processDailyEconomy: () => {},
-        worldAi: null,
+        uiManager: {
+          settingsUI: null,
+          codexUI: null,
+          campUI: null,
+          accountingUI: null,
+          poiUI: null,
+          helpOverlayVisible: false,
+          ensureTutorialState: () => {},
+          onModeChanged: () => {},
+          refreshWeatherState: () => {},
+        },
+        inputManager: {
+          setupKeyboardShortcuts: () => {},
+        },
+        devManager: {
+          setupDebugSmokePanel: () => {},
+        },
+        tuningManager: {
+          getEffectiveTuning: () => ({ EVENTS: {}, WORLD_AI: { ENABLED: false } }),
+        },
+        gameFlowManager: {
+          refreshCurrentEventsSummary: () => [],
+          setLastEventLog: () => {},
+        },
+        worldManager: {
+          getWorldAiCfgWithRegionMods: () => ({}),
+          getBanditCapWithEvents: () => 5,
+          getCurrentRegionModifiers: () => [],
+          updateTransientUIState: () => {},
+          worldAi: null,
+        },
+        economyManager: {
+          processDailyEconomy: () => {},
+        },
+        renderManager: {
+          renderStart: () => {},
+          renderMap: () => {},
+          renderCity: () => {},
+          renderBattle: () => {},
+          renderEncounter: () => {},
+        },
+        battleManager: {
+          updateBattleSimulation: () => {},
+        },
       };
       um.init(game);
       return { um, state, game };
@@ -1206,8 +1269,8 @@ describe('EconomyManager - Phase 5C', () => {
       const game = {
         dom: {},
         smokeResults: null,
-        appendSmokeResults: () => {},
-        showTuningModal: () => {},
+        devManager: { appendSmokeResults: () => {} },
+        tuningManager: { showTuningModal: () => {} },
       };
       dm.init(game);
       return { dm, state, game };
@@ -1246,7 +1309,7 @@ describe('EconomyManager - Phase 5C', () => {
     function makeDM10A(stateOverrides = {}) {
       const state = { factions: null, warState: null, ...stateOverrides };
       const dm = new DiplomacyManager(state);
-      const game = { getEffectiveTuning: () => ({ DIPLOMACY_RELATIONS: {}, FACTION_WAR: {} }), playerParty: null };
+      const game = { tuningManager: { getEffectiveTuning: () => ({ DIPLOMACY_RELATIONS: {}, FACTION_WAR: {} }) }, playerParty: null };
       dm.init(game);
       return { dm, state, game };
     }
@@ -1292,21 +1355,23 @@ describe('EconomyManager - Phase 5C', () => {
         worldManager: {
           enemyParties: [],
           lastEncounterEndTimeByEnemyId: {},
+          cleanupTemporaryEnemy: () => {},
+          clampToWorld: (x, y) => ({ x, y }),
+          getEffectiveCount: (u) => u?.count ?? 1,
+          updateTransientUIState: () => {},
         },
         encounterManager: {
           encounterPushbackDistance: 60,
         },
         battleManager: {
           battleCommandsUI: null,
+          getEnemyUnits: () => [],
+        },
+        economyManager: {
+          getItemName: (id) => id,
         },
         playerParty: { x: 100, y: 100, roster: [] },
-        getEnemyUnits: () => [],
-        updateTransientUIState: () => {},
-        cleanupTemporaryEnemy: () => {},
-        clampToWorld: (x, y) => ({ x, y }),
-        getEffectiveCount: (u) => u?.count ?? 1,
         getSelectedRosterCount: () => 0,
-        getItemName: (id) => id,
         ...gameOverrides,
       };
       em.init(game);
@@ -1353,20 +1418,16 @@ describe('EconomyManager - Phase 5C', () => {
       const game = {
         mode: 'playing',
         started: false,
-        saveManager: { saveSystem: null },
+        saveManager: { saveSystem: null, applySavePayload: () => false, startAutosaveLoop: () => {}, stopAutosaveLoop: () => {} },
         hudManager: { setContinueEnabled: () => {}, setPaused: () => {}, setMenuVisible: () => {}, setSettingsVisible: () => {} },
-        gameFlowManager: { startScreen: null },
-        uiManager: { settingsUI: null },
+        gameFlowManager: { startScreen: null, setLastEventLog: () => {}, setPaused: () => {} },
+        uiManager: { settingsUI: null, onModeChanged: () => {} },
         gameLoop: null,
-        applySavePayload: () => false,
-        startAutosaveLoop: () => {},
         dom: { startModal: null, mainMenuOverlay: null },
-        clampCameraToWorld: () => {},
-        updateTransientUIState: () => {},
+        worldManager: { clampCameraToWorld: () => {}, updateTransientUIState: () => {} },
+        tuningManager: { getEffectiveTuning: () => ({}) },
         warnOnce: () => {},
         playerParty: null,
-        getEffectiveTuning: () => ({}),
-        setLastEventLog: () => {},
         ...gameOverrides,
       };
       gfm.init(game);
@@ -1401,21 +1462,21 @@ describe('EconomyManager - Phase 5C', () => {
   describe('PoiManager extension - Phase 10C', () => {
     it('updatePoiInteractHint is a no-op when state is null', () => {
       const pm = new PoiManager(null);
-      pm.init({ getNearestInteractablePoi: () => null });
+      pm.init({ poiManager: { getNearestInteractablePoi: () => null } });
       expect(() => pm.updatePoiInteractHint()).not.toThrow();
     });
 
     it('openPoiModal returns false in non-map mode', () => {
       const state = { mode: 'battle', map: { pois: [{}] } };
       const pm = new PoiManager(state);
-      pm.init({ poiUI: null, state });
+      pm.init({ uiManager: { poiUI: null }, state });
       expect(pm.openPoiModal()).toBe(false);
     });
 
     it('resolvePoiFollowup is a no-op when pendingPoiAmbush is null', () => {
       const state = {};
       const pm = new PoiManager(state);
-      pm.init({ pendingPoiAmbush: null, enemyParties: [], playerParty: { x: 0, y: 0 } });
+      pm.init({ pendingPoiAmbush: null, worldManager: { enemyParties: [] }, playerParty: { x: 0, y: 0 } });
       expect(() => pm.resolvePoiFollowup()).not.toThrow();
     });
   });
@@ -1434,12 +1495,10 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         gameLoop: { start: () => {}, stop: () => {} },
         hudManager: { setMenuVisible: () => {}, setSettingsVisible: () => {}, setPaused: () => {}, setContinueEnabled: () => {} },
-        saveManager: { saveSystem: null },
-        startAutosaveLoop: () => {},
-        ensureWorldGenerated: () => {},
-        updateTransientUIState: () => {},
+        saveManager: { saveSystem: null, startAutosaveLoop: () => {}, stopAutosaveLoop: () => {} },
+        worldManager: { ensureWorldGenerated: () => {}, updateTransientUIState: () => {} },
+        uiManager: { onModeChanged: () => {} },
         warnOnce: () => {},
-        onModeChanged: () => {},
         audioSystem: null,
         ...gameOverrides,
       };
@@ -1489,15 +1548,17 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         dom: { hud: null, startModal: null, mainMenuOverlay: null, helpOverlay: null, helpCloseBtn: null, buildInfo: null },
         poiManager: { activePoi: null },
-        gameFlowManager: { startScreen: null },
+        gameFlowManager: { startScreen: null, setLastEventLog: () => {}, refreshCurrentEventsSummary: () => [] },
         battleManager: {
           battleCommandsUI: null,
           battleDeployUI: null,
         },
-        uiManager: { helpOverlayVisible: false },
+        uiManager: {
+          helpOverlayVisible: false,
+          ensureTutorialState: () => {},
+          onModeChanged: () => {},
+        },
         hudManager: { showTransientHint: () => true },
-        ensureTutorialState: () => {},
-        setLastEventLog: () => {},
         ...gameOverrides,
       };
       um.init(game);
@@ -1666,7 +1727,8 @@ describe('EconomyManager - Phase 5C', () => {
     it('getRegionIdAtTile returns wild: prefix when no settlement', () => {
       const state = {};
       const wm = new WorldManager(state);
-      const game = { getNearestSettlementAt: () => null };
+      const game = {};
+      game.worldManager = wm;
       wm.init(game);
       const result = wm.getRegionIdAtTile(5, 10);
       expect(result).toBe('wild:5:10');
@@ -1675,7 +1737,9 @@ describe('EconomyManager - Phase 5C', () => {
     it('getRegionIdAtTile returns settlement id when settlement found', () => {
       const state = {};
       const wm = new WorldManager(state);
-      const game = { getNearestSettlementAt: () => ({ id: 'city1', name: 'Rome' }) };
+      const game = {};
+      // Override getNearestSettlementAt on the worldManager (which is wm itself)
+      game.worldManager = { getNearestSettlementAt: () => ({ id: 'city1', name: 'Rome' }) };
       wm.init(game);
       const result = wm.getRegionIdAtTile(5, 10);
       expect(result).toBe('city1');
@@ -1686,8 +1750,10 @@ describe('EconomyManager - Phase 5C', () => {
       const wm = new WorldManager(state);
       const game = {
         playerParty: { x: 0, y: 0 },
-        getTilePosition: () => ({ tx: 3, ty: 7 }),
-        getNearestSettlementAt: () => ({ id: 'town1', name: 'Vienna' }),
+        worldManager: {
+          getTilePosition: () => ({ tx: 3, ty: 7 }),
+          getNearestSettlementAt: () => ({ id: 'town1', name: 'Vienna' }),
+        },
       };
       wm.init(game);
       const ctx = wm.getCurrentRegionContext();
@@ -1700,8 +1766,10 @@ describe('EconomyManager - Phase 5C', () => {
       const wm = new WorldManager(state);
       const game = {
         playerParty: { x: 0, y: 0 },
-        getTilePosition: () => ({ tx: 0, ty: 0 }),
-        getNearestSettlementAt: () => null,
+        worldManager: {
+          getTilePosition: () => ({ tx: 0, ty: 0 }),
+          getNearestSettlementAt: () => null,
+        },
       };
       wm.init(game);
       const mult = wm.getRenownGainMultAtCurrentRegion();
@@ -1713,7 +1781,9 @@ describe('EconomyManager - Phase 5C', () => {
       const state = {};
       const wm = new WorldManager(state);
       const game = {
-        getEffectiveTuning: () => ({ WORLD_AI: { MAX_BANDIT_PARTIES: 5 }, EVENTS: {} }),
+        tuningManager: {
+          getEffectiveTuning: () => ({ WORLD_AI: { MAX_BANDIT_PARTIES: 5 }, EVENTS: {} }),
+        },
       };
       wm.init(game);
       const cap = wm.getBanditCapWithEvents([]);
