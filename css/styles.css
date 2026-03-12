@@ -597,3 +597,57 @@ body{ font-family: "Crimson Text", serif; }
 .tuning-input{ width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: inherit; }
 .tuning-group-title{ margin-top: 14px; font-weight: 800; opacity: 0.95; }
 .tuning-help{ font-size: 12px; opacity: 0.75; margin-top: 2px; }
+
+/* ── Eksik sınıflar ─────────────────────────────────────────── */
+
+/* HUD sol panel padding */
+.hud-left{
+  padding: 14px;
+}
+
+/* Görev paneli (minimap altında) */
+.quest-panel{
+  position: absolute;
+  top: 410px;
+  left: 14px;
+  width: min(220px, calc(100vw - 28px));
+  padding: 10px 12px;
+  pointer-events: auto;
+  z-index: 30;
+}
+
+/* Savaş kartı (battleHud içi) */
+.battle-card{
+  padding: 12px;
+}
+
+/* Birincil aksiyon butonu (altın dolgu) */
+.btn-primary{
+  border-color: rgba(212,175,55,0.55);
+  background: linear-gradient(180deg, rgba(212,175,55,0.30), rgba(0,0,0,0.38));
+  color: rgba(255,255,255,0.97);
+}
+.btn-primary:hover{
+  border-color: rgba(212,175,55,0.82);
+  background: linear-gradient(180deg, rgba(212,175,55,0.42), rgba(0,0,0,0.42));
+}
+
+/* Metin alanı (save transfer) */
+.textarea-dark{
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(212,175,55,0.28);
+  background: rgba(0,0,0,0.35);
+  color: rgba(255,255,255,0.92);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.textarea-dark:focus{
+  outline: none;
+  border-color: rgba(212,175,55,0.55);
+}
