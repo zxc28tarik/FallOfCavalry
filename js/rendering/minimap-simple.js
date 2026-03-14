@@ -51,10 +51,12 @@ export class MinimapSimple {
         for (let tx = 0; tx < mapW; tx++) {
           const tileIdx = ty * mapW + tx;
           const fogLevel = fog ? fog[tileIdx] : 2;
-          if (fogLevel === 0) continue; // keşfedilmemiş → siyah
 
           const rgb = BIOME_RGB[biomes[tileIdx]] || FALLBACK_RGB;
-          const dim = fogLevel === 1 ? 0.42 : 1.0; // yarı görünür → karartılmış
+          // fog=0 keşfedilmemiş → %18 dim (koyu silüet)
+          // fog=1 yarı görünür  → %50 dim
+          // fog=2 tam görünür   → %100
+          const dim = fogLevel === 0 ? 0.18 : fogLevel === 1 ? 0.50 : 1.0;
           const r = (rgb[0] * dim) | 0;
           const g = (rgb[1] * dim) | 0;
           const b = (rgb[2] * dim) | 0;
@@ -86,13 +88,11 @@ export class MinimapSimple {
     const sx = w / Math.max(1, bounds.maxX);
     const sy = h / Math.max(1, bounds.maxY);
 
-    // ── 2. Settlements ──────────────────────────────────────────
+    // ── 2. Settlements (piksel koordinatı) ──────────────────────
+    // Şehirler her zaman gösterilir (dünya haritasında bilinen yerleşim)
     for (const s of (map?.settlements || [])) {
-      const fi = s.y * mapW + s.x;
-      if (fog && fog[fi] === 0) continue;
-
-      const cx = (s.x * TILE + TILE / 2) * sx;
-      const cy = (s.y * TILE + TILE / 2) * sy;
+      const cx = s.x * sx;
+      const cy = s.y * sy;
       const r = s.type === 'city' ? 3.5 : s.type === 'town' ? 2.5 : 1.8;
 
       this.ctx.fillStyle = this._factionColor(s.owner);
@@ -105,18 +105,18 @@ export class MinimapSimple {
       this.ctx.stroke();
     }
 
-    // ── 3. Düşman partileri ─────────────────────────────────────
+    // ── 3. Düşman partileri (piksel koordinatı) ─────────────────
     for (const e of (game.state?.aiParties || [])) {
       if (!e || !Number.isFinite(e.x)) continue;
-      const cx = (e.x * TILE + TILE / 2) * sx;
-      const cy = (e.y * TILE + TILE / 2) * sy;
+      const cx = e.x * sx;
+      const cy = e.y * sy;
       this.ctx.fillStyle = '#e74c3c';
       this.ctx.beginPath();
       this.ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
       this.ctx.fill();
     }
 
-    // ── 4. Oyuncu ───────────────────────────────────────────────
+    // ── 4. Oyuncu (tile koordinatı → piksel) ────────────────────
     const player = game.playerParty;
     if (player && Number.isFinite(player.x) && Number.isFinite(player.y)) {
       const cx = (player.x * TILE + TILE / 2) * sx;
