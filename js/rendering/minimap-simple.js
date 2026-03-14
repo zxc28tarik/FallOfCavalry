@@ -1,47 +1,166 @@
+import * as CONST from '../constants.js';
+
+// Biome → [R, G, B] sabit tablosu (per-pixel hız için)
+const BIOME_RGB = {
+  [CONST.BIOME.SEA]:      [26,  77,  111],
+  [CONST.BIOME.SHORE]:    [139, 115, 85],
+  [CONST.BIOME.PLAINS]:   [111, 143, 78],
+  [CONST.BIOME.FOREST]:   [47,  90,  51],
+  [CONST.BIOME.HILLS]:    [122, 106, 74],
+  [CONST.BIOME.MOUNTAIN]: [90,  82,  74],
+  [CONST.BIOME.SNOW]:     [230, 237, 245],
+};
+const FALLBACK_RGB = BIOME_RGB[CONST.BIOME.PLAINS];
+
 export class MinimapSimple {
   constructor(canvasEl) {
     this.canvas = canvasEl || null;
     this.ctx = canvasEl?.getContext('2d') || null;
+    this._imgData = null; // reused ImageData buffer
   }
 
   render(game) {
     if (!this.ctx || !this.canvas) return;
+
     const w = this.canvas.width;
     const h = this.canvas.height;
+    const TILE = CONST.WORLD.TILE_SIZE;
+
+    const map = game.state?.map;
+    const mapW = map?.width || 1;
+    const mapH = map?.height || 1;
+    const fog = map?.fog || null;
+    const biomes = map?.biomes instanceof Uint8Array ? map.biomes : null;
+
+    // ── 1. Terrain ──────────────────────────────────────────────
+    if (!biomes || !map?.width || !map?.height) {
+      // Harita henüz oluşmadıysa düz arka plan
+      this.ctx.fillStyle = '#0d1b2a';
+      this.ctx.fillRect(0, 0, w, h);
+    } else {
+      // ImageData tamponunu yeniden kullan
+      if (!this._imgData || this._imgData.width !== w || this._imgData.height !== h) {
+        this._imgData = this.ctx.createImageData(w, h);
+      }
+      const data = this._imgData.data;
+
+      // Tüm pikselleri siyah sıfırla (keşfedilmemiş alanlar siyah kalır)
+      data.fill(0);
+
+      for (let ty = 0; ty < mapH; ty++) {
+        for (let tx = 0; tx < mapW; tx++) {
+          const tileIdx = ty * mapW + tx;
+          const fogLevel = fog ? fog[tileIdx] : 2;
+          if (fogLevel === 0) continue; // keşfedilmemiş → siyah
+
+          const rgb = BIOME_RGB[biomes[tileIdx]] || FALLBACK_RGB;
+          const dim = fogLevel === 1 ? 0.42 : 1.0; // yarı görünür → karartılmış
+          const r = (rgb[0] * dim) | 0;
+          const g = (rgb[1] * dim) | 0;
+          const b = (rgb[2] * dim) | 0;
+
+          // Tile → minimap piksel aralığı
+          const px0 = ((tx * w) / mapW) | 0;
+          const py0 = ((ty * h) / mapH) | 0;
+          const px1 = Math.max(px0 + 1, (((tx + 1) * w) / mapW) | 0);
+          const py1 = Math.max(py0 + 1, (((ty + 1) * h) / mapH) | 0);
+
+          for (let py = py0; py < py1; py++) {
+            for (let px = px0; px < px1; px++) {
+              if (px >= w || py >= h) continue;
+              const pidx = (py * w + px) << 2;
+              data[pidx]     = r;
+              data[pidx + 1] = g;
+              data[pidx + 2] = b;
+              data[pidx + 3] = 255;
+            }
+          }
+        }
+      }
+
+      this.ctx.putImageData(this._imgData, 0, 0);
+    }
+
+    // Dünya → minimap ölçek faktörleri (maxX = mapW * TILE, piksel cinsinden)
     const bounds = game.worldManager.getWorldBounds();
-    const maxX = Math.max(1, bounds.maxX);
-    const maxY = Math.max(1, bounds.maxY);
-    const sx = w / maxX;
-    const sy = h / maxY;
+    const sx = w / Math.max(1, bounds.maxX);
+    const sy = h / Math.max(1, bounds.maxY);
 
-    this.ctx.fillStyle = '#0d1b2a';
-    this.ctx.fillRect(0, 0, w, h);
+    // ── 2. Settlements ──────────────────────────────────────────
+    for (const s of (map?.settlements || [])) {
+      const fi = s.y * mapW + s.x;
+      if (fog && fog[fi] === 0) continue;
 
-    (game.enemyParties || []).forEach((e) => {
-      if (!e) return;
-      this.ctx.fillStyle = '#d9534f';
+      const cx = (s.x * TILE + TILE / 2) * sx;
+      const cy = (s.y * TILE + TILE / 2) * sy;
+      const r = s.type === 'city' ? 3.5 : s.type === 'town' ? 2.5 : 1.8;
+
+      this.ctx.fillStyle = this._factionColor(s.owner);
       this.ctx.beginPath();
-      this.ctx.arc(e.x * sx, e.y * sy, 3, 0, Math.PI * 2);
+      this.ctx.arc(cx, cy, r, 0, Math.PI * 2);
       this.ctx.fill();
-    });
 
-    if (game.playerParty) {
-      this.ctx.fillStyle = '#4aa3ff';
+      this.ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      this.ctx.lineWidth = 0.8;
+      this.ctx.stroke();
+    }
+
+    // ── 3. Düşman partileri ─────────────────────────────────────
+    for (const e of (game.state?.aiParties || [])) {
+      if (!e || !Number.isFinite(e.x)) continue;
+      const cx = (e.x * TILE + TILE / 2) * sx;
+      const cy = (e.y * TILE + TILE / 2) * sy;
+      this.ctx.fillStyle = '#e74c3c';
       this.ctx.beginPath();
-      this.ctx.arc(
-        game.playerParty.x * sx,
-        game.playerParty.y * sy,
-        5, 0, Math.PI * 2
-      );
+      this.ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
       this.ctx.fill();
     }
 
+    // ── 4. Oyuncu ───────────────────────────────────────────────
+    const player = game.playerParty;
+    if (player && Number.isFinite(player.x) && Number.isFinite(player.y)) {
+      const cx = (player.x * TILE + TILE / 2) * sx;
+      const cy = (player.y * TILE + TILE / 2) * sy;
+
+      this.ctx.shadowColor = '#ffe066';
+      this.ctx.shadowBlur = 8;
+      this.ctx.fillStyle = '#ffeb3b';
+      this.ctx.beginPath();
+      this.ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.shadowBlur = 0;
+
+      this.ctx.strokeStyle = '#222';
+      this.ctx.lineWidth = 1.2;
+      this.ctx.stroke();
+    }
+
+    // ── 5. Kamera dikdörtgeni ───────────────────────────────────
     const cam = game.worldManager.getCameraSafe();
-    const cw = ((game.canvas?.width || 800) / cam.zoom) * sx;
-    const ch = ((game.canvas?.height || 600) / cam.zoom) * sy;
-    this.ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    const cw = ((game.canvas?.width || 800) / (cam.zoom || 1)) * sx;
+    const ch = ((game.canvas?.height || 600) / (cam.zoom || 1)) * sy;
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     this.ctx.lineWidth = 1;
     this.ctx.strokeRect(cam.x * sx, cam.y * sy, cw, ch);
+
+    // ── 6. Dairesel vignette ────────────────────────────────────
+    const grad = this.ctx.createRadialGradient(w / 2, h / 2, w * 0.28, w / 2, h / 2, w * 0.52);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.72)');
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, 0, w, h);
+  }
+
+  _factionColor(factionId) {
+    const colors = {
+      ottoman: '#c0392b',
+      hre:     '#3498db',
+      polish:  '#e74c3c',
+      spanish: '#f1c40f',
+      venice:  '#16a085',
+      bandit:  '#8d6e63',
+    };
+    return colors[factionId] || '#9e9e9e';
   }
 }
 
