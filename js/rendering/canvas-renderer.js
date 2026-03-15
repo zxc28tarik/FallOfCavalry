@@ -6,6 +6,13 @@
 import MapRenderer from './map-renderer.js';
 import CityRenderer from './city-renderer.js';
 import BattleRenderer from './battle-renderer.js';
+import {
+  initWeatherLayer,
+  setWeatherState,
+  tickWeatherLayer,
+  renderWeatherOverlay,
+} from './weather-layer.js';
+import { getWeatherTint } from '../systems/weather.js';
 
 export class CanvasRenderer {
   constructor(canvas, state) {
@@ -13,15 +20,21 @@ export class CanvasRenderer {
     this.canvas = canvas || null;
     this.ctx = this.getContext2D(this.canvas);
     this.state = state;
-    
+
     // Sub-renderers
     this.mapRenderer = new MapRenderer();
     this.cityRenderer = new CityRenderer();
     this.battleRenderer = new BattleRenderer();
-    
+
     // Performance
     this.frameCount = 0;
     this.lastFpsUpdate = CanvasRenderer.now();
+
+    // Delta-time tracking (weather tick için)
+    this._lastRenderTime = CanvasRenderer.now();
+
+    // Hava durumu katmanını başlat
+    initWeatherLayer();
   }
 
   static now() {
@@ -61,10 +74,25 @@ export class CanvasRenderer {
   render() {
     if (!this.ctx || !this.canvas) return;
 
+    // Delta time — weather tick için
+    const now = CanvasRenderer.now();
+    const dt = Math.min(0.1, (now - this._lastRenderTime) / 1000);
+    this._lastRenderTime = now;
+
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    // Mevcut hava durumu state'ini weather-layer'a aktar
+    if (this.state.weather) {
+      setWeatherState(this.state.weather);
+    }
+    // Partikülleri ilerlet (yağmur/kar)
+    tickWeatherLayer(dt, w, h);
+
     // Clear
     this.ctx.fillStyle = '#0a0a0a';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
+    this.ctx.fillRect(0, 0, w, h);
+
     // Render based on mode
     switch (this.state.mode) {
       case 'start':
@@ -72,23 +100,33 @@ export class CanvasRenderer {
         break;
       case 'map':
         this.mapRenderer.render(this.ctx, this.state);
+        this._renderWeather(w, h);
         break;
       case 'city':
+        // Şehir iç mekânda hava yok — sadece gece/gündüz tint
         this.cityRenderer.render(this.ctx, this.state);
         break;
       case 'battle':
         this.battleRenderer.render(this.ctx, this.state);
+        this._renderWeather(w, h);
         break;
       case 'encounter':
         this.renderEncounter();
+        this._renderWeather(w, h);
         break;
       case 'roster':
         this.renderRoster();
         break;
     }
-    
+
     // FPS counter
     this.updateFPS();
+  }
+
+  /** Hava durumu overlay'ini canvas üzerine uygula */
+  _renderWeather(w, h) {
+    const tint = getWeatherTint(this.state.weather);
+    renderWeatherOverlay(this.ctx, w, h, tint);
   }
   
   renderStart() {
