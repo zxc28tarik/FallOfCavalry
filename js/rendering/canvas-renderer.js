@@ -117,18 +117,68 @@ export class CanvasRenderer {
 
     // Koyu orman atmosferi
     const bg = this.ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, '#090d07');
-    bg.addColorStop(0.5, '#0f1409');
-    bg.addColorStop(1, '#0b0e07');
+    bg.addColorStop(0, '#060a05');
+    bg.addColorStop(0.42, '#0d1408');
+    bg.addColorStop(1, '#09100a');
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, w, h);
 
+    // Ağaç silüetleri — sol ve sağ kenar
+    this._drawForestEdge(this.ctx, w, h);
+
+    // Merkezi sis
+    const mist = this.ctx.createRadialGradient(w / 2, h * 0.55, 0, w / 2, h * 0.55, w * 0.45);
+    mist.addColorStop(0, 'rgba(60,80,50,0.18)');
+    mist.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = mist;
+    this.ctx.fillRect(0, 0, w, h);
+
     // Vignette
-    const vig = this.ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.65);
+    const vig = this.ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.62);
     vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.75)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.82)');
     this.ctx.fillStyle = vig;
     this.ctx.fillRect(0, 0, w, h);
+  }
+
+  /** Encounter ekranı için sol+sağ ağaç perdesi */
+  _drawForestEdge(ctx, w, h) {
+    // Sol kenar
+    ctx.fillStyle = 'rgba(14,22,10,0.88)';
+    this._forestColumn(ctx, 0, w, h, 5, 0.22);
+    // Sağ kenar
+    this._forestColumn(ctx, w, w, h, 6, 0.20);
+  }
+
+  _forestColumn(ctx, originX, w, h, count, widthRatio) {
+    const colW = w * widthRatio;
+    const isRight = originX === w;
+    const rng = this._encounterRng || (this._encounterRng = this._makeLCG(0xfade1234));
+
+    for (let i = 0; i < count; i++) {
+      const bw = colW * (0.55 + rng() * 0.55);
+      const bh = h * (0.45 + rng() * 0.45);
+      const bx = isRight ? w - bw * (0.3 + rng() * 0.7) : bw * (rng() * 0.5 - 0.3);
+
+      ctx.fillStyle = `rgba(${10 + (rng() * 8) | 0},${18 + (rng() * 10) | 0},${8 + (rng() * 6) | 0},0.90)`;
+      // Ağaç gövdesi
+      ctx.beginPath();
+      ctx.moveTo(bx, h);
+      ctx.lineTo(bx + bw * 0.5, h - bh);
+      ctx.lineTo(bx + bw, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  _makeLCG(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s ^= s << 13;
+      s ^= s >> 17;
+      s ^= s << 5;
+      return (s >>> 0) / 0xffffffff;
+    };
   }
 
   renderRoster() {
@@ -137,16 +187,34 @@ export class CanvasRenderer {
 
     // Koyu mavi-gece (savaş hazırlık)
     const bg = this.ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, '#090c12');
-    bg.addColorStop(1, '#06080d');
+    bg.addColorStop(0, '#07090f');
+    bg.addColorStop(0.6, '#0b0d16');
+    bg.addColorStop(1, '#050709');
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, w, h);
 
-    // Merkez aydınlatma
-    const glow = this.ctx.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h * 0.45, w * 0.5);
-    glow.addColorStop(0, 'rgba(212,175,55,0.06)');
+    // Ufuk çizgisi
+    const horizon = h * 0.60;
+    const horizGrad = this.ctx.createLinearGradient(0, horizon - 20, 0, horizon + 30);
+    horizGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    horizGrad.addColorStop(0.5, 'rgba(50,40,20,0.22)');
+    horizGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = horizGrad;
+    this.ctx.fillRect(0, horizon - 20, w, 50);
+
+    // Altın merkez parlaması (savaş hazırlığı hissi)
+    const glow = this.ctx.createRadialGradient(w / 2, h * 0.44, 0, w / 2, h * 0.44, w * 0.52);
+    glow.addColorStop(0, 'rgba(212,175,55,0.07)');
+    glow.addColorStop(0.5,'rgba(180,140,40,0.03)');
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     this.ctx.fillStyle = glow;
+    this.ctx.fillRect(0, 0, w, h);
+
+    // Ağır vignette
+    const vig = this.ctx.createRadialGradient(w / 2, h / 2, w * 0.15, w / 2, h / 2, w * 0.70);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.78)');
+    this.ctx.fillStyle = vig;
     this.ctx.fillRect(0, 0, w, h);
   }
 
