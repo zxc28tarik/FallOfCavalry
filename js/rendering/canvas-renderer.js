@@ -92,42 +92,62 @@ export class CanvasRenderer {
   }
   
   renderStart() {
-    this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '48px "Cinzel", serif';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('FallOfCavalry', this.canvas.width / 2, this.canvas.height / 2);
-    
-    this.ctx.font = '24px "Crimson Text", serif';
-    this.ctx.fillText('Grand Strategy', this.canvas.width / 2, this.canvas.height / 2 + 60);
-  }
-  
-  renderEncounter() {
-    this.ctx.fillStyle = '#1a1a1a';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    const w = this.canvas.width;
+    const h = this.canvas.height;
 
-    const enemyId = this.state?.encounter?.enemyId ?? 'unknown';
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '40px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Encounter!', this.canvas.width / 2, this.canvas.height / 2 - 20);
-    this.ctx.font = '22px Arial';
-    this.ctx.fillText(`Enemy: ${enemyId}`, this.canvas.width / 2, this.canvas.height / 2 + 18);
-    this.ctx.font = '18px Arial';
-    this.ctx.fillText('F = Battle Prep, C = Continue', this.canvas.width / 2, this.canvas.height / 2 + 56);
+    // Koyu altın-gece gradyanı (ana menü arkası)
+    const bg = this.ctx.createRadialGradient(w / 2, h * 0.42, 0, w / 2, h * 0.42, w * 0.70);
+    bg.addColorStop(0, '#1e1608');
+    bg.addColorStop(0.55, '#0e0d0a');
+    bg.addColorStop(1, '#05050a');
+    this.ctx.fillStyle = bg;
+    this.ctx.fillRect(0, 0, w, h);
+
+    // Alt sis
+    const mist = this.ctx.createLinearGradient(0, h * 0.65, 0, h);
+    mist.addColorStop(0, 'rgba(0,0,0,0)');
+    mist.addColorStop(1, 'rgba(0,0,0,0.60)');
+    this.ctx.fillStyle = mist;
+    this.ctx.fillRect(0, h * 0.65, w, h * 0.35);
+  }
+
+  renderEncounter() {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    // Koyu orman atmosferi
+    const bg = this.ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#090d07');
+    bg.addColorStop(0.5, '#0f1409');
+    bg.addColorStop(1, '#0b0e07');
+    this.ctx.fillStyle = bg;
+    this.ctx.fillRect(0, 0, w, h);
+
+    // Vignette
+    const vig = this.ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.65);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.75)');
+    this.ctx.fillStyle = vig;
+    this.ctx.fillRect(0, 0, w, h);
   }
 
   renderRoster() {
-    this.ctx.fillStyle = '#121212';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '36px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Battle Prep', this.canvas.width / 2, 72);
-    this.ctx.font = '18px Arial';
-    this.ctx.fillText('Up/Down Move · Space Toggle · A Select Max · C Clear · Enter Start · Esc Back', this.canvas.width / 2, 104);
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    // Koyu mavi-gece (savaş hazırlık)
+    const bg = this.ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#090c12');
+    bg.addColorStop(1, '#06080d');
+    this.ctx.fillStyle = bg;
+    this.ctx.fillRect(0, 0, w, h);
+
+    // Merkez aydınlatma
+    const glow = this.ctx.createRadialGradient(w / 2, h * 0.45, 0, w / 2, h * 0.45, w * 0.5);
+    glow.addColorStop(0, 'rgba(212,175,55,0.06)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    this.ctx.fillStyle = glow;
+    this.ctx.fillRect(0, 0, w, h);
   }
 
   updateFPS() {
