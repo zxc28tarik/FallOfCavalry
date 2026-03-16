@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:export": "node tools/export-build.mjs",
-    "test:unit": "vitest run js/managers/managers.test.js",
+    "test:unit": "vitest run tests/unit/",
     "test:smoke": "vitest run tests/smoke/",
     "test": "vitest run",
     "lint": "eslint js/ tests/",
