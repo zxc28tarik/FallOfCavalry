@@ -183,7 +183,7 @@ export class BattleRenderer {
 
     // Sprite (procedural)
     const sprite = this.spriteGen.getUnitSprite(unit.faction, unit.type, unit.id);
-    if (sprite) ctx.drawImage(sprite, x - 32, y - 32, 64, 64);
+    if (sprite) ctx.drawImage(sprite, x - 40, y - 40, 80, 80);
 
     // Routing → kırmızı kaçış oku; yoksa hedef halkası
     if (isRouting) {

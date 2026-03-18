@@ -257,6 +257,25 @@ export class GameFlowManager {
     const started = this.start();
     if (!started) return false;
 
+    // Oyuncuyu kendi faction'ının ilk şehrine konumlandır
+    const factionId = this.state?.selectedFaction?.id;
+    const settlements = g.worldManager?.state?.map?.settlements || [];
+    const startCity = settlements.find(s => s.owner === factionId && s.type === 'city')
+                   || settlements.find(s => s.owner === factionId)
+                   || settlements[0];
+    if (startCity && g.playerParty) {
+      g.playerParty.x = startCity.x;
+      g.playerParty.y = startCity.y;
+      const cam = this.state?.camera;
+      if (cam) {
+        cam.x = startCity.x - CONST.GAME.VIEW_WIDTH / 2;
+        cam.y = startCity.y - CONST.GAME.VIEW_HEIGHT / 2;
+      }
+      g.worldManager?.updateFogFromPlayer?.();
+    }
+    g.followParty = true;
+    if (g.playerParty) g.playerParty.selected = true;
+
     g.mode = 'playing';
     g.saveManager.startAutosaveLoop();
     g.hudManager?.setMenuVisible?.(false);

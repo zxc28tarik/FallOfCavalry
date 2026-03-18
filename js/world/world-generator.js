@@ -42,7 +42,7 @@ export class WorldGenerator {
     const { forests, mountains } = this.placeVegetationAndMountains(heightMap);
     
     // Yerleşimler
-    const settlements = this.placeSettlements(heightMap, rivers);
+    const settlements = this.placeSettlements(heightMap, tiles);
     
     // Yollar
     const roads = this.connectRoads(settlements);
@@ -117,7 +117,7 @@ export class WorldGenerator {
         const dx = nx - 0.5;
         const dy = ny - 0.5;
         const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-        const islandFactor = 1.0 - Math.min(1, distFromCenter * 1.8);
+        const islandFactor = 1.0 - Math.min(1, distFromCenter * 0.85);
         
         val *= islandFactor;
         
@@ -539,92 +539,212 @@ export class WorldGenerator {
   // ========================================================================
   // SETTLEMENTS
   // ========================================================================
-  
-  placeSettlements(heightMap, rivers) {
-    const settlements = [];
-    const placed = new Set();
-    const minDist = 15; // Minimum distance between settlements
-    
-    const factions = [
-      CONST.FACTION.ID.OTTOMAN,
-      CONST.FACTION.ID.HRE,
-      CONST.FACTION.ID.POLISH,
-      CONST.FACTION.ID.SPANISH,
-      CONST.FACTION.ID.VENICE,
+
+  placeSettlements(heightMap, tiles) {
+    const all = [];
+
+    // Her factionın yerleşim sayısı + Voronoi bölge merkezi (tile koordinatı)
+    // inf = etki alanı: büyük inf → büyük bölge
+    const FACTION_CONFIG = [
+      { id: CONST.FACTION.ID.OTTOMAN, cities: 6, forts: 30, villages: 100, cx: 120, cy: 80, inf: 1.5 },
+      { id: CONST.FACTION.ID.HRE,     cities: 5, forts: 20, villages: 80,  cx: 68,  cy: 48, inf: 1.2 },
+      { id: CONST.FACTION.ID.SPANISH, cities: 5, forts: 20, villages: 80,  cx: 58,  cy: 74, inf: 1.4 },
+      { id: CONST.FACTION.ID.POLISH,  cities: 2, forts: 10, villages: 40,  cx: 96,  cy: 36, inf: 0.8 },
+      { id: CONST.FACTION.ID.VENICE,  cities: 1, forts: 5,  villages: 20,  cx: 116, cy: 60, inf: 0.6 },
     ];
-    
-    // Try to place ~20 settlements
-    const targetCount = 20;
-    let attempts = 0;
-    const maxAttempts = 1000;
-    
-    while (settlements.length < targetCount && attempts < maxAttempts) {
-      attempts++;
-      
-      const x = this.randInt(10, this.MAP_W - 10);
-      const y = this.randInt(10, this.MAP_H - 10);
-      const h = heightMap[y * this.MAP_W + x];
-      
-      // Only on land
-      if (h < CONST.WORLD.SHORE_MAX || h > CONST.WORLD.MOUNTAIN_MIN) {
-        continue;
+
+    // Weighted Voronoi — her tile'ın hangi faction bölgesine ait olduğunu döndürür
+    const getTerritoryOwner = (x, y) => {
+      let best = null, bestScore = Infinity;
+      for (const fc of FACTION_CONFIG) {
+        const dx = x - fc.cx, dy = y - fc.cy;
+        const score = Math.sqrt(dx * dx + dy * dy) / fc.inf;
+        if (score < bestScore) { bestScore = score; best = fc.id; }
       }
-      
-      // Check distance to other settlements
-      let tooClose = false;
-      for (const s of settlements) {
-        const dist = utils.distance(x, y, s.x, s.y);
-        if (dist < minDist) {
-          tooClose = true;
-          break;
+      return best;
+    };
+
+    // Tile geçerli mi? Kara + izole değil + faction bölgesinde mi?
+    const isGoodTile = (x, y, owner) => {
+      if (x < 6 || y < 6 || x >= this.MAP_W - 6 || y >= this.MAP_H - 6) return false;
+      const tile = tiles ? tiles[y * this.MAP_W + x] : null;
+      if (!tile || tile.type === 'water') return false;
+      // İzole shore tile'larını dışla: 4 kardinal komşunun en az 3'ü kara olmalı
+      if (tile.type === 'shore') {
+        const cardinals = [[1,0],[-1,0],[0,1],[0,-1]];
+        const landNeighbors = cardinals.filter(([dx,dy]) => {
+          const t = tiles[(y+dy)*this.MAP_W+(x+dx)];
+          return t && t.type !== 'water';
+        }).length;
+        if (landNeighbors < 3) return false;
+      }
+      return getTerritoryOwner(x, y) === owner;
+    };
+
+    // Spatial hash — O(1) yakınlık kontrolü
+    const CELL = 5;
+    const spatialHash = new Map();
+    const addToHash = (s) => {
+      const k = `${Math.floor(s.x / CELL)},${Math.floor(s.y / CELL)}`;
+      if (!spatialHash.has(k)) spatialHash.set(k, []);
+      spatialHash.get(k).push(s);
+    };
+
+    const tooClose = (x, y, typeMinD, globalMinD, sameTypes) => {
+      const maxD = Math.max(typeMinD, globalMinD);
+      const cr = Math.ceil(maxD / CELL);
+      const cx = Math.floor(x / CELL);
+      const cy = Math.floor(y / CELL);
+      for (let dy = -cr; dy <= cr; dy++) {
+        for (let dx = -cr; dx <= cr; dx++) {
+          const bucket = spatialHash.get(`${cx + dx},${cy + dy}`);
+          if (!bucket) continue;
+          for (const s of bucket) {
+            const d = utils.distance(x, y, s.x, s.y);
+            if (d < (sameTypes.includes(s.type) ? typeMinD : globalMinD)) return true;
+          }
         }
       }
-      
-      if (tooClose) continue;
-      
-      // Create settlement
-      const id = settlements.length;
-      const owner = factions[id % factions.length];
-      
-      settlements.push({
-        id,
-        x,
-        y,
-        name: this.generateSettlementName(),
-        type: this.determineSettlementType(id),
-        owner,
-        population: this.randInt(500, 5000),
-        garrison: this.randInt(20, 100),
-        buildings: [],
-        taxRate: CONST.SETTLEMENT.BASE_TAX_RATE,
-        loyalty: 100,
-      });
+      return false;
+    };
+
+    const CITY    = CONST.SETTLEMENT.TYPE.CITY;
+    const FORT    = CONST.SETTLEMENT.TYPE.FORT;
+    const VILLAGE = CONST.SETTLEMENT.TYPE.VILLAGE;
+
+    const placeNearby = (owner, type, anchor, count, minR, maxR) => {
+      const [tD, gD, st] = type === CITY ? [10, 2, [CITY]] : type === FORT ? [4, 2, [CITY, FORT]] : [2, 2, [CITY, FORT, VILLAGE]];
+      for (let n = 0; n < count; n++) {
+        let ok = false;
+        for (let a = 0; a < 100 && !ok; a++) {
+          const angle = this.rand() * Math.PI * 2;
+          const r = minR + this.rand() * (maxR - minR);
+          const x = Math.round(anchor.x + Math.cos(angle) * r);
+          const y = Math.round(anchor.y + Math.sin(angle) * r);
+          if (!isGoodTile(x, y, owner) || tooClose(x, y, tD, gD, st)) continue;
+          const s = this._makeSettlement(all.length, x, y, owner, type);
+          all.push(s); addToHash(s); ok = true;
+        }
+      }
+    };
+
+    const placeRandom = (owner, type, count) => {
+      const [tD, gD, st] = type === CITY ? [10, 2, [CITY]] : type === FORT ? [4, 2, [CITY, FORT]] : [2, 2, [CITY, FORT, VILLAGE]];
+      for (let n = 0; n < count; n++) {
+        let ok = false;
+        for (let a = 0; a < 400 && !ok; a++) {
+          const x = this.randInt(8, this.MAP_W - 8);
+          const y = this.randInt(8, this.MAP_H - 8);
+          if (!isGoodTile(x, y, owner) || tooClose(x, y, tD, gD, st)) continue;
+          const s = this._makeSettlement(all.length, x, y, owner, type);
+          all.push(s); addToHash(s); ok = true;
+        }
+      }
+    };
+
+    for (const fc of FACTION_CONFIG) {
+      // Şehirler
+      placeRandom(fc.id, CITY, fc.cities);
+      const cities = all.filter(s => s.owner === fc.id && s.type === CITY);
+
+      // Her şehrin yanına 2 kale
+      for (const city of cities) placeNearby(fc.id, FORT, city, 2, 5, 12);
+
+      // Kalan kaleler rastgele
+      const usedForts = cities.length * 2;
+      if (fc.forts > usedForts) placeRandom(fc.id, FORT, fc.forts - usedForts);
+
+      // Her kalenin yanına 2-3 köy
+      const forts = all.filter(s => s.owner === fc.id && s.type === FORT);
+      for (const fort of forts) placeNearby(fc.id, VILLAGE, fort, this.randInt(2, 3), 3, 8);
+
+      // Kalan köyler rastgele
+      const currentVil = all.filter(s => s.owner === fc.id && s.type === VILLAGE).length;
+      if (fc.villages > currentVil) placeRandom(fc.id, VILLAGE, fc.villages - currentVil);
     }
-    
-    return settlements;
+
+    // ID'leri sıfırdan yeniden ata
+    all.forEach((s, i) => { s.id = i; });
+    return all;
   }
-  
-  generateSettlementName() {
-    const prefixes = [
-      'Yeni', 'Büyük', 'Küçük', 'Kral', 'Sultan', 'Aziz',
-      'Kutsal', 'Yeşil', 'Kızıl', 'Beyaz', 'Siyah'
-    ];
-    
-    const suffixes = [
-      'burg', 'grad', 'polis', 'abad', 'şehir', 'kent',
-      'kale', 'hisar', 'köy', 'belde', 'ova', 'tepe'
-    ];
-    
-    const prefix = this.randChoice(prefixes);
-    const suffix = this.randChoice(suffixes);
-    
-    return `${prefix}${suffix}`;
+
+  _makeSettlement(id, x, y, owner, type) {
+    const popRanges = {
+      [CONST.SETTLEMENT.TYPE.CITY]:    [8000, 30000],
+      [CONST.SETTLEMENT.TYPE.FORT]:    [200,  1200],
+      [CONST.SETTLEMENT.TYPE.VILLAGE]: [50,   600],
+      [CONST.SETTLEMENT.TYPE.TOWN]:    [1000, 5000],
+    };
+    const garRanges = {
+      [CONST.SETTLEMENT.TYPE.CITY]:    [150, 400],
+      [CONST.SETTLEMENT.TYPE.FORT]:    [40,  150],
+      [CONST.SETTLEMENT.TYPE.VILLAGE]: [5,   25],
+      [CONST.SETTLEMENT.TYPE.TOWN]:    [50,  120],
+    };
+    const [pMin, pMax] = popRanges[type] || [100, 1000];
+    const [gMin, gMax] = garRanges[type] || [20, 80];
+    return {
+      id,
+      x,
+      y,
+      name: this.generateSettlementName(owner, type),
+      type,
+      owner,
+      population: this.randInt(pMin, pMax),
+      garrison:   this.randInt(gMin, gMax),
+      buildings:  [],
+      taxRate:    CONST.SETTLEMENT.BASE_TAX_RATE,
+      loyalty:    100,
+    };
   }
-  
-  determineSettlementType(index) {
-    if (index < 3) return CONST.SETTLEMENT.TYPE.CITY;
-    if (index < 10) return CONST.SETTLEMENT.TYPE.TOWN;
-    return CONST.SETTLEMENT.TYPE.VILLAGE;
+
+  generateSettlementName(faction, type) {
+    const data = {
+      ottoman: {
+        city:    ['İstanbul','Edirne','Bursa','Konya','Sivas','Ankara','Trabzon','Kastamonu','Erzurum','Diyarbakır'],
+        fortPre: ['Ak','Kara','Rum','İnce','Büyük','Kızıl','Sultan','Göz','Taş','Demir','Sarı','Boz','Tunç','Ok','Kuş'],
+        fortSuf: ['Hisar','Kale','Burcu','Kalesi','Hisarı','Burç','Kapı'],
+        vilPre:  ['Kızıl','Kara','Ak','Sarı','Yeşil','Boz','Dere','Tepe','Çayır','Taş','Su','Kurt','Doğan','Yıldız','Çiçek','Bağ','Yeni','Eski','Uzun','Geniş','Kavak','Söğüt','Çam','Ardıç','Meşe'],
+        vilSuf:  ['köy','pınar','bağ','alan','dere','çay','ova','tepe','yurt','dağı','lı','lar','başı','önü','altı'],
+      },
+      hre: {
+        city:    ['Wien','Augsburg','Nürnberg','Regensburg','Salzburg','Innsbruck','Graz','Linz','Passau','Breslau'],
+        fortPre: ['Hohen','Stein','Burg','Fels','Eisen','Falken','Rauen','Kron','Wald','Schwarz','Weiß','Rot','Alt','Neu','Hoch'],
+        fortSuf: ['burg','stein','fels','berg','eck','thurn','au','wacht','mark','thor'],
+        vilPre:  ['Klein','Groß','Alt','Neu','Ober','Unter','Mittel','Hinter','Langen','Birken','Eichen','Buchen','Weiden','Linden','Tannen','Rohr','Grün','Wald','Berg','Bach','Braun','Weißen','Roten','Guten','Alten'],
+        vilSuf:  ['bach','dorf','heim','hausen','feld','berg','au','kirchen','mühle','hofen','tal','thal','reuth','rode','leben'],
+      },
+      polish: {
+        city:    ['Kraków','Lwów','Poznań','Gdańsk','Wilno','Lublin','Bydgoszcz','Toruń','Płock','Sandomierz'],
+        fortPre: ['Zamek','Góra','Ostrów','Kras','Lan','Bąk','Śniad','Oleś','Jan','Wiesz','Wiśn','Łańc','Kamień','Czar','Biał'],
+        fortSuf: ['iec','ów','nica','no','sko','ek','ka','ec','owice','owiec'],
+        vilPre:  ['Mało','Biał','Czerwon','Zielon','Star','Now','Kościel','Zarąb','Bor','Dębow','Lipow','Sobol','Czarn','Staw','Łąk','Sreb','Złot','Buk','Ryb','Wołk','Dąb','Grab','Olch','Wierz','Jasion'],
+        vilSuf:  ['ów','owo','ice','wola','ka','ki','ina','any','ec','nica','ówka','ów','ew','owo','iny'],
+      },
+      spanish: {
+        city:    ['Toledo','Valencia','Zaragoza','Valladolid','Sevilla','Córdoba','Salamanca','Segovia','Ávila','Burgos'],
+        fortPre: ['Castillo','Torre','Alcázar','Peña','Monte','Villa','Santo','San','Santa','Fuerte'],
+        fortSuf: ['Real','del Rey','Viejo','Blanca','Mayor','Nuevo','Alta','del Moro','Fuerte','Negra'],
+        vilPre:  ['Aldea','San','Santa','La','Los','El','Las','Nuevo','Viejo','Villa','Vega','Cerro','Río','Fuente','Arroyo','Campo','Pino','Roble','Prado','Soto','Cañada','Collado','Molino','Llano','Puerto'],
+        vilSuf:  ['nuevo','grande','chico','alto','bajo','del Rey','Real','blanca','negra','larga','bermeja','fría','dulce','honda','rasa'],
+      },
+      venice: {
+        city:    ['Venezia','Padova','Verona','Vicenza','Treviso','Bergamo','Brescia','Belluno','Udine','Trieste'],
+        fortPre: ['Fortezza','Torre','Rocca','Castel','Monte','Porto','Borgo','Forte','Motta','Pieve'],
+        fortSuf: ['di Garda','Rossa','Nera','Alta','del Mare','Bianca','Vecchia','Nuova','Grande','Piccola'],
+        vilPre:  ['Casale','Borgo','San','Santa','Rio','Campo','Pieve','Cascina','Mezzano','Cà','Val','Monte','Colle','Ponte','Sasso','Ronco','Villa','Riva','Forno','Corte','Selva','Pian','Costa','Dosso','Volta'],
+        vilSuf:  ['nuovo','grande','piccolo','alto','basso','lungo','di Sopra','di Sotto','del Lago','antico','vecchio','piano','duro','fosco','largo'],
+      },
+    };
+
+    const d = data[faction] || data.ottoman;
+    if (type === CONST.SETTLEMENT.TYPE.CITY) {
+      return this.randChoice(d.city);
+    } else if (type === CONST.SETTLEMENT.TYPE.FORT) {
+      return `${this.randChoice(d.fortPre)}${this.randChoice(d.fortSuf)}`;
+    } else {
+      return `${this.randChoice(d.vilPre)}${this.randChoice(d.vilSuf)}`;
+    }
   }
   
   // ========================================================================
@@ -633,34 +753,33 @@ export class WorldGenerator {
   
   connectRoads(settlements) {
     const roads = [];
-    
-    // Connect each settlement to nearest neighbors
-    for (const settlement of settlements) {
-      // Find 2-3 nearest settlements of same faction
-      const neighbors = settlements
-        .filter(s => s.id !== settlement.id)
-        .map(s => ({
-          settlement: s,
-          dist: utils.distance(settlement.x, settlement.y, s.x, s.y)
-        }))
-        .sort((a, b) => a.dist - b.dist)
+    const seen = new Set();
+
+    // Sadece şehir ve kaleler arası yol — köyler yol ağına dahil değil
+    const nodes = settlements.filter(s =>
+      s.type === CONST.SETTLEMENT.TYPE.CITY || s.type === CONST.SETTLEMENT.TYPE.FORT
+    );
+
+    for (const node of nodes) {
+      // Her düğümü en yakın 2 komşusuna bağla (aynı/farklı faction olabilir)
+      const neighbors = nodes
+        .filter(s => s.id !== node.id)
+        .map(s => ({ s, d: utils.distance(node.x, node.y, s.x, s.y) }))
+        .sort((a, b) => a.d - b.d)
         .slice(0, 2);
-      
-      for (const n of neighbors) {
-        // Simple straight line road
-        const path = this.generateRoadPath(
-          settlement.x, settlement.y,
-          n.settlement.x, n.settlement.y
-        );
-        
+
+      for (const { s } of neighbors) {
+        const key = `${Math.min(node.id, s.id)},${Math.max(node.id, s.id)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
         roads.push({
-          from: settlement.id,
-          to: n.settlement.id,
-          path
+          from: node.id,
+          to: s.id,
+          path: this.generateRoadPath(node.x, node.y, s.x, s.y),
         });
       }
     }
-    
+
     return roads;
   }
   

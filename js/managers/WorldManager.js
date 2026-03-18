@@ -124,7 +124,6 @@ export class WorldManager {
 
   setPlayerDestination(worldX, worldY) {
     if (!this.game?.playerParty) return false;
-    if (!this.game.playerParty.selected) return false;
     if (this.game.mode === 'paused' || this.game.mode === 'menu' || this.state?.mode !== 'map') return false;
 
     const clamped = this.clampToWorld(worldX, worldY);

@@ -56,16 +56,9 @@ export class GameInputManager {
       const world = g.worldManager.updatePointerWorldState(screenX, screenY);
 
       if (event?.button === 0) {
-        if (event?.shiftKey) {
-          g.worldManager.setPlayerDestination(world.x, world.y);
-          return;
-        }
-
-        if (g.worldManager.isWorldPointOnParty(world.x, world.y)) {
-          g.playerParty.selected = !g.playerParty.selected;
-        } else {
-          g.playerParty.selected = false;
-        }
+        g.playerParty.selected = true;
+        g.worldManager.setPlayerDestination(world.x, world.y);
+        g.followParty = true;
         return;
       }
 

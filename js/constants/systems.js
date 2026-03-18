@@ -106,10 +106,11 @@ export const FACTION = Object.freeze({
 });
 
 export const FACTIONS = Object.freeze([
-  { id: FACTION.ID.PLAYER, name: 'Free Company', color: '#4aa3ff', doctrine: 'Mercenary Discipline', desc: 'An independent warband balancing coin and reputation.', startingGold: 120, startingArmy: 0, startingRenown: 10, armyHint: 'Balanced starter roster.' },
-  { id: FACTION.ID.KINGDOM_A, name: 'Aurelian League', color: '#f1c40f', doctrine: 'Legionary Order', desc: 'Reliable formations and defensive doctrine.', startingGold: 110, startingArmy: 0, startingRenown: 8, armyHint: 'Stable regular forces.' },
-  { id: FACTION.ID.KINGDOM_B, name: 'Valen Court', color: '#9b59b6', doctrine: 'Courtly Maneuver', desc: 'Agile armies with opportunistic tactics.', startingGold: 115, startingArmy: 0, startingRenown: 9, armyHint: 'Mobile force composition.' },
-  { id: FACTION.ID.BANDITS, name: 'Broken Banner', color: '#95a5a6', doctrine: 'Raid and Scatter', desc: 'Unreliable but dangerous raiders.', startingGold: 90, startingArmy: 0, startingRenown: 2, armyHint: 'Low resources, high risk.' },
+  { id: FACTION.ID.OTTOMAN, name: 'Osmanlı İmparatorluğu', color: '#c0392b', doctrine: 'Yeniçeri Disiplini', desc: 'Balkanlara ve Anadoluya hükmeden kadim imparatorluk.', startingGold: 130, startingArmy: 0, startingRenown: 15, armyHint: 'Güçlü yaya ve süvari birlikleri.' },
+  { id: FACTION.ID.HRE, name: 'Kutsal Roma İmparatorluğu', color: '#2c3e50', doctrine: 'Lejyon Düzeni', desc: 'Orta Avrupanın savunmacı ve disiplinli ordusu.', startingGold: 110, startingArmy: 0, startingRenown: 12, armyHint: 'Dengeli ve sağlam birlikler.' },
+  { id: FACTION.ID.SPANISH, name: 'İspanya Krallığı', color: '#d4ac0d', doctrine: 'Tercio Taktiği', desc: 'Efsanevi Tercio birlikleriyle Batı Avrupaya hükmedin.', startingGold: 115, startingArmy: 0, startingRenown: 12, armyHint: 'Mızrakçı ve tüfekçi karması.' },
+  { id: FACTION.ID.POLISH, name: 'Polonya Krallığı', color: '#e74c3c', doctrine: 'Kanatlı Hussarlar', desc: 'Efsanevi hussarlarla kuzeyde hükümranlık kurun.', startingGold: 100, startingArmy: 0, startingRenown: 10, armyHint: 'Süvari ağırlıklı saldırı gücü.' },
+  { id: FACTION.ID.VENICE, name: 'Venedik Cumhuriyeti', color: '#16a085', doctrine: 'Ticaret Gücü', desc: 'Zengin ticaret ağı ve paralı askerlerle stratejik üstünlük.', startingGold: 200, startingArmy: 0, startingRenown: 8, armyHint: 'Az ama seçkin birlikler, yüksek altın.' },
 ]);
 
 export const FACTION_WAR = Object.freeze({
