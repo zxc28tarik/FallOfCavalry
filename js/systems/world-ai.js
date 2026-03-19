@@ -1,3 +1,5 @@
+import * as CONST from '../constants.js';
+
 const DEFAULT_FACTION_IDS = ['ottoman', 'hre', 'polish', 'spanish', 'venice'];
 
 function randomInRange(min, max) {
@@ -9,9 +11,9 @@ function distance(a, b) {
 }
 
 function getWorldBounds(worldState) {
-  const tile = Number(worldState?.tileSize ?? worldState?.TILE_SIZE ?? 60);
-  const width = Number(worldState?.width ?? 180) * tile;
-  const height = Number(worldState?.height ?? 120) * tile;
+  const tile = Number(worldState?.tileSize ?? worldState?.TILE_SIZE ?? CONST.WORLD.TILE_SIZE);
+  const width = Number(worldState?.width ?? CONST.WORLD.MAP_WIDTH) * tile;
+  const height = Number(worldState?.height ?? CONST.WORLD.MAP_HEIGHT) * tile;
   return { minX: 0, minY: 0, maxX: Math.max(tile, width), maxY: Math.max(tile, height), tileSize: tile };
 }
 
@@ -268,7 +270,7 @@ function factionIsHostileToPlayer(partyFactionId, playerFactionId) {
   return partyFactionId !== playerFactionId;
 }
 
-export function updateWorldParties({ aiState, worldState, playerParty, factions, cfg, dtSec }) {
+export function updateWorldParties({ aiState, worldState, playerParty, factions: _factions, cfg, dtSec }) {
   if (!aiState || !Array.isArray(aiState.parties)) return [];
   const dt = Number(dtSec ?? 0);
   const encounters = [];

@@ -1,11 +1,20 @@
 :root{
-  --panelA: rgba(18,20,28,0.78);
-  --panelB: rgba(8,9,12,0.66);
-  --line: rgba(212,175,55,0.18);
+  --panelA: rgba(44,28,14,0.90);
+  --panelB: rgba(20,12,6,0.86);
+  --line: rgba(196,152,58,0.62);
+  --frameMid: rgba(94,58,24,0.92);
+  --frameInner: rgba(34,20,9,0.78);
+  --panelGlow: rgba(228,177,74,0.20);
 }
 
 *{ box-sizing: border-box; }
-body{ font-family: "Crimson Text", serif; }
+body{
+  font-family: "Crimson Text", serif;
+  background:
+    radial-gradient(1200px 740px at 50% -10%, rgba(238,191,86,0.16), transparent 62%),
+    radial-gradient(980px 560px at 25% 110%, rgba(88,56,28,0.24), transparent 66%),
+    #0f0b07;
+}
 .royal-font{ font-family: "Cinzel", serif; }
 .hidden{ display:none !important; }
 
@@ -104,10 +113,10 @@ body{ font-family: "Crimson Text", serif; }
   right: auto;
   width: min(220px, calc(100vw - 28px));
   aspect-ratio: 1 / 1;
-  padding: 0;
+  padding: 6px;
   pointer-events:auto;
-  border-radius: 9999px;
-  overflow: hidden;
+  border-radius: 10px;
+  overflow: clip;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -118,11 +127,27 @@ body{ font-family: "Crimson Text", serif; }
 .hud-minimap.is-dragging{ cursor: grabbing; }
 
 .frame-dark{
-  background: linear-gradient(180deg, var(--panelA), var(--panelB));
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.45);
-  border-radius: 18px;
-  backdrop-filter: blur(6px);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.00) 22%),
+    linear-gradient(180deg, var(--panelA), var(--panelB));
+  border: 2px solid var(--line);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,0.52),
+    inset 0 1px 0 rgba(255,226,160,0.28),
+    inset 0 -1px 0 rgba(0,0,0,0.34);
+  border-radius: 10px;
+  backdrop-filter: blur(1px);
+}
+
+.frame-dark::before{
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(116,76,32,0.65);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgba(232,188,92,0.18);
+  pointer-events: none;
 }
 
 
@@ -170,18 +195,24 @@ body{ font-family: "Crimson Text", serif; }
   font-family: "Cinzel", serif;
   font-weight: 800;
   letter-spacing: 0.02em;
-  border-radius: 14px;
-  padding: 10px 12px;
-  border: 1px solid rgba(212,175,55,0.22);
-  background: rgba(0,0,0,0.35);
-  color: rgba(255,255,255,0.92);
-  transition: transform 0.08s ease, background 0.18s ease, border 0.18s ease;
+  border-radius: 9px;
+  padding: 9px 12px;
+  border: 1px solid rgba(179,134,49,0.70);
+  background:
+    linear-gradient(180deg, rgba(130,92,42,0.84), rgba(58,34,16,0.86));
+  color: rgba(247,234,197,0.95);
+  text-shadow: 0 1px 0 rgba(18,9,4,0.80);
+  box-shadow:
+    inset 0 1px 0 rgba(255,220,140,0.26),
+    inset 0 -1px 0 rgba(23,12,6,0.75),
+    0 3px 10px rgba(0,0,0,0.36);
+  transition: transform 0.08s ease, filter 0.16s ease, border 0.16s ease;
 }
 
 .action-btn:hover{
   transform: translateY(-1px);
-  border-color: rgba(212,175,55,0.42);
-  background: rgba(0,0,0,0.45);
+  border-color: rgba(216,168,69,0.90);
+  filter: brightness(1.07) saturate(1.04);
 }
 
 .action-btn:disabled{
@@ -191,11 +222,14 @@ body{ font-family: "Crimson Text", serif; }
 }
 
 .btn-gold{
-  border-color: rgba(212,175,55,0.38);
-  background: linear-gradient(180deg, rgba(212,175,55,0.18), rgba(0,0,0,0.35));
+  border-color: rgba(216,170,66,0.88);
+  background:
+    linear-gradient(180deg, rgba(230,188,86,0.92), rgba(118,78,28,0.86));
+  color: rgba(49,27,8,0.96);
+  text-shadow: 0 1px 0 rgba(255,225,152,0.62);
 }
 .btn-gold:hover{
-  border-color: rgba(212,175,55,0.66);
+  border-color: rgba(245,198,90,0.96);
 }
 
 .btn-danger{
@@ -207,8 +241,36 @@ body{ font-family: "Crimson Text", serif; }
 }
 
 .btn-dark{
-  border-color: rgba(255,255,255,0.14);
+  border-color: rgba(172,132,54,0.62);
+  background:
+    linear-gradient(180deg, rgba(104,74,34,0.86), rgba(46,28,13,0.88));
 }
+
+#helpBtn::before,
+#settingsBtn::before,
+#btnSaveGame::before,
+#btnLoadGame::before,
+#btnResetGame::before,
+#btnOpenSaveTransfer::before{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border: 1px solid rgba(214,172,78,0.72);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(84,54,23,0.92), rgba(40,24,11,0.90));
+  color: rgba(240,214,150,0.96);
+  font-size: 11px;
+  line-height: 1;
+}
+#helpBtn::before{ content: "?"; }
+#settingsBtn::before{ content: "S"; }
+#btnSaveGame::before{ content: "K"; }
+#btnLoadGame::before{ content: "Y"; }
+#btnResetGame::before{ content: "R"; }
+#btnOpenSaveTransfer::before{ content: "A"; }
 
 .kbd{
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -290,9 +352,9 @@ body{ font-family: "Crimson Text", serif; }
 .minimap-hud{
   width: 100%;
   height: 100%;
-  border-radius: 9999px;
+  border-radius: 6px;
   overflow: hidden;
-  clip-path: circle(50% at 50% 50%);
+  clip-path: inset(0 round 6px);
 }
 
 .stat{ padding: 12px; }
@@ -454,14 +516,31 @@ body{ font-family: "Crimson Text", serif; }
 
 .select-dark{
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(212,175,55,0.18);
-  background: rgba(0,0,0,0.35);
-  color: rgba(255,255,255,0.92);
-  padding: 10px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(188,146,58,0.66);
+  background: linear-gradient(180deg, rgba(72,46,21,0.92), rgba(34,20,10,0.90));
+  color: rgba(246,228,182,0.95);
+  padding: 8px 10px;
   outline: none;
 }
-.select-dark:focus{ border-color: rgba(212,175,55,0.45); }
+.select-dark:focus{ border-color: rgba(226,178,72,0.92); }
+
+.hud-settings input[type="checkbox"]{
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(190,148,58,0.74);
+  border-radius: 3px;
+  background: linear-gradient(180deg, rgba(68,42,19,0.90), rgba(31,18,9,0.90));
+  box-shadow: inset 0 1px 0 rgba(255,220,146,0.18);
+}
+
+.hud-settings input[type="checkbox"]:checked{
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255,231,162,0.90) 0 24%, transparent 25%),
+    linear-gradient(180deg, rgba(212,166,74,0.94), rgba(118,76,31,0.90));
+  border-color: rgba(222,177,78,0.95);
+}
 
 /* Şehir içi sağ panel (JS ile oluşturuluyor) */
 .corner-panel{
@@ -602,7 +681,14 @@ body{ font-family: "Crimson Text", serif; }
 
 /* HUD sol panel padding */
 .hud-left{
+  position: absolute;
   padding: 14px;
+}
+
+.hud-right,
+.hud-settings,
+.hud-minimap{
+  position: absolute;
 }
 
 /* Görev paneli (minimap altında) */

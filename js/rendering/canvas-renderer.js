@@ -363,7 +363,7 @@ export class CanvasRenderer {
 
     // ── Yıldızlar (pencereleme) ────────────────────────────────────
     if (!this._encounterStars) {
-      const rng = this._makeLCG(0xF0RE5733);
+      const rng = this._makeLCG(0xF0FE5733);
       this._encounterStars = Array.from({ length: 42 }, () => ({
         x: rng() * w,
         y: rng() * h * 0.38,

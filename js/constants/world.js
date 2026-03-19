@@ -2,29 +2,29 @@
 
 export const WORLD = Object.freeze({
   // Harita boyutları
-  TILE_SIZE: 60,
-  MAP_WIDTH: 180,
-  MAP_HEIGHT: 120,
+  TILE_SIZE: 32,
+  MAP_WIDTH: 1068,
+  MAP_HEIGHT: 714,
 
   // Yükseklik eşikleri (0.0 - 1.0)
-  SEA_LEVEL: 0.40,
-  SHORE_MAX: 0.46,
+  SEA_LEVEL: 0.34,
+  SHORE_MAX: 0.39,
   PLAIN_MAX: 0.72,
-  MOUNTAIN_MIN: 0.72,
-  SNOW_ALTITUDE: 0.88,
+  MOUNTAIN_MIN: 0.79,
+  SNOW_ALTITUDE: 0.95,
 
   // Renk kodları
-  COLOR_SEA: '#1a4d6f',
-  COLOR_SHORE: '#8b7355',
-  COLOR_GRASS: '#4a6741',
-  COLOR_FOREST: '#2d4a2b',
-  COLOR_MOUNTAIN: '#5a524a',
+  COLOR_SEA: '#7a9dbc',
+  COLOR_SHORE: '#ae9874',
+  COLOR_GRASS: '#5b9853',
+  COLOR_FOREST: '#597f3f',
+  COLOR_MOUNTAIN: '#7a7066',
   COLOR_SNOW: '#e8e8e8',
 
   // Dünya oluşturma
   RIVER_COUNT: 12,
-  FOREST_DENSITY: 0.22,
-  MOUNTAIN_DENSITY: 0.12,
+  FOREST_DENSITY: 0.16,
+  MOUNTAIN_DENSITY: 0.22,
 });
 
 export const TERRAIN = Object.freeze({
@@ -69,19 +69,19 @@ export const BIOME = Object.freeze({
 });
 
 export const BIOME_COLORS = Object.freeze({
-  [BIOME.SEA]: '#1a4d6f',
-  [BIOME.SHORE]: '#8b7355',
-  [BIOME.PLAINS]: '#6f8f4e',
-  [BIOME.FOREST]: '#2f5a33',
-  [BIOME.HILLS]: '#7a6a4a',
-  [BIOME.MOUNTAIN]: '#5a524a',
+  [BIOME.SEA]: '#7a9dbc',
+  [BIOME.SHORE]: '#ae9874',
+  [BIOME.PLAINS]: '#5b9853',
+  [BIOME.FOREST]: '#597f3f',
+  [BIOME.HILLS]: '#8a7a64',
+  [BIOME.MOUNTAIN]: '#7a7066',
   [BIOME.SNOW]: '#e6edf5',
 });
 
 export const BIOME_BAND_PARAMS = Object.freeze({
-  SNOW_HEIGHT: 0.7,
-  MOUNTAIN_HEIGHT: 0.56,
-  HILL_HEIGHT: 0.48,
+  SNOW_HEIGHT: 0.88,
+  MOUNTAIN_HEIGHT: 0.78,
+  HILL_HEIGHT: 0.70,
   COLD_BAND_EDGE: 0.1,
   COLD_BAND_BLEND: 0.18,
   FOREST_BASE_CHANCE: 0.34,

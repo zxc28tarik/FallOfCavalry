@@ -1,0 +1,188 @@
+Original prompt: gezme haritasýnýn bu ss lerfe ki tarza ve görüntüde aðaçlara daðlara vb sahip olmasýný istiyorum.
+
+- 2026-03-18: Task started. Need adventure map visuals closer to reference screenshots (dense conifer forests, mountain chains, vivid grass texture, winding rivers).
+- 2026-03-18: Added world height normalization after blur so terrain thresholds become effective (mountains/snow can actually spawn).
+- 2026-03-18: Reworked vegetation + mountain placement in `js/world/world-generator.js` to clustered generation (noise seeds + neighborhood growth + isolation cleanup).
+- 2026-03-18: Tuned world constants for map readability: `MOUNTAIN_MIN` 0.80, `SNOW_ALTITUDE` 0.94, `FOREST_DENSITY` 0.34, `MOUNTAIN_DENSITY` 0.19, and biome band mountain/snow thresholds raised.
+- 2026-03-18: Updated active overworld renderer (`js/managers/RenderManager.js`) forest and mountain tile drawing to more classic strategy-map style (pine-heavy forests, shaded peaks).
+- 2026-03-18: Validation loop:
+  - `npm.cmd run build` passed.
+  - Playwright skill client executed; start-flow required faction selection before start.
+  - Manual Playwright capture script used for deterministic map snapshots after fog reveal.
+  - Latest visual artifacts: `output/web-game/map-style-mountain.png`, `output/web-game/map-style-forest.png`.
+
+TODO / next-agent suggestions:
+- If user wants even denser mountain chains, relax mountain keep/growth thresholds in `placeVegetationAndMountains` pass 2/3.
+- If user wants less mixed broadleaf trees, increase `pine` probability in `mbForestTile` (currently 0.84).
+- Temporary debug scripts under `tmp/` can be cleaned if no longer needed.
+- 2026-03-18: Added HoMM3 `H3sprite.lod` extraction pipeline `scripts/extract-homm3-map-art.mjs` (terrain DEF + adventure object DEF decode). Supports DEF format 0 and 3, exports `js/data/homm3-map-art.json`.
+- 2026-03-18: Integrated extracted HoMM3 map art into active renderer (`js/managers/RenderManager.js`): ground now uses true HoMM3 terrain tile frames (RGBA), forests/mountains use decoded HoMM3 prop sprites.
+- 2026-03-18: Changed terrain rendering order to HoMM-like layering: ground -> river/road -> forest/mountain props (sorted by depth).
+- 2026-03-18: Retuned biome/placement for less clutter and cleaner silhouettes:
+  - `WORLD.TILE_SIZE` to 32.
+  - Sea/shore/mountain thresholds rebalanced for greener land mass.
+  - Forest/mountain placement probabilities and growth/prune thresholds updated in `placeVegetationAndMountains`.
+- 2026-03-18: Validation:
+  - `npx.cmd eslint js/managers/RenderManager.js js/world/world-generator.js js/constants/world.js scripts/extract-homm3-map-art.mjs` passed.
+  - `npm.cmd run build` passed.
+  - Playwright capture reruns stored under `output/web-game/` (latest: `map-h3-v5-current.png`).
+
+TODO / next-agent suggestions:
+- Remaining biggest visual gap is transition logic: still biome-tile boundaries are too square vs HoMM3. Next step is to decode and apply HoMM3 terrain transition DEF sets (edge/corner variants) instead of procedural transition bands.
+- Mountain look can be improved further by using larger mountain DEF variants as multi-tile objects (e.g., `AVLMT*`) instead of only hill/rock-sized props.
+- Bundle size grew due embedded JSON art atlas (`js/data/homm3-map-art.json`). Consider moving decoded frames to runtime-loaded binary/atlas files to reduce JS chunk size.
+- 2026-03-18: Added transition-aware terrain frame selection using decoded HoMM3 terrain frame edge masks/groups (`groups` + `edgeMask` in `homm3-map-art.json`, and runtime mask match in `RenderManager`). This reduces hard square biome seams.
+- 2026-03-18: Added large mountain prop channel (`MOUNTAIN_LARGE`) from HoMM3 `AVLMT*` DEFs and runtime sparse placement for mountain clusters.
+- 2026-03-18: Adjusted base terrain key mapping so forest/hills/mountain land uses grass-like HoMM3 ground key (`PLAINS`) and mountains are represented primarily as overlaid props.
+- 2026-03-18: Optimized extracted art payload to keep bundle manageable:
+  - Terrain export reduced to used keys (SEA/SHORE/PLAINS/SNOW).
+  - Forest/mountain prop variant lists trimmed.
+  - Large mountain list reduced to 8 curated DEFs.
+- 2026-03-18: Validation rerun:
+  - `npx.cmd eslint js/managers/RenderManager.js scripts/extract-homm3-map-art.mjs js/world/world-generator.js js/constants/world.js` passed.
+  - `npm.cmd run build` passed.
+  - Latest screenshot: `output/web-game/map-h3-v8-current.png`.
+
+TODO / next-agent suggestions:
+- Some patches still look tile-ish in low-frequency biome logic; next step is biome noise blending in worldgen (not renderer) to reduce block patterns at source.
+- If startup payload becomes an issue, move `homm3-map-art.json` out of JS bundle and stream/load as external asset.
+- 2026-03-18: Active renderer path corrected to `js/rendering/map-renderer.js` (instead of relying only on `RenderManager`). Added HoMM3 art integration directly in active map renderer:
+  - Imported `js/data/homm3-map-art.json` in map renderer.
+  - Added H3 terrain frame decode/cache and transition-aware frame selection (`groups` + edge mask).
+  - Ground tile drawing now prefers real HoMM3 terrain frames (SEA/SHORE/PLAINS/SNOW), with fallback to legacy procedural draw.
+  - Enabled pixel-preserving rendering (`ctx.imageSmoothingEnabled = false`) during map pass.
+  - Forest/mountain drawing now prefers HoMM3 prop sprites (FOREST/MOUNTAIN/MOUNTAIN_LARGE) with deterministic sparse placement to avoid over-dense clutter.
+- 2026-03-18: Fixed extraction script gap: `buildTerrainVariantData` now receives terrain `baseBias` from `TERRAIN_SPECS`.
+- 2026-03-18: World tile smoothing pass added in `createTiles`:
+  - Shore only generated near sea (`distToSea <= 2`).
+  - New `smoothTileTypes` removes isolated shore/water/mountain artifacts to reduce blocky patches.
+- 2026-03-18: Mountain chain tuning pass:
+  - `WORLD.MOUNTAIN_MIN` lowered to `0.79`.
+  - `WORLD.MOUNTAIN_DENSITY` raised to `0.22`.
+  - Mountain growth/extension probabilities increased (longer ridge effect).
+- 2026-03-18: Validation reruns:
+  - `node scripts/extract-homm3-map-art.mjs` passed.
+  - `npx.cmd eslint js/rendering/map-renderer.js js/world/world-generator.js js/constants/world.js scripts/extract-homm3-map-art.mjs` passed.
+  - `npm.cmd run build` passed.
+  - Visual capture rerun via `node tmp/capture_map_style.mjs`.
+  - Latest artifacts overwritten in `output/web-game/`: `map-style-current.png`, `map-style-forest.png`, `map-style-mountain.png`.
+
+TODO / next-agent suggestions:
+- Remaining gap to HoMM3 is mostly global color grading and UI/weather darkening (map is still too dark vs reference). Next step: reduce map-weather tint/overlay intensity on map mode.
+- Shore transitions still show tile edges in some seeds; consider adding diagonal-aware shoreline transition matching in renderer/worldgen.
+- `tmp/capture_map_style.mjs` currently can miss mountain showcase framing depending on seed/camera; improve capture targeting for guaranteed mountain-in-frame validation.
+- 2026-03-18: Additional focused captures (player/camera snapped to cluster centers) generated for validation:
+  - `output/web-game/map-style-mountain-focus2.png`
+  - `output/web-game/map-style-forest-focus2.png`
+- 2026-03-18: Mountain render thresholds retuned to increase in-cluster visibility and large-mountain usage in dense areas.
+- 2026-03-18: Map scale expansion implemented.
+  - World size changed from 180x120 to 440x294 (~6x area).
+  - Settlement generation now scales with map size:
+    - Territory centers are normalized (ratio-based) instead of fixed tile coords.
+    - Settlement counts scale modestly with size (countScale), while spacing scales to ~2-3x (spacingScale clamp 2.0..3.0).
+    - Edge padding, random inset, spatial hash cell, and placement attempts are scale-aware.
+    - City/Fort/Village minimum-distance profiles now scale with map size.
+    - Nearby placement radii (forts near cities, villages near forts) scale with map size.
+- 2026-03-18: World AI bounds fallback updated to use constants (`CONST.WORLD.MAP_WIDTH/HEIGHT/TILE_SIZE`) instead of fixed 180x120.
+- 2026-03-18: Validation:
+  - `npx.cmd eslint js/constants/world.js js/world/world-generator.js js/systems/world-ai.js` passed.
+  - `npm.cmd run build` passed.
+  - Runtime check (Playwright):
+    - map size: 440x294 (129,360 tiles)
+    - settlements: 545 (city: 24, fort: 109, village: 412)
+    - forests: 665, mountains: 261
+  - Effective settlement spread increased roughly ~2.1x linearly vs old map (as intended, not 6x).
+- 2026-03-19: Continued HoMM3-style world-map pass with ordered feature batch.
+- 2026-03-19: `js/rendering/map-renderer.js`
+  - Added deterministic coast blending overlay (`_drawCoastBlend`) to soften water/land tile transitions.
+  - Added terrain micro detail pass (`_drawMicroDetails`) for grass/shore/snow pixel accents (flower/pebble/tuft/crack-like marks).
+  - Reworked river rendering with `_buildRiverRenderPoints` meander control points and variable width strokes.
+  - Forest prop composition now uses layered HoMM3 draws (back/main/front variants with options), lower repetition, and clearing windows.
+  - Mountain prop composition now supports layered silhouettes, controlled sparse thresholds, less repetitive large-mountain placement, and pass-window skips.
+- 2026-03-19: `js/world/world-generator.js`
+  - Shore generation tightened (`distToSea <= 1`) and smoothing rules updated to reduce thick ring-like shore bands.
+  - River pathfinding upgraded with directional inertia + bend noise scoring for less rigid step patterns.
+  - Mountain generation expanded: directional ridge extension, one-tile gap stitching, and strategic pass carving.
+  - Forest generation now has glade/clump noise modulation and export pruning to reduce over-dense repetition.
+- 2026-03-19: `css/styles.css`
+  - HUD/panel/button style moved toward gold-wood frame language (ornamental borders, beveled buttons, icon badges).
+  - Minimap frame changed from circular glass look to rectangular framed style.
+  - Settings controls (checkbox/select) rethemed to match same art direction.
+- 2026-03-19: Validation
+  - `npx.cmd eslint js/rendering/map-renderer.js js/world/world-generator.js` passed.
+  - `npm.cmd run build` passed.
+  - Playwright skill client call attempted but failed module resolution from skill path (`playwright` package not resolvable there).
+  - Fallback visual checks run with project-local Playwright capture scripts (`tmp/capture_map_style.mjs` + custom HUD-hidden capture snippets).
+  - Latest artifacts: `output/web-game/map-style-current.png`, `output/web-game/map-style-mountain.png`, `output/web-game/map-style-forest.png`, `output/web-game/map-style-mountain-clean.png`, `output/web-game/map-style-forest-clean.png`.
+
+TODO / next-agent suggestions:
+- Coastline still improves but can be pushed further by decoding/using true HoMM3 shoreline transition sets (edge+corner+inner-corner variants) instead of mask overlays.
+- If user wants stronger mountain readability, slightly raise mountain prop draw ratio in sparse neighborhoods (`_drawMountain` thresholds).
+- If forest still reads dense in specific seeds, lower worldgen clump growth in Pass 6 or reduce front-layer draw trigger in `_drawForest`.
+- Consider forcing camera spawn to mixed land region for default screenshot clarity (current start often sea-heavy).
+- 2026-03-19: Minimap/HUD panel kayma bug fix.
+  - Root cause: `css/styles.css` içinde `.frame-dark { position: relative; }` satýrý, daha önce tanýmlanan `.hud-settings` ve `.hud-minimap` için `position:absolute` deðerini cascade ile ezip panelleri relative akýþa sokuyordu; bu da minimap panelini viewport dýþýna itiyordu.
+  - Fix: Dosyanýn alt kýsmýnda `.hud-right, .hud-settings, .hud-minimap` için explicit `position: absolute;` override eklendi ve `.hud-left` blokunda da `position: absolute;` tekrarlandý.
+  - Validation: `npm.cmd run build` passed; Playwright doðrulamasýnda minimap rect `x:14,y:180,w:220,h:220` olarak viewport içinde doðrulandý.
+  - Artifacts: `output/web-game/debug-minimap-full-before-fix.png`, `output/web-game/debug-minimap-full-after-fix.png`.
+- 2026-03-19: User-requested geopolitical placement pass + map scale increase.
+  - World size increased by +40% from 440x294 to 616x412 in `js/constants/world.js`.
+  - Settlement territory model in `js/world/world-generator.js` updated to reduce country intermix:
+    - Repositioned faction Voronoi anchors (Ottoman/HRE/Spanish/Polish/Venice) for clearer macro separation.
+    - Added Voronoi border seam neutral band (`BORDER_SEAM`) so settlements avoid ambiguous frontier tiles.
+    - Increased interior/border constraints (`borderBuffer`) and cross-faction proximity minima (`enemyMin`) per settlement type.
+    - Added fallback random placement pass that relaxes constraints slightly but preserves owner territory to prevent missing factions.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js js/constants/world.js` passed.
+    - `npm.cmd run build` passed.
+    - Multi-seed generator check (20 seeds): no missing factions; cross-faction nearest distance remained safely separated (no enemy pairs < 4 tiles).
+    - Runtime Playwright capture confirmed map size and faction counts: 616x412, 630 settlements with all 5 factions present.
+  - Artifact: `output/web-game/map-after-separation-40pct.png`.
+- 2026-03-19: Settlement target count step-1 applied.
+  - `placeSettlements` now allocates per-faction counts using weighted apportionment with exact global target `800`.
+  - Preserved current state-level ratios by deriving weights from scaled faction totals before final allocation.
+  - Seed check (1337): total 800 -> ottoman 258 (%32.25), hre 198 (%24.75), spanish 198 (%24.75), polish 98 (%12.25), venice 48 (%6.00).
+  - Validation: `npx.cmd eslint js/world/world-generator.js` passed.
+- 2026-03-19: Step-2 map scaling applied.
+  - World map size increased with same aspect ratio from 616x412 to 1068x714 (~3x area).
+  - File updated: `js/constants/world.js` (`MAP_WIDTH`, `MAP_HEIGHT`).
+  - Validation:
+    - `npx.cmd eslint js/constants/world.js js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Runtime generator check: width 1068, height 714, area 762,552, settlements 800.
+- 2026-03-19: Faction composition override pass (user-directed exact counts).
+  - `placeSettlements` rebuilt to stable deterministic flow with exact total target 800 and per-faction override support.
+  - Added explicit overrides:
+    - Venice: cities 8, forts 15, villages 26
+    - Polish: cities 3, forts 15, villages 80
+  - Placement pipeline adjusted so fort/village near-placement no longer overshoots targets (budget-aware + helper functions return placed count).
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 check: total 800; Polish 3/15/80 and Venice 8/15/26 exactly matched.
+- 2026-03-19: Major faction-specific settlement topology rules implemented in `placeSettlements`.
+  - Regional anchor layout retuned for requested macro geography:
+    - Spanish bottom-left, HRE above Spanish, Polish upper-left/upper-mid expansion, Ottoman right side, Venice bottom-mid.
+  - Placement flow now supports city-linked vs unconnected fort behavior per faction.
+  - Ottoman rules:
+    - Each city targets 2 mid-near forts and 8 villages (near+mid split).
+    - Extra forts are preferentially linked to cities; if any unconnected forts remain they get 3 near + 3 mid villages.
+    - Remaining villages random in Ottoman territory.
+  - HRE/Spanish rules:
+    - Each city targets 3 mid-near forts and 5 villages (near+mid split).
+    - Unconnected forts get 4 near + 5 mid villages.
+    - Remaining villages random in own territory.
+  - Venice rules:
+    - Fort plan follows 7 cities with 2 forts (near+mid) and 1 city with 1 fort.
+    - Villages random in Venetian territory.
+  - Polish rules:
+    - City-linked forts disabled.
+    - Each city targets 5 near + 8 mid + 5 medium villages.
+    - Remaining villages distribute near forts with 1-3 per fort logic (each fort gets at least one when possible).
+  - Existing explicit count overrides preserved:
+    - Venice 8/15/26, Polish 3/15/80.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 totals preserved: total 800, ottoman 257, hre 198, spanish 198, polish 98, venice 49.
+    - Seed 1337 centroids indicate requested map macro-layout ordering.

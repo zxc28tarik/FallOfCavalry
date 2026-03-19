@@ -7,6 +7,7 @@
 
 import * as CONST from '../constants.js';
 import { shade } from '../utils.js';
+import h3MapArt from '../data/homm3-map-art.json';
 
 // ── Lord adları (faction bazlı) ────────────────────────────────────────────
 const LORD_NAMES = {
@@ -54,6 +55,155 @@ function tileHash(x, y, seed = 0) {
 }
 function tileRand(x, y, seed = 0) { return (tileHash(x, y, seed) & 0x7fffffff) / 0x7fffffff; }
 
+const H3_TERRAIN_DATA = h3MapArt?.terrain || {};
+const H3_PROP_DATA = h3MapArt?.props || {};
+const H3_FRAME_CACHE = new Map();
+const TILE_TO_H3_KEY = Object.freeze({
+  water: 'SEA',
+  shore: 'SHORE',
+  grass: 'PLAINS',
+  forest: 'PLAINS',
+  mountain: 'PLAINS',
+  snow: 'SNOW',
+});
+
+function h3Noise(x, y, seed = 0) {
+  const n = Math.sin((x * 12.9898) + (y * 78.233) + seed * 31.337) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+function h3DecodeBase64Bytes(b64) {
+  if (typeof b64 !== 'string' || !b64) return null;
+  if (typeof globalThis.atob !== 'function') return null;
+  const bin = globalThis.atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function h3FrameCacheKey(prefix, key, source, name) {
+  return `${prefix}:${key || ''}:${source || ''}:${name || ''}`;
+}
+
+function h3GetFrameCanvas(frame, cacheKey) {
+  if (!frame || frame.format !== 'rgba32-base64' || !Array.isArray(frame.size) || frame.size.length !== 2) return null;
+  if (H3_FRAME_CACHE.has(cacheKey)) return H3_FRAME_CACHE.get(cacheKey);
+  if (typeof document === 'undefined') {
+    H3_FRAME_CACHE.set(cacheKey, null);
+    return null;
+  }
+
+  const w = Math.max(1, Number(frame.size[0]) | 0);
+  const h = Math.max(1, Number(frame.size[1]) | 0);
+  const rgba = h3DecodeBase64Bytes(frame.data);
+  if (!rgba || rgba.length < w * h * 4) {
+    H3_FRAME_CACHE.set(cacheKey, null);
+    return null;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const cctx = canvas.getContext('2d');
+  if (!cctx) {
+    H3_FRAME_CACHE.set(cacheKey, null);
+    return null;
+  }
+
+  const img = cctx.createImageData(w, h);
+  img.data.set(rgba.subarray(0, w * h * 4));
+  cctx.putImageData(img, 0, 0);
+  H3_FRAME_CACHE.set(cacheKey, canvas);
+  return canvas;
+}
+
+function bitCount4(v) {
+  const n = v & 15;
+  return ((n >> 0) & 1) + ((n >> 1) & 1) + ((n >> 2) & 1) + ((n >> 3) & 1);
+}
+
+function h3PickTerrainFrame(h3Key, edgeMask, tx, ty) {
+  const terrain = H3_TERRAIN_DATA?.[h3Key];
+  const frames = terrain?.frames;
+  if (!Array.isArray(frames) || !frames.length) return null;
+
+  const groups = Array.isArray(terrain?.groups) ? terrain.groups : null;
+  let pool = Array.isArray(groups?.[edgeMask]) ? groups[edgeMask] : null;
+  if (!pool || !pool.length) {
+    let best = null;
+    for (let i = 0; i < 16; i++) {
+      const g = groups?.[i];
+      if (!Array.isArray(g) || !g.length) continue;
+      const diff = bitCount4((i ^ edgeMask) & 15) + Math.abs(bitCount4(i) - bitCount4(edgeMask)) * 0.15;
+      if (!best || diff < best.diff) best = { diff, pool: g };
+    }
+    pool = best?.pool || null;
+  }
+  if (!pool || !pool.length) pool = groups?.[0] || null;
+  if (!pool || !pool.length) {
+    const n = h3Noise(tx * 0.317, ty * 0.229, 1943);
+    const idx = Math.max(0, Math.min(frames.length - 1, Math.floor(n * frames.length)));
+    return frames[idx];
+  }
+
+  const n = h3Noise(tx * 0.317 + edgeMask * 0.11, ty * 0.229 + edgeMask * 0.07, 1943);
+  const pick = Math.max(0, Math.min(pool.length - 1, Math.floor(n * pool.length)));
+  const idx = pool[pick];
+  if (!Number.isFinite(idx) || idx < 0 || idx >= frames.length) return null;
+  return frames[idx];
+}
+
+function h3PickPropFrame(kind, tx, ty) {
+  const frames = H3_PROP_DATA?.[kind]?.frames;
+  if (!Array.isArray(frames) || !frames.length) return null;
+  let seed = 2683;
+  if (kind === 'FOREST') seed = 2671;
+  else if (kind === 'MOUNTAIN_LARGE') seed = 2699;
+  const n = h3Noise(tx * 0.191, ty * 0.277, seed);
+  const idx = Math.max(0, Math.min(frames.length - 1, Math.floor(n * frames.length)));
+  return frames[idx];
+}
+
+function h3DrawPropFrame(ctx, entry, px, py, T, fogLevel, tx, ty, kind, options = null) {
+  if (!entry?.frame) return false;
+  const cacheKey = h3FrameCacheKey('prop', kind, entry.sourceDef, entry.frame.name);
+  const canvas = h3GetFrameCanvas(entry.frame, cacheKey);
+  if (!canvas) return false;
+
+  const fw = canvas.width || 1;
+  const fh = canvas.height || 1;
+  const scaleSeed = kind === 'FOREST' ? 3119 : kind === 'MOUNTAIN_LARGE' ? 3151 : 3137;
+  const scaleN = h3Noise(tx * 0.39 + 7, ty * 0.33 + 9, scaleSeed);
+  const baseScale = kind === 'FOREST'
+    ? 1.85
+    : kind === 'MOUNTAIN_LARGE'
+      ? 3.2
+      : 1.62;
+  const dynScale = kind === 'FOREST'
+    ? 0.26
+    : kind === 'MOUNTAIN_LARGE'
+      ? 0.26
+      : 0.22;
+  const scaleMul = Number.isFinite(options?.scaleMul) ? Math.max(0.35, options.scaleMul) : 1;
+  const targetH = Math.max(8, T * (baseScale + scaleN * dynScale) * scaleMul);
+  const targetW = targetH * (fw / fh);
+  const jitter = kind === 'FOREST' ? 0.16 : kind === 'MOUNTAIN_LARGE' ? 0.20 : 0.12;
+  const jitterMul = Number.isFinite(options?.jitterMul) ? Math.max(0, options.jitterMul) : 1;
+  const jitterX = jitter * jitterMul * T * (h3Noise(tx * 0.91, ty * 0.73, 3163) - 0.5);
+  const extraOffsetX = Number.isFinite(options?.offsetX) ? options.offsetX : 0;
+  const extraOffsetY = Number.isFinite(options?.offsetY) ? options.offsetY : 0;
+  const dx = Math.round(px + (T - targetW) * 0.5 + jitterX + extraOffsetX);
+  const dy = Math.round(py + T - targetH + extraOffsetY);
+
+  ctx.save();
+  const baseAlpha = fogLevel === 1 ? 0.60 : 1.0;
+  const alphaMul = Number.isFinite(options?.alphaMul) ? Math.max(0, options.alphaMul) : 1;
+  ctx.globalAlpha = baseAlpha * alphaMul;
+  ctx.drawImage(canvas, dx, dy, Math.round(targetW), Math.round(targetH));
+  ctx.restore();
+  return true;
+}
+
 // ══════════════════════════════════════════════════════════════════════════
 export class MapRenderer {
   constructor() {
@@ -61,6 +211,9 @@ export class MapRenderer {
     this._forestSet = null;
     this._mountainSet = null;
     this._lastMapId = null;
+    this._mapWidth = 0;
+    this._mapHeight = 0;
+    this._visibleLargeMountainCells = new Set();
   }
 
   // Build O(1) lookup sets for forests/mountains (once per map)
@@ -68,19 +221,106 @@ export class MapRenderer {
     const id = map._id || (map._id = Math.random());
     if (this._lastMapId === id) return;
     this._lastMapId = id;
+    this._mapWidth = Number(map.width) || 0;
+    this._mapHeight = Number(map.height) || 0;
     this._forestSet = new Set();
     this._mountainSet = new Set();
     for (const f of (map.forests || [])) this._forestSet.add(f.y * map.width + f.x);
     for (const m of (map.mountains || [])) this._mountainSet.add(m.y * map.width + m.x);
   }
 
+  _isInMap(tx, ty) {
+    return tx >= 0 && ty >= 0 && tx < this._mapWidth && ty < this._mapHeight;
+  }
+
+  _hasForestAt(tx, ty) {
+    if (!this._forestSet || !this._isInMap(tx, ty)) return false;
+    return this._forestSet.has(ty * this._mapWidth + tx);
+  }
+
+  _hasMountainAt(tx, ty) {
+    if (!this._mountainSet || !this._isInMap(tx, ty)) return false;
+    return this._mountainSet.has(ty * this._mapWidth + tx);
+  }
+
+  _countMaskNeighbors8(set, tx, ty) {
+    if (!set) return 0;
+    let count = 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (!this._isInMap(nx, ny)) continue;
+        if (set.has(ny * this._mapWidth + nx)) count++;
+      }
+    }
+    return count;
+  }
+
+  _countForestNeighbors8(tx, ty) {
+    return this._countMaskNeighbors8(this._forestSet, tx, ty);
+  }
+
+  _countMountainNeighbors8(tx, ty) {
+    return this._countMaskNeighbors8(this._mountainSet, tx, ty);
+  }
+
+  _tileTypeAt(map, tx, ty) {
+    if (!map || tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return 'water';
+    const tile = map.tiles?.[ty * map.width + tx];
+    return tile?.type || 'grass';
+  }
+
+  _isWaterAt(map, tx, ty) {
+    return this._tileTypeAt(map, tx, ty) === 'water';
+  }
+
+  _h3KeyAt(map, tx, ty) {
+    return TILE_TO_H3_KEY[this._tileTypeAt(map, tx, ty)] || 'PLAINS';
+  }
+
+  _h3TransitionMask(map, tx, ty, h3Key) {
+    if (!map || !h3Key) return 0;
+    let mask = 0;
+    if (this._h3KeyAt(map, tx, ty - 1) !== h3Key) mask |= 1;
+    if (this._h3KeyAt(map, tx + 1, ty) !== h3Key) mask |= 2;
+    if (this._h3KeyAt(map, tx, ty + 1) !== h3Key) mask |= 4;
+    if (this._h3KeyAt(map, tx - 1, ty) !== h3Key) mask |= 8;
+    return mask;
+  }
+
+  _drawH3TerrainTile(ctx, tile, px, py, T, fog, tx, ty, map) {
+    const h3Key = TILE_TO_H3_KEY[tile?.type] || 'PLAINS';
+    const terrain = H3_TERRAIN_DATA?.[h3Key];
+    if (!terrain?.frames?.length) return false;
+
+    const edgeMask = this._h3TransitionMask(map, tx, ty, h3Key);
+    const frame = h3PickTerrainFrame(h3Key, edgeMask, tx, ty);
+    if (!frame) return false;
+
+    const cacheKey = h3FrameCacheKey('terrain', h3Key, terrain.sourceDef, frame.name);
+    const canvas = h3GetFrameCanvas(frame, cacheKey);
+    if (!canvas) return false;
+
+    ctx.drawImage(canvas, px, py, T, T);
+    if (fog === 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.38)';
+      ctx.fillRect(px, py, T, T);
+    }
+    return true;
+  }
+
   render(ctx, state) {
-    const { map, player, camera, settings } = state;
+    const { map, player, camera } = state;
     const T = CONST.WORLD.TILE_SIZE;
     this._frame++;
     this._ensureLookups(map);
+    this._visibleLargeMountainCells.clear();
 
     ctx.save();
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
     ctx.translate(-camera.x, -camera.y);
 
     // Viewport culling
@@ -127,6 +367,7 @@ export class MapRenderer {
     // 6 – Oyuncu
     this._drawPlayerParty(ctx, player, T);
 
+    ctx.imageSmoothingEnabled = prevSmoothing;
     ctx.restore();
   }
 
@@ -146,27 +387,35 @@ export class MapRenderer {
   // ── Karo ─────────────────────────────────────────────────────────────────
   _drawTile(ctx, tile, x, y, T, fog, map) {
     const px = x * T, py = y * T;
+    const idx = y * map.width + x;
+    const isForest = this._forestSet?.has(idx);
+    const isMountain = this._mountainSet?.has(idx);
 
     if (fog >= 1) {
-      if (tile.type === 'water') {
-        this._drawWater(ctx, px, py, T, fog, x, y);
-      } else if (tile.type === 'shore') {
-        this._drawShore(ctx, px, py, T, fog, x, y, map);
-      } else if (tile.type === 'grass' || tile.type === 'forest') {
-        this._drawGrass(ctx, px, py, T, fog, x, y);
-      } else if (tile.type === 'snow') {
-        this._drawSnow(ctx, px, py, T, fog, x, y);
-      } else {
-        let base = this._terrainColor(tile.type);
-        if (fog === 1) base = shade(base, -0.25);
-        ctx.fillStyle = base;
-        ctx.fillRect(px, py, T, T);
+      const drewH3 = this._drawH3TerrainTile(ctx, tile, px, py, T, fog, x, y, map);
+      if (!drewH3) {
+        if (tile.type === 'water') {
+          this._drawWater(ctx, px, py, T, fog, x, y);
+        } else if (tile.type === 'shore') {
+          this._drawShore(ctx, px, py, T, fog, x, y, map);
+        } else if (tile.type === 'grass' || tile.type === 'forest') {
+          this._drawGrass(ctx, px, py, T, fog, x, y);
+        } else if (tile.type === 'snow') {
+          this._drawSnow(ctx, px, py, T, fog, x, y);
+        } else {
+          let base = this._terrainColor(tile.type);
+          if (fog === 1) base = shade(base, -0.25);
+          ctx.fillStyle = base;
+          ctx.fillRect(px, py, T, T);
+        }
+      }
+      if (tile.type !== 'water') {
+        this._drawCoastBlend(ctx, px, py, T, fog, x, y, map, tile.type);
+      }
+      if (!isForest && !isMountain) {
+        this._drawMicroDetails(ctx, px, py, T, fog, x, y, tile.type);
       }
     }
-
-    const idx = y * map.width + x;
-    const isForest   = this._forestSet?.has(idx);
-    const isMountain = this._mountainSet?.has(idx);
 
     if (isMountain) this._drawMountain(ctx, px, py, T, fog, x, y);
     if (isForest)   this._drawForest(ctx, px, py, T, fog, x, y);
@@ -196,7 +445,7 @@ export class MapRenderer {
   // ══════════════════════════════════════════════════════════════════════════
   // ── KIYISALI — Kumsal toprak tonu ───────────────────────────────────────
   // ══════════════════════════════════════════════════════════════════════════
-  _drawShore(ctx, px, py, T, fog, tx, ty, map) {
+  _drawShore(ctx, px, py, T, fog, tx, ty, _map) {
     const dim = fog === 1 ? -0.18 : 0;
     ctx.fillStyle = shade('#B0996A', dim);
     ctx.fillRect(px, py, T, T);
@@ -219,6 +468,201 @@ export class MapRenderer {
   // ══════════════════════════════════════════════════════════════════════════
   // ── ÇİMEN — Zengin yeşil, doku varyasyonu, ızgara kırıcı ─────────────
   // ══════════════════════════════════════════════════════════════════════════
+  _drawCoastBlend(ctx, px, py, T, fog, tx, ty, map, tileType) {
+    if (!map || fog < 1) return;
+    const north = this._isWaterAt(map, tx, ty - 1);
+    const south = this._isWaterAt(map, tx, ty + 1);
+    const west = this._isWaterAt(map, tx - 1, ty);
+    const east = this._isWaterAt(map, tx + 1, ty);
+    const nw = this._isWaterAt(map, tx - 1, ty - 1);
+    const ne = this._isWaterAt(map, tx + 1, ty - 1);
+    const sw = this._isWaterAt(map, tx - 1, ty + 1);
+    const se = this._isWaterAt(map, tx + 1, ty + 1);
+    if (!(north || south || west || east || nw || ne || sw || se)) return;
+
+    const shoreLike = tileType === 'shore';
+    const sideAlpha = fog === 1 ? (shoreLike ? 0.22 : 0.11) : (shoreLike ? 0.34 : 0.16);
+    const lineAlpha = fog === 1 ? (shoreLike ? 0.24 : 0.14) : (shoreLike ? 0.42 : 0.24);
+    const sideColor = shoreLike
+      ? `rgba(56,102,136,${sideAlpha})`
+      : `rgba(186,164,116,${sideAlpha})`;
+    const lineColor = shoreLike
+      ? `rgba(220,214,186,${lineAlpha})`
+      : `rgba(205,192,146,${lineAlpha})`;
+    const insetBase = shoreLike ? 0.14 : 0.09;
+    const insetVar = shoreLike ? 0.09 : 0.06;
+    const waveBase = shoreLike ? 0.07 : 0.05;
+    const waveVar = shoreLike ? 0.06 : 0.05;
+    const inset = T * (insetBase + h3Noise(tx * 0.19, ty * 0.23, 8401) * insetVar);
+    const wave = T * (waveBase + h3Noise(tx * 0.31, ty * 0.27, 8407) * waveVar);
+
+    ctx.save();
+    ctx.fillStyle = sideColor;
+
+    if (north) {
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + T, py);
+      ctx.lineTo(px + T, py + inset * 0.64);
+      ctx.quadraticCurveTo(px + T * 0.68, py + inset + wave * 0.18, px + T * 0.50, py + inset * 0.68);
+      ctx.quadraticCurveTo(px + T * 0.30, py + inset * 0.34, px, py + inset * 0.72);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (south) {
+      ctx.beginPath();
+      ctx.moveTo(px, py + T);
+      ctx.lineTo(px + T, py + T);
+      ctx.lineTo(px + T, py + T - inset * 0.66);
+      ctx.quadraticCurveTo(px + T * 0.66, py + T - inset - wave * 0.2, px + T * 0.48, py + T - inset * 0.62);
+      ctx.quadraticCurveTo(px + T * 0.25, py + T - inset * 0.26, px, py + T - inset * 0.74);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (west) {
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px, py + T);
+      ctx.lineTo(px + inset * 0.66, py + T);
+      ctx.quadraticCurveTo(px + inset + wave * 0.18, py + T * 0.68, px + inset * 0.66, py + T * 0.50);
+      ctx.quadraticCurveTo(px + inset * 0.34, py + T * 0.30, px + inset * 0.72, py);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (east) {
+      ctx.beginPath();
+      ctx.moveTo(px + T, py);
+      ctx.lineTo(px + T, py + T);
+      ctx.lineTo(px + T - inset * 0.64, py + T);
+      ctx.quadraticCurveTo(px + T - inset - wave * 0.2, py + T * 0.70, px + T - inset * 0.62, py + T * 0.52);
+      ctx.quadraticCurveTo(px + T - inset * 0.22, py + T * 0.28, px + T - inset * 0.76, py);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    const cornerR = T * 0.22;
+    if ((nw && !north && !west) || (north && west)) {
+      ctx.beginPath();
+      ctx.ellipse(px + cornerR * 0.95, py + cornerR * 0.92, cornerR, cornerR * 0.78, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if ((ne && !north && !east) || (north && east)) {
+      ctx.beginPath();
+      ctx.ellipse(px + T - cornerR * 0.95, py + cornerR * 0.92, cornerR, cornerR * 0.78, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if ((sw && !south && !west) || (south && west)) {
+      ctx.beginPath();
+      ctx.ellipse(px + cornerR * 0.92, py + T - cornerR * 0.90, cornerR, cornerR * 0.80, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if ((se && !south && !east) || (south && east)) {
+      ctx.beginPath();
+      ctx.ellipse(px + T - cornerR * 0.92, py + T - cornerR * 0.90, cornerR, cornerR * 0.80, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = fog === 1 ? 1 : 1.2;
+    if (north) {
+      ctx.beginPath();
+      ctx.moveTo(px + T * 0.06, py + inset * 0.42);
+      ctx.quadraticCurveTo(px + T * 0.36, py + inset * 0.10, px + T * 0.58, py + inset * 0.40);
+      ctx.quadraticCurveTo(px + T * 0.80, py + inset * 0.72, px + T * 0.95, py + inset * 0.34);
+      ctx.stroke();
+    }
+    if (south) {
+      const sy = py + T - inset * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(px + T * 0.05, sy);
+      ctx.quadraticCurveTo(px + T * 0.34, sy - inset * 0.30, px + T * 0.56, sy - inset * 0.02);
+      ctx.quadraticCurveTo(px + T * 0.80, sy + inset * 0.26, px + T * 0.95, sy - inset * 0.16);
+      ctx.stroke();
+    }
+    if (west) {
+      ctx.beginPath();
+      ctx.moveTo(px + inset * 0.40, py + T * 0.06);
+      ctx.quadraticCurveTo(px + inset * 0.08, py + T * 0.36, px + inset * 0.34, py + T * 0.58);
+      ctx.quadraticCurveTo(px + inset * 0.64, py + T * 0.80, px + inset * 0.32, py + T * 0.94);
+      ctx.stroke();
+    }
+    if (east) {
+      const ex = px + T - inset * 0.42;
+      ctx.beginPath();
+      ctx.moveTo(ex, py + T * 0.06);
+      ctx.quadraticCurveTo(ex - inset * 0.30, py + T * 0.36, ex - inset * 0.02, py + T * 0.60);
+      ctx.quadraticCurveTo(ex + inset * 0.26, py + T * 0.82, ex - inset * 0.16, py + T * 0.95);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  _drawMicroDetails(ctx, px, py, T, fog, tx, ty, tileType) {
+    if (fog < 2 || tileType === 'water') return;
+
+    if (tileType === 'grass' || tileType === 'forest') {
+      const flowerRoll = tileRand(tx, ty, 9201);
+      if (flowerRoll > 0.84) {
+        const cx = Math.floor(px + T * (0.18 + tileRand(tx, ty, 9202) * 0.64));
+        const cy = Math.floor(py + T * (0.20 + tileRand(tx, ty, 9203) * 0.62));
+        ctx.fillStyle = 'rgba(245,245,215,0.86)';
+        ctx.fillRect(cx, cy, 1, 1);
+        ctx.fillRect(cx + 2, cy + 1, 1, 1);
+        ctx.fillRect(cx - 1, cy + 2, 1, 1);
+      }
+
+      const pebbleCount = 1 + Math.floor(tileRand(tx, ty, 9210) * 3);
+      for (let i = 0; i < pebbleCount; i++) {
+        if (tileRand(tx, ty, 9211 + i * 9) < 0.52) continue;
+        const rx = Math.floor(px + 2 + tileRand(tx, ty, 9212 + i * 9) * (T - 5));
+        const ry = Math.floor(py + 2 + tileRand(tx, ty, 9213 + i * 9) * (T - 5));
+        ctx.fillStyle = tileRand(tx, ty, 9214 + i * 9) > 0.55 ? 'rgba(116,124,104,0.55)' : 'rgba(72,88,64,0.50)';
+        ctx.fillRect(rx, ry, 2, 1);
+        if (tileRand(tx, ty, 9215 + i * 9) > 0.7) ctx.fillRect(rx + 1, ry + 1, 1, 1);
+      }
+
+      ctx.strokeStyle = 'rgba(42,88,34,0.34)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 2; i++) {
+        if (tileRand(tx, ty, 9230 + i * 5) < 0.48) continue;
+        const gx = px + T * (0.16 + tileRand(tx, ty, 9231 + i * 5) * 0.68);
+        const gy = py + T * (0.68 + tileRand(tx, ty, 9232 + i * 5) * 0.22);
+        const gh = T * (0.06 + tileRand(tx, ty, 9233 + i * 5) * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx + 1.5, gy - gh);
+        ctx.stroke();
+      }
+      return;
+    }
+
+    if (tileType === 'shore') {
+      const shellCount = 2 + Math.floor(tileRand(tx, ty, 9301) * 3);
+      for (let i = 0; i < shellCount; i++) {
+        if (tileRand(tx, ty, 9302 + i * 7) < 0.35) continue;
+        const rx = Math.floor(px + 2 + tileRand(tx, ty, 9303 + i * 7) * (T - 6));
+        const ry = Math.floor(py + 2 + tileRand(tx, ty, 9304 + i * 7) * (T - 6));
+        ctx.fillStyle = tileRand(tx, ty, 9305 + i * 7) > 0.5 ? 'rgba(158,144,116,0.64)' : 'rgba(124,110,86,0.58)';
+        ctx.fillRect(rx, ry, 2, 1);
+        if (tileRand(tx, ty, 9306 + i * 7) > 0.72) {
+          ctx.fillStyle = 'rgba(214,202,166,0.55)';
+          ctx.fillRect(rx, ry + 1, 1, 1);
+        }
+      }
+      return;
+    }
+
+    if (tileType === 'snow') {
+      const crackCount = 1 + Math.floor(tileRand(tx, ty, 9401) * 2);
+      for (let i = 0; i < crackCount; i++) {
+        if (tileRand(tx, ty, 9402 + i * 6) < 0.54) continue;
+        const rx = Math.floor(px + 3 + tileRand(tx, ty, 9403 + i * 6) * (T - 7));
+        const ry = Math.floor(py + 3 + tileRand(tx, ty, 9404 + i * 6) * (T - 7));
+        ctx.fillStyle = 'rgba(166,178,194,0.42)';
+        ctx.fillRect(rx, ry, 2, 1);
+      }
+    }
+  }
   _drawGrass(ctx, px, py, T, fog, tx, ty) {
     const dim = fog === 1 ? -0.18 : 0;
     const v1 = tileRand(tx, ty, 0), v2 = tileRand(tx, ty, 1);
@@ -292,37 +736,92 @@ export class MapRenderer {
   // Işık sol üstten. Koyu gölge tabanı, parlak tepeler.
   // ══════════════════════════════════════════════════════════════════════════
   _drawForest(ctx, px, py, T, fog, tx, ty) {
+    const north = this._hasForestAt(tx, ty - 1);
+    const south = this._hasForestAt(tx, ty + 1);
+    const west = this._hasForestAt(tx - 1, ty);
+    const east = this._hasForestAt(tx + 1, ty);
+    const neighborCount = (north ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0) + (east ? 1 : 0);
+    const neighbor8 = this._countForestNeighbors8(tx, ty);
+    const hasH3Forest = Array.isArray(H3_PROP_DATA?.FOREST?.frames) && H3_PROP_DATA.FOREST.frames.length > 0;
+    if (hasH3Forest) {
+      const clearingNoise = h3Noise(tx * 0.16, ty * 0.18, 9013);
+      if (neighbor8 >= 4 && clearingNoise > 0.44 && clearingNoise < 0.56) return;
+
+      const densityNoise = h3Noise(tx * 0.71, ty * 0.59, 7123);
+      const threshold = neighbor8 >= 6 ? 0.56 : neighbor8 >= 4 ? 0.64 : neighbor8 >= 2 ? 0.72 : 0.82;
+      if (densityNoise <= threshold) return;
+
+      let drew = false;
+      const styleNoise = h3Noise(tx * 0.53, ty * 0.61, 7129);
+      if (neighbor8 >= 5 && styleNoise > 0.42) {
+        const back = h3PickPropFrame('FOREST', tx - 17, ty + 9);
+        drew = h3DrawPropFrame(ctx, back, px, py, T, fog, tx, ty, 'FOREST', {
+          scaleMul: 0.76 + h3Noise(tx * 0.29, ty * 0.21, 7137) * 0.10,
+          jitterMul: 0.55,
+          offsetX: (h3Noise(tx * 0.91, ty * 0.73, 7141) - 0.5) * T * 0.22,
+          offsetY: -T * (0.14 + h3Noise(tx * 0.33, ty * 0.27, 7147) * 0.08),
+          alphaMul: 0.72,
+        }) || drew;
+      }
+
+      const main = h3PickPropFrame('FOREST', tx, ty);
+      drew = h3DrawPropFrame(ctx, main, px, py, T, fog, tx, ty, 'FOREST', {
+        scaleMul: 0.86 + h3Noise(tx * 0.49, ty * 0.41, 7153) * 0.30,
+        jitterMul: 0.9,
+        offsetX: (h3Noise(tx * 0.45, ty * 0.57, 7159) - 0.5) * T * 0.28,
+        offsetY: -T * (0.03 + h3Noise(tx * 0.17, ty * 0.39, 7163) * 0.06),
+      }) || drew;
+
+      if (neighbor8 >= 3 && styleNoise > 0.74) {
+        const front = h3PickPropFrame('FOREST', tx + 23, ty - 11);
+        drew = h3DrawPropFrame(ctx, front, px, py, T, fog, tx, ty, 'FOREST', {
+          scaleMul: 1.04 + h3Noise(tx * 0.67, ty * 0.51, 7169) * 0.22,
+          jitterMul: 0.75,
+          offsetX: (h3Noise(tx * 0.52, ty * 0.62, 7171) - 0.5) * T * 0.20,
+          offsetY: T * (0.01 + h3Noise(tx * 0.21, ty * 0.18, 7177) * 0.04),
+          alphaMul: 0.96,
+        }) || drew;
+      }
+
+      if (drew) return;
+    }
+
     const dim = fog === 1 ? -0.18 : 0;
 
-    // Koyu orman tabanı — toprak+gölge karışımı
-    ctx.fillStyle = fog === 1 ? '#1A2818' : '#223420';
+    ctx.fillStyle = fog === 1 ? '#162415' : '#20361f';
     ctx.fillRect(px, py, T, T);
+    ctx.fillStyle = fog === 1 ? 'rgba(12,22,12,0.28)' : 'rgba(16,34,16,0.32)';
+    if (north) ctx.fillRect(px, py - T * 0.08, T, T * 0.24);
+    if (south) ctx.fillRect(px, py + T * 0.84, T, T * 0.24);
+    if (west) ctx.fillRect(px - T * 0.08, py, T * 0.24, T);
+    if (east) ctx.fillRect(px + T * 0.84, py, T * 0.24, T);
 
-    const treeCount = 3 + Math.floor(tileRand(tx, ty, 400) * 2); // 3-4 ağaç
+    const treeCount = 3 + Math.floor(neighbor8 * 0.55) + Math.floor(tileRand(tx, ty, 400) * 2);
+    const pineBias = Math.min(0.92, 0.74 + neighborCount * 0.05);
+    const minX = west ? -0.10 : 0.04;
+    const maxX = east ? 1.10 : 0.96;
+    const minY = north ? 0.08 : 0.16;
+    const maxY = south ? 0.98 : 0.86;
+
     const trees = [];
     for (let i = 0; i < treeCount; i++) {
       trees.push({
-        x: px + T * (0.08 + tileRand(tx, ty, 410 + i * 5) * 0.84),
-        y: py + T * (0.20 + tileRand(tx, ty, 411 + i * 5) * 0.65),
+        x: px + T * (minX + tileRand(tx, ty, 410 + i * 5) * (maxX - minX)),
+        y: py + T * (minY + tileRand(tx, ty, 411 + i * 5) * (maxY - minY)),
         scale: 0.80 + tileRand(tx, ty, 412 + i * 5) * 0.40,
         palette: Math.floor(tileRand(tx, ty, 413 + i * 5) * MapRenderer.TREE_PALETTES.length),
-        isPine: tileRand(tx, ty, 414 + i * 5) > 0.40, // %60 çam (iğne yapraklı ağırlıklı)
+        isPine: tileRand(tx, ty, 414 + i * 5) < pineBias,
       });
     }
     trees.sort((a, b) => a.y - b.y);
 
     for (const t of trees) {
       const s = T * 0.38 * t.scale;
-      if (t.isPine) {
-        this._drawPine(ctx, t.x, t.y, s, dim, fog, t.palette);
-      } else {
-        this._drawTree(ctx, t.x, t.y, s, dim, fog, t.palette);
-      }
+      if (t.isPine) this._drawPine(ctx, t.x, t.y, s, dim, fog, t.palette);
+      else this._drawTree(ctx, t.x, t.y, s, dim, fog, t.palette);
     }
   }
 
-  // ── Yaprak ağaç — Dolgun yuvarlak taç, güçlü siluet ───────────────────
-  // Işık sol üstten gelir: sol üst açık, sağ alt koyu
   _drawTree(ctx, cx, cy, s, dim, fog, palIdx) {
     const pal = MapRenderer.TREE_PALETTES[palIdx] || MapRenderer.TREE_PALETTES[0];
 
@@ -434,11 +933,80 @@ export class MapRenderer {
   // Işık sol üstten: sol yüz açık gri, sağ yüz koyu mavi-gri
   // ══════════════════════════════════════════════════════════════════════════
   _drawMountain(ctx, px, py, T, fog, tx, ty) {
-    const dim = fog === 1 ? -0.18 : 0;
-    const base = py + T * 0.95;
-    const peakCount = 1 + Math.floor(tileRand(tx, ty, 500) * 2);
+    const north = this._hasMountainAt(tx, ty - 1);
+    const south = this._hasMountainAt(tx, ty + 1);
+    const west = this._hasMountainAt(tx - 1, ty);
+    const east = this._hasMountainAt(tx + 1, ty);
+    const neighborCount = (north ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0) + (east ? 1 : 0);
+    const neighbor8 = this._countMountainNeighbors8(tx, ty);
+    const hasH3Mountain = Array.isArray(H3_PROP_DATA?.MOUNTAIN?.frames) && H3_PROP_DATA.MOUNTAIN.frames.length > 0;
+    if (hasH3Mountain) {
+      const passWindow = east && west && !north && !south && neighbor8 >= 5;
+      const passNoise = h3Noise(tx * 0.83, ty * 0.37, 7399);
+      if (passWindow && passNoise > 0.44 && passNoise < 0.62) return;
 
-    // Zemin gölgesi
+      const clusterNoise = h3Noise(tx * 0.61, ty * 0.57, 7331);
+      const sparseThreshold = neighbor8 >= 6 ? 0.30 : neighbor8 >= 4 ? 0.44 : neighbor8 >= 2 ? 0.58 : 0.75;
+      if (clusterNoise <= sparseThreshold) return;
+
+      let drew = false;
+      if (neighbor8 >= 5) {
+        const backEntry = h3PickPropFrame('MOUNTAIN', tx - 19, ty + 13);
+        drew = h3DrawPropFrame(ctx, backEntry, px, py, T, fog, tx, ty, 'MOUNTAIN', {
+          scaleMul: 0.78 + h3Noise(tx * 0.27, ty * 0.29, 7411) * 0.12,
+          jitterMul: 0.50,
+          offsetX: (h3Noise(tx * 0.47, ty * 0.53, 7417) - 0.5) * T * 0.22,
+          offsetY: -T * (0.13 + h3Noise(tx * 0.39, ty * 0.31, 7421) * 0.10),
+          alphaMul: 0.72,
+        }) || drew;
+      }
+
+      const largeCell = `${Math.floor(tx / 3)},${Math.floor(ty / 2)}`;
+      const largeNoise = h3Noise(tx * 0.53, ty * 0.47, 7811);
+      const canLarge = neighbor8 >= 6
+        && largeNoise > 0.58
+        && !this._visibleLargeMountainCells.has(largeCell)
+        && Array.isArray(H3_PROP_DATA?.MOUNTAIN_LARGE?.frames)
+        && H3_PROP_DATA.MOUNTAIN_LARGE.frames.length > 0;
+      if (canLarge) {
+        this._visibleLargeMountainCells.add(largeCell);
+        const largeEntry = h3PickPropFrame('MOUNTAIN_LARGE', tx, ty);
+        drew = h3DrawPropFrame(ctx, largeEntry, px, py, T, fog, tx, ty, 'MOUNTAIN_LARGE', {
+          scaleMul: 0.94 + h3Noise(tx * 0.17, ty * 0.21, 7427) * 0.18,
+          jitterMul: 0.82,
+          offsetX: (h3Noise(tx * 0.23, ty * 0.37, 7433) - 0.5) * T * 0.24,
+          offsetY: -T * 0.04,
+        }) || drew;
+      }
+
+      const entry = h3PickPropFrame('MOUNTAIN', tx, ty);
+      drew = h3DrawPropFrame(ctx, entry, px, py, T, fog, tx, ty, 'MOUNTAIN', {
+        scaleMul: 0.90 + h3Noise(tx * 0.33, ty * 0.49, 7439) * 0.24,
+        jitterMul: 0.78,
+        offsetX: (h3Noise(tx * 0.59, ty * 0.41, 7441) - 0.5) * T * 0.20,
+        offsetY: -T * (0.01 + h3Noise(tx * 0.31, ty * 0.23, 7447) * 0.05),
+      }) || drew;
+
+      if (neighbor8 >= 6 && h3Noise(tx * 0.43, ty * 0.45, 7451) > 0.75) {
+        const front = h3PickPropFrame('MOUNTAIN', tx + 29, ty - 7);
+        drew = h3DrawPropFrame(ctx, front, px, py, T, fog, tx, ty, 'MOUNTAIN', {
+          scaleMul: 0.66 + h3Noise(tx * 0.27, ty * 0.37, 7457) * 0.12,
+          jitterMul: 0.45,
+          offsetX: (h3Noise(tx * 0.51, ty * 0.21, 7463) - 0.5) * T * 0.16,
+          offsetY: T * (0.12 + h3Noise(tx * 0.35, ty * 0.25, 7469) * 0.04),
+          alphaMul: 0.88,
+        }) || drew;
+      }
+
+      if (drew) return;
+    }
+
+    const dim = fog === 1 ? -0.18 : 0;
+
+    const base = py + T * (south ? 0.98 : 0.95);
+    const ridgeLift = neighborCount * 0.04 + (north ? 0.03 : 0);
+    const peakCount = 1 + Math.floor(tileRand(tx, ty, 500) * 2) + (neighborCount >= 3 ? 1 : 0);
+
     ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath();
     ctx.ellipse(px + T * 0.52, base + T * 0.02, T * 0.52, T * 0.10, 0, 0, Math.PI * 2);
@@ -446,13 +1014,35 @@ export class MapRenderer {
 
     const peaks = [];
     for (let i = 0; i < peakCount; i++) {
+      let center = 0.20 + tileRand(tx, ty, 510 + i * 4) * 0.60;
+      if (west && !east) center *= 0.88;
+      if (east && !west) center = 0.10 + center * 0.96;
       peaks.push({
-        cx: 0.20 + tileRand(tx, ty, 510 + i * 4) * 0.60,
-        peakY: -0.12 + tileRand(tx, ty, 511 + i * 4) * 0.10,
-        width: 0.36 + tileRand(tx, ty, 512 + i * 4) * 0.18,
+        cx: center,
+        peakY: -0.14 - ridgeLift + tileRand(tx, ty, 511 + i * 4) * 0.10,
+        width: 0.34 + tileRand(tx, ty, 512 + i * 4) * 0.20 + neighborCount * 0.02,
       });
     }
     peaks.sort((a, b) => b.peakY - a.peakY);
+
+    if (west) {
+      ctx.fillStyle = shade('#434853', dim - 0.10);
+      ctx.beginPath();
+      ctx.moveTo(px - T * 0.06, base);
+      ctx.lineTo(px + T * 0.25, py + T * (0.20 - ridgeLift));
+      ctx.lineTo(px + T * 0.46, base);
+      ctx.closePath();
+      ctx.fill();
+    }
+    if (east) {
+      ctx.fillStyle = shade('#434853', dim - 0.10);
+      ctx.beginPath();
+      ctx.moveTo(px + T * 1.06, base);
+      ctx.lineTo(px + T * 0.75, py + T * (0.20 - ridgeLift));
+      ctx.lineTo(px + T * 0.54, base);
+      ctx.closePath();
+      ctx.fill();
+    }
 
     for (let i = 0; i < peaks.length; i++) {
       const p = peaks[i];
@@ -460,7 +1050,6 @@ export class MapRenderer {
       const peakTop = py + T * p.peakY;
       const halfW = T * p.width;
 
-      // Tam siluet (en koyu)
       ctx.fillStyle = shade('#3A3E48', dim - 0.15);
       ctx.beginPath();
       ctx.moveTo(mcx - halfW * 1.3, base);
@@ -471,7 +1060,6 @@ export class MapRenderer {
       ctx.closePath();
       ctx.fill();
 
-      // Sağ yüz — soğuk koyu gri/mavi (gölge)
       ctx.fillStyle = shade('#484E58', dim - 0.06);
       ctx.beginPath();
       ctx.moveTo(mcx, peakTop);
@@ -481,7 +1069,6 @@ export class MapRenderer {
       ctx.closePath();
       ctx.fill();
 
-      // Sol yüz — açık sıcak gri (ışık)
       ctx.fillStyle = shade('#8A9098', dim + 0.08);
       ctx.beginPath();
       ctx.moveTo(mcx, peakTop);
@@ -491,7 +1078,6 @@ export class MapRenderer {
       ctx.closePath();
       ctx.fill();
 
-      // Sırt çizgisi vurgu
       if (fog === 2) {
         ctx.strokeStyle = shade('#B0B8C0', dim + 0.15);
         ctx.lineWidth = 1.5;
@@ -501,7 +1087,6 @@ export class MapRenderer {
         ctx.lineTo(mcx + halfW * 0.20, peakTop + T * 0.03);
         ctx.stroke();
 
-        // Kaya doku çizgileri
         ctx.strokeStyle = 'rgba(30,35,45,0.20)';
         ctx.lineWidth = 0.7;
         const cracks = 3 + Math.floor(tileRand(tx, ty, 540 + i * 5) * 3);
@@ -510,11 +1095,13 @@ export class MapRenderer {
           const cy0 = peakTop + (base - peakTop) * frac;
           const cx0 = mcx + halfW * (-0.5 + tileRand(tx, ty, 560 + i * 5 + c) * 0.4);
           const cx1 = cx0 + halfW * (0.2 + tileRand(tx, ty, 570 + i * 5 + c) * 0.3);
-          ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy0 + T * 0.01); ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx0, cy0);
+          ctx.lineTo(cx1, cy0 + T * 0.01);
+          ctx.stroke();
         }
       }
 
-      // Kar başlığı
       const snowH = T * (0.10 + tileRand(tx, ty, 590 + i) * 0.08);
       ctx.fillStyle = fog === 2 ? 'rgba(240,245,255,0.95)' : 'rgba(220,230,245,0.55)';
       ctx.beginPath();
@@ -527,7 +1114,6 @@ export class MapRenderer {
       ctx.fill();
     }
 
-    // Taban kayaları
     if (fog === 2 && tileRand(tx, ty, 600) > 0.4) {
       for (let i = 0; i < 2; i++) {
         const bx = px + T * (0.1 + tileRand(tx, ty, 610 + i * 2) * 0.8);
@@ -537,7 +1123,6 @@ export class MapRenderer {
     }
   }
 
-  // ── Small decorative elements ──────────────────────────────────────────
   _drawRock(ctx, x, y, r) {
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -568,34 +1153,69 @@ export class MapRenderer {
   }
 
   // ── Nehirler (smooth curves + banks) ───────────────────────────────────
+  _buildRiverRenderPoints(river, T) {
+    const base = river.map((p) => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 }));
+    if (base.length < 3) return base;
+
+    const pts = [base[0]];
+    for (let i = 0; i < base.length - 1; i++) {
+      const a = base[i];
+      const b = base[i + 1];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const nx = -dy / len;
+      const ny = dx / len;
+      const bendNoise = h3Noise((a.x + b.x) * 0.007, (a.y + b.y) * 0.009, 8603 + i * 17);
+      const bendSign = bendNoise > 0.5 ? 1 : -1;
+      const bendAmp = T * (0.08 + h3Noise(a.x * 0.013, a.y * 0.011, 8611 + i * 13) * 0.09);
+      const midX = (a.x + b.x) * 0.5 + nx * bendAmp * bendSign;
+      const midY = (a.y + b.y) * 0.5 + ny * bendAmp * bendSign;
+      pts.push({ x: midX, y: midY });
+      pts.push(b);
+    }
+
+    const relaxed = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      relaxed.push({
+        x: p1.x * 0.58 + (p0.x + p2.x) * 0.21,
+        y: p1.y * 0.58 + (p0.y + p2.y) * 0.21,
+      });
+    }
+    relaxed.push(pts[pts.length - 1]);
+    return relaxed;
+  }
+
   _drawRivers(ctx, rivers, T) {
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
     for (const r of rivers) {
       if (r.length < 2) continue;
-      const pts = r.map(p => ({ x: p.x * T + T / 2, y: p.y * T + T / 2 }));
+      const pts = this._buildRiverRenderPoints(r, T);
+      const widthNoise = h3Noise((r[0]?.x || 0) * 0.12, (r[0]?.y || 0) * 0.14, 8627);
+      const widthMul = 0.92 + widthNoise * 0.24;
 
-      // River bank (dark outer edge)
-      ctx.strokeStyle = 'rgba(25,55,80,0.5)';
-      ctx.lineWidth = T * 0.28;
+      ctx.strokeStyle = 'rgba(20,52,78,0.48)';
+      ctx.lineWidth = T * 0.26 * widthMul;
       this._drawSmoothPath(ctx, pts);
       ctx.stroke();
 
-      // Main water body
-      ctx.strokeStyle = '#2870A5';
-      ctx.lineWidth = T * 0.20;
+      ctx.strokeStyle = '#2A78AA';
+      ctx.lineWidth = T * 0.19 * widthMul;
       this._drawSmoothPath(ctx, pts);
       ctx.stroke();
 
-      // Center highlight (lighter blue)
-      ctx.strokeStyle = '#4A9AD4';
-      ctx.lineWidth = T * 0.10;
+      ctx.strokeStyle = '#5AA7DA';
+      ctx.lineWidth = T * 0.09 * widthMul;
       this._drawSmoothPath(ctx, pts);
       ctx.stroke();
 
-      // Specular highlight
-      ctx.strokeStyle = 'rgba(130,195,240,0.35)';
-      ctx.lineWidth = T * 0.035;
+      ctx.strokeStyle = 'rgba(150,206,240,0.30)';
+      ctx.lineWidth = T * 0.028 * widthMul;
       this._drawSmoothPath(ctx, pts);
       ctx.stroke();
     }
@@ -1051,3 +1671,6 @@ export class MapRenderer {
 }
 
 export default MapRenderer;
+
+
+

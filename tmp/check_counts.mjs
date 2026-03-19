@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(1200);
+await page.click('.faction-card');
+await page.click('#btnStart');
+await page.waitForTimeout(1500);
+const counts = await page.evaluate(() => ({ forests: window.game?.state?.map?.forests?.length || 0, mountains: window.game?.state?.map?.mountains?.length || 0 }));
+console.log(JSON.stringify(counts));
+await browser.close();
