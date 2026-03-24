@@ -154,10 +154,10 @@ export class MinimapSimple {
   _factionColor(factionId) {
     const colors = {
       ottoman: '#c0392b',
-      hre:     '#3498db',
-      polish:  '#e74c3c',
-      spanish: '#f1c40f',
-      venice:  '#16a085',
+      hre:     '#111111',
+      polish:  '#8e44ad',
+      spanish: '#f57c00',
+      venice:  '#1e88e5',
       bandit:  '#8d6e63',
     };
     return colors[factionId] || '#9e9e9e';

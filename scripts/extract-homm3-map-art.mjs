@@ -51,6 +51,26 @@ const MOUNTAIN_LARGE_PROP_DEFS = Object.freeze([
   'AVLMTSW2.def',
 ]);
 
+const SETTLEMENT_CITY_DEFS = Object.freeze([
+  'AVCcasx0.def',
+  'AVCramx0.def',
+  'AVCtowx0.def',
+  'AVCinfx0.def',
+  'AVCnecx0.def',
+  'AVCdunx0.def',
+  'AVCstrx0.def',
+  'Avcftrx0.def',
+  'AVChforX.def',
+  'avcranx0.def',
+]);
+
+const SETTLEMENT_FORT_DEFS = Object.freeze([
+  'AVCgar10.def',
+  'AVCgar20.def',
+]);
+
+const SETTLEMENT_VILLAGE_DEFS = Object.freeze([]);
+
 function readLodIndex(buffer) {
   const count = buffer.readUInt32LE(8);
   const out = new Map();
@@ -455,7 +475,8 @@ function main() {
     };
   }
 
-  const decodePropDefs = (defs) => {
+  const decodePropDefs = (defs, options = {}) => {
+    const maxFramesPerDef = Math.max(1, Number(options.maxFramesPerDef) || 1);
     const out = [];
     for (const defName of defs) {
       const entry = index.get(defName.toLowerCase());
@@ -463,10 +484,13 @@ function main() {
       const payload = extractLodEntry(lodBuffer, entry);
       const decoded = decodeDefFrames(payload, { mode: 'object' });
       if (!decoded.length) continue;
-      out.push({
-        sourceDef: entry.name,
-        frame: frameToExport(decoded[0]),
-      });
+      const useCount = Math.min(maxFramesPerDef, decoded.length);
+      for (let i = 0; i < useCount; i++) {
+        out.push({
+          sourceDef: entry.name,
+          frame: frameToExport(decoded[i]),
+        });
+      }
     }
     return out;
   };
@@ -474,6 +498,9 @@ function main() {
   const forestFrames = decodePropDefs(FOREST_PROP_DEFS);
   const mountainFrames = decodePropDefs(MOUNTAIN_PROP_DEFS);
   const mountainLargeFrames = decodePropDefs(MOUNTAIN_LARGE_PROP_DEFS);
+  const settlementCityFrames = decodePropDefs(SETTLEMENT_CITY_DEFS, { maxFramesPerDef: 1 });
+  const settlementFortFrames = decodePropDefs(SETTLEMENT_FORT_DEFS, { maxFramesPerDef: 2 });
+  const settlementVillageFrames = decodePropDefs(SETTLEMENT_VILLAGE_DEFS, { maxFramesPerDef: 1 });
 
   const doc = {
     generatedAt: new Date().toISOString(),
@@ -497,6 +524,21 @@ function main() {
         avgSize: averageSize(mountainLargeFrames.map((x) => x.frame)),
         frames: mountainLargeFrames,
       },
+      SETTLEMENT_CITY: {
+        frameCount: settlementCityFrames.length,
+        avgSize: averageSize(settlementCityFrames.map((x) => x.frame)),
+        frames: settlementCityFrames,
+      },
+      SETTLEMENT_FORT: {
+        frameCount: settlementFortFrames.length,
+        avgSize: averageSize(settlementFortFrames.map((x) => x.frame)),
+        frames: settlementFortFrames,
+      },
+      SETTLEMENT_VILLAGE: {
+        frameCount: settlementVillageFrames.length,
+        avgSize: averageSize(settlementVillageFrames.map((x) => x.frame)),
+        frames: settlementVillageFrames,
+      },
     },
   };
 
@@ -507,6 +549,9 @@ function main() {
   console.log(`Forest props: ${forestFrames.length}`);
   console.log(`Mountain props: ${mountainFrames.length}`);
   console.log(`Large mountain props: ${mountainLargeFrames.length}`);
+  console.log(`Settlement city props: ${settlementCityFrames.length}`);
+  console.log(`Settlement fort props: ${settlementFortFrames.length}`);
+  console.log(`Settlement village props: ${settlementVillageFrames.length}`);
 }
 
 main();

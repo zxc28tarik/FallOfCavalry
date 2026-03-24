@@ -10,6 +10,7 @@ export class WorldGenerator {
   constructor(seed) {
     this.seed = Number.isFinite(seed) ? seed : 1337;
     this.rng = utils.mulberry32(this.seed);
+    this._lastFactionZones = [];
     
     this.MAP_W = CONST.WORLD.MAP_WIDTH;
     this.MAP_H = CONST.WORLD.MAP_HEIGHT;
@@ -62,6 +63,7 @@ export class WorldGenerator {
       height: this.MAP_H,
       tiles,
       settlements,
+      factionZones: Array.isArray(this._lastFactionZones) ? this._lastFactionZones.map((z) => ({ ...z })) : [],
       rivers,
       roads,
       crossings,
@@ -370,7 +372,53 @@ export class WorldGenerator {
       }
     }
 
+    this.reduceInlandWater(refined, heightMap);
+
     for (let i = 0; i < tiles.length; i++) tiles[i].type = refined[i];
+  }
+
+  reduceInlandWater(types, heightMap) {
+    const size = this.MAP_W * this.MAP_H;
+    const visited = new Uint8Array(size);
+    const maxInlandLakeTiles = Math.max(60, Math.floor(size * 0.00018));
+    const idxOf = (x, y) => y * this.MAP_W + x;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+    for (let y = 0; y < this.MAP_H; y++) {
+      for (let x = 0; x < this.MAP_W; x++) {
+        const start = idxOf(x, y);
+        if (visited[start] || types[start] !== CONST.TERRAIN.TYPE.WATER) continue;
+
+        const stack = [start];
+        visited[start] = 1;
+        const component = [];
+        let touchesBoundary = (x <= 1 || y <= 1 || x >= this.MAP_W - 2 || y >= this.MAP_H - 2);
+
+        while (stack.length) {
+          const ci = stack.pop();
+          component.push(ci);
+          const cx = ci % this.MAP_W;
+          const cy = Math.floor(ci / this.MAP_W);
+          if (cx <= 1 || cy <= 1 || cx >= this.MAP_W - 2 || cy >= this.MAP_H - 2) touchesBoundary = true;
+
+          for (const [dx, dy] of dirs) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= this.MAP_W || ny >= this.MAP_H) continue;
+            const ni = idxOf(nx, ny);
+            if (visited[ni] || types[ni] !== CONST.TERRAIN.TYPE.WATER) continue;
+            visited[ni] = 1;
+            stack.push(ni);
+          }
+        }
+
+        if (touchesBoundary || component.length > maxInlandLakeTiles) continue;
+        for (const ci of component) {
+          const h = heightMap[ci] ?? 0;
+          types[ci] = h < CONST.WORLD.SEA_LEVEL + 0.004 ? CONST.TERRAIN.TYPE.SHORE : CONST.TERRAIN.TYPE.GRASS;
+        }
+      }
+    }
   }
 
 
@@ -549,7 +597,7 @@ export class WorldGenerator {
     
     for (let r = 0; r < riverCount; r++) {
       const river = this.generateSingleRiver(heightMap);
-      if (river && river.length > 5) {
+      if (river && river.length > 10) {
         rivers.push(river);
       }
     }
@@ -587,7 +635,8 @@ export class WorldGenerator {
     let dirX = 0;
     let dirY = 1;
     
-    for (let i = 0; i < 200; i++) {
+    const maxSteps = 150;
+    for (let i = 0; i < maxSteps; i++) {
       const key = `${x},${y}`;
       if (visited.has(key)) break;
       visited.add(key);
@@ -635,7 +684,7 @@ export class WorldGenerator {
 
       // Stuck
       if (nextX === x && nextY === y) break;
-      if (nextH > currentH + 0.03) break;
+      if (nextH > currentH + 0.025) break;
       
       dirX = nextX - x;
       dirY = nextY - y;
@@ -658,7 +707,7 @@ export class WorldGenerator {
     const forestMask = new Uint8Array(size);
 
     const mountainBaseChance = Math.min(0.9, CONST.WORLD.MOUNTAIN_DENSITY * 1.24);
-    const forestBaseChance = Math.min(0.9, CONST.WORLD.FOREST_DENSITY * 1.10);
+    const forestBaseChance = Math.min(0.9, CONST.WORLD.FOREST_DENSITY * 1.14);
 
     // Pass 1: seed mountain candidates (height + ridge noise).
     for (let y = 0; y < this.MAP_H; y++) {
@@ -820,12 +869,12 @@ export class WorldGenerator {
         const hillFactor = utils.clamp((h - CONST.WORLD.SHORE_MAX) / (CONST.WORLD.MOUNTAIN_MIN - CONST.WORLD.SHORE_MAX + 0.001), 0, 1);
         const mountainAdj = this.countMaskNeighbors(mountainMask, x, y);
 
-        let chance = forestBaseChance * (0.38 + moisture * 0.64);
-        chance *= canopy > 0.48 ? 1 : 0.24;
-        if (glade > 0.44 && glade < 0.58) chance *= 0.46;
-        else if (glade > 0.72) chance *= 0.82;
-        chance *= (1 - hillFactor * 0.55);
-        if (mountainAdj >= 2) chance *= 0.50;
+        let chance = forestBaseChance * (0.46 + moisture * 0.72);
+        chance *= canopy > 0.45 ? 1.08 : 0.42;
+        if (glade > 0.44 && glade < 0.58) chance *= 0.60;
+        else if (glade > 0.72) chance *= 0.92;
+        chance *= (1 - hillFactor * 0.45);
+        if (mountainAdj >= 2) chance *= 0.58;
         if (this.rand() < chance) forestMask[i] = 1;
       }
     }
@@ -840,9 +889,9 @@ export class WorldGenerator {
         const nx = x / this.MAP_W;
         const ny = y / this.MAP_H;
         const clumpNoise = this.noise2d(nx * 9.7, ny * 9.7, this.seed + 2701);
-        if (neighbors >= 5 && clumpNoise > 0.36 && this.rand() < 0.34) forestMask[i] = 1;
-        else if (neighbors >= 4 && clumpNoise > 0.46 && this.rand() < 0.24) forestMask[i] = 1;
-        else if (neighbors >= 3 && clumpNoise > 0.58 && this.rand() < 0.12) forestMask[i] = 1;
+        if (neighbors >= 5 && clumpNoise > 0.34 && this.rand() < 0.42) forestMask[i] = 1;
+        else if (neighbors >= 4 && clumpNoise > 0.44 && this.rand() < 0.31) forestMask[i] = 1;
+        else if (neighbors >= 3 && clumpNoise > 0.56 && this.rand() < 0.17) forestMask[i] = 1;
       }
     }
 
@@ -854,8 +903,8 @@ export class WorldGenerator {
         const h = heightMap[i];
         if (h >= CONST.WORLD.MOUNTAIN_MIN) continue;
         const neighbors = this.countMaskNeighbors(forestMask, x, y);
-        if (neighbors >= 6 && this.rand() < 0.20) continue;
-        if (neighbors >= 2 || (neighbors >= 1 && this.rand() < 0.04)) forests.push({ x, y });
+        if (neighbors >= 7 && this.rand() < 0.14) continue;
+        if (neighbors >= 2 || (neighbors >= 1 && this.rand() < 0.10) || this.rand() < 0.015) forests.push({ x, y });
       }
     }
 
@@ -967,25 +1016,75 @@ export class WorldGenerator {
       fc.villages = override.villages;
     }
 
-    const BORDER_SEAM = Math.max(1.7, 1.15 * localSpacingScale + Math.max(0, linearScale - 1) * 0.30);
+    const totalConfigured = FACTION_CONFIG.reduce((acc, fc) => acc + fc.cities + fc.forts + fc.villages, 0);
+    const factionRatioById = new Map(
+      FACTION_CONFIG.map((fc) => [fc.id, (fc.cities + fc.forts + fc.villages) / Math.max(1, totalConfigured)])
+    );
+    const zoneHints = {
+      [CONST.FACTION.ID.SPANISH]: { cx: 0.22, cy: 0.83, aspect: 1.45 },
+      [CONST.FACTION.ID.HRE]: { cx: 0.26, cy: 0.50, aspect: 1.16 },
+      [CONST.FACTION.ID.POLISH]: { cx: 0.35, cy: 0.16, aspect: 1.85 },
+      [CONST.FACTION.ID.OTTOMAN]: { cx: 0.83, cy: 0.54, aspect: 0.56 },
+      [CONST.FACTION.ID.VENICE]: { cx: 0.60, cy: 0.84, aspect: 0.55 },
+    };
+    const clamp01 = (v) => utils.clamp(v, 0, 1);
+    const buildFactionZone = (fc) => {
+      const ratio = utils.clamp(factionRatioById.get(fc.id) || 0.05, 0.02, 0.80);
+      const hint = zoneHints[fc.id] || { cx: fc.cx / Math.max(1, this.MAP_W - 1), cy: fc.cy / Math.max(1, this.MAP_H - 1), aspect: 1.0 };
+      const aspect = utils.clamp(hint.aspect || 1.0, 0.20, 4.00);
+
+      let nw = Math.sqrt(ratio * aspect);
+      let nh = ratio / Math.max(0.0001, nw);
+      nw = utils.clamp(nw, 0.06, 0.95);
+      nh = utils.clamp(nh, 0.06, 0.95);
+
+      let nx = clamp01((hint.cx || 0.5) - nw * 0.5);
+      let ny = clamp01((hint.cy || 0.5) - nh * 0.5);
+      if (nx + nw > 1) nx = 1 - nw;
+      if (ny + nh > 1) ny = 1 - nh;
+
+      const x0 = Math.max(0, Math.min(this.MAP_W - 1, Math.floor(nx * this.MAP_W)));
+      const y0 = Math.max(0, Math.min(this.MAP_H - 1, Math.floor(ny * this.MAP_H)));
+      const x1 = Math.max(x0 + 1, Math.min(this.MAP_W - 1, Math.ceil((nx + nw) * this.MAP_W) - 1));
+      const y1 = Math.max(y0 + 1, Math.min(this.MAP_H - 1, Math.ceil((ny + nh) * this.MAP_H) - 1));
+      const cx = Math.round((x0 + x1) * 0.5);
+      const cy = Math.round((y0 + y1) * 0.5);
+
+      return { owner: fc.id, x0, y0, x1, y1, cx, cy };
+    };
+    const factionZones = FACTION_CONFIG.map((fc) => buildFactionZone(fc));
+    const zoneByOwner = new Map(factionZones.map((z) => [z.owner, z]));
+    this._lastFactionZones = factionZones.map((z) => ({
+      owner: z.owner,
+      x: z.x0,
+      y: z.y0,
+      w: Math.max(1, z.x1 - z.x0 + 1),
+      h: Math.max(1, z.y1 - z.y0 + 1),
+    }));
+
+    const fcById = new Map(FACTION_CONFIG.map((fc) => [fc.id, fc]));
+    const zoneScore = (x, y, zone, inf = 1) => {
+      const dx = x < zone.x0 ? (zone.x0 - x) : x > zone.x1 ? (x - zone.x1) : 0;
+      const dy = y < zone.y0 ? (zone.y0 - y) : y > zone.y1 ? (y - zone.y1) : 0;
+      const outsideDist = Math.hypot(dx, dy);
+      const spanX = Math.max(1, zone.x1 - zone.x0 + 1);
+      const spanY = Math.max(1, zone.y1 - zone.y0 + 1);
+      const centerDist = Math.hypot((x - zone.cx) / spanX, (y - zone.cy) / spanY);
+      if (outsideDist > 0) return (outsideDist * 2.4 + centerDist * 7.0 + 2.2) / Math.max(0.5, inf);
+      return (centerDist * 6.0) / Math.max(0.5, inf);
+    };
     const computeTerritoryOwner = (x, y) => {
       let best = null;
       let bestScore = Infinity;
-      let secondScore = Infinity;
-      for (const fc of FACTION_CONFIG) {
-        const dx = x - fc.cx;
-        const dy = y - fc.cy;
-        const score = Math.sqrt(dx * dx + dy * dy) / fc.inf;
+      for (const zone of factionZones) {
+        const fc = fcById.get(zone.owner);
+        const score = zoneScore(x, y, zone, fc?.inf || 1);
         if (score < bestScore) {
-          secondScore = bestScore;
           bestScore = score;
-          best = fc.id;
-        } else if (score < secondScore) {
-          secondScore = score;
+          best = zone.owner;
         }
       }
-      const margin = secondScore - bestScore;
-      return margin < BORDER_SEAM ? null : best;
+      return best;
     };
 
     const territoryOwners = new Array(this.MAP_W * this.MAP_H);
@@ -1062,95 +1161,599 @@ export class WorldGenerator {
     const CITY = CONST.SETTLEMENT.TYPE.CITY;
     const FORT = CONST.SETTLEMENT.TYPE.FORT;
     const VILLAGE = CONST.SETTLEMENT.TYPE.VILLAGE;
-    const distanceProfile = (type) => {
-      const base = type === CITY
-        ? { typeMin: 8, globalMin: 2, sameTypes: [CITY] }
-        : type === FORT
-          ? { typeMin: 3, globalMin: 2, sameTypes: [CITY, FORT] }
-          : { typeMin: 2, globalMin: 1, sameTypes: [CITY, FORT, VILLAGE] };
-      const globalScale = 1 + (localSpacingScale - 1) * 0.35;
-      return {
-        typeMin: Math.max(type === CITY ? 6 : 2, Math.round(base.typeMin * localSpacingScale)),
-        globalMin: Math.max(1, Math.round(base.globalMin * globalScale)),
-        sameTypes: base.sameTypes,
-        borderBuffer: type === CITY ? 2 : 1,
-        enemyMin: type === CITY
-          ? Math.max(4, Math.round(3.0 * localSpacingScale))
-          : type === FORT
-            ? Math.max(3, Math.round(2.2 * localSpacingScale))
-            : Math.max(2, Math.round(1.8 * localSpacingScale)),
-      };
-    };
-
-    const placeNearby = (owner, type, anchor, count, minR, maxR) => {
-      const profile = distanceProfile(type);
-      const nearAttempts = Math.max(100, Math.round(100 * spacingScale));
-      const placed = [];
-      for (let n = 0; n < count; n++) {
-        let ok = false;
-        for (let a = 0; a < nearAttempts && !ok; a++) {
-          const angle = this.rand() * Math.PI * 2;
-          const r = minR + this.rand() * (maxR - minR);
-          const x = Math.round(anchor.x + Math.cos(angle) * r);
-          const y = Math.round(anchor.y + Math.sin(angle) * r);
-          if (!isGoodTile(x, y, owner, type, profile.borderBuffer)) continue;
-          if (tooClose(x, y, profile.typeMin, profile.globalMin, profile.sameTypes, owner, profile.enemyMin)) continue;
-          const s = this._makeSettlement(all.length, x, y, owner, type);
-          all.push(s);
-          addToHash(s);
-          ok = true;
-          placed.push(s);
-        }
-      }
-      return placed;
-    };
-
-    const placeRandom = (owner, type, count) => {
-      const profile = distanceProfile(type);
-      const randomAttempts = Math.max(400, Math.round(400 * spacingScale));
-      const placed = [];
-      for (let n = 0; n < count; n++) {
-        let ok = false;
-        for (let a = 0; a < randomAttempts && !ok; a++) {
-          const x = this.randInt(randomInset, this.MAP_W - randomInset);
-          const y = this.randInt(randomInset, this.MAP_H - randomInset);
-          if (!isGoodTile(x, y, owner, type, profile.borderBuffer)) continue;
-          if (tooClose(x, y, profile.typeMin, profile.globalMin, profile.sameTypes, owner, profile.enemyMin)) continue;
-          const s = this._makeSettlement(all.length, x, y, owner, type);
-          all.push(s);
-          addToHash(s);
-          ok = true;
-          placed.push(s);
-        }
-        if (!ok) {
-          for (let a = 0; a < randomAttempts && !ok; a++) {
-            const x = this.randInt(randomInset, this.MAP_W - randomInset);
-            const y = this.randInt(randomInset, this.MAP_H - randomInset);
-            if (!isGoodTile(x, y, owner, type, 0)) continue;
-            const relaxedTypeMin = Math.max(1, profile.typeMin - 1);
-            const relaxedGlobalMin = Math.max(1, profile.globalMin - 1);
-            const relaxedEnemyMin = Math.max(1, Math.floor(profile.enemyMin * 0.70));
-            if (tooClose(x, y, relaxedTypeMin, relaxedGlobalMin, profile.sameTypes, owner, relaxedEnemyMin)) continue;
-            const s = this._makeSettlement(all.length, x, y, owner, type);
-            all.push(s);
-            addToHash(s);
-            ok = true;
-            placed.push(s);
-          }
-        }
-      }
-      return placed;
-    };
-
     const OTTOMAN = CONST.FACTION.ID.OTTOMAN;
     const HRE = CONST.FACTION.ID.HRE;
     const SPANISH = CONST.FACTION.ID.SPANISH;
     const POLISH = CONST.FACTION.ID.POLISH;
     const VENICE = CONST.FACTION.ID.VENICE;
 
+    const factionSpreadTuning = {
+      [SPANISH]: { city: 1.18, fort: 1.28, village: 1.42, radius: 1.16 },
+      [VENICE]:  { city: 1.26, fort: 1.36, village: 1.60, radius: 1.30 },
+    };
+    const spacingBiasFor = (owner, type) => {
+      const cfg = factionSpreadTuning[owner];
+      if (!cfg) return 1;
+      if (type === CITY) return cfg.city || 1;
+      if (type === FORT) return cfg.fort || 1;
+      return cfg.village || 1;
+    };
+    const radiusBiasFor = (owner, type) => {
+      const cfg = factionSpreadTuning[owner];
+      const base = cfg?.radius || 1;
+      if (type === CITY) return Math.max(1, base);
+      if (type === FORT) return Math.max(1, base * 1.04);
+      return Math.max(1, base * 1.08);
+    };
+    const CORE_ANCHOR_CITY = 'city';
+    const CORE_ANCHOR_INDEPENDENT_FORT = 'independent_fort';
+    const coreAnchorMap = new Map();
+    const ownerCoreAnchors = (owner) => {
+      if (!coreAnchorMap.has(owner)) coreAnchorMap.set(owner, []);
+      return coreAnchorMap.get(owner);
+    };
+    const addCoreAnchor = (owner, settlement, kind) => {
+      if (!settlement || !kind) return;
+      ownerCoreAnchors(owner).push({
+        id: settlement.id,
+        x: settlement.x,
+        y: settlement.y,
+        kind,
+      });
+    };
+    const scaledAnchorConstraint = (constraint, factor = 1) => {
+      if (!constraint) return null;
+      const out = {};
+      for (const [key, val] of Object.entries(constraint)) {
+        if (!Number.isFinite(val)) continue;
+        out[key] = Math.max(1, Math.round(val * factor));
+      }
+      return out;
+    };
+    const passesCoreAnchorConstraint = (owner, x, y, constraint, ignoreAnchorId = null) => {
+      if (!constraint) return true;
+      const anchors = ownerCoreAnchors(owner);
+      for (const anchor of anchors) {
+        if (ignoreAnchorId != null && anchor.id === ignoreAnchorId) continue;
+        const minD = Number.isFinite(constraint[anchor.kind])
+          ? constraint[anchor.kind]
+          : Number(constraint.default || 0);
+        if (!Number.isFinite(minD) || minD <= 0) continue;
+        if (utils.distance(x, y, anchor.x, anchor.y) < minD) return false;
+      }
+      return true;
+    };
+    const forEachRingPoint = (cx, cy, radius, fn) => {
+      const r = Math.max(0, Math.floor(radius));
+      if (r === 0) {
+        fn(Math.round(cx), Math.round(cy));
+        return;
+      }
+      const ix = Math.round(cx);
+      const iy = Math.round(cy);
+      for (let dy = -r; dy <= r; dy++) {
+        const dx = r - Math.abs(dy);
+        fn(ix + dx, iy + dy);
+        if (dx !== 0) fn(ix - dx, iy + dy);
+      }
+    };
+    const buildSymmetricCandidates = (owner, count, density = 2.8, marginExtra = 0, jitter = 0.16) => {
+      if (count <= 0) return [];
+      const zone = zoneByOwner.get(owner);
+      if (!zone) return [];
+      const minX = Math.max(randomInset, zone.x0 + marginExtra);
+      const maxX = Math.min(this.MAP_W - randomInset, zone.x1 - marginExtra);
+      const minY = Math.max(randomInset, zone.y0 + marginExtra);
+      const maxY = Math.min(this.MAP_H - randomInset, zone.y1 - marginExtra);
+      if (minX > maxX || minY > maxY) return [];
+
+      const spanX = Math.max(1, maxX - minX + 1);
+      const spanY = Math.max(1, maxY - minY + 1);
+      const targetCells = Math.max(count, Math.round(count * Math.max(1.2, density)));
+      const aspect = spanX / Math.max(1, spanY);
+      const cols = Math.max(1, Math.round(Math.sqrt(targetCells * Math.max(0.2, aspect))));
+      const rows = Math.max(1, Math.ceil(targetCells / cols));
+      const cellW = spanX / cols;
+      const cellH = spanY / rows;
+      const raw = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const baseX = minX + (c + 0.5) * cellW;
+          const baseY = minY + (r + 0.5) * cellH;
+          const jx = (this.rand() * 2 - 1) * cellW * jitter;
+          const jy = (this.rand() * 2 - 1) * cellH * jitter;
+          const x = Math.round(utils.clamp(baseX + jx, minX, maxX));
+          const y = Math.round(utils.clamp(baseY + jy, minY, maxY));
+          raw.push({ x, y });
+        }
+      }
+
+      const seen = new Set();
+      const uniq = [];
+      for (const p of raw) {
+        const key = `${p.x},${p.y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        uniq.push(p);
+      }
+
+      const q = [[], [], [], []];
+      for (const p of uniq) {
+        const qx = p.x < zone.cx ? 0 : 1;
+        const qy = p.y < zone.cy ? 0 : 1;
+        q[qx + qy * 2].push(p);
+      }
+      for (const bucket of q) {
+        bucket.sort((a, b) => (a.y - b.y) || (a.x - b.x));
+      }
+
+      const ordered = [];
+      while (q.some((bucket) => bucket.length > 0)) {
+        for (let i = 0; i < q.length; i++) {
+          if (q[i].length > 0) ordered.push(q[i].shift());
+        }
+      }
+      return ordered;
+    };
+    const buildRadialCandidates = (anchor, count, minR, maxR) => {
+      if (!anchor || count <= 0) return [];
+      const out = [];
+      const rings = Math.max(1, Math.ceil(Math.sqrt(count)));
+      const band = Math.max(1, maxR - minR);
+      const baseAngle = this.rand() * Math.PI * 2;
+      for (let ring = 0; ring < rings; ring++) {
+        const ringT = rings === 1 ? 0.5 : ring / Math.max(1, rings - 1);
+        const radius = minR + band * (0.2 + 0.8 * ringT);
+        const slots = Math.max(6, Math.ceil((count * 2.4) / rings) + ring * 2);
+        for (let i = 0; i < slots; i++) {
+          const angle = baseAngle + (Math.PI * 2 * i) / slots + (ring % 2 ? Math.PI / slots : 0);
+          out.push({
+            x: Math.round(anchor.x + Math.cos(angle) * radius),
+            y: Math.round(anchor.y + Math.sin(angle) * radius),
+          });
+        }
+      }
+      return out;
+    };
+    const buildCityLatticeCandidates = (owner, count, marginExtra = 2) => {
+      if (count <= 0) return [];
+      const zone = zoneByOwner.get(owner);
+      if (!zone) return [];
+
+      const minX = Math.max(randomInset, zone.x0 + marginExtra);
+      const maxX = Math.min(this.MAP_W - randomInset, zone.x1 - marginExtra);
+      const minY = Math.max(randomInset, zone.y0 + marginExtra);
+      const maxY = Math.min(this.MAP_H - randomInset, zone.y1 - marginExtra);
+      if (minX > maxX || minY > maxY) return [];
+
+      const spanX = Math.max(1, maxX - minX + 1);
+      const spanY = Math.max(1, maxY - minY + 1);
+      const aspect = spanX / Math.max(1, spanY);
+      let best = null;
+      for (let rows = 1; rows <= Math.max(1, count); rows++) {
+        const cols = Math.ceil(count / rows);
+        const gridAspect = cols / Math.max(1, rows);
+        const overflow = cols * rows - count;
+        const score = Math.abs(Math.log((gridAspect + 1e-6) / (aspect + 1e-6))) + overflow * 0.18;
+        if (!best || score < best.score) best = { rows, cols, score };
+      }
+      const rows = best?.rows || 1;
+      const cols = best?.cols || count;
+
+      const full = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const fx = (c + 1) / (cols + 1);
+          const fy = (r + 1) / (rows + 1);
+          const x = Math.round(minX + fx * (spanX - 1));
+          const y = Math.round(minY + fy * (spanY - 1));
+          full.push({ x, y });
+        }
+      }
+      if (full.length <= count) return full;
+
+      const picked = [];
+      const step = full.length / count;
+      for (let i = 0; i < count; i++) {
+        const idx = Math.max(0, Math.min(full.length - 1, Math.floor((i + 0.5) * step)));
+        picked.push(full[idx]);
+      }
+      return picked;
+    };
+    const estimateMinPointDistance = (points) => {
+      if (!Array.isArray(points) || points.length < 2) return Infinity;
+      let best = Infinity;
+      for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+          const d = utils.distance(points[i].x, points[i].y, points[j].x, points[j].y);
+          if (d < best) best = d;
+        }
+      }
+      return best;
+    };
+
+    const distanceProfile = (owner, type) => {
+      const base = type === CITY
+        ? { typeMin: 8, globalMin: 2, sameTypes: [CITY] }
+        : type === FORT
+          ? { typeMin: 3, globalMin: 2, sameTypes: [CITY, FORT] }
+          : { typeMin: 2, globalMin: 1, sameTypes: [CITY, FORT, VILLAGE] };
+      const globalScale = 1 + (localSpacingScale - 1) * 0.35;
+      const spreadBias = spacingBiasFor(owner, type);
+      const typeScaled = base.typeMin * localSpacingScale * spreadBias;
+      const globalScaled = base.globalMin * globalScale * (1 + (spreadBias - 1) * 0.65);
+      return {
+        typeMin: Math.max(type === CITY ? 6 : 2, Math.round(typeScaled)),
+        globalMin: Math.max(1, Math.round(globalScaled)),
+        sameTypes: base.sameTypes,
+        borderBuffer: type === CITY ? 2 : 1,
+        enemyMin: type === CITY
+          ? Math.max(4, Math.round(3.0 * localSpacingScale * spreadBias))
+          : type === FORT
+            ? Math.max(3, Math.round(2.2 * localSpacingScale * spreadBias))
+            : Math.max(2, Math.round(1.8 * localSpacingScale * spreadBias)),
+      };
+    };
+
+    const placeNearby = (owner, type, anchor, count, minR, maxR) => {
+      const profile = distanceProfile(owner, type);
+      const radiusBias = radiusBiasFor(owner, type);
+      const scaledMinR = Math.max(1, Math.round(minR * radiusBias));
+      const scaledMaxR = Math.max(scaledMinR + 1, Math.round(maxR * radiusBias));
+      const nearAttempts = Math.max(100, Math.round(100 * spacingScale * (1 + (radiusBias - 1) * 0.45)));
+      const placed = [];
+      const candidateSearchR = Math.max(2, Math.round(Math.min(7, (scaledMaxR - scaledMinR) * 0.45)));
+      const radialCandidates = buildRadialCandidates(anchor, count, scaledMinR, scaledMaxR);
+      const tryAt = (x, y, relax = 0) => {
+        const borderBuffer = relax === 0 ? profile.borderBuffer : 0;
+        if (!isGoodTile(x, y, owner, type, borderBuffer)) return null;
+        const typeMin = Math.max(1, profile.typeMin - (relax >= 2 ? 2 : relax));
+        const globalMin = Math.max(1, profile.globalMin - (relax >= 2 ? 2 : relax));
+        const enemyMin = Math.max(1, Math.floor(profile.enemyMin * (relax === 0 ? 1 : relax === 1 ? 0.80 : 0.62)));
+        if (tooClose(x, y, typeMin, globalMin, profile.sameTypes, owner, enemyMin)) return null;
+        const s = this._makeSettlement(all.length, x, y, owner, type);
+        all.push(s);
+        addToHash(s);
+        placed.push(s);
+        return s;
+      };
+      const tryAround = (base, relax = 0) => {
+        let out = null;
+        for (let r = 0; r <= candidateSearchR && !out; r++) {
+          forEachRingPoint(base.x, base.y, r, (x, y) => {
+            if (out) return;
+            const hit = tryAt(x, y, relax);
+            if (hit) out = hit;
+          });
+        }
+        return out;
+      };
+
+      for (const candidate of radialCandidates) {
+        if (placed.length >= count) break;
+        tryAround(candidate, 0);
+      }
+      if (placed.length < count) {
+        for (const candidate of radialCandidates) {
+          if (placed.length >= count) break;
+          tryAround(candidate, 1);
+        }
+      }
+      for (let n = placed.length; n < count; n++) {
+        let ok = false;
+        for (let a = 0; a < nearAttempts && !ok; a++) {
+          const angle = this.rand() * Math.PI * 2;
+          const r = scaledMinR + this.rand() * (scaledMaxR - scaledMinR);
+          const x = Math.round(anchor.x + Math.cos(angle) * r);
+          const y = Math.round(anchor.y + Math.sin(angle) * r);
+          if (tryAt(x, y, 1)) ok = true;
+        }
+        if (!ok) {
+          for (let a = 0; a < nearAttempts && !ok; a++) {
+            const angle = this.rand() * Math.PI * 2;
+            const r = scaledMinR + this.rand() * (scaledMaxR - scaledMinR);
+            const x = Math.round(anchor.x + Math.cos(angle) * r);
+            const y = Math.round(anchor.y + Math.sin(angle) * r);
+            if (tryAt(x, y, 2)) ok = true;
+          }
+        }
+      }
+      return placed;
+    };
+
+    const placeRandom = (owner, type, count, options = null) => {
+      const profile = distanceProfile(owner, type);
+      const spreadBias = spacingBiasFor(owner, type);
+      const attemptMult = Math.max(1, Number(options?.attemptMultiplier) || 1);
+      const randomAttempts = Math.max(400, Math.round(400 * spacingScale * (1 + (spreadBias - 1) * 0.55) * attemptMult));
+      const anchorConstraint = options?.anchorConstraint || null;
+      const anchorConstraintRelaxed = scaledAnchorConstraint(anchorConstraint, 0.88);
+      const anchorConstraintEmergency = scaledAnchorConstraint(anchorConstraint, 0.76);
+      const placed = [];
+      const candidateList = Array.isArray(options?.candidateList) ? options.candidateList : [];
+      let candidateIndex = 0;
+      const candidateSearchRadius = Math.max(1, Math.round(Number(options?.searchRadius) || Math.max(2, profile.typeMin * 0.7)));
+      const zone = zoneByOwner.get(owner);
+      const pickCandidate = () => {
+        if (zone && this.rand() < 0.86) {
+          const minX = Math.max(randomInset, zone.x0);
+          const maxX = Math.min(this.MAP_W - randomInset, zone.x1);
+          const minY = Math.max(randomInset, zone.y0);
+          const maxY = Math.min(this.MAP_H - randomInset, zone.y1);
+          if (minX <= maxX && minY <= maxY) {
+            return {
+              x: this.randInt(minX, maxX),
+              y: this.randInt(minY, maxY),
+            };
+          }
+        }
+        return {
+          x: this.randInt(randomInset, this.MAP_W - randomInset),
+          y: this.randInt(randomInset, this.MAP_H - randomInset),
+        };
+      };
+      const tryPlaceAt = (x, y, relaxLevel = 0) => {
+        const borderBuffer = relaxLevel === 0 ? profile.borderBuffer : 0;
+        const activeConstraint = relaxLevel === 0
+          ? anchorConstraint
+          : relaxLevel === 1
+            ? anchorConstraintRelaxed
+            : anchorConstraintEmergency;
+        if (!isGoodTile(x, y, owner, type, borderBuffer)) return null;
+        if (!passesCoreAnchorConstraint(owner, x, y, activeConstraint)) return null;
+        const typeMin = Math.max(1, profile.typeMin - (relaxLevel >= 2 ? 2 : relaxLevel));
+        const globalMin = Math.max(1, profile.globalMin - (relaxLevel >= 2 ? 2 : relaxLevel));
+        const enemyMin = Math.max(1, Math.floor(profile.enemyMin * (relaxLevel === 0 ? 1 : relaxLevel === 1 ? 0.70 : 0.62)));
+        if (tooClose(x, y, typeMin, globalMin, profile.sameTypes, owner, enemyMin)) return null;
+        const s = this._makeSettlement(all.length, x, y, owner, type);
+        all.push(s);
+        addToHash(s);
+        if (options?.registerAnchorKind) addCoreAnchor(owner, s, options.registerAnchorKind);
+        placed.push(s);
+        return s;
+      };
+      const tryAroundCandidate = (base, relaxLevel = 0) => {
+        let out = null;
+        for (let r = 0; r <= candidateSearchRadius && !out; r++) {
+          forEachRingPoint(base.x, base.y, r, (x, y) => {
+            if (out) return;
+            const hit = tryPlaceAt(x, y, relaxLevel);
+            if (hit) out = hit;
+          });
+        }
+        return out;
+      };
+      for (let n = 0; n < count; n++) {
+        let ok = false;
+        while (!ok && candidateIndex < candidateList.length) {
+          const base = candidateList[candidateIndex++];
+          if (!base) continue;
+          if (tryAroundCandidate(base, 0) || tryAroundCandidate(base, 1)) ok = true;
+        }
+        for (let a = 0; a < randomAttempts && !ok; a++) {
+          const pick = pickCandidate();
+          const x = pick.x;
+          const y = pick.y;
+          if (tryPlaceAt(x, y, 0)) ok = true;
+        }
+        if (!ok) {
+          for (let a = 0; a < randomAttempts && !ok; a++) {
+            const pick = pickCandidate();
+            const x = pick.x;
+            const y = pick.y;
+            if (tryPlaceAt(x, y, 1)) ok = true;
+          }
+        }
+        if (!ok) {
+          const emergencyAttempts = Math.max(randomAttempts, Math.round(randomAttempts * 1.55));
+          for (let a = 0; a < emergencyAttempts && !ok; a++) {
+            const pick = pickCandidate();
+            const x = pick.x;
+            const y = pick.y;
+            if (tryPlaceAt(x, y, 2)) ok = true;
+          }
+        }
+      }
+      return placed;
+    };
+    const placeCitiesOnLattice = (owner, count, providedCandidates = null) => {
+      const candidates = Array.isArray(providedCandidates) && providedCandidates.length > 0
+        ? providedCandidates
+        : buildCityLatticeCandidates(owner, count, 2);
+      const placed = [];
+      const canUse = (x, y) => {
+        if (x < 0 || y < 0 || x >= this.MAP_W || y >= this.MAP_H) return false;
+        const tile = tiles ? tiles[y * this.MAP_W + x] : null;
+        return Boolean(tile && tile.type !== 'water');
+      };
+      const placeCity = (x, y) => {
+        const s = this._makeSettlement(all.length, x, y, owner, CITY);
+        all.push(s);
+        addToHash(s);
+        addCoreAnchor(owner, s, CORE_ANCHOR_CITY);
+        placed.push(s);
+      };
+      const claimBestPoint = (base) => {
+        if (canUse(base.x, base.y)) return { x: base.x, y: base.y };
+        for (let r = 1; r <= 6; r++) {
+          let found = null;
+          forEachRingPoint(base.x, base.y, r, (x, y) => {
+            if (found) return;
+            if (!canUse(x, y)) return;
+            found = { x, y };
+          });
+          if (found) return found;
+        }
+        // Keep exact lattice intent if no nearby land was found.
+        return {
+          x: Math.max(0, Math.min(this.MAP_W - 1, base.x)),
+          y: Math.max(0, Math.min(this.MAP_H - 1, base.y)),
+        };
+      };
+      for (const base of candidates) {
+        if (placed.length >= count) break;
+        const point = claimBestPoint(base);
+        placeCity(point.x, point.y);
+      }
+      if (placed.length < count) {
+        const missing = count - placed.length;
+        const fallbackCandidates = buildSymmetricCandidates(owner, missing, 4.0, 1, 0.12);
+        const supplemented = placeRandom(owner, CITY, missing, {
+          registerAnchorKind: CORE_ANCHOR_CITY,
+          attemptMultiplier: 2.0,
+          candidateList: fallbackCandidates,
+          searchRadius: 4,
+        });
+        for (const s of supplemented) placed.push(s);
+      }
+      return placed;
+    };
+    const placeIndependentFortsOnLattice = (owner, count, anchorConstraint = null, providedCandidates = null) => {
+      const profile = distanceProfile(owner, FORT);
+      const candidates = Array.isArray(providedCandidates) && providedCandidates.length > 0
+        ? providedCandidates
+        : buildCityLatticeCandidates(owner, count, 1);
+      const placed = [];
+      const tryFortAt = (x, y, relaxLevel = 0) => {
+        const borderBuffer = relaxLevel === 0 ? profile.borderBuffer : 0;
+        const activeConstraint = relaxLevel === 0
+          ? anchorConstraint
+          : relaxLevel === 1
+            ? scaledAnchorConstraint(anchorConstraint, 0.90)
+            : scaledAnchorConstraint(anchorConstraint, 0.78);
+        if (!isGoodTile(x, y, owner, FORT, borderBuffer)) return null;
+        if (!passesCoreAnchorConstraint(owner, x, y, activeConstraint)) return null;
+        const typeMin = Math.max(2, profile.typeMin - (relaxLevel >= 2 ? 2 : relaxLevel));
+        const globalMin = Math.max(1, profile.globalMin - (relaxLevel >= 2 ? 2 : relaxLevel));
+        const enemyMin = Math.max(1, Math.floor(profile.enemyMin * (relaxLevel === 0 ? 1 : relaxLevel === 1 ? 0.78 : 0.64)));
+        if (tooClose(x, y, typeMin, globalMin, profile.sameTypes, owner, enemyMin)) return null;
+        const s = this._makeSettlement(all.length, x, y, owner, FORT);
+        all.push(s);
+        addToHash(s);
+        addCoreAnchor(owner, s, CORE_ANCHOR_INDEPENDENT_FORT);
+        placed.push(s);
+        return s;
+      };
+      const tryAround = (base, relaxLevel = 0, maxR = 0) => {
+        let out = null;
+        for (let r = 0; r <= maxR && !out; r++) {
+          forEachRingPoint(base.x, base.y, r, (x, y) => {
+            if (out) return;
+            const hit = tryFortAt(x, y, relaxLevel);
+            if (hit) out = hit;
+          });
+        }
+        return out;
+      };
+      for (const base of candidates) {
+        if (placed.length >= count) break;
+        if (tryAround(base, 0, 2)) continue;
+        if (tryAround(base, 1, 6)) continue;
+        tryAround(base, 2, 12);
+      }
+      if (placed.length < count) {
+        const missing = count - placed.length;
+        const fallbackCandidates = buildSymmetricCandidates(owner, missing, 3.8, 1, 0.12);
+        const supplemented = placeRandom(owner, FORT, missing, {
+          anchorConstraint: scaledAnchorConstraint(anchorConstraint, 0.66),
+          registerAnchorKind: CORE_ANCHOR_INDEPENDENT_FORT,
+          attemptMultiplier: 1.9,
+          candidateList: fallbackCandidates,
+          searchRadius: 4,
+        });
+        for (const s of supplemented) placed.push(s);
+      }
+      return placed;
+    };
+
+    const R_NEAR_MIN = Math.max(3, Math.round(5 * clusterRadiusScale));
+    const R_NEAR_MAX = Math.max(R_NEAR_MIN + 1, Math.round(9 * clusterRadiusScale));
+    const R_MIDNEAR_MIN = Math.max(R_NEAR_MIN + 1, Math.round(9 * clusterRadiusScale));
+    const R_MIDNEAR_MAX = Math.max(R_MIDNEAR_MIN + 1, Math.round(13 * clusterRadiusScale));
+    const R_MID_MIN = Math.max(R_MIDNEAR_MIN + 1, Math.round(13 * clusterRadiusScale));
+    const R_MID_MAX = Math.max(R_MID_MIN + 1, Math.round(17 * clusterRadiusScale));
+    const R_MIDPLUS_MIN = Math.max(R_MID_MIN + 1, Math.round(17 * clusterRadiusScale));
+    const R_MIDPLUS_MAX = Math.max(R_MIDPLUS_MIN + 1, Math.round(21 * clusterRadiusScale));
+    const RANDOMIZE_ALL_SETTLEMENTS = true;
+
+    const fillMissingRandom = (owner, type, remaining, options = null) => {
+      if (remaining <= 0) return 0;
+      const zone = zoneByOwner.get(owner);
+      const useUnseeded = Boolean(options?.unseeded);
+      const randIntUnseeded = (min, max) => {
+        const lo = Math.ceil(Math.min(min, max));
+        const hi = Math.floor(Math.max(min, max));
+        return Math.floor(lo + Math.random() * (hi - lo + 1));
+      };
+      const pickInt = (min, max) => useUnseeded ? randIntUnseeded(min, max) : this.randInt(min, max);
+      let added = 0;
+      const emergencyAttempts = Math.max(2000, remaining * 800);
+      for (let i = 0; i < emergencyAttempts && added < remaining; i++) {
+        const x = zone
+          ? pickInt(Math.max(0, zone.x0), Math.min(this.MAP_W - 1, zone.x1))
+          : pickInt(0, this.MAP_W - 1);
+        const y = zone
+          ? pickInt(Math.max(0, zone.y0), Math.min(this.MAP_H - 1, zone.y1))
+          : pickInt(0, this.MAP_H - 1);
+        const tile = tiles ? tiles[y * this.MAP_W + x] : null;
+        if (!tile || tile.type === 'water') continue;
+        if (getTerritoryOwner(x, y) !== owner) continue;
+        const s = this._makeSettlement(all.length, x, y, owner, type);
+        all.push(s);
+        addToHash(s);
+        added++;
+      }
+      return added;
+    };
+
+    if (RANDOMIZE_ALL_SETTLEMENTS) {
+      for (const fc of FACTION_CONFIG) {
+        const forcePureRandom = fc.id === SPANISH || fc.id === VENICE;
+        if (forcePureRandom) {
+          const randomOpts = { unseeded: true };
+          fillMissingRandom(fc.id, CITY, fc.cities, randomOpts);
+          fillMissingRandom(fc.id, FORT, fc.forts, randomOpts);
+          fillMissingRandom(fc.id, VILLAGE, fc.villages, randomOpts);
+          continue;
+        }
+
+        const placedCities = placeRandom(fc.id, CITY, fc.cities);
+        const placedForts = placeRandom(fc.id, FORT, fc.forts);
+        const placedVillages = placeRandom(fc.id, VILLAGE, fc.villages);
+
+        const missingCity = fc.cities - placedCities.length;
+        const missingFort = fc.forts - placedForts.length;
+        const missingVillage = fc.villages - placedVillages.length;
+
+        if (missingCity > 0) fillMissingRandom(fc.id, CITY, missingCity);
+        if (missingFort > 0) fillMissingRandom(fc.id, FORT, missingFort);
+        if (missingVillage > 0) fillMissingRandom(fc.id, VILLAGE, missingVillage);
+      }
+
+      all.forEach((s, i) => { s.id = i; });
+      return all;
+    }
+
+    const ownerCoreGapFactor = {
+      [VENICE]: 0.76,
+      [POLISH]: 0.92,
+    };
+    const coreGapScale = (owner, base) => {
+      const factor = Number(ownerCoreGapFactor[owner] || 1);
+      return Math.max(8, Math.round(base * factor));
+    };
+    const cityVsIndependentFortBase = Math.max(R_MID_MAX + 6, Math.round(20 * clusterRadiusScale));
+    const independentFortCoreBase = Math.max(R_MIDNEAR_MAX + 6, Math.round(16 * clusterRadiusScale));
+
     for (const fc of FACTION_CONFIG) {
       const connectedFortIds = new Set();
-      placeRandom(fc.id, CITY, fc.cities);
+      const cityCandidates = buildCityLatticeCandidates(fc.id, fc.cities, 2);
+      const cityLatticeMinDist = estimateMinPointDistance(cityCandidates);
+      const effectiveCityFortGap = Math.min(
+        coreGapScale(fc.id, cityVsIndependentFortBase),
+        Math.max(7, Math.round(cityLatticeMinDist * 0.66)),
+      );
+      placeCitiesOnLattice(fc.id, fc.cities, cityCandidates);
       const cities = all.filter((s) => s.owner === fc.id && s.type === CITY);
 
       const markConnected = (list) => {
@@ -1172,20 +1775,20 @@ export class WorldGenerator {
       if (fc.id === OTTOMAN) {
         for (const city of cities) {
           if (remainingForts <= 0) break;
-          const got = placeCityLinkedForts(city, Math.min(2, remainingForts), Math.round(5 * clusterRadiusScale), Math.round(11 * clusterRadiusScale));
+          const got = placeCityLinkedForts(city, Math.min(2, remainingForts), R_MIDNEAR_MIN, R_MIDNEAR_MAX);
           remainingForts -= got;
         }
         let guard = 0;
         while (remainingForts > 0 && cities.length > 0 && guard < remainingForts * 12) {
           const city = cities[this.randInt(0, cities.length - 1)];
-          const got = placeCityLinkedForts(city, 1, Math.round(4 * clusterRadiusScale), Math.round(12 * clusterRadiusScale));
+          const got = placeCityLinkedForts(city, 1, R_MIDNEAR_MIN, R_MID_MAX);
           if (got > 0) remainingForts -= got;
           guard++;
         }
       } else if (fc.id === HRE || fc.id === SPANISH) {
         for (const city of cities) {
           if (remainingForts <= 0) break;
-          const got = placeCityLinkedForts(city, Math.min(3, remainingForts), Math.round(5 * clusterRadiusScale), Math.round(12 * clusterRadiusScale));
+          const got = placeCityLinkedForts(city, Math.min(3, remainingForts), R_MIDNEAR_MIN, R_MID_MAX);
           remainingForts -= got;
         }
       } else if (fc.id === VENICE) {
@@ -1193,13 +1796,13 @@ export class WorldGenerator {
         for (let i = 0; i < cityList.length && remainingForts > 0; i++) {
           const city = cityList[i];
           if (i < 7) {
-            const nearGot = placeCityLinkedForts(city, 1, Math.round(3 * clusterRadiusScale), Math.round(6 * clusterRadiusScale));
+            const nearGot = placeCityLinkedForts(city, 1, R_NEAR_MIN, R_NEAR_MAX);
             remainingForts -= nearGot;
             if (remainingForts <= 0) break;
-            const midGot = placeCityLinkedForts(city, 1, Math.round(6 * clusterRadiusScale), Math.round(10 * clusterRadiusScale));
+            const midGot = placeCityLinkedForts(city, 1, R_MIDNEAR_MIN, R_MIDNEAR_MAX);
             remainingForts -= midGot;
           } else {
-            const oneGot = placeCityLinkedForts(city, 1, Math.round(4 * clusterRadiusScale), Math.round(8 * clusterRadiusScale));
+            const oneGot = placeCityLinkedForts(city, 1, R_MIDNEAR_MIN, R_MIDNEAR_MAX);
             remainingForts -= oneGot;
           }
         }
@@ -1208,7 +1811,13 @@ export class WorldGenerator {
       }
 
       if (remainingForts > 0) {
-        placeRandom(fc.id, FORT, remainingForts);
+        const independentFortConstraint = {
+          [CORE_ANCHOR_CITY]: effectiveCityFortGap,
+          [CORE_ANCHOR_INDEPENDENT_FORT]: coreGapScale(fc.id, independentFortCoreBase),
+          default: coreGapScale(fc.id, independentFortCoreBase),
+        };
+        const independentFortCandidates = buildCityLatticeCandidates(fc.id, remainingForts, 1);
+        placeIndependentFortsOnLattice(fc.id, remainingForts, independentFortConstraint, independentFortCandidates);
       }
 
       const forts = all.filter((s) => s.owner === fc.id && s.type === FORT);
@@ -1222,45 +1831,45 @@ export class WorldGenerator {
       if (fc.id === OTTOMAN) {
         for (const city of cities) {
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(4, remainingVillages), Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(4, remainingVillages), R_NEAR_MIN, R_NEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(4, remainingVillages), Math.round(5 * clusterRadiusScale), Math.round(9 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(4, remainingVillages), R_MIDNEAR_MIN, R_MIDNEAR_MAX));
         }
         for (const fort of unconnectedForts) {
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(fort, Math.min(3, remainingVillages), Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(fort, Math.min(3, remainingVillages), R_NEAR_MIN, R_NEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(fort, Math.min(3, remainingVillages), Math.round(5 * clusterRadiusScale), Math.round(9 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(fort, Math.min(3, remainingVillages), R_MIDNEAR_MIN, R_MIDNEAR_MAX));
         }
       } else if (fc.id === HRE || fc.id === SPANISH) {
         for (const city of cities) {
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(2, remainingVillages), Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(2, remainingVillages), R_NEAR_MIN, R_NEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(3, remainingVillages), Math.round(5 * clusterRadiusScale), Math.round(9 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(3, remainingVillages), R_MIDNEAR_MIN, R_MIDNEAR_MAX));
         }
         for (const fort of unconnectedForts) {
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(fort, Math.min(4, remainingVillages), Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(fort, Math.min(4, remainingVillages), R_NEAR_MIN, R_NEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(fort, Math.min(5, remainingVillages), Math.round(5 * clusterRadiusScale), Math.round(9 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(fort, Math.min(5, remainingVillages), R_MIDNEAR_MIN, R_MIDNEAR_MAX));
         }
       } else if (fc.id === VENICE) {
         // Villages are distributed randomly inside Venetian territory.
       } else if (fc.id === POLISH) {
         for (const city of cities) {
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(5, remainingVillages), Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(5, remainingVillages), R_NEAR_MIN, R_NEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(8, remainingVillages), Math.round(5 * clusterRadiusScale), Math.round(9 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(8, remainingVillages), R_MIDNEAR_MIN, R_MIDNEAR_MAX));
           if (remainingVillages <= 0) break;
-          consumeVillageBudget(placeVillagesAround(city, Math.min(5, remainingVillages), Math.round(9 * clusterRadiusScale), Math.round(13 * clusterRadiusScale)));
+          consumeVillageBudget(placeVillagesAround(city, Math.min(5, remainingVillages), R_MID_MIN, R_MIDPLUS_MAX));
         }
 
         const fortVillageCount = new Map(unconnectedForts.map((fort) => [fort.id, 0]));
         for (const fort of unconnectedForts) {
           if (remainingVillages <= 0) break;
-          const got = placeVillagesAround(fort, 1, Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale));
+          const got = placeVillagesAround(fort, 1, R_NEAR_MIN, R_NEAR_MAX);
           if (got > 0) {
             consumeVillageBudget(got);
             fortVillageCount.set(fort.id, (fortVillageCount.get(fort.id) || 0) + got);
@@ -1271,7 +1880,7 @@ export class WorldGenerator {
           const candidates = unconnectedForts.filter((fort) => (fortVillageCount.get(fort.id) || 0) < 3);
           if (!candidates.length) break;
           const fort = candidates[this.randInt(0, candidates.length - 1)];
-          const got = placeVillagesAround(fort, 1, Math.round(2 * clusterRadiusScale), Math.round(5 * clusterRadiusScale));
+          const got = placeVillagesAround(fort, 1, R_NEAR_MIN, R_NEAR_MAX);
           if (got > 0) {
             consumeVillageBudget(got);
             fortVillageCount.set(fort.id, (fortVillageCount.get(fort.id) || 0) + got);
@@ -1280,8 +1889,13 @@ export class WorldGenerator {
         }
       }
 
-      if (remainingVillages > 0 && fc.id !== POLISH) {
-        placeRandom(fc.id, VILLAGE, remainingVillages);
+      if (remainingVillages > 0) {
+        const leftoverVillageCandidates = buildSymmetricCandidates(fc.id, remainingVillages, 4.2, 0, 0.20);
+        placeRandom(fc.id, VILLAGE, remainingVillages, {
+          candidateList: leftoverVillageCandidates,
+          attemptMultiplier: 1.18,
+          searchRadius: Math.max(2, Math.round(R_NEAR_MIN * 0.55)),
+        });
       }
     }
 

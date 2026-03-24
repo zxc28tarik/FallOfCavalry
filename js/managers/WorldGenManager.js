@@ -3,6 +3,8 @@ import WorldGenerator from '../world/world-generator.js';
 import FogOfWar from '../world/fog-of-war.js';
 import { assignInitialSettlementOwners } from '../systems/factions.js';
 
+const WORLD_GEN_REVISION = '2026-03-19-random-spain-venice-unseeded-v2-no-seam-no-minimap-box';
+
 export class WorldGenManager {
   constructor() { this.world = null; this.game = null; }
   init(world, game) { this.world = world; this.game = game; }
@@ -12,7 +14,11 @@ export class WorldGenManager {
 
     const normalizedSeed = Number.isFinite(seed) ? seed : parseInt(String(seed || this.world.state.seed || 1337), 10) || 1337;
     const hasExistingTiles = Array.isArray(this.world.state?.map?.tiles) && this.world.state.map.tiles.length > 0;
-    if (hasExistingTiles && this.world._worldSeedCache === normalizedSeed) {
+    const hasMatchingRevision = this.world._worldGenRevision === WORLD_GEN_REVISION;
+    if (hasExistingTiles && this.world._worldSeedCache === normalizedSeed && hasMatchingRevision) {
+      if (!Array.isArray(this.world.state.map.factionZones) || this.world.state.map.factionZones.length === 0) {
+        this.world.state.map.factionZones = this.buildFactionZonesFromSettlements(this.world.state.map);
+      }
       this.game?.ensureFactionState?.();
       assignInitialSettlementOwners(this.world.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
       if (this.world.state.map.fog instanceof Uint8Array) {
@@ -47,6 +53,7 @@ export class WorldGenManager {
       height: world.height,
       tiles: Array.isArray(world.tiles) ? world.tiles : [],
       settlements,
+      factionZones: Array.isArray(world.factionZones) ? world.factionZones : [],
       rivers: Array.isArray(world.rivers) ? world.rivers : [],
       roads: Array.isArray(world.roads) ? world.roads : [],
       forests: Array.isArray(world.forests) ? world.forests : [],
@@ -56,6 +63,9 @@ export class WorldGenManager {
       pois: Array.isArray(world.pois) ? world.pois : [],
       fog,
     };
+    if (!Array.isArray(this.world.state.map.factionZones) || this.world.state.map.factionZones.length === 0) {
+      this.world.state.map.factionZones = this.buildFactionZonesFromSettlements(this.world.state.map);
+    }
 
     this.game?.ensureFactionState?.();
     assignInitialSettlementOwners(this.world.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
@@ -77,6 +87,7 @@ export class WorldGenManager {
     this.rebuildMovementMasks();
 
     this.world._worldSeedCache = normalizedSeed;
+    this.world._worldGenRevision = WORLD_GEN_REVISION;
     this.world.fogOfWar = new FogOfWar(world.width, world.height, this.world.state.map.fog);
     this.updateFogFromPlayer();
     return this.world.state.map;
@@ -225,5 +236,45 @@ export class WorldGenManager {
       }
     });
     return best?.id || null;
+  }
+
+  buildFactionZonesFromSettlements(map) {
+    if (!map || !Array.isArray(map.settlements) || !Number.isFinite(map.width) || !Number.isFinite(map.height)) return [];
+    const tileSize = Math.max(1, Number(CONST.WORLD.TILE_SIZE || 1));
+    const boundsByOwner = new Map();
+    for (const settlement of map.settlements) {
+      const owner = settlement?.owner;
+      if (!owner || owner === CONST.FACTION.ID.BANDIT || owner === CONST.FACTION.ID.PLAYER) continue;
+      const tx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x ?? 0) / tileSize);
+      const ty = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor(Number(settlement?.y ?? 0) / tileSize);
+      if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
+
+      const old = boundsByOwner.get(owner) || { minX: tx, minY: ty, maxX: tx, maxY: ty };
+      old.minX = Math.min(old.minX, tx);
+      old.minY = Math.min(old.minY, ty);
+      old.maxX = Math.max(old.maxX, tx);
+      old.maxY = Math.max(old.maxY, ty);
+      boundsByOwner.set(owner, old);
+    }
+
+    const zones = [];
+    boundsByOwner.forEach((b, owner) => {
+      const spanX = Math.max(1, b.maxX - b.minX + 1);
+      const spanY = Math.max(1, b.maxY - b.minY + 1);
+      const pad = Math.max(6, Math.round(Math.max(spanX, spanY) * 0.16));
+      const x0 = Math.max(0, b.minX - pad);
+      const y0 = Math.max(0, b.minY - pad);
+      const x1 = Math.min(map.width - 1, b.maxX + pad);
+      const y1 = Math.min(map.height - 1, b.maxY + pad);
+      zones.push({
+        owner,
+        x: x0,
+        y: y0,
+        w: Math.max(1, x1 - x0 + 1),
+        h: Math.max(1, y1 - y0 + 1),
+      });
+    });
+
+    return zones;
   }
 }

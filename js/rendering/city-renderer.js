@@ -45,10 +45,10 @@ const BANNER_SIDES = [-1, 1];
 
 const FACTION_COLORS = {
   ottoman: '#c0392b',
-  hre:     '#2c3e50',
-  polish:  '#e74c3c',
-  spanish: '#f1c40f',
-  venice:  '#16a085',
+  hre:     '#111111',
+  polish:  '#8e44ad',
+  spanish: '#f57c00',
+  venice:  '#1e88e5',
   bandit:  '#6d4c41',
 };
 

@@ -16,10 +16,10 @@ import { mulberry32, hashStr, shade } from '../utils.js';
 // ─── Fraction görsel tanımları ─────────────────────────────────────────────
 const FACTION_VISUALS = {
   ottoman:      { primary:'#c0392b', secondary:'#8e2a1f', accent:'#f1c40f', metal:'#8c8f95', leather:'#6a4a2f', horse:'#6d5845', headgear:'ottoman_helm', cloak:true  },
-  hre:          { primary:'#2c3e50', secondary:'#1d2a38', accent:'#f4d03f', metal:'#9aa5b1', leather:'#4b3a2a', horse:'#4f4540', headgear:'kettle',  cloak:false },
-  polish:       { primary:'#e74c3c', secondary:'#9b2d21', accent:'#f7dc6f', metal:'#b0b7c2', leather:'#6e4a32', horse:'#6b4a3a', headgear:'cap',     cloak:true  },
-  spanish:      { primary:'#f1c40f', secondary:'#b9770e', accent:'#c0392b', metal:'#a0a7b0', leather:'#5b4127', horse:'#5a4a3f', headgear:'morion',  cloak:false },
-  venice:       { primary:'#16a085', secondary:'#0e6655', accent:'#f4d03f', metal:'#9aa5b1', leather:'#6a4a2f', horse:'#6b5a45', headgear:'kettle',  cloak:true  },
+  hre:          { primary:'#111111', secondary:'#1e1e1e', accent:'#bdbdbd', metal:'#9aa5b1', leather:'#4b3a2a', horse:'#4f4540', headgear:'kettle',  cloak:false },
+  polish:       { primary:'#8e44ad', secondary:'#5b2c6f', accent:'#d7bde2', metal:'#b0b7c2', leather:'#6e4a32', horse:'#6b4a3a', headgear:'cap',     cloak:true  },
+  spanish:      { primary:'#f57c00', secondary:'#c75f00', accent:'#ffd180', metal:'#a0a7b0', leather:'#5b4127', horse:'#5a4a3f', headgear:'morion',  cloak:false },
+  venice:       { primary:'#1e88e5', secondary:'#1565c0', accent:'#90caf9', metal:'#9aa5b1', leather:'#6a4a2f', horse:'#6b5a45', headgear:'kettle',  cloak:true  },
   bandit:       { primary:'#3e2723', secondary:'#2a1a15', accent:'#6d4c41', metal:'#5a5a5a', leather:'#4e3629', horse:'#5c4033', headgear:'hood',    cloak:true  },
   free_company: { primary:'#1a4a8a', secondary:'#0e2d58', accent:'#e8c44c', metal:'#8a8f9a', leather:'#5a4030', horse:'#5a4030', headgear:'kettle',  cloak:false },
   aurelian:     { primary:'#7a1818', secondary:'#4a0808', accent:'#d4af37', metal:'#909aa0', leather:'#5a3a28', horse:'#5a3020', headgear:'closed',  cloak:true  },

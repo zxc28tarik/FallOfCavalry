@@ -186,3 +186,223 @@ TODO / next-agent suggestions:
     - `npm.cmd run build` passed.
     - Seed 1337 totals preserved: total 800, ottoman 257, hre 198, spanish 198, polish 98, venice 49.
     - Seed 1337 centroids indicate requested map macro-layout ordering.
+- 2026-03-19: User color mapping update applied across UI/render layers.
+  - Requested mapping set:
+    - HRE black, Ottoman red, Venice blue, Spanish orange, Polish purple.
+  - Updated files:
+    - `js/constants/systems.js` (FACTIONS color values)
+    - `js/rendering/minimap-simple.js` (_factionColor)
+    - `js/rendering/map-renderer.js` (_factionColor)
+    - `js/rendering/city-renderer.js` (FACTION_COLORS)
+    - `js/rendering/sprite-generator.js` (faction palette primary/secondary/accent)
+  - Validation:
+    - targeted eslint run passed with pre-existing warnings in sprite-generator (no new errors)
+    - `npm.cmd run build` passed.
+- 2026-03-19: Temporary minimap faction-rectangle pass + proportional spread tightening.
+  - `js/world/world-generator.js`
+    - Added `factionZones` to world generate output.
+    - Settlement zonal model now exports rectangle data via `this._lastFactionZones`.
+    - Distance-band shift kept (near/mid-near/mid are pushed farther than previous pass).
+  - `js/managers/WorldGenManager.js`
+    - Persisted `factionZones` into runtime map state.
+    - Added fallback `buildFactionZonesFromSettlements(map)` so cached/old maps without zone data still get minimap rectangles.
+  - `js/rendering/minimap-simple.js`
+    - Added ruler-like rectangle overlay draw for each faction zone (owner-colored 1px outline + dark under-stroke).
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js js/managers/WorldGenManager.js js/rendering/minimap-simple.js` passed.
+    - `npm.cmd run build` passed.
+    - Playwright visual capture:
+      - `output/web-game/minimap-zones-full.png`
+      - `output/web-game/minimap-zones-panel.png`
+    - Seed 1337 generator diagnostic:
+      - map: `1068x714`
+      - settlements: `800`
+      - zone-inside ratios: Ottoman `1.00`, HRE `1.00`, Spanish `1.00`, Polish `0.98`, Venice `0.98`.
+- 2026-03-19: Yellow/Blue spread tuning pass (Spanish + Venice).
+  - `js/world/world-generator.js`
+    - Increased zone aspect for wider spread:
+      - Spanish aspect `1.45` (was `1.28`)
+      - Venice aspect `0.55` (was `0.30`)
+    - Added faction-specific spacing/radius tuning so Spanish and Venice settlements no longer stack too tightly.
+    - `distanceProfile` now takes `(owner, type)` and applies per-faction spread bias on type/global/enemy minimum distances.
+    - `placeNearby` now scales ring radii by faction/type radius bias.
+    - `placeRandom` attempts scaled for these stricter spacing targets.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 check keeps total `800` and preserves key counts (Spanish `198`, Venice `49`).
+- 2026-03-19: Core spacing rule pass for intra-zone settlement structure.
+  - `js/world/world-generator.js`
+    - Added core-anchor system for mandatory spacing of cities and city-independent forts per faction zone.
+    - `placeRandom` now supports anchor constraints + multi-stage fallback (strict/relaxed/emergency while keeping spacing semantics).
+    - City placement now registers `city` core anchors; independent fort placement registers `independent_fort` anchors.
+    - Added owner-based core-gap scaling and enforced city-city / city-independent-fort / independent-fort-independent-fort minimum distances.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 counts restored/stable: total 800, Venice 8/15/26, Polish 3/15/80, others preserved.
+- 2026-03-19: City lattice placement refinement (equal-distance city points in each faction rectangle).
+  - `js/world/world-generator.js`
+    - Added strict city lattice generator (`buildCityLatticeCandidates`) and city placement path (`placeCitiesOnLattice`).
+    - Cities now originate from evenly spaced grid nodes inside each faction rectangle (2-4-6 style spacing logic).
+    - Removed random city scatter path; small local correction only when a lattice node lands on water.
+    - Independent forts/villages still follow agreed organic rules around city cores, with remaining placements symmetric + spaced.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 keeps totals exactly: overall 800 and per-faction targets preserved.
+- 2026-03-19: Independent fort lattice placement pass.
+  - `js/world/world-generator.js`
+    - Added `placeIndependentFortsOnLattice(...)`.
+    - Remaining (city-independent) forts are now placed on per-faction lattice/grid points inside faction rectangles, not random scatter.
+    - Kept fallback to constrained placement only when strict lattice nodes are invalid/blocked.
+  - Validation:
+    - `npx.cmd eslint js/world/world-generator.js` passed.
+    - `npm.cmd run build` passed.
+    - Seed 1337 counts remain exact: total 800 and all per-faction city/fort/village targets preserved.
+- 2026-03-19: Settlement visual system migrated from legacy procedural M&B-like draw to cached HoMM-like pixel sprite renderer in `js/rendering/map-renderer.js`.
+  - `_drawSettlement` now uses new sprite pipeline (`city/town/fort/village`) with per-type sizing profiles, pixel-art silhouettes, stone/roof palettes, and faction-colored pennants.
+  - Added settlement sprite cache (`this._settlementSpriteCache`) for low-overhead reuse.
+  - Legacy `_castle`/`_village` methods kept only as runtime fallback if sprite canvas generation is unavailable.
+  - Validation: `npx.cmd eslint js/rendering/map-renderer.js` passed, `npm.cmd run build` passed.
+- 2026-03-19: Post-change visual validation pass.
+  - `develop-web-game` client attempted with `C:/Users/zxc28/.codex/skills/develop-web-game/scripts/web_game_playwright_client.js` but failed again due external script path not resolving `playwright` package (`ERR_MODULE_NOT_FOUND`).
+  - Fallback runtime checks executed with project-local Playwright scripts (`tmp/capture_map_style.mjs` + inline capture snippets).
+  - New settlement-focused artifacts captured after forcing game start and fog reveal:
+    - `output/web-game/map-settlement-check-city.png`
+    - `output/web-game/map-settlement-check-fort.png`
+    - `output/web-game/map-settlement-check-village.png`
+- 2026-03-19: User-requested environment rebalance pass (more trees, less water, shrubs, tree variety).
+- Updated `js/constants/world.js`:
+  - `SEA_LEVEL` 0.305 (down from 0.34)
+  - `SHORE_MAX` 0.365 (down from 0.39)
+  - `RIVER_COUNT` 6 (down from 12)
+  - `FOREST_DENSITY` 0.24 (up from 0.16)
+- Updated `js/world/world-generator.js`:
+  - Added `reduceInlandWater(types, heightMap)` and invoked it from `smoothTileTypes` to remove small inland lakes/pools (non-boundary water components below threshold).
+  - River generation tightened: min accepted river length increased (>10), max river steps reduced (150), uphill break threshold tightened.
+  - Forest seeding/clump growth probabilities increased and pruning relaxed to produce denser forests.
+- Updated `js/rendering/map-renderer.js`:
+  - Grass micro-detail now spawns bushes/trees more often.
+  - Forest H3 prop thresholds retuned for higher forest render density.
+  - Added shrub layers in forest rendering.
+  - Added cypress-like tree silhouette (`_drawCypress`) and bush cluster helper (`_drawBushCluster`) to diversify tree composition.
+  - Fallback forest renderer now mixes broadleaf/pine/cypress kinds instead of binary pine/non-pine.
+  - River stroke widths reduced to visually lower water dominance.
+- Validation:
+  - `npx.cmd eslint js/constants/world.js js/world/world-generator.js js/rendering/map-renderer.js` passed.
+  - `npm.cmd run build` passed.
+  - Generator stats sample (seed 1337): water 17.69%, shore 10.07%, rivers=3, forests=27377.
+- 2026-03-20: Settlement rendering pipeline fix + 3x scale applied to ACTIVE renderer (`js/managers/RenderManager.js`).
+  - Root cause: runtime map uses `mbSettlement(...)` in `RenderManager`, so earlier `js/rendering/map-renderer.js` settlement changes were not visible in game.
+  - Replaced legacy vector settlement draw with cached HoMM-like pixel sprite pipeline for `city/town/fort/village`:
+    - Added sprite palette + sprite cache (`_SETTLEMENT_PALETTE`, `_SETTLEMENT_SPRITE_CACHE`).
+    - Added sprite builders/helpers (`_buildSettlementSprite`, `_getSettlementSprite`, dither/crenel/tower/house/pennant primitives).
+    - Added deterministic settlement ground blending (`_drawSettlementGroundBlend`) for dirt base/track/shrub accents matching upgraded ground language.
+    - Added per-type visual profile with explicit `scale = 3.0` so city/fort/village footprint is 3x on the enlarged map.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Playwright visual captures (after boot notice bypass + fog reveal) generated:
+      - `output/web-game/map-settlement-3x-show-city.png`
+      - `output/web-game/map-settlement-3x-show-fort.png`
+      - `output/web-game/map-settlement-3x-show-village.png`
+
+TODO / next-agent suggestions:
+- If user wants even closer HoMM3 fidelity, replace procedural settlement sprites with extracted object DEF frames from HoMM asset pipeline (same method already used for terrain/props).
+- If labels overlap due larger footprint, add simple collision/offset pass for settlement labels based on nearest-neighbor spacing.
+- 2026-03-20: HoMM3 settlement art pass (code-driven, from original DEF assets).
+  - `scripts/extract-homm3-map-art.mjs` extended to export settlement DEF frames:
+    - `SETTLEMENT_CITY` from `AVC*X0` town defs (10 frames)
+    - `SETTLEMENT_FORT` from `AVCgar*` garrison defs (3 frames)
+    - Village HoMM candidate defs were tested and discarded (not usable as map village visuals), so `SETTLEMENT_VILLAGE` kept empty.
+  - Regenerated atlas: `js/data/homm3-map-art.json` now includes settlement frame pools for city/fort.
+- 2026-03-20: Active renderer integration in `js/managers/RenderManager.js`.
+  - Added settlement H3 selectors/draw path:
+    - `_settlementH3Kind`, `_settlementH3BaseIndex`, `_pickSettlementH3Frame`, `_drawSettlementH3Frame`.
+  - `mbSettlement(...)` now tries real HoMM settlement frame draw first (city/fort), falls back to custom pixel settlement sprite when H3 frame is absent (currently village fallback).
+  - Kept enlarged map readability: settlement profile remains 3x-scale family and tuned anchors/labels for bigger map.
+- 2026-03-20: Visual validation artifacts:
+  - `output/web-game/map-settlement-h3v2-city.png`
+  - `output/web-game/map-settlement-h3v2-fort.png`
+  - `output/web-game/map-settlement-h3v2-village.png`
+  - Frame inspection sheets:
+    - `output/web-game/h3-settlement-frames-sheet.png`
+    - `output/web-game/h3-settlement-frames-sheet-v2.png`
+- Validation:
+  - `npx.cmd eslint js/managers/RenderManager.js scripts/extract-homm3-map-art.mjs` passed.
+  - `npm.cmd run build` passed.
+
+TODO / next-agent suggestions:
+- If user wants village visuals also 1:1 HoMM-like, mine additional adventure-object DEFs that are actual dwellings/buildings (not UI dwelling icons) and wire them as `SETTLEMENT_VILLAGE`.
+- Bundle grew due extra settlement frames in `homm3-map-art.json`; if needed, split settlement art into a lazy-loaded external asset.
+- 2026-03-20: Settlement style unification pass after user feedback ('one style looks good, others look off').
+  - `js/managers/RenderManager.js`:
+    - Unified settlement asset selection to curated HoMM3 medieval-looking pools.
+    - Villages now also use HoMM3-derived frames (from curated `SETTLEMENT_CITY` pool) instead of previous plain fallback houses.
+    - Added deterministic `_pickFromPool(...)` helper and revised `_settlementH3BaseIndex(...)` mapping to avoid visually jarring fantasy outliers.
+  - Result: city/fort/village share a coherent art language closer to the accepted 'good' sample.
+- Validation:
+  - `npx.cmd eslint js/managers/RenderManager.js` passed.
+  - `npm.cmd run build` passed.
+  - New captures:
+    - `output/web-game/map-settlement-unified-city.png`
+    - `output/web-game/map-settlement-unified-fort.png`
+    - `output/web-game/map-settlement-unified-village.png`
+- 2026-03-20: Grounding fix for settlement sprites ('floating' look).
+  - `js/managers/RenderManager.js`
+    - `_drawSettlementH3Frame` now returns placement metrics (baseX/baseY) after draw.
+    - `mbSettlement` changed flow:
+      - For HoMM3 settlement frames: removed broad legacy ground-blend/ring shadow that created hover illusion.
+      - Added tight contact shadow drawn under sprite base via `destination-over`, aligned to sprite foot.
+      - Legacy blend/shadow kept only for non-H3 fallback sprites.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Visual check: `output/web-game/map-settlement-grounded-fix.png`.
+- 2026-03-20: User-requested settlement integration pass (avoid direct copy feel; adapt to game pipeline).
+  - `js/managers/RenderManager.js`:
+    - Added `H3 -> game-adapted` settlement conversion cache (`_SETTLEMENT_H3_ADAPTED_CACHE`).
+    - New adaptation step `_buildAdaptedSettlementH3Canvas(...)`:
+      - removes low-alpha dark DEF shadow artifacts,
+      - computes opaque bounds,
+      - crops and normalizes to game-native sprite sizes,
+      - bottom-aligns consistently for stable grounding.
+    - `_drawSettlementH3Frame(...)` now renders adapted/normalized sprites instead of raw DEF canvas draw.
+  - Effect: HoMM style preserved, but sprites are integrated to game sizing/anchor logic so manual shadow-height tuning is no longer needed for each frame.
+- Validation:
+  - `npx.cmd eslint js/managers/RenderManager.js` passed.
+  - `npm.cmd run build` passed.
+  - Visuals:
+    - `output/web-game/map-settlement-adapted-city.png`
+    - `output/web-game/map-settlement-adapted-fort.png`
+    - `output/web-game/map-settlement-adapted-village.png`
+- 2026-03-20: Full settlement redesign pass (no direct HoMM asset copy for settlements; inspired style integrated to game-native pipeline).
+  - `js/managers/RenderManager.js`
+    - Added faction-aware historical style palettes for settlements (`_SETTLEMENT_FACTION_STYLE`) and fort layout set (`_FORT_LAYOUTS`).
+    - Added deterministic settlement identity/seed utilities:
+      - `_settlementHash32`, `_settlementSeed`, `_seedRand`
+      - ensures repeatable per-settlement visuals.
+    - Rebuilt settlement sprite generation from scratch:
+      - City/town renderer: `_drawFactionCitySprite(...)` with faction architecture motifs (Ottoman domes/minarets, HRE gothic towers, Polish onion-domed details, Spanish alcazar profile, Venice palazzo/campanile profile).
+      - Fort renderer: `_drawFactionFortSprite(...)` driven by 6-layout template system (per faction palette + layout variation).
+      - Village renderer: `_drawVillageSprite(...)` with 15 distinct template variants (faction-independent).
+    - Settlement sprite cache key now settlement/design aware (`_getSettlementSprite(settlement, type, factionId, factionColor)`).
+    - Disabled direct settlement H3 frame usage by returning `null` in `_settlementH3Kind` (terrain/forest/mountain H3 usage remains untouched).
+    - Added city micro-signature lights (seed-coded) to strengthen unique-per-city appearance.
+- Requirement checks (runtime diagnostics via Playwright on current seed):
+  - unique city visuals keys: `43/43`
+  - village variants present on map: `15` (0..14)
+  - fort variant count by faction:
+    - spanish: `6`
+    - polish: `6`
+    - ottoman: `6`
+    - hre: `6`
+    - venice: `6`
+- Visual artifacts:
+  - `output/web-game/map-settlement-redesign-city.png`
+  - `output/web-game/map-settlement-redesign-fort.png`
+  - `output/web-game/map-settlement-redesign-village.png`
+- Validation:
+  - `npx.cmd eslint js/managers/RenderManager.js` passed.
+  - `npm.cmd run build` passed.

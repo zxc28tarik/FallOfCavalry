@@ -7,8 +7,8 @@ export const WORLD = Object.freeze({
   MAP_HEIGHT: 714,
 
   // Yükseklik eşikleri (0.0 - 1.0)
-  SEA_LEVEL: 0.34,
-  SHORE_MAX: 0.39,
+  SEA_LEVEL: 0.305,
+  SHORE_MAX: 0.365,
   PLAIN_MAX: 0.72,
   MOUNTAIN_MIN: 0.79,
   SNOW_ALTITUDE: 0.95,
@@ -22,8 +22,8 @@ export const WORLD = Object.freeze({
   COLOR_SNOW: '#e8e8e8',
 
   // Dünya oluşturma
-  RIVER_COUNT: 12,
-  FOREST_DENSITY: 0.16,
+  RIVER_COUNT: 6,
+  FOREST_DENSITY: 0.24,
   MOUNTAIN_DENSITY: 0.22,
 });
 

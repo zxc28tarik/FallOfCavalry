@@ -577,89 +577,1507 @@ function _drawCavalrySilhouette(ctx, x, y, s, horseC, riderC) {
   ctx.beginPath(); ctx.moveTo(x+s*0.10, y-s*0.10); ctx.lineTo(x+s*0.20, y-s*0.34); ctx.stroke();
 }
 
-/** Draw M&B-style castle/fort/village at world pixel (sx, sy). */
+const _SETTLEMENT_PALETTE = Object.freeze({
+  stoneDark: '#343a42',
+  stoneMid: '#505965',
+  stoneLight: '#6a7484',
+  roofDark: '#6b1f21',
+  roofMid: '#8f2a2c',
+  roofLight: '#b03a3c',
+  woodDark: '#4f3018',
+  woodMid: '#734a24',
+  woodLight: '#9f6a32',
+  plaster: '#b7a184',
+  pathDark: '#6e4f2d',
+  pathLight: '#9a7444',
+  outline: 'rgba(0,0,0,0.6)',
+});
+const _SETTLEMENT_SPRITE_CACHE = new Map();
+const _SETTLEMENT_H3_ADAPTED_CACHE = new Map();
+
+const _SETTLEMENT_FACTION_STYLE = Object.freeze({
+  ottoman: Object.freeze({
+    stoneDark: '#5a5147',
+    stoneMid: '#7c6f60',
+    stoneLight: '#a69279',
+    roofDark: '#7b3b2a',
+    roofMid: '#a65338',
+    roofLight: '#cf8a61',
+    domeDark: '#2d5568',
+    domeMid: '#427d98',
+    domeLight: '#69a8c5',
+    plaster: '#d4c2a8',
+    accent: '#1b6c8b',
+  }),
+  hre: Object.freeze({
+    stoneDark: '#3f4653',
+    stoneMid: '#586274',
+    stoneLight: '#808b9e',
+    roofDark: '#542a2d',
+    roofMid: '#744047',
+    roofLight: '#9f5d66',
+    domeDark: '#4f5f75',
+    domeMid: '#6c829f',
+    domeLight: '#95abc7',
+    plaster: '#b9b2a9',
+    accent: '#c2a14a',
+  }),
+  polish: Object.freeze({
+    stoneDark: '#5e5c69',
+    stoneMid: '#7d7889',
+    stoneLight: '#a9a2b6',
+    roofDark: '#73292e',
+    roofMid: '#9b3942',
+    roofLight: '#c7706e',
+    domeDark: '#405f94',
+    domeMid: '#6085c1',
+    domeLight: '#8eb1e2',
+    plaster: '#d2c2ad',
+    accent: '#345cad',
+  }),
+  spanish: Object.freeze({
+    stoneDark: '#695948',
+    stoneMid: '#8e765f',
+    stoneLight: '#b89a79',
+    roofDark: '#80412a',
+    roofMid: '#b25d3b',
+    roofLight: '#d98d5f',
+    domeDark: '#6d5c48',
+    domeMid: '#957355',
+    domeLight: '#bf946d',
+    plaster: '#e1cba8',
+    accent: '#9a2f28',
+  }),
+  venice: Object.freeze({
+    stoneDark: '#63584f',
+    stoneMid: '#87786b',
+    stoneLight: '#b59f8d',
+    roofDark: '#6a3a30',
+    roofMid: '#8f5245',
+    roofLight: '#bf7e65',
+    domeDark: '#3f6670',
+    domeMid: '#5b8793',
+    domeLight: '#83b5c1',
+    plaster: '#dfc8b5',
+    accent: '#2d6784',
+  }),
+  bandit: Object.freeze({
+    stoneDark: '#463f39',
+    stoneMid: '#5b5048',
+    stoneLight: '#7a6d61',
+    roofDark: '#4f321e',
+    roofMid: '#69462c',
+    roofLight: '#8d6241',
+    domeDark: '#3f4f56',
+    domeMid: '#5c6f78',
+    domeLight: '#7f95a1',
+    plaster: '#a7937b',
+    accent: '#7b2626',
+  }),
+});
+
+const _FORT_LAYOUTS_BY_FACTION = Object.freeze({
+  ottoman: Object.freeze([
+    Object.freeze({ wallW: 0.64, wallH: 0.24, towers: 2, keep: true, bastion: false, round: true, minaret: true, domeKeep: true }),
+    Object.freeze({ wallW: 0.68, wallH: 0.22, towers: 3, keep: false, bastion: true, round: false, minaret: false, gateArch: true }),
+    Object.freeze({ wallW: 0.60, wallH: 0.23, towers: 2, keep: true, bastion: true, round: true, minaret: true, barbican: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.22, towers: 1, keep: true, bastion: false, round: false, minaret: false, splitWall: true }),
+    Object.freeze({ wallW: 0.66, wallH: 0.21, towers: 2, keep: true, bastion: true, round: true, minaret: true, splitWall: true }),
+    Object.freeze({ wallW: 0.56, wallH: 0.25, towers: 2, keep: false, bastion: true, round: false, minaret: true, gateArch: true }),
+    Object.freeze({ wallW: 0.62, wallH: 0.24, towers: 3, keep: true, bastion: false, round: false, minaret: true, barbican: true }),
+  ]),
+  hre: Object.freeze([
+    Object.freeze({ wallW: 0.64, wallH: 0.24, towers: 2, keep: true, bastion: false, round: false, spireKeep: true }),
+    Object.freeze({ wallW: 0.70, wallH: 0.22, towers: 3, keep: true, bastion: true, round: false, splitWall: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.24, towers: 2, keep: false, bastion: true, round: true, gateArch: true }),
+    Object.freeze({ wallW: 0.62, wallH: 0.23, towers: 1, keep: true, bastion: false, round: false, barbican: true }),
+    Object.freeze({ wallW: 0.66, wallH: 0.22, towers: 2, keep: true, bastion: true, round: false, spireKeep: true }),
+    Object.freeze({ wallW: 0.60, wallH: 0.25, towers: 3, keep: false, bastion: false, round: false, splitWall: true }),
+    Object.freeze({ wallW: 0.56, wallH: 0.24, towers: 2, keep: true, bastion: true, round: true, gateArch: true }),
+  ]),
+  polish: Object.freeze([
+    Object.freeze({ wallW: 0.62, wallH: 0.23, towers: 2, keep: true, bastion: false, round: true, onion: true }),
+    Object.freeze({ wallW: 0.68, wallH: 0.22, towers: 3, keep: false, bastion: true, round: false, onion: true, splitWall: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.24, towers: 2, keep: true, bastion: true, round: false, onion: true, barbican: true }),
+    Object.freeze({ wallW: 0.60, wallH: 0.23, towers: 1, keep: true, bastion: false, round: false, onion: false, gateArch: true }),
+    Object.freeze({ wallW: 0.66, wallH: 0.22, towers: 2, keep: true, bastion: true, round: true, onion: true }),
+    Object.freeze({ wallW: 0.56, wallH: 0.25, towers: 2, keep: false, bastion: true, round: false, onion: false, splitWall: true }),
+    Object.freeze({ wallW: 0.64, wallH: 0.24, towers: 3, keep: true, bastion: false, round: false, onion: true, barbican: true }),
+  ]),
+  spanish: Object.freeze([
+    Object.freeze({ wallW: 0.66, wallH: 0.23, towers: 2, keep: true, bastion: false, round: false, alcazar: true }),
+    Object.freeze({ wallW: 0.70, wallH: 0.21, towers: 3, keep: false, bastion: true, round: false, alcazar: true, splitWall: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.24, towers: 2, keep: true, bastion: true, round: true, alcazar: true, gateArch: true }),
+    Object.freeze({ wallW: 0.62, wallH: 0.23, towers: 1, keep: true, bastion: false, round: false, alcazar: false, barbican: true }),
+    Object.freeze({ wallW: 0.64, wallH: 0.22, towers: 2, keep: true, bastion: true, round: false, alcazar: true, splitWall: true }),
+    Object.freeze({ wallW: 0.56, wallH: 0.25, towers: 2, keep: false, bastion: true, round: false, alcazar: false, gateArch: true }),
+    Object.freeze({ wallW: 0.60, wallH: 0.24, towers: 3, keep: true, bastion: false, round: true, alcazar: true }),
+  ]),
+  venice: Object.freeze([
+    Object.freeze({ wallW: 0.60, wallH: 0.24, towers: 2, keep: true, bastion: false, round: false, campanile: true }),
+    Object.freeze({ wallW: 0.66, wallH: 0.22, towers: 3, keep: false, bastion: true, round: false, campanile: true, splitWall: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.23, towers: 2, keep: true, bastion: true, round: true, campanile: false, gateArch: true }),
+    Object.freeze({ wallW: 0.62, wallH: 0.22, towers: 1, keep: true, bastion: false, round: false, campanile: true, barbican: true }),
+    Object.freeze({ wallW: 0.64, wallH: 0.21, towers: 2, keep: true, bastion: true, round: false, campanile: true }),
+    Object.freeze({ wallW: 0.56, wallH: 0.25, towers: 2, keep: false, bastion: true, round: false, campanile: false, splitWall: true }),
+    Object.freeze({ wallW: 0.62, wallH: 0.24, towers: 3, keep: true, bastion: false, round: true, campanile: true }),
+  ]),
+  bandit: Object.freeze([
+    Object.freeze({ wallW: 0.56, wallH: 0.24, towers: 1, keep: false, bastion: false, round: false }),
+    Object.freeze({ wallW: 0.60, wallH: 0.23, towers: 2, keep: false, bastion: true, round: false }),
+    Object.freeze({ wallW: 0.54, wallH: 0.25, towers: 1, keep: true, bastion: false, round: false }),
+    Object.freeze({ wallW: 0.62, wallH: 0.22, towers: 2, keep: false, bastion: true, round: true }),
+    Object.freeze({ wallW: 0.58, wallH: 0.23, towers: 2, keep: true, bastion: false, round: false, splitWall: true }),
+    Object.freeze({ wallW: 0.60, wallH: 0.24, towers: 3, keep: false, bastion: false, round: false }),
+    Object.freeze({ wallW: 0.56, wallH: 0.24, towers: 2, keep: true, bastion: true, round: false, barbican: true }),
+  ]),
+});
+
+function _settlementHash32(text) {
+  const s = String(text || '');
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i) & 255;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+function _settlementSeed(settlement, salt = 0) {
+  let h = (0x9e3779b9 ^ (salt >>> 0)) >>> 0;
+  const id = Number.isFinite(settlement?.id) ? settlement.id : 0;
+  const tx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor((settlement?.x || 0) / 32);
+  const ty = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor((settlement?.y || 0) / 32);
+  h ^= Math.imul((id + 31) >>> 0, 2246822519) >>> 0;
+  h ^= Math.imul((tx + 131) >>> 0, 3266489917) >>> 0;
+  h ^= Math.imul((ty + 911) >>> 0, 668265263) >>> 0;
+  h ^= _settlementHash32(`${settlement?.name || ''}:${settlement?.ownerFactionId || settlement?.owner || ''}`);
+  return h >>> 0;
+}
+
+function _seedRand(seed, idx = 0) {
+  let s = (seed + Math.imul((idx + 1) >>> 0, 747796405)) >>> 0;
+  s = Math.imul((s ^ (s >>> 15)) >>> 0, 2246822519) >>> 0;
+  s = (s ^ (s >>> 13)) >>> 0;
+  return (s >>> 0) / 4294967295;
+}
+
+function _settlementFactionStyle(fid) {
+  return _SETTLEMENT_FACTION_STYLE[fid] || _SETTLEMENT_FACTION_STYLE.bandit;
+}
+
+function _fortLayoutsForFaction(fid) {
+  return _FORT_LAYOUTS_BY_FACTION[fid] || _FORT_LAYOUTS_BY_FACTION.bandit;
+}
+
+function _cityRegionVariant(settlement, count = 6) {
+  const tx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor((settlement?.x || 0) / 32);
+  const ty = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor((settlement?.y || 0) / 32);
+  const gx = Math.floor(tx / 96);
+  const gy = Math.floor(ty / 84);
+  const owner = settlement?.ownerFactionId || settlement?.owner || 'bandit';
+  const h = _settlementHash32(`${owner}:${gx}:${gy}`);
+  return Math.max(0, h % Math.max(1, count));
+}
+
+function _settlementPalette(fid) {
+  const style = _settlementFactionStyle(fid);
+  return {
+    stoneDark: style.stoneDark,
+    stoneMid: style.stoneMid,
+    stoneLight: style.stoneLight,
+    roofDark: style.roofDark,
+    roofMid: style.roofMid,
+    roofLight: style.roofLight,
+    woodDark: _hexShade(style.roofDark, -0.12),
+    woodMid: _hexShade(style.roofMid, -0.02),
+    woodLight: _hexShade(style.roofLight, 0.10),
+    plaster: style.plaster,
+    pathDark: '#6e4f2d',
+    pathLight: '#9a7444',
+    outline: 'rgba(0,0,0,0.6)',
+    accent: style.accent,
+    domeDark: style.domeDark,
+    domeMid: style.domeMid,
+    domeLight: style.domeLight,
+  };
+}
+
+function _tintSettlementPalette(basePal, stoneDelta = 0, roofDelta = 0, plasterDelta = 0) {
+  const pal = { ...basePal };
+  pal.stoneDark = _hexShade(basePal.stoneDark, stoneDelta - 0.04);
+  pal.stoneMid = _hexShade(basePal.stoneMid, stoneDelta);
+  pal.stoneLight = _hexShade(basePal.stoneLight, stoneDelta + 0.05);
+  pal.roofDark = _hexShade(basePal.roofDark, roofDelta - 0.04);
+  pal.roofMid = _hexShade(basePal.roofMid, roofDelta);
+  pal.roofLight = _hexShade(basePal.roofLight, roofDelta + 0.06);
+  pal.plaster = _hexShade(basePal.plaster, plasterDelta);
+  pal.woodDark = _hexShade(basePal.woodDark, roofDelta * 0.35);
+  pal.woodMid = _hexShade(basePal.woodMid, roofDelta * 0.38);
+  pal.woodLight = _hexShade(basePal.woodLight, roofDelta * 0.42);
+  pal.pathDark = _hexShade(basePal.pathDark, stoneDelta * 0.35);
+  pal.pathLight = _hexShade(basePal.pathLight, stoneDelta * 0.35);
+  pal.domeDark = _hexShade(basePal.domeDark, roofDelta * 0.30);
+  pal.domeMid = _hexShade(basePal.domeMid, roofDelta * 0.35);
+  pal.domeLight = _hexShade(basePal.domeLight, roofDelta * 0.40);
+  return pal;
+}
+
+function _cityPaletteByRegion(basePal, fid, rv) {
+  const idx = Math.max(0, rv | 0) % 6;
+  const table = {
+    ottoman: [
+      [0.00, 0.03, 0.04],
+      [-0.04, -0.02, -0.01],
+      [0.06, 0.00, 0.06],
+      [0.02, 0.07, 0.03],
+      [-0.02, 0.10, 0.00],
+      [0.05, -0.03, 0.03],
+    ],
+    hre: [
+      [0.00, 0.04, 0.00],
+      [0.05, -0.02, 0.05],
+      [-0.06, 0.06, -0.03],
+      [0.04, 0.08, 0.02],
+      [-0.02, -0.04, 0.00],
+      [0.07, 0.00, 0.06],
+    ],
+    polish: [
+      [0.03, 0.05, 0.03],
+      [-0.03, 0.10, -0.02],
+      [0.06, -0.01, 0.06],
+      [0.00, 0.07, 0.01],
+      [-0.05, 0.03, -0.04],
+      [0.04, -0.03, 0.03],
+    ],
+    spanish: [
+      [0.01, 0.09, 0.06],
+      [-0.03, 0.04, 0.01],
+      [0.06, -0.02, 0.08],
+      [0.04, 0.12, 0.04],
+      [-0.04, 0.00, -0.02],
+      [0.08, 0.03, 0.09],
+    ],
+    venice: [
+      [0.02, 0.04, 0.08],
+      [-0.02, 0.08, 0.02],
+      [0.06, -0.02, 0.10],
+      [0.00, 0.10, 0.04],
+      [-0.05, 0.02, -0.02],
+      [0.07, 0.00, 0.12],
+    ],
+    bandit: [
+      [-0.06, -0.04, -0.05],
+      [-0.04, 0.00, -0.03],
+      [0.00, -0.02, -0.01],
+      [-0.02, 0.02, -0.01],
+      [0.03, -0.01, 0.00],
+      [0.05, 0.04, 0.02],
+    ],
+  };
+  const row = table[fid] || table.bandit;
+  const triple = row[idx] || row[0];
+  return _tintSettlementPalette(basePal, triple[0], triple[1], triple[2]);
+}
+
+function _fortPaletteByVariant(basePal, fid, variant) {
+  const idx = Math.max(0, variant | 0) % 7;
+  const table = {
+    ottoman: [[0.02, 0.06, 0.05], [-0.03, 0.00, -0.01], [0.06, -0.03, 0.06], [0.00, 0.09, 0.02], [0.04, 0.02, 0.07], [-0.05, 0.05, -0.03], [0.08, -0.01, 0.09]],
+    hre: [[0.00, 0.04, 0.00], [0.05, -0.02, 0.04], [-0.04, 0.07, -0.04], [0.03, 0.09, 0.02], [-0.02, -0.05, -0.02], [0.07, 0.01, 0.06], [0.02, 0.11, 0.03]],
+    polish: [[0.02, 0.08, 0.02], [-0.03, 0.02, -0.03], [0.06, -0.01, 0.05], [0.00, 0.10, 0.01], [-0.05, 0.04, -0.04], [0.05, -0.03, 0.03], [0.08, 0.01, 0.08]],
+    spanish: [[0.01, 0.11, 0.07], [-0.03, 0.04, 0.00], [0.06, -0.02, 0.09], [0.04, 0.13, 0.03], [-0.04, 0.00, -0.03], [0.08, 0.03, 0.10], [0.02, 0.07, 0.05]],
+    venice: [[0.03, 0.05, 0.09], [-0.02, 0.08, 0.01], [0.07, -0.01, 0.11], [0.00, 0.11, 0.03], [-0.05, 0.03, -0.03], [0.06, 0.00, 0.12], [0.02, 0.09, 0.07]],
+    bandit: [[-0.07, -0.05, -0.06], [-0.05, -0.01, -0.04], [-0.02, 0.01, -0.02], [0.00, 0.03, -0.01], [0.03, -0.01, 0.00], [0.04, 0.02, 0.01], [0.06, 0.04, 0.03]],
+  };
+  const row = table[fid] || table.bandit;
+  const triple = row[idx] || row[0];
+  return _tintSettlementPalette(basePal, triple[0], triple[1], triple[2]);
+}
+
+function _settlementColorTriplet(color) {
+  if (typeof color === 'string') {
+    const s = color.trim();
+    if (s.startsWith('#')) {
+      const hex = s.slice(1);
+      if (hex.length === 3) {
+        return [
+          parseInt(hex[0] + hex[0], 16) || 0,
+          parseInt(hex[1] + hex[1], 16) || 0,
+          parseInt(hex[2] + hex[2], 16) || 0,
+        ];
+      }
+      if (hex.length >= 6) {
+        return [
+          parseInt(hex.slice(0, 2), 16) || 0,
+          parseInt(hex.slice(2, 4), 16) || 0,
+          parseInt(hex.slice(4, 6), 16) || 0,
+        ];
+      }
+    }
+    const m = s.match(/rgba?\(([^)]+)\)/i);
+    if (m) {
+      const parts = m[1].split(',').map((x) => Number.parseFloat(x.trim()));
+      if (parts.length >= 3) {
+        return [_clampByte(parts[0]), _clampByte(parts[1]), _clampByte(parts[2])];
+      }
+    }
+  }
+  return [128, 128, 128];
+}
+
+function _rgbLuma(r, g, b) {
+  return (r * 77 + g * 150 + b * 29) >> 8;
+}
+
+function _norm01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+function _looksStoneLike(r, g, b) {
+  return Math.abs(r - g) <= 20 && Math.abs(g - b) <= 20;
+}
+
+function _looksWarmRoofLike(r, g, b) {
+  return r > (g + 10) && r > (b + 8) && r >= 54;
+}
+
+function _looksPlasterLike(r, g, b) {
+  return r >= 68 && g >= 50 && b >= 34 && r > g && g > b && (r - b) <= 80;
+}
+
+function _looksAccentLike(r, g, b) {
+  const strongRed = r >= 140 && g <= 122 && b <= 122;
+  const strongBlue = b >= 130 && r <= 130 && g <= 140;
+  return strongRed || strongBlue;
+}
+
+function _hexShade(hex, delta = 0) {
+  try {
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (!Number.isFinite(n)) return hex || '#888888';
+    const d = Math.round(delta * 255);
+    const r = _clampByte((n >> 16) + d);
+    const g = _clampByte(((n >> 8) & 255) + d);
+    const b = _clampByte((n & 255) + d);
+    return `rgb(${r},${g},${b})`;
+  } catch {
+    return hex || '#888888';
+  }
+}
+
+function _settlementSpriteRect(ctx, color, x, y, w, h) {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  const rw = Math.max(1, Math.round(w));
+  const rh = Math.max(1, Math.round(h));
+  ctx.fillStyle = color;
+  ctx.fillRect(rx, ry, rw, rh);
+}
+
+function _settlementSpriteFrame(ctx, x, y, w, h, light, dark) {
+  const sx = Math.round(x);
+  const sy = Math.round(y);
+  const sw = Math.max(1, Math.round(w));
+  const sh = Math.max(1, Math.round(h));
+  _settlementSpriteRect(ctx, light, sx, sy, sw, 1);
+  _settlementSpriteRect(ctx, light, sx, sy, 1, sh);
+  _settlementSpriteRect(ctx, dark, sx, sy + sh - 1, sw, 1);
+  _settlementSpriteRect(ctx, dark, sx + sw - 1, sy, 1, sh);
+}
+
+function _settlementSpriteDither(ctx, x, y, w, h, colorA, colorB, seed = 0) {
+  const sx = Math.round(x);
+  const sy = Math.round(y);
+  const ex = sx + Math.max(1, Math.round(w));
+  const ey = sy + Math.max(1, Math.round(h));
+  const b4 = [
+    0, 8, 2, 10,
+    12, 4, 14, 6,
+    3, 11, 1, 9,
+    15, 7, 13, 5,
+  ];
+  for (let yy = sy; yy < ey; yy++) {
+    for (let xx = sx; xx < ex; xx++) {
+      const idx = ((yy + (seed & 3)) & 3) * 4 + ((xx + ((seed >>> 2) & 3)) & 3);
+      const b = b4[idx];
+      const n = (Math.imul(xx + seed * 3, 1103515245) + Math.imul(yy + seed * 7, 12345)) >>> 0;
+      const threshold = (n >>> 28) & 15;
+      const useA = b <= threshold;
+      ctx.fillStyle = useA ? colorA : colorB;
+      ctx.fillRect(xx, yy, 1, 1);
+    }
+  }
+}
+
+function _settlementSpriteCrenels(ctx, x, y, w, light, dark) {
+  const sx = Math.round(x);
+  const sy = Math.round(y);
+  const width = Math.max(2, Math.round(w));
+  _settlementSpriteRect(ctx, _hexShade(light, 0.08), sx, sy - 3, width, 1);
+  for (let i = 0; i < width; i += 3) {
+    _settlementSpriteRect(ctx, light, sx + i, sy - 2, Math.min(2, width - i), 2);
+  }
+  _settlementSpriteRect(ctx, _hexShade(dark, -0.10), sx, sy, width, 1);
+  _settlementSpriteRect(ctx, dark, sx, sy + 1, width, 1);
+}
+
+function _settlementSpriteTower(ctx, x, y, w, h, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark) {
+  _settlementSpriteRect(ctx, wallMain, x, y, w, h);
+  _settlementSpriteDither(ctx, x, y, w, h, wallLight, wallDark, (Math.round(x) + Math.round(y)) & 15);
+  _settlementSpriteFrame(ctx, x, y, w, h, _hexShade(wallLight, 0.08), _hexShade(wallDark, -0.10));
+  _settlementSpriteCrenels(ctx, x, y, w, wallLight, wallDark);
+  _settlementSpriteRect(ctx, wallDark, x, y + h - 1, w, 1);
+  _settlementSpriteRect(ctx, 'rgba(0,0,0,0.55)', x + Math.floor(w * 0.38), y + Math.floor(h * 0.34), Math.max(2, Math.floor(w * 0.22)), Math.max(4, Math.floor(h * 0.44)));
+
+  const cx = x + Math.floor(w * 0.5);
+  const roofH = Math.max(4, Math.floor(w * 0.95));
+  ctx.fillStyle = roofDark;
+  ctx.beginPath();
+  ctx.moveTo(x - 1, y);
+  ctx.lineTo(cx, y - roofH);
+  ctx.lineTo(x + w + 1, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = roofMain;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 1);
+  ctx.lineTo(cx, y - roofH + 1);
+  ctx.lineTo(x + w, y + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = roofLight;
+  ctx.beginPath();
+  ctx.moveTo(cx, y - roofH + 1);
+  ctx.lineTo(x + Math.floor(w * 0.45), y + 1);
+  ctx.lineTo(x + Math.floor(w * 0.67), y + 1);
+  ctx.closePath();
+  ctx.fill();
+  _settlementSpriteRect(ctx, _hexShade(roofDark, -0.12), x - 1, y, w + 2, 1);
+  _settlementSpriteRect(ctx, _hexShade(roofLight, 0.10), cx, y - roofH + 1, 1, roofH);
+}
+
+function _settlementSpriteHouse(ctx, x, y, w, h, wallColor, roofBase, roofMid, roofLight) {
+  _settlementSpriteRect(ctx, wallColor, x, y, w, h);
+  _settlementSpriteDither(
+    ctx,
+    x + 1,
+    y + 1,
+    Math.max(1, w - 2),
+    Math.max(1, h - 2),
+    _hexShade(wallColor, 0.04),
+    _hexShade(wallColor, -0.08),
+    (Math.round(x) * 3 + Math.round(y) * 5) & 15,
+  );
+  _settlementSpriteFrame(ctx, x, y, w, h, _hexShade(wallColor, 0.12), _hexShade(wallColor, -0.20));
+  _settlementSpriteRect(ctx, _hexShade(wallColor, -0.18), x, y + h - 1, w, 1);
+  _settlementSpriteRect(ctx, 'rgba(30,20,10,0.62)', x + Math.floor(w * 0.42), y + Math.floor(h * 0.42), Math.max(2, Math.floor(w * 0.18)), Math.max(3, Math.floor(h * 0.58)));
+
+  const cx = x + Math.floor(w * 0.5);
+  const roofH = Math.max(3, Math.floor(h * 0.82));
+  ctx.fillStyle = roofBase;
+  ctx.beginPath();
+  ctx.moveTo(x - 1, y);
+  ctx.lineTo(cx, y - roofH);
+  ctx.lineTo(x + w + 1, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = roofMid;
+  ctx.beginPath();
+  ctx.moveTo(x, y + 1);
+  ctx.lineTo(cx, y - roofH + 1);
+  ctx.lineTo(x + w, y + 1);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = roofLight;
+  ctx.beginPath();
+  ctx.moveTo(cx, y - roofH + 1);
+  ctx.lineTo(x + Math.floor(w * 0.45), y + 1);
+  ctx.lineTo(x + Math.floor(w * 0.62), y + 1);
+  ctx.closePath();
+  ctx.fill();
+  _settlementSpriteRect(ctx, _hexShade(roofBase, -0.10), x - 1, y, w + 2, 1);
+  _settlementSpriteRect(ctx, _hexShade(roofLight, 0.12), cx, y - roofH + 1, 1, roofH);
+}
+
+function _settlementSpritePennant(ctx, x, y, color) {
+  const flagColor = color || '#c0392b';
+  _settlementSpriteRect(ctx, '#3b2816', x, y - 5, 1, 6);
+  _settlementSpriteRect(ctx, _hexShade(flagColor, -0.10), x + 1, y - 5, 5, 3);
+  _settlementSpriteRect(ctx, flagColor, x + 1, y - 4, 5, 2);
+  _settlementSpriteRect(ctx, _hexShade(flagColor, 0.18), x + 2, y - 4, 2, 1);
+  _settlementSpriteRect(ctx, 'rgba(255,255,255,0.55)', x + 2, y - 3, 1, 1);
+}
+
+function _spriteTriangle(ctx, color, x1, y1, x2, y2, x3, y3) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x3, y3);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function _spriteDome(ctx, dark, mid, light, cx, cy, rx, ry) {
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  _ellipse(ctx, cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = mid;
+  ctx.beginPath();
+  _ellipse(ctx, cx, cy + 1, rx * 0.88, ry * 0.82, 0, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = light;
+  ctx.beginPath();
+  _ellipse(ctx, cx - rx * 0.28, cy - ry * 0.20, rx * 0.34, ry * 0.24, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function _drawCityRegionMotif(ctx, fid, pal, rv, seed, wallX, wallY, wallW, wallH, w, h) {
+  const bandY = wallY + wallH - 2;
+  if (rv === 0) {
+    const stallW = 7;
+    const gap = 4;
+    const start = wallX + Math.max(2, Math.floor((wallW - (stallW * 3 + gap * 2)) * 0.5));
+    for (let i = 0; i < 3; i++) {
+      const sx = start + i * (stallW + gap);
+      _settlementSpriteRect(ctx, pal.plaster, sx, bandY + 1, stallW, 4);
+      _spriteTriangle(ctx, pal.roofMid, sx - 1, bandY + 1, sx + Math.floor(stallW * 0.5), bandY - 3, sx + stallW + 1, bandY + 1);
+      _settlementSpriteRect(ctx, _hexShade(pal.roofLight, 0.08), sx + 1, bandY - 1, stallW - 2, 1);
+    }
+    return;
+  }
+
+  if (rv === 1) {
+    const tw = Math.max(7, Math.floor(w * 0.10));
+    const th = Math.max(14, Math.floor(h * 0.24));
+    const tx = wallX + Math.max(2, Math.floor((fid === 'venice' ? wallW - tw - 3 : 3)));
+    const ty = wallY - th + 5;
+    _settlementSpriteRect(ctx, pal.stoneMid, tx, ty, tw, th);
+    _settlementSpriteDither(ctx, tx, ty, tw, th, pal.stoneLight, pal.stoneDark, 2);
+    if (fid === 'ottoman') {
+      _spriteTriangle(ctx, pal.roofDark, tx - 1, ty + 1, tx + Math.floor(tw * 0.5), ty - 5, tx + tw + 1, ty + 1);
+    } else if (fid === 'polish') {
+      _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, tx + Math.floor(tw * 0.5), ty + 1, Math.floor(tw * 0.44), Math.floor(tw * 0.33));
+    } else {
+      _spriteTriangle(ctx, pal.roofMid, tx - 1, ty + 1, tx + Math.floor(tw * 0.5), ty - 7, tx + tw + 1, ty + 1);
+    }
+    _settlementSpriteRect(ctx, 'rgba(28,20,12,0.70)', tx + Math.floor(tw * 0.38), ty + Math.floor(th * 0.36), Math.max(2, Math.floor(tw * 0.20)), 3);
+    return;
+  }
+
+  if (rv === 2) {
+    const cx = wallX + Math.floor(wallW * 0.50);
+    const cy = bandY + 1;
+    const rw = Math.max(12, Math.floor(wallW * 0.36));
+    _settlementSpriteRect(ctx, pal.stoneDark, cx - Math.floor(rw * 0.5), cy, rw, 3);
+    _settlementSpriteRect(ctx, pal.stoneMid, cx - Math.floor(rw * 0.5), cy - 1, rw, 1);
+    _settlementSpriteRect(ctx, pal.plaster, cx - 2, cy - 7, 4, 6);
+    if (fid === 'ottoman' || fid === 'venice') {
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, cx, cy - 8, 4, 3);
+    } else {
+      _spriteTriangle(ctx, pal.roofMid, cx - 4, cy - 7, cx, cy - 12, cx + 4, cy - 7);
+    }
+    return;
+  }
+
+  if (rv === 3) {
+    const laneY = bandY + 2;
+    _settlementSpriteRect(ctx, _hexShade(pal.pathDark, 0.04), wallX + 2, laneY, wallW - 4, 2);
+    for (let i = 0; i < 4; i++) {
+      const px = wallX + 5 + i * Math.floor((wallW - 12) / 4);
+      _settlementSpriteRect(ctx, _hexShade(pal.pathLight, -0.08), px, laneY + (i & 1), 2, 1);
+    }
+    return;
+  }
+
+  if (rv === 4) {
+    const fx = wallX + Math.floor(wallW * 0.22);
+    const fy = wallY + Math.floor(wallH * 0.18);
+    _settlementSpriteRect(ctx, pal.stoneMid, fx, fy, 10, 7);
+    _settlementSpriteRect(ctx, pal.stoneLight, fx + 1, fy + 1, 8, 5);
+    _settlementSpriteRect(ctx, pal.stoneDark, fx + 4, fy - 5, 2, 5);
+    _settlementSpriteRect(ctx, pal.roofDark, fx + 3, fy - 5, 4, 1);
+    _settlementSpriteRect(ctx, _hexShade(pal.roofLight, 0.05), fx + 2, fy + 3, 6, 1);
+    return;
+  }
+
+  const rowY = wallY + Math.max(1, Math.floor(wallH * 0.20));
+  for (let i = 0; i < 5; i++) {
+    const hx = wallX + 4 + i * Math.floor((wallW - 10) / 5);
+    const hw = 5 + ((i + (seed & 3)) % 2);
+    _settlementSpriteHouse(ctx, hx, rowY + (i & 1), hw, 5, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
+  }
+}
+
+function _drawFactionCitySprite(ctx, fid, pal, seed, factionColor, w, h, regionVariant = 0) {
+  let wallX = Math.floor(w * 0.14);
+  let wallY = Math.floor(h * 0.42);
+  let wallW = Math.floor(w * 0.72);
+  let wallH = Math.floor(h * 0.28);
+  const rv = Math.max(0, regionVariant | 0) % 6;
+
+  if (rv === 1) {
+    wallY -= 2;
+    wallH += 2;
+  } else if (rv === 2) {
+    wallX -= 2;
+    wallW += 4;
+  } else if (rv === 3) {
+    wallY += 1;
+    wallH -= 1;
+  } else if (rv === 4) {
+    wallY -= 1;
+    wallH += 1;
+    wallW -= 2;
+    wallX += 1;
+  } else if (rv === 5) {
+    wallX -= 1;
+    wallW += 2;
+  }
+
+  _settlementSpriteRect(ctx, pal.stoneMid, wallX, wallY, wallW, wallH);
+  _settlementSpriteDither(ctx, wallX, wallY, wallW, wallH, pal.stoneLight, pal.stoneDark, seed & 3);
+  _settlementSpriteCrenels(ctx, wallX, wallY, wallW, pal.stoneLight, pal.stoneDark);
+  _settlementSpriteRect(ctx, 'rgba(22,18,14,0.70)', wallX + Math.floor(wallW * 0.46), wallY + Math.floor(wallH * 0.35), Math.max(4, Math.floor(w * 0.06)), Math.max(6, Math.floor(h * 0.13)));
+
+  if (rv === 2) {
+    const ux = wallX + Math.floor(wallW * 0.14);
+    const uw = Math.floor(wallW * 0.72);
+    _settlementSpriteRect(ctx, _hexShade(pal.stoneMid, 0.05), ux, wallY - 6, uw, 6);
+    _settlementSpriteCrenels(ctx, ux, wallY - 6, uw, _hexShade(pal.stoneLight, 0.03), pal.stoneDark);
+  } else if (rv === 4) {
+    const tx = wallX + 3;
+    const tw = wallW - 6;
+    _settlementSpriteRect(ctx, _hexShade(pal.stoneDark, 0.08), tx, wallY + Math.floor(wallH * 0.55), tw, Math.max(2, Math.floor(wallH * 0.18)));
+    for (let i = 0; i < 3; i++) {
+      const sx = tx + 3 + i * Math.floor((tw - 8) / 3);
+      _settlementSpriteRect(ctx, _hexShade(pal.stoneLight, -0.02), sx, wallY + Math.floor(wallH * 0.60), 2, 1);
+    }
+  } else if (rv === 5) {
+    const lx = wallX + Math.floor(wallW * 0.28);
+    const rx = wallX + Math.floor(wallW * 0.62);
+    _settlementSpriteRect(ctx, pal.stoneMid, lx, wallY - 7, 6, 7);
+    _settlementSpriteRect(ctx, pal.stoneMid, rx, wallY - 7, 6, 7);
+    _spriteTriangle(ctx, pal.roofMid, lx - 1, wallY - 7, lx + 3, wallY - 12, lx + 7, wallY - 7);
+    _spriteTriangle(ctx, pal.roofMid, rx - 1, wallY - 7, rx + 3, wallY - 12, rx + 7, wallY - 7);
+  }
+
+  if (fid === 'ottoman') {
+    const minaretW = Math.max(4, Math.floor(w * 0.05));
+    const minaretH = Math.max(18, Math.floor(h * (rv === 2 ? 0.38 : 0.34)));
+    const leftX = wallX + (rv === 1 ? 8 : 2);
+    const rightX = wallX + wallW - minaretW - (rv === 1 ? 8 : 2);
+    const topY = wallY - minaretH + 2;
+    _settlementSpriteRect(ctx, pal.plaster, leftX, topY, minaretW, minaretH);
+    _settlementSpriteRect(ctx, pal.plaster, rightX, topY, minaretW, minaretH);
+    _spriteTriangle(ctx, pal.roofDark, leftX - 1, topY + 1, leftX + Math.floor(minaretW * 0.5), topY - Math.floor(minaretW * 0.9), leftX + minaretW + 1, topY + 1);
+    _spriteTriangle(ctx, pal.roofDark, rightX - 1, topY + 1, rightX + Math.floor(minaretW * 0.5), topY - Math.floor(minaretW * 0.9), rightX + minaretW + 1, topY + 1);
+    if (rv === 0) {
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.50), wallY + 1, Math.floor(w * 0.13), Math.floor(h * 0.11));
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.30), wallY + 4, Math.floor(w * 0.09), Math.floor(h * 0.08));
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.70), wallY + 4, Math.floor(w * 0.09), Math.floor(h * 0.08));
+    } else if (rv === 1) {
+      _settlementSpriteRect(ctx, pal.plaster, wallX + 11, wallY - 8, wallW - 22, 9);
+      for (let i = 0; i < 4; i++) _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.20), wallX + 13 + i * 10, wallY - 5, 6, 2);
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.50), wallY + 2, Math.floor(w * 0.09), Math.floor(h * 0.07));
+    } else if (rv === 2) {
+      _settlementSpriteRect(ctx, pal.stoneMid, wallX + Math.floor(wallW * 0.43), wallY - 16, Math.floor(w * 0.14), 18);
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.50), wallY - 16, Math.floor(w * 0.08), Math.floor(h * 0.06));
+      _settlementSpriteRect(ctx, pal.stoneDark, wallX + Math.floor(wallW * 0.22), wallY - 4, Math.floor(w * 0.10), 5);
+      _settlementSpriteRect(ctx, pal.stoneDark, wallX + Math.floor(wallW * 0.68), wallY - 4, Math.floor(w * 0.10), 5);
+    } else {
+      _settlementSpriteTower(ctx, wallX + 2, wallY - 11, 10, 20, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _settlementSpriteTower(ctx, wallX + wallW - 12, wallY - 11, 10, 20, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.50), wallY + 2, Math.floor(w * 0.10), Math.floor(h * 0.08));
+    }
+  } else if (fid === 'hre') {
+    if (rv === 0) {
+      _settlementSpriteTower(ctx, wallX + 1, wallY - 13, 11, 24, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _settlementSpriteTower(ctx, wallX + Math.floor(wallW * 0.42), wallY - 20, 12, 30, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _settlementSpriteTower(ctx, wallX + wallW - 12, wallY - 13, 11, 24, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    } else if (rv === 1) {
+      _settlementSpriteRect(ctx, pal.plaster, wallX + 10, wallY - 9, wallW - 20, 10);
+      _spriteTriangle(ctx, pal.roofMid, wallX + 8, wallY - 9, wallX + Math.floor(wallW * 0.5), wallY - 20, wallX + wallW - 8, wallY - 9);
+      _settlementSpriteTower(ctx, wallX + wallW - 14, wallY - 18, 12, 28, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    } else if (rv === 2) {
+      _settlementSpriteRect(ctx, pal.stoneMid, wallX + 2, wallY - 12, wallW - 4, 10);
+      _settlementSpriteCrenels(ctx, wallX + 2, wallY - 12, wallW - 4, pal.stoneLight, pal.stoneDark);
+      _settlementSpriteTower(ctx, wallX + 3, wallY - 18, 10, 26, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _settlementSpriteTower(ctx, wallX + wallW - 13, wallY - 18, 10, 26, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    } else {
+      _settlementSpriteTower(ctx, wallX + Math.floor(wallW * 0.43), wallY - 21, 13, 31, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+      _settlementSpriteRect(ctx, pal.plaster, wallX + 8, wallY - 5, wallW - 16, 6);
+      for (let i = 0; i < 4; i++) _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.18), wallX + 11 + i * 9, wallY - 2, 4, 3);
+    }
+    _settlementSpriteHouse(ctx, wallX + 16, wallY + wallH - 7, 12, 8, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
+    _settlementSpriteHouse(ctx, wallX + wallW - 29, wallY + wallH - 7, 12, 8, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
+  } else if (fid === 'polish') {
+    const onionRx = Math.max(4, Math.floor(w * 0.06));
+    const onionRy = Math.max(3, Math.floor(h * 0.05));
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + 3, wallY - 11, 8, 16);
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + wallW - 11, wallY - 11, 8, 16);
+    _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, wallX + 7, wallY - 11, onionRx, onionRy);
+    _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, wallX + wallW - 7, wallY - 11, onionRx, onionRy);
+    if (rv === 0) {
+      _settlementSpriteRect(ctx, pal.plaster, wallX + Math.floor(wallW * 0.37), wallY - 8, Math.floor(w * 0.18), 12);
+      _spriteTriangle(ctx, pal.roofMid, wallX + Math.floor(wallW * 0.34), wallY - 7, wallX + Math.floor(wallW * 0.46), wallY - 16, wallX + Math.floor(wallW * 0.58), wallY - 7);
+    } else if (rv === 1) {
+      _settlementSpriteRect(ctx, pal.stoneMid, wallX + 14, wallY - 12, wallW - 28, 9);
+      _settlementSpriteCrenels(ctx, wallX + 14, wallY - 12, wallW - 28, pal.stoneLight, pal.stoneDark);
+    } else if (rv === 2) {
+      _settlementSpriteHouse(ctx, wallX + 20, wallY - 9, 16, 10, pal.plaster, pal.roofDark, pal.roofMid, pal.roofLight);
+    } else {
+      _settlementSpriteRect(ctx, pal.plaster, wallX + 17, wallY - 9, wallW - 34, 9);
+      for (let i = 0; i < 3; i++) _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.18), wallX + 20 + i * 10, wallY - 6, 6, 2);
+    }
+  } else if (fid === 'spanish') {
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + 2, wallY - 10, wallW - 4, 11);
+    _settlementSpriteCrenels(ctx, wallX + 2, wallY - 10, wallW - 4, pal.stoneLight, pal.stoneDark);
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + 1, wallY - 15, 8, 18);
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + wallW - 9, wallY - 15, 8, 18);
+    _spriteTriangle(ctx, pal.roofMid, wallX, wallY - 15, wallX + 5, wallY - 21, wallX + 10, wallY - 15);
+    _spriteTriangle(ctx, pal.roofMid, wallX + wallW - 10, wallY - 15, wallX + wallW - 5, wallY - 21, wallX + wallW, wallY - 15);
+    if (rv === 0) {
+      for (let i = 0; i < 3; i++) {
+        const wx = wallX + 12 + i * 12;
+        _settlementSpriteRect(ctx, 'rgba(25,18,14,0.58)', wx, wallY + 4, 3, 5);
+      }
+    } else if (rv === 1) {
+      _settlementSpriteRect(ctx, pal.plaster, wallX + 14, wallY - 8, wallW - 28, 8);
+      _spriteTriangle(ctx, pal.roofMid, wallX + 12, wallY - 8, wallX + Math.floor(wallW * 0.5), wallY - 18, wallX + wallW - 12, wallY - 8);
+    } else if (rv === 2) {
+      _settlementSpriteTower(ctx, wallX + Math.floor(wallW * 0.43), wallY - 18, 12, 28, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    } else {
+      _settlementSpriteRect(ctx, pal.stoneDark, wallX + 15, wallY - 4, wallW - 30, 4);
+      _settlementSpriteRect(ctx, pal.stoneMid, wallX + 22, wallY - 13, wallW - 44, 9);
+    }
+  } else if (fid === 'venice') {
+    _settlementSpriteRect(ctx, pal.plaster, wallX + 6, wallY - 8, wallW - 12, 11);
+    _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.12), wallX + 6, wallY + 2, wallW - 12, 1);
+    for (let i = 0; i < 4; i++) {
+      const ax = wallX + 8 + i * 11;
+      _settlementSpriteRect(ctx, pal.stoneDark, ax, wallY + 4, 2, 6);
+      _settlementSpriteRect(ctx, pal.plaster, ax + 1, wallY + 4, 4, 6);
+    }
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + wallW - 15, wallY - 18, 9, 21);
+    _settlementSpriteCrenels(ctx, wallX + wallW - 15, wallY - 18, 9, pal.stoneLight, pal.stoneDark);
+    _spriteTriangle(ctx, pal.roofMid, wallX + wallW - 17, wallY - 18, wallX + wallW - 11, wallY - 26, wallX + wallW - 5, wallY - 18);
+    if (rv === 1) {
+      _settlementSpriteRect(ctx, pal.stoneDark, wallX + 14, wallY - 2, 18, 3);
+      _settlementSpriteRect(ctx, pal.stoneMid, wallX + 20, wallY - 6, 6, 4);
+    } else if (rv === 2) {
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.38), wallY - 6, Math.floor(w * 0.07), Math.floor(h * 0.05));
+      _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, wallX + Math.floor(wallW * 0.57), wallY - 6, Math.floor(w * 0.07), Math.floor(h * 0.05));
+    } else if (rv === 3) {
+      _settlementSpriteTower(ctx, wallX + 4, wallY - 14, 10, 24, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    }
+  } else {
+    _settlementSpriteTower(ctx, wallX + 1, wallY - 12, 10, 22, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    _settlementSpriteTower(ctx, wallX + wallW - 11, wallY - 12, 10, 22, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    if (rv >= 2) _settlementSpriteTower(ctx, wallX + Math.floor(wallW * 0.46), wallY - 16, 9, 26, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+  }
+
+  const houseCount = 2 + Math.floor(_seedRand(seed, 10) * 3);
+  for (let i = 0; i < houseCount; i++) {
+    const hx = wallX + 5 + Math.floor(_seedRand(seed, 20 + i) * (wallW - 20));
+    const hw = 9 + Math.floor(_seedRand(seed, 30 + i) * 4);
+    const hh = 6 + Math.floor(_seedRand(seed, 40 + i) * 3);
+    _settlementSpriteHouse(ctx, hx, wallY + wallH - hh + 1, hw, hh, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
+  }
+
+  _drawCityRegionMotif(ctx, fid, pal, rv, seed, wallX, wallY, wallW, wallH, w, h);
+
+  // City-specific micro signature (seed-coded facade lights) to keep each city visually unique.
+  const sigY = wallY + Math.max(3, Math.floor(wallH * 0.18));
+  for (let i = 0; i < 8; i++) {
+    const bit = ((seed >>> i) & 1) === 1;
+    const sx = wallX + 6 + i * 6;
+    _settlementSpriteRect(ctx, bit ? 'rgba(245,214,118,0.86)' : 'rgba(31,24,18,0.48)', sx, sigY + (i & 1), 2, 2);
+  }
+  _settlementSpritePennant(ctx, wallX + Math.floor(wallW * 0.52), wallY - 2, factionColor);
+}
+
+function _drawFortFactionMotif(ctx, fid, pal, layout, seed, wallX, wallY, wallW, wallH, w, h) {
+  const bandY = wallY + Math.floor(wallH * 0.26);
+  if (fid === 'ottoman') {
+    const domeX = wallX + Math.floor(wallW * 0.50);
+    const domeY = wallY - Math.max(6, Math.floor(h * 0.10));
+    _spriteDome(ctx, pal.domeDark, pal.domeMid, pal.domeLight, domeX, domeY, Math.max(4, Math.floor(w * 0.06)), Math.max(3, Math.floor(h * 0.04)));
+    _settlementSpriteRect(ctx, pal.plaster, domeX - 3, domeY, 6, 4);
+    for (let i = 0; i < 4; i++) {
+      const wx = wallX + 5 + i * Math.floor((wallW - 10) / 4);
+      _settlementSpriteRect(ctx, 'rgba(34,25,18,0.65)', wx, bandY + (i & 1), 2, 2);
+    }
+    return;
+  }
+  if (fid === 'hre') {
+    for (let i = 0; i < 3; i++) {
+      const bx = wallX + 8 + i * Math.floor((wallW - 16) / 3);
+      _settlementSpriteRect(ctx, pal.plaster, bx, bandY + 2, 6, 5);
+      _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.20), bx + 2, bandY + 1, 2, 1);
+      _settlementSpriteRect(ctx, pal.woodDark, bx + 1, bandY + 4, 1, 3);
+      _settlementSpriteRect(ctx, pal.woodDark, bx + 4, bandY + 4, 1, 3);
+    }
+    return;
+  }
+  if (fid === 'polish') {
+    const chapelX = wallX + Math.floor(wallW * 0.46);
+    const chapelY = wallY - Math.max(8, Math.floor(h * 0.14));
+    _settlementSpriteRect(ctx, pal.stoneMid, chapelX - 4, chapelY, 8, 8);
+    _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, chapelX, chapelY, 4, 3);
+    _settlementSpriteRect(ctx, pal.roofLight, chapelX - 1, chapelY - 2, 2, 2);
+    return;
+  }
+  if (fid === 'spanish') {
+    const courtX = wallX + Math.floor(wallW * 0.24);
+    const courtW = Math.max(10, Math.floor(wallW * 0.52));
+    _settlementSpriteRect(ctx, _hexShade(pal.pathLight, -0.04), courtX, wallY + Math.floor(wallH * 0.48), courtW, 3);
+    for (let i = 0; i < 3; i++) {
+      const px = courtX + 2 + i * Math.floor((courtW - 4) / 3);
+      _settlementSpriteRect(ctx, pal.plaster, px, wallY + Math.floor(wallH * 0.42), 2, 2);
+    }
+    return;
+  }
+  if (fid === 'venice') {
+    const canalY = wallY + wallH + 1;
+    _settlementSpriteRect(ctx, _hexShade(pal.domeDark, -0.10), wallX + 2, canalY, wallW - 4, 2);
+    for (let i = 0; i < 3; i++) {
+      const ax = wallX + 8 + i * Math.floor((wallW - 16) / 3);
+      _settlementSpriteRect(ctx, pal.plaster, ax, wallY + Math.floor(wallH * 0.34), 4, 4);
+      _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.16), ax + 1, wallY + Math.floor(wallH * 0.36), 2, 2);
+    }
+    return;
+  }
+  if (layout.gateArch) {
+    _settlementSpriteRect(ctx, _hexShade(pal.stoneDark, -0.05), wallX + Math.floor(wallW * 0.40), wallY + Math.floor(wallH * 0.58), Math.max(6, Math.floor(wallW * 0.20)), 2);
+  }
+  if ((seed & 1) === 1) {
+    _settlementSpriteRect(ctx, pal.plaster, wallX + Math.floor(wallW * 0.18), wallY + Math.floor(wallH * 0.26), 5, 4);
+  }
+}
+
+function _drawFactionFortSprite(ctx, fid, pal, variant, seed, factionColor, w, h) {
+  const layouts = _fortLayoutsForFaction(fid);
+  const layout = layouts[variant % layouts.length];
+  const wallW = Math.floor(w * layout.wallW);
+  const wallH = Math.floor(h * layout.wallH);
+  const wallX = Math.floor((w - wallW) * 0.5);
+  const wallY = Math.floor(h * 0.46);
+
+  if (layout.splitWall) {
+    const leftW = Math.floor(wallW * 0.42);
+    const rightW = Math.floor(wallW * 0.42);
+    const gap = wallW - leftW - rightW;
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX, wallY, leftW, wallH);
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX + leftW + gap, wallY, rightW, wallH);
+    _settlementSpriteDither(ctx, wallX, wallY, leftW, wallH, pal.stoneLight, pal.stoneDark, (seed >>> 3) & 3);
+    _settlementSpriteDither(ctx, wallX + leftW + gap, wallY, rightW, wallH, pal.stoneLight, pal.stoneDark, (seed >>> 5) & 3);
+    _settlementSpriteCrenels(ctx, wallX, wallY, leftW, pal.stoneLight, pal.stoneDark);
+    _settlementSpriteCrenels(ctx, wallX + leftW + gap, wallY, rightW, pal.stoneLight, pal.stoneDark);
+    _settlementSpriteRect(ctx, pal.stoneDark, wallX + leftW, wallY + Math.floor(wallH * 0.35), gap, Math.max(2, Math.floor(wallH * 0.50)));
+  } else {
+    _settlementSpriteRect(ctx, pal.stoneMid, wallX, wallY, wallW, wallH);
+    _settlementSpriteDither(ctx, wallX, wallY, wallW, wallH, pal.stoneLight, pal.stoneDark, (seed >>> 3) & 3);
+    _settlementSpriteCrenels(ctx, wallX, wallY, wallW, pal.stoneLight, pal.stoneDark);
+  }
+
+  if (layout.bastion) {
+    _settlementSpriteRect(ctx, pal.stoneDark, wallX - 5, wallY + Math.floor(wallH * 0.35), 7, Math.floor(wallH * 0.78));
+    _settlementSpriteRect(ctx, pal.stoneDark, wallX + wallW - 2, wallY + Math.floor(wallH * 0.35), 7, Math.floor(wallH * 0.78));
+  }
+
+  const towerW = Math.max(8, Math.floor(w * 0.12));
+  const towerH = Math.max(14, Math.floor(h * 0.28));
+  const towerTop = wallY - towerH + 3;
+  const slots = [];
+  if (layout.towers === 1) slots.push(Math.floor(w * 0.5 - towerW * 0.5));
+  else if (layout.towers === 2) slots.push(wallX - 1, wallX + wallW - towerW + 1);
+  else slots.push(wallX - 1, Math.floor(w * 0.5 - towerW * 0.5), wallX + wallW - towerW + 1);
+
+  for (let i = 0; i < slots.length; i++) {
+    const tx = slots[i];
+    if (layout.round && i !== 1) {
+      _settlementSpriteRect(ctx, pal.stoneMid, tx + 1, towerTop + 2, towerW - 2, towerH);
+      if (layout.onion) {
+        _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, tx + Math.floor(towerW * 0.5), towerTop + 1, Math.floor(towerW * 0.46), Math.floor(towerW * 0.38));
+      } else {
+        _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, tx + Math.floor(towerW * 0.5), towerTop + 2, Math.floor(towerW * 0.46), Math.floor(towerW * 0.34));
+      }
+    } else if ((fid === 'ottoman' || layout.minaret) && i !== 1) {
+      _settlementSpriteRect(ctx, pal.plaster, tx + 2, towerTop + 2, towerW - 4, towerH);
+      _spriteTriangle(ctx, pal.roofDark, tx + 1, towerTop + 3, tx + Math.floor(towerW * 0.5), towerTop - 6, tx + towerW - 1, towerTop + 3);
+    } else {
+      _settlementSpriteTower(ctx, tx, towerTop, towerW, towerH, pal.stoneMid, pal.stoneLight, pal.stoneDark, pal.roofMid, pal.roofLight, pal.roofDark);
+    }
+  }
+
+  if (layout.keep) {
+    const keepW = Math.max(12, Math.floor(w * 0.18));
+    const keepH = Math.max(14, Math.floor(h * 0.25));
+    const keepX = Math.floor(w * 0.5 - keepW * 0.5);
+    const keepY = wallY - keepH + 5;
+    _settlementSpriteRect(ctx, pal.stoneMid, keepX, keepY, keepW, keepH);
+    _settlementSpriteDither(ctx, keepX, keepY, keepW, keepH, pal.stoneLight, pal.stoneDark, 1);
+    if (layout.domeKeep || fid === 'venice' || fid === 'polish') {
+      _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, keepX + Math.floor(keepW * 0.5), keepY + 1, Math.floor(keepW * 0.35), Math.floor(keepW * 0.26));
+    } else if (layout.onion) {
+      _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, keepX + Math.floor(keepW * 0.5), keepY + 1, Math.floor(keepW * 0.30), Math.floor(keepW * 0.30));
+      _settlementSpriteRect(ctx, pal.roofLight, keepX + Math.floor(keepW * 0.46), keepY - 2, Math.max(2, Math.floor(keepW * 0.08)), 2);
+    } else if (layout.spireKeep) {
+      _spriteTriangle(ctx, pal.roofMid, keepX - 2, keepY + 1, keepX + Math.floor(keepW * 0.50), keepY - Math.floor(keepW * 0.70), keepX + keepW + 2, keepY + 1);
+      _settlementSpriteRect(ctx, pal.roofLight, keepX + Math.floor(keepW * 0.48), keepY - Math.floor(keepW * 0.70) - 3, 2, 3);
+    } else {
+      _spriteTriangle(ctx, pal.roofMid, keepX - 1, keepY + 1, keepX + Math.floor(keepW * 0.5), keepY - Math.floor(keepW * 0.52), keepX + keepW + 1, keepY + 1);
+    }
+  }
+
+  if (layout.barbican) {
+    const bx = wallX + Math.floor(wallW * 0.40);
+    const bw = Math.max(8, Math.floor(wallW * 0.20));
+    const by = wallY + Math.floor(wallH * 0.25);
+    _settlementSpriteRect(ctx, pal.stoneDark, bx, by, bw, Math.max(5, Math.floor(wallH * 0.72)));
+    _settlementSpriteCrenels(ctx, bx, by, bw, pal.stoneLight, pal.stoneDark);
+  }
+  if (layout.campanile) {
+    const cx = wallX + wallW - Math.max(9, Math.floor(w * 0.12));
+    const cw = Math.max(8, Math.floor(w * 0.11));
+    const ch = Math.max(18, Math.floor(h * 0.34));
+    const cy = wallY - ch + 4;
+    _settlementSpriteRect(ctx, pal.plaster, cx, cy, cw, ch);
+    _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.18), cx, cy + ch - 1, cw, 1);
+    _spriteTriangle(ctx, pal.roofMid, cx - 1, cy + 1, cx + Math.floor(cw * 0.5), cy - Math.floor(cw * 0.9), cx + cw + 1, cy + 1);
+  }
+  if (layout.alcazar) {
+    _settlementSpriteRect(ctx, pal.plaster, wallX + 8, wallY - 8, wallW - 16, 7);
+    _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.14), wallX + 8, wallY - 1, wallW - 16, 1);
+  }
+  _drawFortFactionMotif(ctx, fid, pal, layout, seed, wallX, wallY, wallW, wallH, w, h);
+
+  const gateH = Math.max(5, Math.floor(h * 0.13));
+  const gateX = wallX + Math.floor(wallW * 0.47);
+  const gateW = Math.max(3, Math.floor(w * 0.05));
+  if (layout.gateArch) {
+    _settlementSpriteRect(ctx, 'rgba(24,18,14,0.72)', gateX, wallY + Math.floor(wallH * 0.36), gateW, gateH);
+    _spriteDome(ctx, '#2a2018', '#35281f', '#483124', gateX + Math.floor(gateW * 0.5), wallY + Math.floor(wallH * 0.36), Math.max(2, Math.floor(gateW * 0.5)), Math.max(1, Math.floor(gateW * 0.25)));
+  } else {
+    _settlementSpriteRect(ctx, 'rgba(24,18,14,0.72)', gateX, wallY + Math.floor(wallH * 0.30), gateW, gateH);
+  }
+  _settlementSpritePennant(ctx, wallX + Math.floor(wallW * (0.42 + _seedRand(seed, 77) * 0.18)), wallY - 1, factionColor);
+}
+
+function _drawHut(ctx, pal, x, y, w, h, tallRoof = false) {
+  _settlementSpriteRect(ctx, pal.plaster, x, y, w, h);
+  _settlementSpriteRect(ctx, _hexShade(pal.plaster, -0.14), x, y + h - 1, w, 1);
+  const roofH = tallRoof ? Math.max(4, Math.floor(h * 1.0)) : Math.max(3, Math.floor(h * 0.78));
+  _spriteTriangle(ctx, pal.woodMid, x - 1, y + 1, x + Math.floor(w * 0.5), y - roofH, x + w + 1, y + 1);
+  _spriteTriangle(ctx, pal.woodLight, x + Math.floor(w * 0.42), y + 1, x + Math.floor(w * 0.5), y - roofH, x + Math.floor(w * 0.68), y + 1);
+  _settlementSpriteRect(ctx, 'rgba(28,20,14,0.62)', x + Math.floor(w * 0.42), y + Math.floor(h * 0.44), Math.max(2, Math.floor(w * 0.16)), Math.max(3, Math.floor(h * 0.56)));
+}
+
+function _drawVillageSprite(ctx, pal, variant, seed, factionColor, w, h) {
+  const v = variant % 15;
+  const baseY = Math.floor(h * 0.58);
+  const hutPal = { ...pal };
+  if (v === 12) {
+    hutPal.plaster = '#a89072';
+    hutPal.woodMid = '#8a6a3b';
+    hutPal.woodLight = '#b48d5d';
+  } else if (v === 13) {
+    hutPal.plaster = '#b9b6b1';
+    hutPal.woodMid = '#5f4b39';
+    hutPal.woodLight = '#7f6650';
+  }
+
+  if (v === 3) {
+    _drawHut(ctx, hutPal, 10, baseY + 1, 12, 9, false);
+    _drawHut(ctx, hutPal, 38, baseY + 2, 12, 8, false);
+    _settlementSpriteRect(ctx, hutPal.woodDark, 27, baseY - 12, 2, 22);
+    _settlementSpriteRect(ctx, hutPal.woodMid, 23, baseY - 5, 10, 2);
+    _settlementSpriteRect(ctx, hutPal.woodMid, 26, baseY - 10, 2, 12);
+  } else if (v === 4) {
+    _drawHut(ctx, hutPal, 10, baseY + 2, 12, 8, false);
+    _drawHut(ctx, hutPal, 38, baseY + 2, 12, 8, false);
+    _settlementSpriteRect(ctx, pal.stoneMid, 25, baseY - 8, 8, 18);
+    _spriteDome(ctx, pal.roofDark, pal.roofMid, pal.roofLight, 29, baseY - 8, 5, 3);
+  } else if (v === 5) {
+    _drawHut(ctx, hutPal, 9, baseY + 2, 16, 9, false);
+    _drawHut(ctx, hutPal, 33, baseY + 3, 16, 8, false);
+    _settlementSpriteRect(ctx, pal.woodDark, 28, baseY + 1, 2, 10);
+    _settlementSpriteRect(ctx, pal.woodLight, 27, baseY + 3, 4, 1);
+  } else if (v === 6) {
+    _drawHut(ctx, hutPal, 9, baseY + 2, 14, 8, false);
+    _settlementSpriteRect(ctx, pal.woodDark, 29, baseY + 4, 18, 6);
+    _settlementSpriteRect(ctx, pal.woodLight, 29, baseY + 3, 18, 1);
+    _spriteTriangle(ctx, pal.woodMid, 28, baseY + 4, 38, baseY - 5, 48, baseY + 4);
+  } else if (v === 7) {
+    _drawHut(ctx, hutPal, 10, baseY + 3, 13, 8, false);
+    _drawHut(ctx, hutPal, 38, baseY + 3, 13, 8, false);
+    for (let i = 0; i < 6; i++) _settlementSpriteRect(ctx, pal.woodDark, 24 + i * 2, baseY + 8, 1, 3);
+  } else if (v === 8) {
+    _drawHut(ctx, hutPal, 9, baseY + 2, 12, 8, false);
+    _drawHut(ctx, hutPal, 39, baseY + 2, 12, 8, false);
+    for (let i = 0; i < 7; i++) _settlementSpriteRect(ctx, pal.woodMid, 23 + i * 4, baseY - 3 + (i & 1), 2, 12);
+  } else if (v === 9) {
+    _drawHut(ctx, hutPal, 11, baseY + 2, 13, 8, false);
+    _drawHut(ctx, hutPal, 26, baseY + 3, 12, 7, false);
+    _drawHut(ctx, hutPal, 40, baseY + 2, 13, 8, false);
+  } else if (v === 10) {
+    _drawHut(ctx, hutPal, 12, baseY + 2, 12, 8, false);
+    _drawHut(ctx, hutPal, 26, baseY + 2, 12, 8, false);
+    _drawHut(ctx, hutPal, 40, baseY + 2, 12, 8, false);
+    _settlementSpriteRect(ctx, pal.stoneMid, 26, baseY - 5, 2, 6);
+  } else if (v === 11) {
+    _drawHut(ctx, hutPal, 12, baseY + 3, 15, 7, false);
+    _drawHut(ctx, hutPal, 33, baseY + 3, 15, 7, false);
+    _settlementSpriteRect(ctx, pal.woodDark, 28, baseY + 4, 3, 6);
+  } else if (v === 12) {
+    _spriteDome(ctx, pal.woodDark, pal.woodMid, pal.woodLight, 18, baseY + 5, 7, 4);
+    _spriteDome(ctx, pal.woodDark, pal.woodMid, pal.woodLight, 34, baseY + 6, 8, 5);
+    _spriteDome(ctx, pal.woodDark, pal.woodMid, pal.woodLight, 48, baseY + 5, 7, 4);
+  } else if (v === 13) {
+    _drawHut(ctx, hutPal, 10, baseY + 3, 14, 7, true);
+    _drawHut(ctx, hutPal, 25, baseY + 2, 15, 8, true);
+    _drawHut(ctx, hutPal, 42, baseY + 3, 13, 7, true);
+  } else if (v === 14) {
+    _drawHut(ctx, hutPal, 11, baseY + 3, 12, 7, false);
+    _drawHut(ctx, hutPal, 25, baseY + 2, 12, 8, false);
+    _drawHut(ctx, hutPal, 39, baseY + 3, 12, 7, false);
+    for (let i = 0; i < 4; i++) _settlementSpriteRect(ctx, pal.woodDark, 24 + i * 4, baseY + 8, 2, 2);
+  } else {
+    _drawHut(ctx, hutPal, 9, baseY + 2, 13, 8, false);
+    _drawHut(ctx, hutPal, 24, baseY + 1, 14, 9, false);
+    _drawHut(ctx, hutPal, 40, baseY + 2, 13, 8, false);
+  }
+
+  _settlementSpritePennant(ctx, 31 + Math.floor(_seedRand(seed, 120) * 8) - 4, baseY - 4, factionColor);
+}
+
+function _buildSettlementSprite(type, factionColor, design = {}) {
+  if (typeof document === 'undefined') return null;
+  const dims = {
+    city: [88, 66],
+    town: [80, 60],
+    fort: [74, 56],
+    village: [64, 50],
+  }[type] || [64, 50];
+  const [w, h] = dims;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const cctx = canvas.getContext('2d');
+  if (!cctx) return null;
+  cctx.imageSmoothingEnabled = false;
+
+  const fid = design.factionId || 'bandit';
+  const basePal = _settlementPalette(fid);
+  const seed = design.seed >>> 0;
+  const variant = Number.isFinite(design.variant) ? design.variant : 0;
+  const cityRegion = Number.isFinite(design.cityRegion) ? design.cityRegion : 0;
+  const pal = (type === 'city' || type === 'town')
+    ? _cityPaletteByRegion(basePal, fid, cityRegion)
+    : (type === 'fort')
+      ? _fortPaletteByVariant(basePal, fid, variant)
+      : basePal;
+
+  _settlementSpriteRect(cctx, 'rgba(0,0,0,0.20)', 6, h - 9, w - 12, 6);
+  _settlementSpriteRect(cctx, pal.pathDark, Math.floor(w * 0.44), h - 12, Math.max(6, Math.floor(w * 0.15)), 11);
+  _settlementSpriteRect(cctx, pal.pathLight, Math.floor(w * 0.47), h - 11, Math.max(3, Math.floor(w * 0.08)), 10);
+  _settlementSpriteRect(cctx, _hexShade(pal.pathDark, -0.08), Math.floor(w * 0.18), h - 8, Math.floor(w * 0.64), 2);
+
+  if (type === 'city' || type === 'town') {
+    _drawFactionCitySprite(cctx, fid, pal, seed, factionColor, w, h, cityRegion);
+  } else if (type === 'fort') {
+    _drawFactionFortSprite(cctx, fid, pal, variant, seed, factionColor, w, h);
+  } else {
+    _drawVillageSprite(cctx, pal, variant, seed, factionColor, w, h);
+  }
+
+  _settlementSpriteRect(cctx, pal.outline, 0, h - 1, w, 1);
+  return canvas;
+}
+
+function _getSettlementSprite(settlement, type, factionId, factionColor) {
+  const baseSeed = _settlementSeed(settlement, 1709);
+  let variant;
+  const cityRegion = _cityRegionVariant(settlement, 6);
+  let key = `s:v9:${type}:${factionId || 'bandit'}:`;
+  if (type === 'fort') {
+    const fortLayouts = _fortLayoutsForFaction(factionId || 'bandit');
+    variant = baseSeed % Math.max(1, fortLayouts.length);
+    key += `fort-${variant}`;
+  } else if (type === 'city' || type === 'town') {
+    const cityKey = Number.isFinite(settlement?.id)
+      ? `id${settlement.id}`
+      : `${settlement?.name || 'city'}:${settlement?.tx || 0}:${settlement?.ty || 0}`;
+    variant = baseSeed >>> 0;
+    key += `city-${cityRegion}-${cityKey}`;
+  } else {
+    variant = baseSeed % 15;
+    key += `village-${variant}`;
+  }
+
+  if (_SETTLEMENT_SPRITE_CACHE.has(key)) return _SETTLEMENT_SPRITE_CACHE.get(key);
+  const sprite = _buildSettlementSprite(type, factionColor, {
+    factionId: factionId || 'bandit',
+    seed: baseSeed,
+    variant,
+    cityRegion,
+  });
+  _SETTLEMENT_SPRITE_CACHE.set(key, sprite || null);
+  return sprite;
+}
+
+function _settlementH3Kind(type) {
+  void type;
+  return null;
+}
+
+function _pickFromPool(pool, fallbackLen, tx, ty, seed = 0) {
+  const list = Array.isArray(pool) && pool.length
+    ? pool.filter((n) => Number.isFinite(n) && n >= 0 && n < fallbackLen)
+    : [];
+  if (!list.length) {
+    const n = _terrainNoise(tx * 0.173 + 1.7, ty * 0.211 + 2.3, 9901 + seed);
+    return Math.max(0, Math.min(fallbackLen - 1, Math.floor(n * fallbackLen)));
+  }
+  const n = _terrainNoise(tx * 0.163 + 3.1, ty * 0.197 + 5.7, 9917 + seed);
+  return list[Math.max(0, Math.min(list.length - 1, Math.floor(n * list.length)))];
+}
+
+function _settlementH3BaseIndex(type, factionId, frameCount, tx, ty) {
+  const fid = String(factionId || '').toLowerCase();
+  if (type === 'city' || type === 'town') {
+    // Curated medieval pool: avoid fantasy outliers for visual consistency.
+    if (fid === 'spanish' || fid === 'ottoman') return _pickFromPool([6], frameCount, tx, ty, 1);
+    if (fid === 'venice') return _pickFromPool([1, 0], frameCount, tx, ty, 2);
+    if (fid === 'hre' || fid === 'polish') return _pickFromPool([0, 1], frameCount, tx, ty, 3);
+    return _pickFromPool([0, 1, 6], frameCount, tx, ty, 4);
+  }
+  if (type === 'fort') {
+    return _pickFromPool([0, 1], frameCount, tx, ty, 5);
+  }
+  // Villages use a calmer city/town frame subset (still HoMM3-authentic style).
+  if (type === 'village') {
+    if (fid === 'spanish' || fid === 'ottoman') return _pickFromPool([1, 6], frameCount, tx, ty, 6);
+    return _pickFromPool([1, 0], frameCount, tx, ty, 7);
+  }
+  return _pickFromPool([0, 1], frameCount, tx, ty, 8);
+}
+
+function _pickSettlementH3Frame(type, factionId, tx, ty) {
+  const kind = _settlementH3Kind(type);
+  if (!kind) return null;
+  const frames = _H3_PROP_DATA?.[kind]?.frames;
+  if (!Array.isArray(frames) || !frames.length) return null;
+  const base = _settlementH3BaseIndex(type, factionId, frames.length, tx, ty) % frames.length;
+  return frames[base];
+}
+
+function _settlementAdaptedSize(type) {
+  switch (type) {
+    case 'city': return [120, 90];
+    case 'town': return [110, 82];
+    case 'fort': return [104, 74];
+    default: return [104, 78];
+  }
+}
+
+function _buildAdaptedSettlementH3Canvas(entry, type, design = {}) {
+  if (!entry?.frame || typeof document === 'undefined') return null;
+  const frameKey = _frameCacheKey('settlement-src', type, entry.sourceDef, entry.frame.name);
+  const src = _getFrameCanvas(entry.frame, frameKey);
+  if (!src) return null;
+
+  const fid = String(design?.factionId || 'bandit').toLowerCase();
+  const pal = _settlementPalette(fid);
+  const roofDark = _settlementColorTriplet(pal.roofDark);
+  const roofLight = _settlementColorTriplet(pal.roofLight);
+  const stoneDark = _settlementColorTriplet(pal.stoneDark);
+  const stoneLight = _settlementColorTriplet(pal.stoneLight);
+  const plasterBase = _settlementColorTriplet(pal.plaster);
+  const plasterDark = _shade(plasterBase, -18);
+  const accentBase = _settlementColorTriplet(design?.factionColor || pal.accent);
+
+  const key = `${type}:${entry.sourceDef}:${entry.frame.name}:${fid}:${accentBase.join('-')}`;
+  if (_SETTLEMENT_H3_ADAPTED_CACHE.has(key)) return _SETTLEMENT_H3_ADAPTED_CACHE.get(key);
+
+  const w = src.width || 1;
+  const h = src.height || 1;
+  const tmp = document.createElement('canvas');
+  tmp.width = w;
+  tmp.height = h;
+  const tctx = tmp.getContext('2d');
+  if (!tctx) {
+    _SETTLEMENT_H3_ADAPTED_CACHE.set(key, null);
+    return null;
+  }
+  tctx.imageSmoothingEnabled = false;
+  tctx.drawImage(src, 0, 0);
+
+  const img = tctx.getImageData(0, 0, w, h);
+  const px = img.data;
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let i = 0; i < px.length; i += 4) {
+    const r = px[i];
+    const g = px[i + 1];
+    const b = px[i + 2];
+    const a = px[i + 3];
+
+    // Remove low-alpha dark DEF shadow pixels so sprite can be grounded by game shadow.
+    let keep = a >= 20;
+    if (keep && a < 170 && r < 66 && g < 66 && b < 66) keep = false;
+    if (keep && a < 46 && (r + g + b) < 210) keep = false;
+    if (!keep) {
+      px[i + 3] = 0;
+      continue;
+    }
+
+    const luma = _rgbLuma(r, g, b);
+    const t = _norm01((luma - 26) / 208);
+    const orig = [r, g, b];
+
+    let target = null;
+    let blend = 0;
+    if (_looksAccentLike(r, g, b)) {
+      target = _mixRgb(_shade(accentBase, -16), _shade(accentBase, 26), t);
+      blend = 0.58;
+    } else if (_looksWarmRoofLike(r, g, b)) {
+      target = _mixRgb(roofDark, roofLight, t);
+      blend = 0.46;
+    } else if (_looksStoneLike(r, g, b)) {
+      target = _mixRgb(stoneDark, stoneLight, t);
+      blend = 0.34;
+    } else if (_looksPlasterLike(r, g, b)) {
+      target = _mixRgb(plasterDark, plasterBase, t);
+      blend = 0.30;
+    }
+    if (target) {
+      const recolored = _mixRgb(orig, target, blend);
+      px[i] = recolored[0];
+      px[i + 1] = recolored[1];
+      px[i + 2] = recolored[2];
+    }
+
+    const p = i >> 2;
+    const x = p % w;
+    const y = Math.floor(p / w);
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+
+  if (maxX < minX || maxY < minY) {
+    _SETTLEMENT_H3_ADAPTED_CACHE.set(key, null);
+    return null;
+  }
+
+  tctx.putImageData(img, 0, 0);
+  const padX = 2;
+  const padTop = 2;
+  const padBottom = 1;
+  const sx = Math.max(0, minX - padX);
+  const sy = Math.max(0, minY - padTop);
+  const sw = Math.min(w - sx, (maxX - minX + 1) + padX * 2);
+  const sh = Math.min(h - sy, (maxY - minY + 1) + padTop + padBottom);
+
+  const [ow, oh] = _settlementAdaptedSize(type);
+  const out = document.createElement('canvas');
+  out.width = ow;
+  out.height = oh;
+  const octx = out.getContext('2d');
+  if (!octx) {
+    _SETTLEMENT_H3_ADAPTED_CACHE.set(key, null);
+    return null;
+  }
+  octx.imageSmoothingEnabled = false;
+  const scale = Math.min((ow * 0.92) / sw, (oh * 0.90) / sh);
+  const dw = Math.max(2, Math.round(sw * scale));
+  const dh = Math.max(2, Math.round(sh * scale));
+  const dx = Math.round((ow - dw) * 0.5);
+  const baseY = oh - Math.max(2, Math.round(oh * 0.06));
+  const dy = baseY - dh;
+  octx.drawImage(tmp, sx, sy, sw, sh, dx, dy, dw, dh);
+
+  _SETTLEMENT_H3_ADAPTED_CACHE.set(key, out);
+  return out;
+}
+
+function _drawSettlementH3Frame(ctx, entry, type, sx, sy, profile, design) {
+  if (!entry?.frame) return false;
+  const canvas = _buildAdaptedSettlementH3Canvas(entry, type, design);
+  if (!canvas) return false;
+
+  const fw = canvas.width || 1;
+  const fh = canvas.height || 1;
+  let targetH = Math.max(16, profile.h);
+  if (type === 'city' || type === 'town') targetH *= 1.00;
+  else if (type === 'fort') targetH *= 0.95;
+  else targetH *= 0.96;
+  const targetW = Math.max(14, targetH * (fw / fh));
+
+  const dx = Math.round(sx - targetW * 0.5);
+  const dy = Math.round(sy - targetH * profile.anchor);
+  ctx.imageSmoothingEnabled = false;
+  const dw = Math.round(targetW);
+  const dh = Math.round(targetH);
+  ctx.drawImage(canvas, dx, dy, dw, dh);
+  return {
+    dx,
+    dy,
+    dw,
+    dh,
+    baseX: dx + dw * 0.5,
+    baseY: dy + dh,
+  };
+}
+
+function _settlementProfile(type, T) {
+  const scale = 3.0;
+  switch (type) {
+    case 'city':
+      return { w: T * 2.60 * scale, h: T * 1.96 * scale, anchor: 0.90, labelY: T * 0.72 * scale, shadowW: T * 0.92 * scale, shadowH: T * 0.22 * scale, shadowY: T * 0.36 * scale };
+    case 'town':
+      return { w: T * 2.20 * scale, h: T * 1.68 * scale, anchor: 0.88, labelY: T * 0.64 * scale, shadowW: T * 0.76 * scale, shadowH: T * 0.18 * scale, shadowY: T * 0.33 * scale };
+    case 'fort':
+      return { w: T * 2.00 * scale, h: T * 1.10 * scale, anchor: 0.87, labelY: T * 0.56 * scale, shadowW: T * 0.70 * scale, shadowH: T * 0.17 * scale, shadowY: T * 0.30 * scale };
+    default:
+      return { w: T * 1.70 * scale, h: T * 1.30 * scale, anchor: 0.86, labelY: T * 0.54 * scale, shadowW: T * 0.62 * scale, shadowH: T * 0.16 * scale, shadowY: T * 0.28 * scale };
+  }
+}
+
+function _drawSettlementGroundBlend(ctx, sx, sy, profile, T, factionColor, tx, ty) {
+  const baseW = profile.shadowW * 1.08;
+  const baseH = profile.shadowH * 1.45;
+  const baseY = sy + profile.shadowY * 1.02;
+
+  ctx.fillStyle = 'rgba(28,18,10,0.34)';
+  ctx.beginPath();
+  _ellipse(ctx, sx + 2, baseY + 2, baseW, baseH, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(126,90,52,0.42)';
+  ctx.beginPath();
+  _ellipse(ctx, sx, baseY, baseW * 0.96, baseH * 0.88, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  _ellipse(ctx, sx, baseY + baseH * 0.10, baseW * 0.58, baseH * 0.46, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const roadW = Math.max(4, profile.shadowW * 0.18);
+  const roadH = Math.max(8, profile.shadowY * 0.44);
+  ctx.fillStyle = 'rgba(144,110,68,0.42)';
+  ctx.fillRect(Math.round(sx - roadW * 0.5), Math.round(baseY + baseH * 0.10), Math.round(roadW), Math.round(roadH));
+  ctx.fillStyle = 'rgba(186,150,102,0.36)';
+  ctx.fillRect(Math.round(sx - roadW * 0.2), Math.round(baseY + baseH * 0.10), Math.max(2, Math.round(roadW * 0.34)), Math.round(roadH));
+
+  const bushCount = 2 + Math.floor(_terrainNoise(tx * 0.73 + 11, ty * 0.51 + 17, 9111) * 3);
+  for (let i = 0; i < bushCount; i++) {
+    const angle = _terrainNoise(tx * 0.31 + i * 0.91, ty * 0.41 + i * 0.77, 9127) * Math.PI * 2;
+    const rad = baseW * (0.58 + _terrainNoise(tx * 0.44 + i, ty * 0.37 + i * 0.3, 9143) * 0.32);
+    const bx = sx + Math.cos(angle) * rad;
+    const by = baseY + Math.sin(angle) * baseH * 0.68;
+    const r = Math.max(2, T * (0.08 + _terrainNoise(tx * 0.19 + i * 0.27, ty * 0.27 + i * 0.19, 9157) * 0.05));
+    ctx.fillStyle = `rgba(28,${65 + Math.floor(_terrainNoise(tx + i, ty - i, 9179) * 36)},24,0.82)`;
+    ctx.beginPath();
+    _ellipse(ctx, bx, by, r * 0.95, r * 0.66, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.strokeStyle = _hexShade(factionColor || '#808080', 0.10);
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = Math.max(1, T * 0.05);
+  ctx.beginPath();
+  _ellipse(ctx, sx, baseY - baseH * 0.06, baseW * 0.80, baseH * 0.62, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+/** Draw HoMM-like city/fort/village at world pixel (sx, sy). */
 function mbSettlement(ctx, settlement, sx, sy, T, fogAlpha, zoom) {
-  const type = settlement.type || 'village';
+  const type = String(settlement.type || 'village').toLowerCase();
+  const spriteType = (type === 'city' || type === 'town' || type === 'fort') ? type : 'village';
+  const factionId = settlement.ownerFactionId || settlement.owner || 'bandit';
+  const factionColor = _factionData(factionId)[0] || '#b03a3c';
+  const tx = Number.isFinite(settlement.tx) ? settlement.tx : Math.floor(sx / Math.max(1, T));
+  const ty = Number.isFinite(settlement.ty) ? settlement.ty : Math.floor(sy / Math.max(1, T));
+  const profile = _settlementProfile(spriteType, T);
+  const design = { factionId, factionColor };
+  const h3Entry = _pickSettlementH3Frame(spriteType, factionId, tx, ty);
+  const sprite = _getSettlementSprite(settlement, spriteType, factionId, factionColor);
+
   ctx.save();
   ctx.globalAlpha = fogAlpha;
 
-  if (type === 'city' || type === 'town' || type === 'fort') {
-    const s = T * (type === 'city' ? 0.44 : type === 'town' ? 0.30 : 0.24);
-    const wallC  = type === 'fort' ? '#5a5a6a' : '#8a7c6a';
-    const towerC = type === 'fort' ? '#4a4a58' : '#7a6c5c';
-    const capC   = '#bfb0a0';
-
-    // Shadow
+  const h3Placement = _drawSettlementH3Frame(ctx, h3Entry, spriteType, sx, sy, profile, design);
+  if (h3Placement) {
+    // HoMM settlements already carry painted shadows; keep only a tight contact shadow.
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = 'rgba(0,0,0,0.24)';
+    ctx.beginPath();
+    _ellipse(
+      ctx,
+      h3Placement.baseX + 1,
+      h3Placement.baseY - Math.max(2, T * 0.05),
+      Math.max(8, h3Placement.dw * 0.20),
+      Math.max(3, h3Placement.dh * 0.055),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.fillStyle = 'rgba(96,68,40,0.18)';
+    ctx.beginPath();
+    _ellipse(
+      ctx,
+      h3Placement.baseX,
+      h3Placement.baseY - Math.max(1, T * 0.03),
+      Math.max(10, h3Placement.dw * 0.24),
+      Math.max(3, h3Placement.dh * 0.06),
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.restore();
+  } else if (sprite) {
+    _drawSettlementGroundBlend(ctx, sx, sy, profile, T, factionColor, tx, ty);
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath();
+    _ellipse(ctx, sx + 1, sy + profile.shadowY, profile.shadowW, profile.shadowH, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.beginPath(); _ellipse(ctx, sx+2, sy+s*0.5+2, s*1.1, s*0.25, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    _ellipse(ctx, sx + 1, sy + profile.shadowY + Math.max(1, T * 0.02), profile.shadowW * 0.56, profile.shadowH * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Curtain wall
-    const ww = s * (type==='city'?1.85:1.50), wh = s * 0.58;
-    const wl = sx - ww/2, wt = sy - s*0.05;
-    ctx.fillStyle = wallC; ctx.fillRect(wl, wt, ww, wh);
-    // Wall crenels
-    const mn = Math.max(2, Math.floor(ww/(s*0.22)));
-    const mw = ww/(mn*2), mh = s*0.11;
-    ctx.fillStyle = capC;
-    for (let i=0;i<mn;i++) ctx.fillRect(wl+i*mw*2, wt-mh, mw, mh);
-
-    // Towers
-    const tW = s*(type==='city'?0.37:0.30), tH = s*(type==='city'?0.98:0.82);
-    const tTop = sy - tH*0.52;
-    const towers = type==='city'
-      ? [wl-tW*0.25, sx-tW/2, wl+ww-tW*0.75]
-      : [wl-tW*0.25, wl+ww-tW*0.75];
-    for (const tx of towers) {
-      ctx.fillStyle = towerC; ctx.fillRect(tx, tTop, tW, tH);
-      const tn=Math.max(2,Math.floor(tW/(s*0.18))), tw2=tW/(tn*2), th2=s*0.12;
-      ctx.fillStyle = capC;
-      for (let i=0;i<tn;i++) ctx.fillRect(tx+i*tw2*2, tTop-th2, tw2, th2);
-      ctx.fillStyle='rgba(0,0,0,0.5)';
-      ctx.fillRect(tx+tW*0.37, tTop+tH*0.28, tW*0.13, tH*0.22);
-    }
-    // Gate
-    const gw=s*0.25, gb=wt+wh;
-    ctx.fillStyle='rgba(0,0,0,0.60)';
-    ctx.beginPath(); ctx.moveTo(sx-gw/2,gb); ctx.lineTo(sx-gw/2,gb-gw*0.8);
-    ctx.arc(sx,gb-gw*0.8,gw/2,Math.PI,0); ctx.lineTo(sx+gw/2,gb); ctx.closePath(); ctx.fill();
-    // Flag pennant on center/left tower
-    const fTX = type==='city' ? towers[1]+tW/2 : towers[0]+tW/2;
-    const fTY = tTop, pw=s*0.20, ph=s*0.13;
-    ctx.strokeStyle='#5c4020'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(fTX,fTY); ctx.lineTo(fTX,fTY-ph*1.2); ctx.stroke();
-    ctx.fillStyle='#e8c44c';
-    ctx.beginPath(); ctx.moveTo(fTX,fTY-ph*1.2);
-    ctx.lineTo(fTX+pw,fTY-ph*1.2+ph*0.48); ctx.lineTo(fTX,fTY-ph*0.15);
-    ctx.closePath(); ctx.fill();
-    // Outline
-    ctx.strokeStyle='rgba(0,0,0,0.30)'; ctx.lineWidth=1;
-    for (const tx of towers) ctx.strokeRect(tx,tTop,tW,tH);
-    ctx.strokeRect(wl,wt,ww,wh);
-    // Name label
-    const labelY = tTop - ph*1.2 - 3;
-    _mbLabel(ctx, sx, labelY, settlement.name||'', zoom, 'rgba(255,248,200,0.95)');
+    const dw = Math.max(10, Math.round(profile.w));
+    const dh = Math.max(8, Math.round(profile.h));
+    const dx = Math.round(sx - dw * 0.5);
+    const dy = Math.round(sy - dh * profile.anchor);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sprite, dx, dy, dw, dh);
   } else {
-    // Village
-    const s = T * 0.27;
-    ctx.fillStyle='rgba(0,0,0,0.18)';
-    ctx.beginPath(); _ellipse(ctx, sx+1,sy+s*0.55,s*0.85,s*0.20,0,0,Math.PI*2); ctx.fill();
-    const houses=[{ox:-s*0.48,oy:s*0.13},{ox:s*0.48,oy:s*0.13},{ox:0,oy:-s*0.10}];
-    for (const h of houses) {
-      const hx=sx+h.ox, hy=sy+h.oy, hw=s*0.35, hh=s*0.30;
-      ctx.fillStyle='#b5956a'; ctx.fillRect(hx-hw/2,hy-hh/2,hw,hh);
-      ctx.fillStyle='#8a5a3a';
-      ctx.beginPath(); ctx.moveTo(hx,hy-hh/2-hh*0.44);
-      ctx.lineTo(hx+hw/2+hw*0.08,hy-hh/2+1); ctx.lineTo(hx-hw/2-hw*0.08,hy-hh/2+1);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle='rgba(0,0,0,0.42)';
-      ctx.fillRect(hx-hw*0.10,hy-hh/2+hh*0.46,hw*0.20,hh*0.50);
-    }
-    ctx.strokeStyle='#7a5a3a'; ctx.lineWidth=1.2;
-    ctx.setLineDash([s*0.10,s*0.07]);
-    ctx.beginPath(); ctx.arc(sx,sy,s*0.73,0,Math.PI*2); ctx.stroke();
-    ctx.setLineDash([]);
-    _mbLabel(ctx, sx, sy-s*0.78, settlement.name||'', zoom, 'rgba(255,248,200,0.90)');
+    _drawSettlementGroundBlend(ctx, sx, sy, profile, T, factionColor, tx, ty);
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath();
+    _ellipse(ctx, sx + 1, sy + profile.shadowY, profile.shadowW, profile.shadowH, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    _ellipse(ctx, sx + 1, sy + profile.shadowY + Math.max(1, T * 0.02), profile.shadowW * 0.56, profile.shadowH * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
+
+  _mbLabel(ctx, sx, sy + profile.labelY, settlement.name || '', zoom, 'rgba(255,248,200,0.95)');
   ctx.restore();
 }
 

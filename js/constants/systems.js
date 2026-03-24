@@ -107,10 +107,10 @@ export const FACTION = Object.freeze({
 
 export const FACTIONS = Object.freeze([
   { id: FACTION.ID.OTTOMAN, name: 'Osmanlı İmparatorluğu', color: '#c0392b', doctrine: 'Yeniçeri Disiplini', desc: 'Balkanlara ve Anadoluya hükmeden kadim imparatorluk.', startingGold: 130, startingArmy: 0, startingRenown: 15, armyHint: 'Güçlü yaya ve süvari birlikleri.' },
-  { id: FACTION.ID.HRE, name: 'Kutsal Roma İmparatorluğu', color: '#2c3e50', doctrine: 'Lejyon Düzeni', desc: 'Orta Avrupanın savunmacı ve disiplinli ordusu.', startingGold: 110, startingArmy: 0, startingRenown: 12, armyHint: 'Dengeli ve sağlam birlikler.' },
-  { id: FACTION.ID.SPANISH, name: 'İspanya Krallığı', color: '#d4ac0d', doctrine: 'Tercio Taktiği', desc: 'Efsanevi Tercio birlikleriyle Batı Avrupaya hükmedin.', startingGold: 115, startingArmy: 0, startingRenown: 12, armyHint: 'Mızrakçı ve tüfekçi karması.' },
-  { id: FACTION.ID.POLISH, name: 'Polonya Krallığı', color: '#e74c3c', doctrine: 'Kanatlı Hussarlar', desc: 'Efsanevi hussarlarla kuzeyde hükümranlık kurun.', startingGold: 100, startingArmy: 0, startingRenown: 10, armyHint: 'Süvari ağırlıklı saldırı gücü.' },
-  { id: FACTION.ID.VENICE, name: 'Venedik Cumhuriyeti', color: '#16a085', doctrine: 'Ticaret Gücü', desc: 'Zengin ticaret ağı ve paralı askerlerle stratejik üstünlük.', startingGold: 200, startingArmy: 0, startingRenown: 8, armyHint: 'Az ama seçkin birlikler, yüksek altın.' },
+  { id: FACTION.ID.HRE, name: 'Kutsal Roma İmparatorluğu', color: '#111111', doctrine: 'Lejyon Düzeni', desc: 'Orta Avrupanın savunmacı ve disiplinli ordusu.', startingGold: 110, startingArmy: 0, startingRenown: 12, armyHint: 'Dengeli ve sağlam birlikler.' },
+  { id: FACTION.ID.SPANISH, name: 'İspanya Krallığı', color: '#f57c00', doctrine: 'Tercio Taktiği', desc: 'Efsanevi Tercio birlikleriyle Batı Avrupaya hükmedin.', startingGold: 115, startingArmy: 0, startingRenown: 12, armyHint: 'Mızrakçı ve tüfekçi karması.' },
+  { id: FACTION.ID.POLISH, name: 'Polonya Krallığı', color: '#8e44ad', doctrine: 'Kanatlı Hussarlar', desc: 'Efsanevi hussarlarla kuzeyde hükümranlık kurun.', startingGold: 100, startingArmy: 0, startingRenown: 10, armyHint: 'Süvari ağırlıklı saldırı gücü.' },
+  { id: FACTION.ID.VENICE, name: 'Venedik Cumhuriyeti', color: '#1e88e5', doctrine: 'Ticaret Gücü', desc: 'Zengin ticaret ağı ve paralı askerlerle stratejik üstünlük.', startingGold: 200, startingArmy: 0, startingRenown: 8, armyHint: 'Az ama seçkin birlikler, yüksek altın.' },
 ]);
 
 export const FACTION_WAR = Object.freeze({
