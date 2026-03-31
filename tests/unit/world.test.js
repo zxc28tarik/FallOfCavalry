@@ -53,8 +53,8 @@ describe('WorldManager - Phase 3A', () => {
   it('getTilePosition converts world to tile coords', () => {
     const wm = createWM();
     const pos = wm.getTilePosition(180, 240);
-    expect(pos.tx).toBe(3);
-    expect(pos.ty).toBe(4);
+    expect(pos.tx).toBe(5);
+    expect(pos.ty).toBe(7);
   });
 
   it('getBiomeKeyAtTile returns null for out of bounds', () => {
@@ -248,6 +248,9 @@ describe('WorldManager - Phase 3C', () => {
     wm.initPlayerParty();
     // playerParty already existed, should not overwrite
     expect(wm.game.playerParty.x).toBe(300);
+    expect(wm.game.playerParty.vx).toBe(0);
+    expect(wm.game.playerParty.vy).toBe(0);
+    expect(wm.game.playerParty.moveState).toBe('idle');
   });
 
   it('triggerEncounter sets encounter state', () => {
@@ -328,6 +331,10 @@ describe('WorldManager - Phase 3D', () => {
       buildAftermathPanelData: () => ({}),
       getLogisticsSpeedMult: () => ({ weight: 10, cap: 100, starvingMult: 1, overcapMult: 1 }),
       hudManager: { update: () => {} },
+      input: {
+        isKeyDown: () => false,
+        mouse: { over: false, x: 0, y: 0 },
+      },
       ...gameOverrides,
     });
     return wm;
@@ -362,6 +369,19 @@ describe('WorldManager - Phase 3D', () => {
     wm.rebuildMovementMasks();
     wm.updatePlayerParty(0.1);
     expect(party.x).toBeGreaterThan(100);
+    expect(party.vx).toBeGreaterThan(0);
+    expect(Math.abs(party.vy)).toBeLessThan(0.001);
+    expect(party.moveState).toBe('moving');
+  });
+
+  it('updatePlayerParty sets idle motion when no destination', () => {
+    const party = { x: 180, y: 160, radius: 12, speed: 180, destX: null, destY: null, hasDestination: false, arrivalFeedbackTimer: 0, vx: 12, vy: -8, moveState: 'moving' };
+    const wm = createWM({}, { playerParty: party });
+    wm.rebuildMovementMasks();
+    wm.updatePlayerParty(0.1);
+    expect(party.vx).toBe(0);
+    expect(party.vy).toBe(0);
+    expect(party.moveState).toBe('idle');
   });
 
   it('updateEnemyParties does nothing with empty array', () => {
@@ -377,6 +397,8 @@ describe('WorldManager - Phase 3D', () => {
     const oldX = enemy.x;
     wm.updateEnemyParties(0.1);
     expect(enemy.x).not.toBe(oldX);
+    expect(typeof enemy.moveState).toBe('string');
+    expect(Number.isFinite(enemy.worldSpeed)).toBe(true);
   });
 
   it('updateMapSimulation skips when paused', () => {
@@ -386,5 +408,61 @@ describe('WorldManager - Phase 3D', () => {
     wm.updateMapSimulation(0.1);
     // Party should not move when paused
     expect(party.x).toBe(100);
+  });
+
+  it('updateMapSimulation pans camera with arrow input and disables follow mode', () => {
+    const party = { x: 1800, y: 900, radius: 12, speed: 180, destX: null, destY: null, hasDestination: false, arrivalFeedbackTimer: 0 };
+    const wm = createWM({
+      map: {
+        width: 220,
+        height: 140,
+        tiles: new Array(220 * 140).fill({}),
+        settlements: [{ tx: 20, ty: 20, id: 'c1', x: 640, y: 640 }],
+        rivers: [],
+        roads: [],
+        crossings: [],
+        biomes: new Uint8Array(220 * 140),
+        fog: new Uint8Array(220 * 140),
+      },
+      camera: { x: 1200, y: 700, zoom: 1 },
+    }, {
+      playerParty: party,
+      followParty: true,
+      input: {
+        isKeyDown: (key) => key === 'arrowright',
+        mouse: { over: false, x: 0, y: 0 },
+      },
+    });
+    wm.rebuildMovementMasks();
+    const prevX = wm.state.camera.x;
+    wm.updateMapSimulation(0.16);
+    expect(wm.game.followParty).toBe(false);
+    expect(wm.state.camera.x).toBeGreaterThan(prevX);
+  });
+
+  it('updateMapSimulation edge-scrolls camera when cursor is near border', () => {
+    const wm = createWM({
+      map: {
+        width: 220,
+        height: 140,
+        tiles: new Array(220 * 140).fill({}),
+        settlements: [{ tx: 20, ty: 20, id: 'c1', x: 640, y: 640 }],
+        rivers: [],
+        roads: [],
+        crossings: [],
+        biomes: new Uint8Array(220 * 140),
+        fog: new Uint8Array(220 * 140),
+      },
+      camera: { x: 1200, y: 700, zoom: 1 },
+    }, {
+      input: {
+        isKeyDown: () => false,
+        mouse: { over: true, x: 2, y: 300 },
+      },
+    });
+    wm.rebuildMovementMasks();
+    const prevX = wm.state.camera.x;
+    wm.updateMapSimulation(0.16);
+    expect(wm.state.camera.x).toBeLessThan(prevX);
   });
 });

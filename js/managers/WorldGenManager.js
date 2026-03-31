@@ -25,6 +25,10 @@ export class WorldGenManager {
         this.world.fogOfWar = new FogOfWar(this.world.state.map.width, this.world.state.map.height, this.world.state.map.fog);
       }
       this.world._crossingSet = new Set((this.world.state.map.crossings || []).map((p) => `${p.x},${p.y}`));
+      this.world.ensureBuildingSystem?.({
+        map: this.world.state.map,
+        reset: true,
+      });
       this.rebuildMovementMasks();
       return this.world.state.map;
     }
@@ -84,6 +88,10 @@ export class WorldGenManager {
     }
 
     this.world._crossingSet = new Set(this.world.state.map.crossings.map((p) => `${p.x},${p.y}`));
+    this.world.ensureBuildingSystem?.({
+      map: this.world.state.map,
+      reset: true,
+    });
     this.rebuildMovementMasks();
 
     this.world._worldSeedCache = normalizedSeed;

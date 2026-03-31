@@ -1,5 +1,14 @@
 import * as CONST from '../constants.js';
 import { toggleCurrentEventsModal } from '../ui/modals.js';
+import { getBuildingDef } from '../data/building-defs.js';
+
+const MAP_BUILD_DEF_ORDER = Object.freeze(['wall', 'gatehouse', 'keep', 'granary']);
+const MAP_BUILD_DEF_LABEL = Object.freeze({
+  wall: 'Duvar',
+  gatehouse: 'Kapi',
+  keep: 'Keep',
+  granary: 'Ambar',
+});
 
 export class GameInputManager {
   constructor(gameState) {
@@ -21,6 +30,165 @@ export class GameInputManager {
 
   init(game) {
     this.game = game;
+    this.ensureMapBuildModeState();
+  }
+
+  ensureMapBuildModeState() {
+    const g = this.game;
+    if (!g) return null;
+    if (!g.mapBuildMode || typeof g.mapBuildMode !== 'object') {
+      g.mapBuildMode = {
+        active: false,
+        defId: MAP_BUILD_DEF_ORDER[0],
+        selectedBuildingId: null,
+      };
+    }
+    if (!MAP_BUILD_DEF_ORDER.includes(g.mapBuildMode.defId)) g.mapBuildMode.defId = MAP_BUILD_DEF_ORDER[0];
+    if (typeof g.mapBuildMode.active !== 'boolean') g.mapBuildMode.active = false;
+    if (this.state && typeof this.state === 'object') {
+      this.state.mapBuildMode = g.mapBuildMode;
+    }
+    return g.mapBuildMode;
+  }
+
+  getMapBuildLabel(defId) {
+    const key = String(defId || '').toLowerCase();
+    if (MAP_BUILD_DEF_LABEL[key]) return MAP_BUILD_DEF_LABEL[key];
+    const def = getBuildingDef(key);
+    if (!def) return String(defId || 'Yapi');
+    return MAP_BUILD_DEF_LABEL[def.id] || String(def.id || 'Yapi');
+  }
+
+  setMapBuildHint(text) {
+    if (!this.state) return;
+    this.state.interactHint = typeof text === 'string' ? text : '';
+  }
+
+  refreshMapBuildHint() {
+    const g = this.game;
+    if (!g || g.state?.mode !== 'map') return;
+    const mode = this.ensureMapBuildModeState();
+    if (!mode) return;
+    if (!mode.active) {
+      if (mode.selectedBuildingId) {
+        const picked = g.worldManager?.getBuildingById?.(mode.selectedBuildingId);
+        if (picked) {
+          this.setMapBuildHint(`Secili yapi: ${this.getMapBuildLabel(picked.defId)} (${picked.anchorX},${picked.anchorY}) | B: Insa modu`);
+          return;
+        }
+      }
+      return;
+    }
+    this.setMapBuildHint(`Insa modu: ${this.getMapBuildLabel(mode.defId)} | Sol tik: yerlestir | Sag tik: kaldir | 1-4/Tab: sec | B/Esc: cik`);
+  }
+
+  toggleMapBuildMode(forceActive = null) {
+    const mode = this.ensureMapBuildModeState();
+    if (!mode) return false;
+    const nextActive = typeof forceActive === 'boolean' ? forceActive : !mode.active;
+    mode.active = nextActive;
+    if (!nextActive) mode.selectedBuildingId = null;
+    this.refreshMapBuildHint();
+    return mode.active;
+  }
+
+  setMapBuildDef(defId) {
+    const mode = this.ensureMapBuildModeState();
+    if (!mode) return false;
+    const normalized = String(defId || '').toLowerCase();
+    const def = getBuildingDef(normalized);
+    if (!def) return false;
+    mode.defId = def.id;
+    if (!mode.active) mode.active = true;
+    this.refreshMapBuildHint();
+    return true;
+  }
+
+  cycleMapBuildDef(step = 1) {
+    const mode = this.ensureMapBuildModeState();
+    if (!mode) return false;
+    const currentIdx = Math.max(0, MAP_BUILD_DEF_ORDER.indexOf(mode.defId));
+    const dir = Number.isFinite(step) && step < 0 ? -1 : 1;
+    const nextIdx = (currentIdx + dir + MAP_BUILD_DEF_ORDER.length) % MAP_BUILD_DEF_ORDER.length;
+    return this.setMapBuildDef(MAP_BUILD_DEF_ORDER[nextIdx]);
+  }
+
+  getTileFromWorld(world) {
+    const g = this.game;
+    if (world && Number.isFinite(world.tileX) && Number.isFinite(world.tileY)) {
+      return { tx: Math.floor(world.tileX), ty: Math.floor(world.tileY) };
+    }
+    if (world && (Number.isFinite(world.x) || Number.isFinite(world.y))) {
+      return g?.worldManager?.getTilePosition?.(world.x, world.y) || null;
+    }
+    return null;
+  }
+
+  describeCanPlaceReason(reason) {
+    const key = String(reason || '').toLowerCase();
+    if (key === 'occupied') return 'tile dolu';
+    if (key === 'water') return 'su ustune yerlestirilemez';
+    if (key === 'blocked') return 'engelli bolge';
+    if (key === 'out_of_bounds') return 'harita disi';
+    if (key === 'unknown_def') return 'gecersiz yapi tipi';
+    return 'uygun degil';
+  }
+
+  handleMapBuildPointer(event, world) {
+    const g = this.game;
+    if (!g || g.state?.mode !== 'map') return false;
+    const mode = this.ensureMapBuildModeState();
+    if (!mode) return false;
+    const wm = g.worldManager;
+    if (!wm) return false;
+
+    const tile = this.getTileFromWorld(world);
+    if (!tile) return false;
+    const tx = tile.tx;
+    const ty = tile.ty;
+
+    if (event?.button === 2 && mode.active) {
+      event.preventDefault?.();
+      const existing = wm.getBuildingAtTile?.(tx, ty) || null;
+      if (!existing?.id) {
+        this.refreshMapBuildHint();
+        return true;
+      }
+      const removed = wm.removeBuilding?.(existing.id);
+      if (removed) {
+        mode.selectedBuildingId = null;
+        this.setMapBuildHint(`Silindi: ${this.getMapBuildLabel(existing.defId)} (${tx},${ty})`);
+      } else {
+        this.setMapBuildHint(`Silme basarisiz (${tx},${ty})`);
+      }
+      return true;
+    }
+
+    if (event?.button !== 0) return false;
+
+    const existing = wm.getBuildingAtTile?.(tx, ty) || null;
+    if (mode.active) {
+      if (existing) {
+        mode.selectedBuildingId = existing.id || null;
+        this.setMapBuildHint(`Secili: ${this.getMapBuildLabel(existing.defId)} (${existing.anchorX},${existing.anchorY})`);
+        return true;
+      }
+      const placed = wm.placeBuilding?.(mode.defId, tx, ty);
+      if (placed) {
+        mode.selectedBuildingId = placed.id || null;
+        g.followParty = false;
+        this.setMapBuildHint(`Yerlestirildi: ${this.getMapBuildLabel(mode.defId)} (${tx},${ty})`);
+      } else {
+        const check = wm.canPlaceBuilding?.(mode.defId, tx, ty);
+        this.setMapBuildHint(`Yerlestirilemedi: ${this.describeCanPlaceReason(check?.reason)}`);
+      }
+      return true;
+    }
+
+    if (!existing) return false;
+    mode.selectedBuildingId = existing.id || null;
+    this.setMapBuildHint(`Secili yapi: ${this.getMapBuildLabel(existing.defId)} (${existing.anchorX},${existing.anchorY}) | B: Insa modu`);
+    return true;
   }
 
   setupPartyInputHandlers() {
@@ -54,9 +222,24 @@ export class GameInputManager {
       const screenX = (event?.clientX ?? 0) - (rect.left ?? 0);
       const screenY = (event?.clientY ?? 0) - (rect.top ?? 0);
       const world = g.worldManager.updatePointerWorldState(screenX, screenY);
+      if (this.handleMapBuildPointer(event, world)) return;
 
       if (event?.button === 0) {
         g.playerParty.selected = true;
+        const clickedSettlement = g.worldManager.getSettlementAtWorldPoint?.(world.x, world.y, {
+          maxHitScale: g.worldManager.isDimetricMode?.() ? 1.12 : 1.0,
+        });
+        if (clickedSettlement) {
+          if (g.worldManager.isPlayerNearSettlement?.(clickedSettlement) && g.economyManager?.enterCityServicesForSettlement?.(clickedSettlement)) {
+            g.followParty = false;
+            return;
+          }
+          const targetX = Number.isFinite(clickedSettlement.x) ? clickedSettlement.x : world.x;
+          const targetY = Number.isFinite(clickedSettlement.y) ? clickedSettlement.y : world.y;
+          g.worldManager.setPlayerDestination(targetX, targetY);
+          g.followParty = true;
+          return;
+        }
         g.worldManager.setPlayerDestination(world.x, world.y);
         g.followParty = true;
         return;
@@ -264,6 +447,12 @@ export class GameInputManager {
           return;
         }
 
+        if (g.state?.mode === 'map' && this.ensureMapBuildModeState()?.active) {
+          e.preventDefault?.();
+          this.toggleMapBuildMode(false);
+          return;
+        }
+
         e.preventDefault?.();
         if (g.mode === 'playing') {
           g.gameFlowManager.setPaused(true);
@@ -457,6 +646,33 @@ export class GameInputManager {
           if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.min(Math.max(0, wounded.length - 1), g.economyManager.cityHealerCursor + 1); g.worldManager.updateTransientUIState(); return; }
           if (e.key === 'Enter') { e.preventDefault?.(); g.economyManager.healCurrentUnit(); g.worldManager.updateTransientUIState(); return; }
         }
+      }
+
+      if (g.state?.mode === 'map' && (
+        e.key === 'ArrowUp'
+        || e.key === 'ArrowDown'
+        || e.key === 'ArrowLeft'
+        || e.key === 'ArrowRight'
+      )) {
+        e.preventDefault?.();
+      }
+
+      if (g.state?.mode === 'map' && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault?.();
+        this.toggleMapBuildMode();
+        return;
+      }
+
+      if (g.state?.mode === 'map' && this.ensureMapBuildModeState()?.active) {
+        if (e.key === 'Tab') {
+          e.preventDefault?.();
+          this.cycleMapBuildDef(e.shiftKey ? -1 : 1);
+          return;
+        }
+        if (e.key === '1') { e.preventDefault?.(); this.setMapBuildDef('wall'); return; }
+        if (e.key === '2') { e.preventDefault?.(); this.setMapBuildDef('gatehouse'); return; }
+        if (e.key === '3') { e.preventDefault?.(); this.setMapBuildDef('keep'); return; }
+        if (e.key === '4') { e.preventDefault?.(); this.setMapBuildDef('granary'); return; }
       }
 
       if ((e.key === 'x' || e.key === 'Backspace') && g.mode !== 'menu' && g.state?.mode === 'map') {

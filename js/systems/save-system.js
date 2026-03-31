@@ -5,6 +5,61 @@
 
 import * as CONST from '../constants.js';
 
+const MAX_NORMALIZED_BUILDINGS = 10000;
+
+function asObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+function toInt(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return Math.floor(fallback);
+  return Math.floor(n);
+}
+
+function normalizeBuildingEntry(entry, index = 0) {
+  const src = asObject(entry);
+  if (!src) return null;
+  const defId = typeof src.defId === 'string' ? src.defId.trim() : '';
+  const anchorXNum = Number(src.anchorX);
+  const anchorYNum = Number(src.anchorY);
+  if (!defId || !Number.isFinite(anchorXNum) || !Number.isFinite(anchorYNum)) return null;
+  const anchorX = Math.floor(anchorXNum);
+  const anchorY = Math.floor(anchorYNum);
+  const id = typeof src.id === 'string' && src.id.trim()
+    ? src.id.trim()
+    : `${defId}_${anchorX}_${anchorY}_${Math.max(0, Math.floor(index))}`;
+  const state = typeof src.state === 'string' && src.state.trim() ? src.state.trim() : 'default';
+  return {
+    id,
+    defId,
+    anchorX,
+    anchorY,
+    state,
+  };
+}
+
+export function normalizeBuildingState(raw, {
+  maxEntries = MAX_NORMALIZED_BUILDINGS,
+} = {}) {
+  const source = asObject(raw);
+  if (!source) return null;
+  const limit = Math.max(1, toInt(maxEntries, MAX_NORMALIZED_BUILDINGS));
+  const entries = Array.isArray(source.buildings) ? source.buildings : [];
+  const buildings = [];
+
+  for (let i = 0; i < entries.length && buildings.length < limit; i += 1) {
+    const normalized = normalizeBuildingEntry(entries[i], i);
+    if (!normalized) continue;
+    buildings.push(normalized);
+  }
+
+  const nextIdRaw = toInt(source.nextId, buildings.length + 1);
+  const nextId = Math.max(1, buildings.length + 1, nextIdRaw);
+
+  return { nextId, buildings };
+}
+
 export class SaveSystem {
   constructor() {
     this.SAVE_KEY = CONST.SAVE.KEY;
@@ -35,7 +90,7 @@ export class SaveSystem {
       ) {
         return storage;
       }
-    } catch (err) {
+    } catch {
       this.warnOnce('storage-access', '[SaveSystem] Storage unavailable');
       return null;
     }
@@ -47,7 +102,7 @@ export class SaveSystem {
   safeStringify(data) {
     try {
       return JSON.stringify(data);
-    } catch (err) {
+    } catch {
       this.warnOnce('json-stringify', '[SaveSystem] Save serialization failed');
       return null;
     }
@@ -58,7 +113,7 @@ export class SaveSystem {
       const data = JSON.parse(json);
       if (!data || typeof data !== 'object') return null;
       return data;
-    } catch (err) {
+    } catch {
       this.warnOnce('json-parse', '[SaveSystem] Save data parse failed');
       return null;
     }
@@ -79,7 +134,7 @@ export class SaveSystem {
     try {
       storage.setItem(key, value);
       return true;
-    } catch (err) {
+    } catch {
       this.warnOnce(`storage-set:${key}`, '[SaveSystem] Storage write failed');
       return false;
     }
@@ -91,7 +146,7 @@ export class SaveSystem {
 
     try {
       return storage.getItem(key);
-    } catch (err) {
+    } catch {
       this.warnOnce(`storage-get:${key}`, '[SaveSystem] Storage read failed');
       return null;
     }
@@ -158,6 +213,7 @@ export class SaveSystem {
           ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
           : { tradePL: 0 },
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
+        buildings: normalizeBuildingState(game.buildings),
         tuning: game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {},
       },
     };

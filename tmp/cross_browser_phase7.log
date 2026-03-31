@@ -1,0 +1,67 @@
+[cross-browser] chromium: open
+[cross-browser] chromium: sampled
+{
+  "ok": true,
+  "outJson": "C:\\Users\\zxc28\\Desktop\\FallOfCavalry\\output\\web-game\\phase7-cross-browser.json",
+  "outMd": "C:\\Users\\zxc28\\Desktop\\FallOfCavalry\\output\\web-game\\phase7-cross-browser.md",
+  "results": [
+    {
+      "browser": "chromium",
+      "status": "pass",
+      "telemetry": {
+        "level": 2,
+        "effectiveLevel": 4,
+        "adaptivePressure": 2,
+        "avgFps": 0.11947930917065565,
+        "avgMs": 8369.64999999851,
+        "sampleCount": 2,
+        "stageAverages": {
+          "world": 8316,
+          "fx": 0.3499999940395355,
+          "ui": 53.30000000447035
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 8316,
+          "sampleCount": 2,
+          "frameSharePct": 99.35899350631723
+        },
+        {
+          "stage": "ui",
+          "avgMs": 53.30000000447035,
+          "sampleCount": 2,
+          "frameSharePct": 0.636824717933006
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.3499999940395355,
+          "sampleCount": 2,
+          "frameSharePct": 0.00418177574975773
+        }
+      ],
+      "errors": [],
+      "screenshotPath": "C:\\Users\\zxc28\\Desktop\\FallOfCavalry\\output\\web-game\\phase7-browser-chromium.png",
+      "failureReason": ""
+    },
+    {
+      "browser": "firefox",
+      "status": "fail",
+      "telemetry": null,
+      "stageTelemetry": [],
+      "errors": [],
+      "screenshotPath": "",
+      "failureReason": "browserType.launch: Executable doesn't exist at C:\\Users\\zxc28\\AppData\\Local\\ms-playwright\\firefox-1509\\firefox\\firefox.exe\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝"
+    },
+    {
+      "browser": "webkit",
+      "status": "fail",
+      "telemetry": null,
+      "stageTelemetry": [],
+      "errors": [],
+      "screenshotPath": "",
+      "failureReason": "browserType.launch: Executable doesn't exist at C:\\Users\\zxc28\\AppData\\Local\\ms-playwright\\webkit-2248\\Playwright.exe\n╔═════════════════════════════════════════════════════════════════════════╗\n║ Looks like Playwright Test or Playwright was just installed or updated. ║\n║ Please run the following command to download new browsers:              ║\n║                                                                         ║\n║     npx playwright install                                              ║\n║                                                                         ║\n║ <3 Playwright Team                                                      ║\n╚═════════════════════════════════════════════════════════════════════════╝"
+    }
+  ]
+}

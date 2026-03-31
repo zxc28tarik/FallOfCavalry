@@ -1,28 +1,47 @@
 
 > fall-of-cavalry@0.1.0 dev
-> vite --host 127.0.0.1 --port 5173
+> vite --host 127.0.0.1 --port 5173 --strictPort
 
-Re-optimizing dependencies because lockfile has changed
 
-  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m408[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m915[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5173[22m/[39m
-[2m05:52:49[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m06:23:12[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/data/homm3-map-art.json[22m
-[2m06:25:43[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m06:38:23[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/data/homm3-map-art.json[22m
-[2m06:42:54[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m06:43:39[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/data/homm3-map-art.json[22m
-[2m06:59:24[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m07:18:28[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m07:35:57[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:27:37[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:31:30[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:32:56[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:34:09[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:37:55[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m08:48:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m09:40:02[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
-[2m09:45:53[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:12:37[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:13:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:14:09[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:14:54[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:15:35[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:35:05[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:36:23[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m02:37:43[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m03:31:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m03:31:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m06:57:53[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m06:58:44[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m06:59:14[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:00:07[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:18:23[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:24:49[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:25:26[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:26:02[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:40:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:40:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:41:49[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m07:42:36[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:04:45[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:05:37[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:06:20[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:13:55[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:25:25[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m08:30:21[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:02:53[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:05:06[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:06:22[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:07:45[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:14:57[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:54:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:56:33[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m12:58:34[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
+[2m13:00:04[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2mjs/managers/RenderManager.js[22m
 
 C:\Users\zxc28\Desktop\FallOfCavalry>

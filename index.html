@@ -535,9 +535,17 @@
         <div id="buildInfo" class="build-info hidden"></div>
     <script>
       setTimeout(function () {
+        var el = document.getElementById('bootNotice');
+        if (!el) return;
         if (!window.__FOC_BOOT_OK__) {
-          var el = document.getElementById('bootNotice');
-          if (el) el.classList.remove('hidden');
+          el.classList.remove('hidden');
+          var watchId = setInterval(function () {
+            if (!window.__FOC_BOOT_OK__) return;
+            el.classList.add('hidden');
+            clearInterval(watchId);
+          }, 250);
+        } else {
+          el.classList.add('hidden');
         }
       }, 800);
     </script>

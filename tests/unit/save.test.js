@@ -17,6 +17,8 @@ describe('SaveManager - Phase 4A', () => {
         worldAi: { lastRespawnDay: 0, parties: [] },
         lastEncounterEndTimeByEnemyId: {},
         worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: () => null,
+        syncBuildingStateToMap: () => null,
       },
       itemCatalog: [],
       settings: {},
@@ -159,6 +161,8 @@ describe('SaveManager - Phase 4B', () => {
         worldAi: { lastRespawnDay: 0, parties: [] },
         lastEncounterEndTimeByEnemyId: {},
         worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: () => null,
+        syncBuildingStateToMap: () => null,
       },
       itemCatalog: [],
       settings: {},
@@ -259,6 +263,8 @@ describe('SaveManager - Phase 4C', () => {
         worldAi: { lastRespawnDay: 0, parties: [] },
         lastEncounterEndTimeByEnemyId: {},
         worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: () => null,
+        syncBuildingStateToMap: () => null,
       },
       itemCatalog: [],
       settings: {},
@@ -313,6 +319,25 @@ describe('SaveManager - Phase 4C', () => {
     expect(payload.game.roster[0].id).toBe('u1');
   });
 
+  it('buildSavePayload includes building state when world manager provides it', () => {
+    const buildingState = {
+      nextId: 2,
+      buildings: [{ id: 'wall_1', defId: 'wall', anchorX: 3, anchorY: 4, state: 'default' }],
+    };
+    const sm = createSM({}, {
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: () => null,
+        syncBuildingStateToMap: () => buildingState,
+      },
+    });
+    const payload = sm.buildSavePayload();
+    expect(payload.game.buildings).toEqual(buildingState);
+  });
+
   // applySavePayload
   it('applySavePayload returns false without playerParty', () => {
     const sm = createSM({}, { playerParty: null });
@@ -329,6 +354,74 @@ describe('SaveManager - Phase 4C', () => {
     const sm = createSM();
     sm.applySavePayload({ game: { playerParty: { gold: 9999 } } });
     expect(sm.game.playerParty.gold).toBe(9999);
+  });
+
+  it('applySavePayload forwards building payload to world manager', () => {
+    let loadedState = null;
+    const sm = createSM({}, {
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: ({ state }) => { loadedState = state; return {}; },
+        syncBuildingStateToMap: () => null,
+      },
+    });
+    const buildingState = {
+      nextId: 3,
+      buildings: [{ id: 'keep_1', defId: 'keep', anchorX: 6, anchorY: 6, state: 'default' }],
+    };
+    sm.applySavePayload({ game: { buildings: buildingState } });
+    expect(loadedState).toEqual(buildingState);
+  });
+
+  it('applySavePayload sanitizes malformed building payload before forwarding', () => {
+    let loadedState = null;
+    const sm = createSM({}, {
+      worldManager: {
+        enemyParties: [],
+        worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {},
+        worldEncounterPartyByEnemyId: {},
+        ensureBuildingSystem: ({ state }) => { loadedState = state; return {}; },
+        syncBuildingStateToMap: () => null,
+      },
+    });
+    sm.applySavePayload({
+      game: {
+        buildings: {
+          nextId: 'bad',
+          buildings: [
+            { id: 17, defId: 'wall', anchorX: '4', anchorY: 6, state: null },
+            { defId: '', anchorX: 1, anchorY: 2 },
+            { defId: 'keep', anchorX: 9.8, anchorY: 10.2, state: 'default' },
+          ],
+        },
+      },
+    });
+    expect(loadedState).toEqual({
+      nextId: 3,
+      buildings: [
+        { id: 'wall_4_6_0', defId: 'wall', anchorX: 4, anchorY: 6, state: 'default' },
+        { id: 'keep_9_10_2', defId: 'keep', anchorX: 9, anchorY: 10, state: 'default' },
+      ],
+    });
+  });
+
+  it('applySavePayload keeps normalized faction object instead of nulling it', () => {
+    const sm = createSM({ factions: null });
+    sm.applySavePayload({
+      game: {
+        factions: {
+          relations: { 'a:b': 40 },
+        },
+      },
+    });
+    expect(sm.state.factions).toBeTruthy();
+    expect(typeof sm.state.factions).toBe('object');
+    expect(sm.state.factions).not.toBeNull();
+    expect(sm.state.factions.relations).toBeTruthy();
   });
 
   it('applySavePayload returns true on success', () => {

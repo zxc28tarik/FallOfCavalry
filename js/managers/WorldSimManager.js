@@ -1,5 +1,5 @@
 import * as CONST from '../constants.js';
-import { assignInitialSettlementOwners, getStance } from '../systems/factions.js';
+import { getStance } from '../systems/factions.js';
 import { computeRiskMultiplier, riskLabel } from '../systems/encounter-risk.js';
 import { ensureWorldParties, createInitialWorldAiState, updateWorldParties, getBanditCap } from '../systems/world-ai.js';
 import { getBanditCapFromEvents } from '../systems/events.js';
@@ -9,8 +9,115 @@ import { setContractsRuntimeContext } from '../systems/contracts.js';
 import { createInitialRegionState, getActiveRegionModifiers } from '../systems/region-state.js';
 
 export class WorldSimManager {
-  constructor() { this.world = null; this.game = null; }
+  constructor() {
+    this.world = null;
+    this.game = null;
+    this.cameraPanVelocity = { x: 0, y: 0 };
+  }
   init(world, game) { this.world = world; this.game = game; }
+
+  hasTypingFocus() {
+    if (typeof document === 'undefined') return false;
+    const active = document.activeElement;
+    if (!active || typeof active !== 'object') return false;
+    if (active.isContentEditable) return true;
+    const tag = String(active.tagName || '').toUpperCase();
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  getMapCameraPanInput() {
+    const input = this.game?.input;
+    const canvas = this.game?.canvas;
+    const allowKeyboard = !this.hasTypingFocus();
+    let moveX = 0;
+    let moveY = 0;
+
+    if (input && allowKeyboard) {
+      if (input.isKeyDown('arrowleft')) moveX -= 1;
+      if (input.isKeyDown('arrowright')) moveX += 1;
+      if (input.isKeyDown('arrowup')) moveY -= 1;
+      if (input.isKeyDown('arrowdown')) moveY += 1;
+    }
+
+    const mouse = input?.mouse;
+    const canEdgePan = Boolean(
+      mouse?.over
+      && canvas
+      && Number.isFinite(canvas.width)
+      && Number.isFinite(canvas.height)
+      && Number.isFinite(mouse.x)
+      && Number.isFinite(mouse.y),
+    );
+
+    if (canEdgePan) {
+      const edgeZone = Math.max(14, Math.min(42, Math.round(Math.min(canvas.width, canvas.height) * 0.024)));
+      const rightDist = canvas.width - mouse.x;
+      const bottomDist = canvas.height - mouse.y;
+      const edgePow = 1.35;
+      const toWeight = (distance) => {
+        if (!Number.isFinite(distance) || distance >= edgeZone) return 0;
+        const t = Math.max(0, Math.min(1, (edgeZone - distance) / edgeZone));
+        return t ** edgePow;
+      };
+
+      moveX += toWeight(rightDist);
+      moveX -= toWeight(mouse.x);
+      moveY += toWeight(bottomDist);
+      moveY -= toWeight(mouse.y);
+    }
+
+    const magnitude = Math.hypot(moveX, moveY);
+    if (magnitude > 1e-6) {
+      const inv = 1 / Math.max(1, magnitude);
+      return {
+        x: moveX * inv,
+        y: moveY * inv,
+        magnitude: Math.min(1, magnitude),
+      };
+    }
+    return { x: 0, y: 0, magnitude: 0 };
+  }
+
+  updateMapCameraPan(dt) {
+    const camera = this.world?.getCameraSafe?.();
+    if (!camera || !Number.isFinite(dt) || dt <= 0) return false;
+
+    const panInput = this.getMapCameraPanInput();
+    const hasInput = panInput.magnitude > 0.001;
+    const shiftBoost = this.game?.input?.isKeyDown?.('shift') ? 1.7 : 1.0;
+    const zoom = Math.max(0.35, Number(camera.zoom) || 1);
+    const baseSpeed = Math.max(120, Number(CONST.GAME?.CAMERA_SPEED) || 220);
+    const maxSpeed = (baseSpeed * 5.5 * shiftBoost) / zoom;
+    const targetVx = panInput.x * maxSpeed;
+    const targetVy = panInput.y * maxSpeed;
+    const accel = hasInput ? 14 : 9;
+    const blend = 1 - Math.exp(-accel * dt);
+    this.cameraPanVelocity.x += (targetVx - this.cameraPanVelocity.x) * blend;
+    this.cameraPanVelocity.y += (targetVy - this.cameraPanVelocity.y) * blend;
+
+    if (!hasInput) {
+      const damping = Math.exp(-8.5 * dt);
+      this.cameraPanVelocity.x *= damping;
+      this.cameraPanVelocity.y *= damping;
+      if (Math.abs(this.cameraPanVelocity.x) < 1) this.cameraPanVelocity.x = 0;
+      if (Math.abs(this.cameraPanVelocity.y) < 1) this.cameraPanVelocity.y = 0;
+    }
+
+    if (hasInput && this.game?.followParty) {
+      this.game.followParty = false;
+    }
+    if (this.game?.followParty) return false;
+
+    const prevX = Number(camera.x) || 0;
+    const prevY = Number(camera.y) || 0;
+    camera.x = prevX + (this.cameraPanVelocity.x * dt);
+    camera.y = prevY + (this.cameraPanVelocity.y * dt);
+    this.world.clampCameraToWorld();
+
+    if (camera.x === prevX) this.cameraPanVelocity.x = 0;
+    if (camera.y === prevY) this.cameraPanVelocity.y = 0;
+    return camera.x !== prevX || camera.y !== prevY;
+  }
 
   initEnemyParties() {
     if (!this.world.state) return;
@@ -60,7 +167,14 @@ export class WorldSimManager {
   }
 
   initPlayerParty() {
-    if (this.game?.playerParty) return;
+    if (this.game?.playerParty) {
+      if (!Number.isFinite(this.game.playerParty.vx)) this.game.playerParty.vx = 0;
+      if (!Number.isFinite(this.game.playerParty.vy)) this.game.playerParty.vy = 0;
+      if (typeof this.game.playerParty.moveState !== 'string' || !this.game.playerParty.moveState) {
+        this.game.playerParty.moveState = this.game.playerParty.hasDestination ? 'moving' : 'idle';
+      }
+      return;
+    }
 
     const fallback = {
       x: 320,
@@ -73,6 +187,9 @@ export class WorldSimManager {
       hasDestination: false,
       arrivalFeedbackTimer: 0,
       hovered: false,
+      vx: 0,
+      vy: 0,
+      moveState: 'idle',
     };
 
     const statePlayer = this.world.state?.player;
@@ -300,6 +417,9 @@ export class WorldSimManager {
   updatePlayerParty(dt) {
     const party = this.game?.playerParty;
     if (!party || !Number.isFinite(dt) || dt <= 0) return;
+    if (!Number.isFinite(party.vx)) party.vx = 0;
+    if (!Number.isFinite(party.vy)) party.vy = 0;
+    if (typeof party.moveState !== 'string' || !party.moveState) party.moveState = 'idle';
 
     if (party.arrivalFeedbackTimer > 0) {
       party.arrivalFeedbackTimer = Math.max(0, party.arrivalFeedbackTimer - dt);
@@ -309,9 +429,19 @@ export class WorldSimManager {
       this.world.centerCameraOnParty();
     }
 
-    if (this.game?.mode === 'paused' || this.world.state?.mode !== 'map') return;
+    if (this.game?.mode === 'paused' || this.world.state?.mode !== 'map') {
+      party.vx = 0;
+      party.vy = 0;
+      if (party.moveState !== 'arrived') party.moveState = 'idle';
+      return;
+    }
 
-    if (!party.hasDestination) return;
+    if (!party.hasDestination) {
+      party.vx = 0;
+      party.vy = 0;
+      if (party.moveState !== 'arrived') party.moveState = 'idle';
+      return;
+    }
 
     const dx = party.destX - party.x;
     const dy = party.destY - party.y;
@@ -333,6 +463,7 @@ export class WorldSimManager {
     this.world.currentTerrainStatus = `${currentContext.terrainLabel} | Yük: ${Math.round(logistics.weight)}/${Math.round(logistics.cap)}`;
     if (currentContext.blocked) {
       this.world.cancelPlayerDestination();
+      party.moveState = 'blocked';
       return;
     }
 
@@ -347,15 +478,23 @@ export class WorldSimManager {
     const nextContext = this.world.getMovementContextAt(nx, ny);
     if (nextContext.blocked) {
       this.world.cancelPlayerDestination();
+      party.moveState = 'blocked';
       return;
     }
 
+    const prevX = Number(party.x) || 0;
+    const prevY = Number(party.y) || 0;
     party.x = nx;
     party.y = ny;
 
     const clamped = this.world.clampToWorld(party.x, party.y);
     party.x = clamped.x;
     party.y = clamped.y;
+    const movedX = party.x - prevX;
+    const movedY = party.y - prevY;
+    party.vx = movedX / dt;
+    party.vy = movedY / dt;
+    party.moveState = (Math.hypot(party.vx, party.vy) > 0.001) ? 'moving' : 'idle';
 
     if (this.game?.followParty) {
       this.world.centerCameraOnParty();
@@ -374,6 +513,7 @@ export class WorldSimManager {
 
     enemies.forEach((enemy, index) => {
       if (!enemy || !Number.isFinite(enemy.x) || !Number.isFinite(enemy.y)) return;
+      if (typeof enemy.moveState !== 'string' || !enemy.moveState) enemy.moveState = 'patrol';
 
       const wobble = (this.world.state.timeSec * 0.65) + (index * 1.37);
       enemy.vx = (enemy.vx ?? 0) + Math.sin(wobble) * driftRate * dt;
@@ -387,14 +527,17 @@ export class WorldSimManager {
       const playerDirX = dxToPlayer / playerDist;
       const playerDirY = dyToPlayer / playerDist;
       const aggroRadius = stance === 'WAR' ? 260 : (stance === 'NEUTRAL' ? 140 : 0);
+      let nextMoveState = 'patrol';
       if (aggroRadius > 0 && playerDist <= aggroRadius) {
         const aggroStrength = stance === 'WAR' ? 0.85 : 0.25;
         enemy.vx += playerDirX * aggroStrength * dt;
         enemy.vy += playerDirY * aggroStrength * dt;
+        nextMoveState = stance === 'WAR' ? 'chase' : 'approach';
       }
       if (stance === 'ALLY' && playerDist < 140) {
         enemy.vx -= playerDirX * 0.5 * dt;
         enemy.vy -= playerDirY * 0.5 * dt;
+        nextMoveState = 'retreat';
       }
 
       const speedLen = Math.hypot(enemy.vx, enemy.vy) || 1;
@@ -411,9 +554,11 @@ export class WorldSimManager {
       if (nextContext.blocked) {
         enemy.vx *= -1;
         enemy.vy *= -1;
+        enemy.moveState = 'blocked';
       } else {
         enemy.x = nx;
         enemy.y = ny;
+        enemy.moveState = nextMoveState;
       }
 
       if (enemy.x < bounds.minX + radius || enemy.x > bounds.maxX - radius) {
@@ -424,6 +569,7 @@ export class WorldSimManager {
         enemy.vy *= -1;
         enemy.y = Math.max(bounds.minY + radius, Math.min(bounds.maxY - radius, enemy.y));
       }
+      enemy.worldSpeed = moveSpeed;
     });
   }
 
@@ -432,6 +578,7 @@ export class WorldSimManager {
     this.updateTransientUIState();
     if (this.world.state) this.world.state.worldAi = this.world.worldAi;
     if (this.world.state?.paused || this.world.state?.accounting) return;
+    this.updateMapCameraPan(dt);
     this.updatePlayerParty(dt);
     if ((this.game?.getEffectiveTuning?.() || {}).WORLD_AI?.ENABLED ?? CONST.WORLD_AI?.ENABLED) {
       const worldState = this.world.state?.map || {};

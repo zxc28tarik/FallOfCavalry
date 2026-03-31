@@ -1,4 +1,4 @@
-import SaveSystem from '../systems/save-system.js';
+import SaveSystem, { normalizeBuildingState } from '../systems/save-system.js';
 import * as CONST from '../constants.js';
 import { serializeSettings, deserializeSettings } from '../systems/settings.js';
 import { ensureFactionState, assignInitialSettlementOwners } from '../systems/factions.js';
@@ -233,6 +233,9 @@ Esc close`,
     const enemyParties = this.game?.enemyParties || [];
     const worldAi = this.game?.worldAi;
     const lastEncounterEndTimeByEnemyId = this.game?.lastEncounterEndTimeByEnemyId || {};
+    const buildingStateFromWorld = this.game?.worldManager?.syncBuildingStateToMap?.() || null;
+    const buildingStateFromMap = this.state?.map?.buildingState;
+    const buildingState = normalizeBuildingState(buildingStateFromWorld || buildingStateFromMap);
 
     return {
       schemaVersion: 1,
@@ -318,6 +321,7 @@ Esc close`,
         lastAccounting: this.state?.lastAccounting && typeof this.state.lastAccounting === 'object' ? this.state.lastAccounting : null,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
+        buildings: buildingState,
         tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
         factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : null,
       },
@@ -482,8 +486,19 @@ Esc close`,
       ? { tradePL: Number(game.dailyLedger.tradePL ?? 0) }
       : { tradePL: 0 };
     this.state.tuning = game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {};
+    const savedBuildingState = normalizeBuildingState(game.buildings);
+    const fallbackBuildingState = normalizeBuildingState(this.state?.map?.buildingState);
+    const resolvedBuildingState = savedBuildingState || fallbackBuildingState;
+    if (this.state?.map && savedBuildingState) {
+      this.state.map.buildingState = savedBuildingState;
+    }
+    this.game?.worldManager?.ensureBuildingSystem?.({
+      map: this.state?.map,
+      reset: true,
+      state: resolvedBuildingState,
+    });
+    this.game?.worldManager?.syncBuildingStateToMap?.();
     this.state.factions = ensureFactionState(game.factions, CONST.DIPLOMACY_RELATIONS);
-    this.state.factions = game.factions && typeof game.factions === 'object' && !Array.isArray(game.factions) ? game.factions : null;
     this.game?.ensureFactionState?.();
     assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
     suppliesSystem.ensureSuppliesState(this.state);

@@ -18,6 +18,11 @@ export class MapData {
     this.forests = worldData.forests;
     this.mountains = worldData.mountains;
     this.fog = worldData.fog;
+    this.walkabilityOverrides = new Map();
+  }
+
+  walkKey(x, y) {
+    return `${x},${y}`;
   }
   
   getTile(x, y) {
@@ -36,15 +41,36 @@ export class MapData {
   }
   
   isWalkable(x, y) {
+    const key = this.walkKey(x, y);
+    if (this.walkabilityOverrides.has(key)) {
+      return Boolean(this.walkabilityOverrides.get(key));
+    }
     const tile = this.getTile(x, y);
     if (!tile) return false;
     return tile.type !== CONST.TERRAIN.TYPE.WATER;
   }
+
+  setWalkable(x, y, walkable) {
+    if (!inBounds(x, y, this.width, this.height)) return false;
+    this.walkabilityOverrides.set(this.walkKey(x, y), Boolean(walkable));
+    return true;
+  }
+
+  clearWalkableOverride(x, y) {
+    if (!inBounds(x, y, this.width, this.height)) return false;
+    return this.walkabilityOverrides.delete(this.walkKey(x, y));
+  }
+
+  clearAllWalkabilityOverrides() {
+    this.walkabilityOverrides.clear();
+  }
   
   getMovementCost(x, y) {
+    if (!this.isWalkable(x, y)) return CONST.TERRAIN.COST.WATER;
     const tile = this.getTile(x, y);
     if (!tile) return 999;
-    return CONST.TERRAIN.COST[tile.type] || 1;
+    const typeKey = String(tile.type || '').toUpperCase();
+    return CONST.TERRAIN.COST[typeKey] || 1;
   }
   
   getSettlementAt(x, y) {

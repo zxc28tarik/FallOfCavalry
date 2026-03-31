@@ -40,7 +40,7 @@ export const TUTORIAL_HINTS = Object.freeze({
 
 export const HINT_TEXT = Object.freeze({
   encounter: 'İpucu: Karşılaşmada Fight ile savaşa gir veya Retreat ile geri çekil.',
-  movement: 'İpucu: Haritada WASD / sürükle ile gez, mouse tekeri ile zoom.',
+  movement: 'İpucu: Haritada yön tuşları veya ekran kenarı ile kamerayı kaydır, tekerlekle zoom yap.',
   city: 'İpucu: Şehir yakınında C ile şehre gir (Recruit/Trade).',
   poi: 'İpucu: POI yakınında E ile incele (ganimet/pusu/ipucu).',
   camp: 'İpucu: K ile kamp kur, nöbet seç; erzak tüketimi düşer.',

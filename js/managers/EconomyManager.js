@@ -289,19 +289,22 @@ export class EconomyManager {
 
   // ── Phase 5C: City services, trading, healing ─────────────────────
 
-  enterCityServices() {
+  enterCityServicesForSettlement(settlement) {
     if (!this.state) return false;
     this.game?.setupCityServicesUI?.();
     this.game?.maybeShowTutorialHint?.({ nearSettlement: true, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
-    this.state.city = this.getActiveSettlementForCity();
-    const settlement = this.state.city;
-    settlement.tier = this.getSettlementTier(settlement);
-    const recruitPool = recruitmentSystem.getRecruitPool(settlement, this.state?.seed);
-    settlement.recruitPool = recruitPool;
-    const market = this.getOrCreateMarketForSettlement(settlement);
+    this.state.city = settlement && typeof settlement === 'object'
+      ? settlement
+      : this.getActiveSettlementForCity();
+    const activeSettlement = this.state.city;
+    if (!activeSettlement || typeof activeSettlement !== 'object') return false;
+    activeSettlement.tier = this.getSettlementTier(activeSettlement);
+    const recruitPool = recruitmentSystem.getRecruitPool(activeSettlement, this.state?.seed);
+    activeSettlement.recruitPool = recruitPool;
+    const market = this.getOrCreateMarketForSettlement(activeSettlement);
     setContractsRuntimeContext({ party: this.game?.playerParty, map: this.state?.map, worldSeed: this.state?.seed });
     const contracts = generateContractsForCity({
-      cityId: settlement.id,
+      cityId: activeSettlement.id,
       day: this.state?.day,
       seed: this.state?.seed,
       map: this.state?.map,
@@ -309,9 +312,9 @@ export class EconomyManager {
       factions: this.state?.factions,
       warState: this.state?.warState,
     })
-      .map((contract) => ({ ...contract, factionId: settlement.ownerFactionId || settlement.owner || null }));
+      .map((contract) => ({ ...contract, factionId: activeSettlement.ownerFactionId || activeSettlement.owner || null }));
 
-    if (this.state?.escortState?.active && this.state.escortState.toCityId === settlement.id) {
+    if (this.state?.escortState?.active && this.state.escortState.toCityId === activeSettlement.id) {
       const escortSuccess = Number(this.state.escortState.banditEncounters ?? 0) <= Number(this.state.escortState.maxBanditEncounters ?? 1);
       emitContractEvent({
         type: 'ESCORT_COMPLETE',
@@ -323,9 +326,13 @@ export class EconomyManager {
       this.game?.setLastEventLog?.(escortSuccess ? 'Escort route completed successfully.' : 'Escort failed: too many bandit encounters.');
     }
     this.state.setMode('city');
-    this.game?.cityUI?.show?.(settlement, { recruitPool, market, contracts });
+    this.game?.cityUI?.show?.(activeSettlement, { recruitPool, market, contracts });
     this.game?.updateTransientUIState?.();
     return true;
+  }
+
+  enterCityServices() {
+    return this.enterCityServicesForSettlement(this.getActiveSettlementForCity());
   }
 
   exitCityServices() {

@@ -1,0 +1,1193 @@
+{
+  "timestampIso": "2026-03-31T00:04:36.365Z",
+  "viewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "mapInfo": {
+    "width": 1068,
+    "height": 714
+  },
+  "worldCounts": {
+    "settlements": 800,
+    "forests": 27377,
+    "mountains": 3869
+  },
+  "points": [
+    {
+      "x": 28080,
+      "y": 13072,
+      "tag": "spawn"
+    },
+    {
+      "x": 26768,
+      "y": 10992,
+      "tag": "forest"
+    },
+    {
+      "x": 17040,
+      "y": 9520,
+      "tag": "mountain"
+    }
+  ],
+  "summary": {
+    "sampleCount": 24,
+    "fps": {
+      "avg": 0.4025743174244603,
+      "min": 0.12706883954382286,
+      "max": 0.6098211699414989,
+      "p50": 0.480691233994398,
+      "p95": 0.6098211699414989
+    },
+    "frameMs": {
+      "avg": 3301.7985416663146,
+      "min": 1639.8250000011176,
+      "max": 7869.75,
+      "p50": 2046.9749999996275,
+      "p95": 5603.39999999851
+    },
+    "stageMs": {
+      "worldAvg": 3178.3791716240685,
+      "fxAvg": 0.7943105170348038,
+      "uiAvg": 122.61195932625394
+    },
+    "quality": {
+      "avgLevel": 5,
+      "minLevel": 5,
+      "maxLevel": 5
+    },
+    "lodDistribution": {
+      "minimal": 24
+    }
+  },
+  "samples": [
+    {
+      "tick": 0,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 4,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.22931177802619887,
+        "avgMs": 4360.875,
+        "sampleCount": 4,
+        "stageAverages": {
+          "world": 4285.52499999851,
+          "fx": 0.22500000149011612,
+          "ui": 75.07499999925494
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 4285.52499999851,
+          "sampleCount": 4,
+          "frameSharePct": 98.27213575253843
+        },
+        {
+          "stage": "ui",
+          "avgMs": 75.07499999925494,
+          "sampleCount": 4,
+          "frameSharePct": 1.7215581735146028
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.22500000149011612,
+          "sampleCount": 4,
+          "frameSharePct": 0.005159515039759592
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 1,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.23960474800765233,
+        "avgMs": 4173.540000000596,
+        "sampleCount": 5,
+        "stageAverages": {
+          "world": 4051.239999997616,
+          "fx": 0.22000000178813933,
+          "ui": 122.04000000059605
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 4051.239999997616,
+          "sampleCount": 5,
+          "frameSharePct": 97.06963393179502
+        },
+        {
+          "stage": "ui",
+          "avgMs": 122.04000000059605,
+          "sampleCount": 5,
+          "frameSharePct": 2.9241363446996704
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.22000000178813933,
+          "sampleCount": 5,
+          "frameSharePct": 0.0052713044990130185
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 81,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 2,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.12706883954382286,
+        "avgMs": 7869.75,
+        "sampleCount": 6,
+        "stageAverages": {
+          "world": 7757.883333330353,
+          "fx": 0.21666666865348816,
+          "ui": 111.61666666716337
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 7757.883333330353,
+          "sampleCount": 6,
+          "frameSharePct": 98.57852324826523
+        },
+        {
+          "stage": "ui",
+          "avgMs": 111.61666666716337,
+          "sampleCount": 6,
+          "frameSharePct": 1.4183000307146145
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.21666666865348816,
+          "sampleCount": 6,
+          "frameSharePct": 0.002753158215362472
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 49,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 3,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.12887760493860395,
+        "avgMs": 7759.299999999149,
+        "sampleCount": 7,
+        "stageAverages": {
+          "world": 7658.714285710028,
+          "fx": 0.2142857164144516,
+          "ui": 100.34285714370864
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 7658.714285710028,
+          "sampleCount": 7,
+          "frameSharePct": 98.70367540513794
+        },
+        {
+          "stage": "ui",
+          "avgMs": 100.34285714370864,
+          "sampleCount": 7,
+          "frameSharePct": 1.2931947101377657
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.2142857164144516,
+          "sampleCount": 7,
+          "frameSharePct": 0.0027616629904047415
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 36,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 4,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.2005761550053575,
+        "avgMs": 4985.637499997392,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 4883.987499995157,
+          "fx": 1.6625000014901161,
+          "ui": 99.96250000037253
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 4883.987499995157,
+          "sampleCount": 8,
+          "frameSharePct": 97.96114338432571
+        },
+        {
+          "stage": "ui",
+          "avgMs": 99.96250000037253,
+          "sampleCount": 8,
+          "frameSharePct": 2.0050093894797767
+        },
+        {
+          "stage": "fx",
+          "avgMs": 1.6625000014901161,
+          "sampleCount": 8,
+          "frameSharePct": 0.033345785799528856
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 20,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 5,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.19101375776598464,
+        "avgMs": 5235.224999997765,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 5135.762499993667,
+          "fx": 1.6750000026077032,
+          "ui": 97.76250000111759
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 5135.762499993667,
+          "sampleCount": 8,
+          "frameSharePct": 98.1001294117418
+        },
+        {
+          "stage": "ui",
+          "avgMs": 97.76250000111759,
+          "sampleCount": 8,
+          "frameSharePct": 1.8673982493810546
+        },
+        {
+          "stage": "fx",
+          "avgMs": 1.6750000026077032,
+          "sampleCount": 8,
+          "frameSharePct": 0.03199480447561314
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 72,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 6,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.18461850892870152,
+        "avgMs": 5416.574999997392,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 5305.4749999940395,
+          "fx": 1.7125000022351742,
+          "ui": 109.375
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 5305.4749999940395,
+          "sampleCount": 8,
+          "frameSharePct": 97.94888836574023
+        },
+        {
+          "stage": "ui",
+          "avgMs": 109.375,
+          "sampleCount": 8,
+          "frameSharePct": 2.019264941407673
+        },
+        {
+          "stage": "fx",
+          "avgMs": 1.7125000022351742,
+          "sampleCount": 8,
+          "frameSharePct": 0.03161591969530558
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 49,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 7,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.17846307598962521,
+        "avgMs": 5603.39999999851,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 5481.087499994785,
+          "fx": 2.150000002235174,
+          "ui": 120.16250000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 5481.087499994785,
+          "sampleCount": 8,
+          "frameSharePct": 97.81717350173541
+        },
+        {
+          "stage": "ui",
+          "avgMs": 120.16250000149012,
+          "sampleCount": 8,
+          "frameSharePct": 2.144456936886927
+        },
+        {
+          "stage": "fx",
+          "avgMs": 2.150000002235174,
+          "sampleCount": 8,
+          "frameSharePct": 0.03836956137765903
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 8,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.18850807639296416,
+        "avgMs": 5304.812499998137,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 5206.837499996647,
+          "fx": 2.125000001862645,
+          "ui": 95.84999999962747
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 5206.837499996647,
+          "sampleCount": 8,
+          "frameSharePct": 98.15309212151185
+        },
+        {
+          "stage": "ui",
+          "avgMs": 95.84999999962747,
+          "sampleCount": 8,
+          "frameSharePct": 1.8068499122195387
+        },
+        {
+          "stage": "fx",
+          "avgMs": 2.125000001862645,
+          "sampleCount": 8,
+          "frameSharePct": 0.04005796626861725
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 20,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 9,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.4114485560730389,
+        "avgMs": 2430.4374999981374,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 2325.9999999962747,
+          "fx": 2.100000001490116,
+          "ui": 102.33750000037253
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 2325.9999999962747,
+          "sampleCount": 8,
+          "frameSharePct": 95.70293414243555
+        },
+        {
+          "stage": "ui",
+          "avgMs": 102.33750000037253,
+          "sampleCount": 8,
+          "frameSharePct": 4.21066166072779
+        },
+        {
+          "stage": "fx",
+          "avgMs": 2.100000001490116,
+          "sampleCount": 8,
+          "frameSharePct": 0.08640419683664878
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 81,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 10,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.5539322263925581,
+        "avgMs": 1805.2749999985099,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1690.0749999973923,
+          "fx": 2.087500000372529,
+          "ui": 113.11250000074506
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1690.0749999973923,
+          "sampleCount": 8,
+          "frameSharePct": 93.61870075189583
+        },
+        {
+          "stage": "ui",
+          "avgMs": 113.11250000074506,
+          "sampleCount": 8,
+          "frameSharePct": 6.265665895824095
+        },
+        {
+          "stage": "fx",
+          "avgMs": 2.087500000372529,
+          "sampleCount": 8,
+          "frameSharePct": 0.11563335228008209
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 56,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 11,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.5082140089199256,
+        "avgMs": 1967.6749999970198,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1841.1749999970198,
+          "fx": 2.074999999254942,
+          "ui": 124.42500000074506
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1841.1749999970198,
+          "sampleCount": 8,
+          "frameSharePct": 93.57109278716294
+        },
+        {
+          "stage": "ui",
+          "avgMs": 124.42500000074506,
+          "sampleCount": 8,
+          "frameSharePct": 6.323452806024039
+        },
+        {
+          "stage": "fx",
+          "avgMs": 2.074999999254942,
+          "sampleCount": 8,
+          "frameSharePct": 0.10545440681301967
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 12,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.4885257514137603,
+        "avgMs": 2046.9749999996275,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1915.4249999970198,
+          "fx": 0.5750000011175871,
+          "ui": 130.97500000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1915.4249999970198,
+          "sampleCount": 8,
+          "frameSharePct": 93.57344374002459
+        },
+        {
+          "stage": "ui",
+          "avgMs": 130.97500000149012,
+          "sampleCount": 8,
+          "frameSharePct": 6.398466029214521
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.5750000011175871,
+          "sampleCount": 8,
+          "frameSharePct": 0.028090230760888225
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 25,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 13,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.480691233994398,
+        "avgMs": 2080.3375000003725,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1931.7124999985099,
+          "fx": 0.5750000011175871,
+          "ui": 148.05000000074506
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1931.7124999985099,
+          "sampleCount": 8,
+          "frameSharePct": 92.85572653466872
+        },
+        {
+          "stage": "ui",
+          "avgMs": 148.05000000074506,
+          "sampleCount": 8,
+          "frameSharePct": 7.116633719322876
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.5750000011175871,
+          "sampleCount": 8,
+          "frameSharePct": 0.027639746008399316
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 81,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 14,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.47003249099569316,
+        "avgMs": 2127.5125000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1967.0874999985099,
+          "fx": 0.5375000014901161,
+          "ui": 159.8875000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1967.0874999985099,
+          "sampleCount": 8,
+          "frameSharePct": 92.45950376307903
+        },
+        {
+          "stage": "ui",
+          "avgMs": 159.8875000011176,
+          "sampleCount": 8,
+          "frameSharePct": 7.515231990459919
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.5375000014901161,
+          "sampleCount": 8,
+          "frameSharePct": 0.02526424646105881
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 49,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 15,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.4944528570104144,
+        "avgMs": 2022.4375,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1877.5624999981374,
+          "fx": 0.08750000037252903,
+          "ui": 144.78750000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1877.5624999981374,
+          "sampleCount": 8,
+          "frameSharePct": 92.83661423396951
+        },
+        {
+          "stage": "ui",
+          "avgMs": 144.78750000149012,
+          "sampleCount": 8,
+          "frameSharePct": 7.159059303513217
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.08750000037252903,
+          "sampleCount": 8,
+          "frameSharePct": 0.00432646251726093
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 16,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.5124460330269511,
+        "avgMs": 1951.425000000745,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1814.0374999977648,
+          "fx": 0.08750000037252903,
+          "ui": 137.28750000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1814.0374999977648,
+          "sampleCount": 8,
+          "frameSharePct": 92.95963206359825
+        },
+        {
+          "stage": "ui",
+          "avgMs": 137.28750000149012,
+          "sampleCount": 8,
+          "frameSharePct": 7.035243475995117
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.08750000037252903,
+          "sampleCount": 8,
+          "frameSharePct": 0.004483902808075925
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 20,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 17,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.5124460330269511,
+        "avgMs": 1951.425000000745,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1814.0374999977648,
+          "fx": 0.08750000037252903,
+          "ui": 137.28750000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1814.0374999977648,
+          "sampleCount": 8,
+          "frameSharePct": 92.95963206359825
+        },
+        {
+          "stage": "ui",
+          "avgMs": 137.28750000149012,
+          "sampleCount": 8,
+          "frameSharePct": 7.035243475995117
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.08750000037252903,
+          "sampleCount": 8,
+          "frameSharePct": 0.004483902808075925
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 20,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 18,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.5124460330269511,
+        "avgMs": 1951.425000000745,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1814.0374999977648,
+          "fx": 0.08750000037252903,
+          "ui": 137.28750000149012
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1814.0374999977648,
+          "sampleCount": 8,
+          "frameSharePct": 92.95963206359825
+        },
+        {
+          "stage": "ui",
+          "avgMs": 137.28750000149012,
+          "sampleCount": 8,
+          "frameSharePct": 7.035243475995117
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.08750000037252903,
+          "sampleCount": 8,
+          "frameSharePct": 0.004483902808075925
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 20,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 19,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.6098211699414989,
+        "avgMs": 1639.8250000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1504.6874999981374,
+          "fx": 0.11250000074505806,
+          "ui": 135.0125000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1504.6874999981374,
+          "sampleCount": 8,
+          "frameSharePct": 91.75902916452134
+        },
+        {
+          "stage": "ui",
+          "avgMs": 135.0125000011176,
+          "sampleCount": 8,
+          "frameSharePct": 8.233348070740815
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.11250000074505806,
+          "sampleCount": 8,
+          "frameSharePct": 0.006860488207277081
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 20,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 0.62,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.6098211699414989,
+        "avgMs": 1639.8250000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1504.6874999981374,
+          "fx": 0.11250000074505806,
+          "ui": 135.0125000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1504.6874999981374,
+          "sampleCount": 8,
+          "frameSharePct": 91.75902916452134
+        },
+        {
+          "stage": "ui",
+          "avgMs": 135.0125000011176,
+          "sampleCount": 8,
+          "frameSharePct": 8.233348070740815
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.11250000074505806,
+          "sampleCount": 8,
+          "frameSharePct": 0.006860488207277081
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 21,
+      "pointA": "spawn",
+      "pointB": "forest",
+      "zoom": 0.78,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.6098211699414989,
+        "avgMs": 1639.8250000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1504.6874999981374,
+          "fx": 0.11250000074505806,
+          "ui": 135.0125000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1504.6874999981374,
+          "sampleCount": 8,
+          "frameSharePct": 91.75902916452134
+        },
+        {
+          "stage": "ui",
+          "avgMs": 135.0125000011176,
+          "sampleCount": 8,
+          "frameSharePct": 8.233348070740815
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.11250000074505806,
+          "sampleCount": 8,
+          "frameSharePct": 0.006860488207277081
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 22,
+      "pointA": "forest",
+      "pointB": "mountain",
+      "zoom": 1,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.6098211699414989,
+        "avgMs": 1639.8250000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1504.6874999981374,
+          "fx": 0.11250000074505806,
+          "ui": 135.0125000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1504.6874999981374,
+          "sampleCount": 8,
+          "frameSharePct": 91.75902916452134
+        },
+        {
+          "stage": "ui",
+          "avgMs": 135.0125000011176,
+          "sampleCount": 8,
+          "frameSharePct": 8.233348070740815
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.11250000074505806,
+          "sampleCount": 8,
+          "frameSharePct": 0.006860488207277081
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    },
+    {
+      "tick": 23,
+      "pointA": "mountain",
+      "pointB": "spawn",
+      "zoom": 1.22,
+      "lodLevel": "minimal",
+      "telemetry": {
+        "level": 5,
+        "effectiveLevel": 5,
+        "adaptivePressure": 2,
+        "avgFps": 0.6098211699414989,
+        "avgMs": 1639.8250000011176,
+        "sampleCount": 8,
+        "stageAverages": {
+          "world": 1504.6874999981374,
+          "fx": 0.11250000074505806,
+          "ui": 135.0125000011176
+        }
+      },
+      "stageTelemetry": [
+        {
+          "stage": "world",
+          "avgMs": 1504.6874999981374,
+          "sampleCount": 8,
+          "frameSharePct": 91.75902916452134
+        },
+        {
+          "stage": "ui",
+          "avgMs": 135.0125000011176,
+          "sampleCount": 8,
+          "frameSharePct": 8.233348070740815
+        },
+        {
+          "stage": "fx",
+          "avgMs": 0.11250000074505806,
+          "sampleCount": 8,
+          "frameSharePct": 0.006860488207277081
+        }
+      ],
+      "cacheStats": {
+        "chunkCount": 30,
+        "chunkSize": 16,
+        "maxChunks": 86,
+        "groundStylePreset": "stronghold",
+        "groundSpritesEnabled": true
+      }
+    }
+  ]
+}

@@ -3,6 +3,11 @@ import { createInitialWorldAiState } from '../systems/world-ai.js';
 import { createInitialRegionState } from '../systems/region-state.js';
 import { WorldGenManager } from './WorldGenManager.js';
 import { WorldSimManager } from './WorldSimManager.js';
+import { distanceToSettlementTiles, findSettlementAtWorldPoint, getSettlementInteractRangeTiles } from '../systems/settlement-picking.js';
+import { screenToWorldPrecise } from '../rendering/dimetric/projection.js';
+import { buildDimetricCameraConfig, resolveProjectionMode } from '../rendering/dimetric/view-config.js';
+import { BuildingSystem } from '../systems/building-system.js';
+import { resolveWallVariant } from '../rendering/dimetric/wall-auto-tile.js';
 
 export class WorldManager {
   constructor(gameState) {
@@ -25,12 +30,17 @@ export class WorldManager {
     this.encounterCooldownMs = 3000;
     this.genManager = null;
     this.simManager = null;
+    this.buildingSystem = null;
+    this._buildingSystemMapRef = null;
+    this.projectionMode = null;
+    this.refreshProjectionMode();
   }
 
   init(game) {
     this.game = game;
     if (!this.state.regionState || typeof this.state.regionState !== 'object')
       this.state.regionState = createInitialRegionState();
+    this.refreshProjectionMode();
     this.genManager = new WorldGenManager();
     this.genManager.init(this, game);
     this.simManager = new WorldSimManager();
@@ -81,10 +91,54 @@ export class WorldManager {
     };
   }
 
+  refreshProjectionMode() {
+    this.projectionMode = resolveProjectionMode(Boolean(CONST.DIMETRIC?.USE_DIMETRIC), {
+      allowLegacyUrlOverride: Boolean(this.state?.devMode),
+      allowLegacyRuntime: Boolean(this.state?.devMode),
+    });
+    return this.projectionMode;
+  }
+
+  isDimetricMode() {
+    return Boolean(this.projectionMode?.dimetricEnabled);
+  }
+
+  isLegacyTopdownMode() {
+    return Boolean(this.projectionMode?.legacyTopdownEnabled);
+  }
+
+  getDimetricViewConfig(camera = this.getCameraSafe()) {
+    return buildDimetricCameraConfig({
+      camera,
+      map: this.state?.map,
+      canvas: this.game?.canvas,
+      tileSize: CONST.WORLD?.TILE_SIZE,
+      tileW: CONST.DIMETRIC?.TILE_W,
+      tileH: CONST.DIMETRIC?.TILE_H,
+      elevationPx: CONST.DIMETRIC?.ELEVATION_PX,
+    });
+  }
+
   screenToWorld(screenX, screenY) {
     const camera = this.getCameraSafe();
     const x = Number.isFinite(screenX) ? screenX : 0;
     const y = Number.isFinite(screenY) ? screenY : 0;
+    if (this.isDimetricMode() && this.game?.canvas) {
+      const view = this.getDimetricViewConfig(camera);
+      if (view?.config) {
+        const picked = screenToWorldPrecise(x, y, camera, view.config, 0);
+        const tileX = Math.max(0, Math.min(view.mapWidth - 1, picked.tileX));
+        const tileY = Math.max(0, Math.min(view.mapHeight - 1, picked.tileY));
+        const tileSize = Math.max(1, Number(view.tileSize) || Number(CONST.WORLD?.TILE_SIZE) || 32);
+        return {
+          x: (tileX + 0.5) * tileSize,
+          y: (tileY + 0.5) * tileSize,
+          tileX,
+          tileY,
+          isDimetric: true,
+        };
+      }
+    }
     return {
       x: x / camera.zoom + camera.x,
       y: y / camera.zoom + camera.y,
@@ -92,6 +146,17 @@ export class WorldManager {
   }
 
   getTilePosition(x, y) {
+    if (x && typeof x === 'object') {
+      if (Number.isFinite(x.tileX) && Number.isFinite(x.tileY)) {
+        return {
+          tx: Math.floor(x.tileX),
+          ty: Math.floor(x.tileY),
+        };
+      }
+      if (Number.isFinite(x.x) || Number.isFinite(x.y)) {
+        return this.getTilePosition(x.x, x.y);
+      }
+    }
     const tileSize = CONST.WORLD.TILE_SIZE;
     const tx = Math.floor((Number.isFinite(x) ? x : 0) / tileSize);
     const ty = Math.floor((Number.isFinite(y) ? y : 0) / tileSize);
@@ -119,6 +184,9 @@ export class WorldManager {
     this.game.playerParty.hasDestination = false;
     this.game.playerParty.destX = null;
     this.game.playerParty.destY = null;
+    this.game.playerParty.vx = 0;
+    this.game.playerParty.vy = 0;
+    this.game.playerParty.moveState = 'idle';
     return true;
   }
 
@@ -136,14 +204,159 @@ export class WorldManager {
       this.game.playerParty.hasDestination = false;
       this.game.playerParty.destX = null;
       this.game.playerParty.destY = null;
+      this.game.playerParty.vx = 0;
+      this.game.playerParty.vy = 0;
+      this.game.playerParty.moveState = 'idle';
       return false;
     }
 
     this.game.playerParty.hasDestination = true;
+    this.game.playerParty.moveState = 'moving';
     return true;
   }
 
+  getSettlementAtWorldPoint(worldX, worldY, options = {}) {
+    const map = this.state?.map;
+    if (!map) return null;
+    return findSettlementAtWorldPoint(map, worldX, worldY, {
+      tileSize: CONST.WORLD?.TILE_SIZE,
+      isDimetric: this.isDimetricMode(),
+      maxHitScale: Number.isFinite(options.maxHitScale) ? options.maxHitScale : 1.0,
+    });
+  }
+
+  distanceToSettlementTiles(settlement, worldX, worldY) {
+    return distanceToSettlementTiles(settlement, worldX, worldY, {
+      tileSize: CONST.WORLD?.TILE_SIZE,
+    });
+  }
+
+  isPlayerNearSettlement(settlement, rangeTiles = null) {
+    if (!settlement || !this.game?.playerParty) return false;
+    const worldX = Number(this.game.playerParty.x);
+    const worldY = Number(this.game.playerParty.y);
+    if (!Number.isFinite(worldX) || !Number.isFinite(worldY)) return false;
+    const distTiles = this.distanceToSettlementTiles(settlement, worldX, worldY);
+    const defaultRange = getSettlementInteractRangeTiles(settlement, {
+      isDimetric: this.isDimetricMode(),
+    });
+    const maxRange = Number.isFinite(rangeTiles) ? Number(rangeTiles) : defaultRange;
+    return distTiles <= Math.max(0.1, maxRange);
+  }
+
   // ─── 3B: Camera, Pointer, World Gen, FOW, Masks ────────────────
+
+  buildBuildingAdapter(map = this.state?.map) {
+    const tileSize = Number(CONST.WORLD?.TILE_SIZE) || 32;
+    const waterType = String(CONST.TERRAIN?.TYPE?.WATER || 'water').toLowerCase();
+    if (!map || !Number.isFinite(map.width) || !Number.isFinite(map.height)) return null;
+    const getTileAt = (x, y) => {
+      if (!Array.isArray(map.tiles)) return null;
+      if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
+      return map.tiles[(y * map.width) + x] || null;
+    };
+    const settlementSet = new Set((map.settlements || []).map((settlement) => {
+      const tx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x || 0) / tileSize);
+      const ty = Number.isFinite(settlement?.ty) ? settlement.ty : Math.floor(Number(settlement?.y || 0) / tileSize);
+      return `${tx},${ty}`;
+    }));
+    return {
+      width: map.width,
+      height: map.height,
+      isValidTile(x, y) {
+        return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < map.width && y < map.height;
+      },
+      isWaterTile(x, y) {
+        const tile = getTileAt(x, y);
+        return String(tile?.type || '').toLowerCase() === waterType;
+      },
+      isHardBlockedTile(x, y) {
+        return settlementSet.has(`${x},${y}`);
+      },
+      setWalkable(x, y, walkable) {
+        if (!(map.walkabilityOverrides instanceof Map)) map.walkabilityOverrides = new Map();
+        map.walkabilityOverrides.set(`${x},${y}`, Boolean(walkable));
+      },
+    };
+  }
+
+  ensureBuildingSystem(options = {}) {
+    const map = options?.map || this.state?.map;
+    if (!map || !Number.isFinite(map.width) || !Number.isFinite(map.height)) {
+      this.buildingSystem = null;
+      this._buildingSystemMapRef = null;
+      return null;
+    }
+
+    const shouldRecreate = options?.reset === true || !this.buildingSystem || this._buildingSystemMapRef !== map;
+    if (shouldRecreate) {
+      const adapter = this.buildBuildingAdapter(map);
+      if (!adapter) return null;
+      this.buildingSystem = new BuildingSystem(adapter);
+      this._buildingSystemMapRef = map;
+      const sourceState = options?.state || map.buildingState;
+      if (sourceState && typeof sourceState === 'object') {
+        this.buildingSystem.load(sourceState);
+      }
+      map.buildingState = this.buildingSystem.toJSON();
+    }
+
+    return this.buildingSystem;
+  }
+
+  syncBuildingStateToMap() {
+    const map = this.state?.map;
+    const system = this.buildingSystem;
+    if (!map || !system || this._buildingSystemMapRef !== map) return null;
+    map.buildingState = system.toJSON();
+    return map.buildingState;
+  }
+
+  placeBuilding(defId, anchorX, anchorY, options = {}) {
+    const system = this.ensureBuildingSystem();
+    if (!system) return null;
+    const placed = system.place(defId, anchorX, anchorY, options);
+    if (!placed) return null;
+    this.syncBuildingStateToMap();
+    return placed;
+  }
+
+  canPlaceBuilding(defId, anchorX, anchorY, options = {}) {
+    const system = this.ensureBuildingSystem();
+    if (!system || typeof system.canPlace !== 'function') {
+      return { ok: false, reason: 'system_unavailable' };
+    }
+    return system.canPlace(defId, anchorX, anchorY, options);
+  }
+
+  removeBuilding(buildingId) {
+    const system = this.ensureBuildingSystem();
+    if (!system) return false;
+    const removed = system.remove(buildingId);
+    if (removed) this.syncBuildingStateToMap();
+    return removed;
+  }
+
+  getBuildingAtTile(tx, ty) {
+    const system = this.ensureBuildingSystem();
+    if (!system) return null;
+    return system.getBuildingAt(tx, ty);
+  }
+
+  getBuildingById(buildingId) {
+    const system = this.ensureBuildingSystem();
+    if (!system) return null;
+    if (typeof system.getBuildingById !== 'function') return null;
+    return system.getBuildingById(buildingId);
+  }
+
+  getWallVariantAtTile(tx, ty) {
+    const system = this.ensureBuildingSystem();
+    if (!system) return null;
+    return resolveWallVariant(tx, ty, system.tileIndex, {
+      buildings: system.buildings,
+    });
+  }
 
   clampCameraToWorld() {
     const camera = this.getCameraSafe();
@@ -184,6 +397,14 @@ export class WorldManager {
     const world = this.screenToWorld(screenX, screenY);
     this.game.mouseWorldX = world.x;
     this.game.mouseWorldY = world.y;
+    if (Number.isFinite(world.tileX) && Number.isFinite(world.tileY)) {
+      this.game.mouseTileX = Math.floor(world.tileX);
+      this.game.mouseTileY = Math.floor(world.tileY);
+    } else {
+      const tile = this.getTilePosition(world.x, world.y);
+      this.game.mouseTileX = tile.tx;
+      this.game.mouseTileY = tile.ty;
+    }
 
     if (this.game?.playerParty) {
       this.game.playerParty.hovered = this.isWorldPointOnParty(world.x, world.y);
@@ -206,6 +427,9 @@ export class WorldManager {
     this.game.playerParty.destX = null;
     this.game.playerParty.destY = null;
     this.game.playerParty.arrivalFeedbackTimer = 1.0;
+    this.game.playerParty.vx = 0;
+    this.game.playerParty.vy = 0;
+    this.game.playerParty.moveState = 'arrived';
     return true;
   }
 

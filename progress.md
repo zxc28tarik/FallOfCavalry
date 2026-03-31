@@ -406,3 +406,169 @@ TODO / next-agent suggestions:
 - Validation:
   - `npx.cmd eslint js/managers/RenderManager.js` passed.
   - `npm.cmd run build` passed.
+- 2026-03-25: Fort silhouette iteration continued in `js/managers/RenderManager.js`.
+  - Procedural fort sprite now uses 3 bastions on the middle band in addition to top/bottom rows.
+  - Current fort composition is a dense bastion grid over a square wall mass; latest visual check artifact: `output/web-game/map-settlement-v9-fort.png`.
+- 2026-03-25: Fort middle band emphasis pass.
+  - Middle-row bastions in `js/managers/RenderManager.js` now render with separate larger dimensions and centered anchor offsets so the center band reads stronger than top/bottom rows.
+- 2026-03-25: Fort wall enlargement pass.
+  - Increased fort wall thickness and expanded wall width/height envelope in `js/managers/RenderManager.js` so the rampart mass reads larger without changing the overall three-band bastion layout.
+- 2026-03-25: Fort pond/moat accent pass.
+  - Added small pond sprites around fort walls in `js/managers/RenderManager.js` using a dedicated `_settlementSpritePond` helper.
+  - Current layout places visible water pockets on the side and lower flanks of the fort while keeping the gate approach open.
+- 2026-03-25: Fort moat redesign pass.
+  - Replaced the four small pond pockets with one enlarged full-round moat body in `js/managers/RenderManager.js`.
+  - Added reeds, shoreline stones, foam highlights, and a small gate bridge so the fort now sits inside a visible circular water accent.
+- 2026-03-25: Fort moat terrain-style pass.
+  - Reworked moat rendering in `js/managers/RenderManager.js` to use a darker earthy palette, broken shoreline cuts, larger radius, and terrain-like reeds/stones instead of the previous clean blue oval.
+- 2026-03-26: Fixed moat clipping root cause.
+  - Cause was the fort sprite still rendering inside an 88x70 sprite box while the moat had been enlarged beyond that box.
+  - Moat rendering moved out of the fort sprite and into world-space settlement rendering in `js/managers/RenderManager.js`.
+  - Sprite cache key bumped to `v11` to invalidate old clipped fort sprites.
+- 2026-03-26: Fort wall/tower style pass.
+  - Fort walls and bastions in `js/managers/RenderManager.js` were retuned toward the city visual language: neutral grey stone mix, raised parapet band, and tower-like bastion bodies instead of flat block bastions.
+- 2026-03-26: External fort sprite integration applied.
+  - User-selected castle image downloaded, top/main variant extracted to transparent assets under `assets/settlements/fort-main.png` and game-ready resized `assets/settlements/fort-main-game.png`.
+  - `js/managers/RenderManager.js` now loads the fort asset via Vite URL and uses it as the primary fort render path.
+  - Procedural fort remains as fallback while the image is still loading.
+  - External fort mode uses a taller fort profile and disables procedural moat/ground blend so the baked rocky/water base is not doubled.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Develop-web-game Playwright client executed successfully via loader shim; latest skill screenshot: `output/web-game/skill-fort-asset/shot-0.png`.
+    - Runtime fort capture: `output/web-game/map-settlement-v9-fort-latest.png`.
+
+TODO / next-agent suggestions:
+- If the fort should feel more dominant against cities, increase external fort profile width/height by ~8-12% in `_settlementProfile` fort asset branch.
+- If the external sprite should look crisper, produce a dedicated smaller raster from the source instead of runtime downscaling further.
+- Bottom/simpler castle variant from the source image was not integrated yet; can be wired later as a second fort style if needed.
+- 2026-03-26: Fort visual pass refined per user direction.
+  - External fort sprite darkened significantly (roughly 4-tick darker target) with stronger contrast, alpha cleanup, and edge emphasis in `_getFortRenderCanvas`.
+  - External fort draw switched to non-smoothed bitmap scaling for crisper silhouette.
+  - External fort profile reduced slightly in size.
+  - Added `_drawFortAssetPondGround` for a subtle muddy/olive ground-matched pond beneath fort asset mode.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Updated artifact: `output/web-game/map-settlement-v9-fort-latest.png`.
+- 2026-03-26: Stronghold Definitive Edition local castle adaptation pass started.
+  - Located local install at `C:\Program Files (x86)\Steam\steamapps\common\Stronghold Definitive Edition`.
+  - Inspected Unity data files; no direct source code, but castle/wall/tower sprites exist in `resources.assets`.
+  - Installed `UnityPy` locally and extracted Stronghold castle-related sprites (`tile_castle`, `tile_walls`, `anim_castle`, `body_gate`) to `tmp/stronghold_castle_extract/pngs` for inspection.
+  - Copied selected wall/tower textures into project assets:
+    - `assets/settlements/stronghold/wall-front.png`
+    - `assets/settlements/stronghold/wall-left.png`
+    - `assets/settlements/stronghold/wall-right.png`
+    - `assets/settlements/stronghold/tower-left.png`
+    - `assets/settlements/stronghold/tower-right.png`
+  - `js/managers/RenderManager.js` now has a Stronghold fort render path that composes a 4-corner quadrilateral fort from those extracted textures, with AI fort asset as fallback only if Stronghold textures are unavailable.
+  - Current Stronghold fort is a first-pass geometry: readable 4-corner fort, but still tile-driven because Stronghold DE exposes wall/tower modules rather than a single overworld fort sprite.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Latest artifact: `output/web-game/map-settlement-v9-fort-latest.png`.
+
+TODO / next-agent suggestions:
+- If continuing Stronghold adaptation, inspect additional extracted `tile_castle_2xx / 4xx / 9xx / 11xx` sprites; they likely contain better tower/gate modules than the first-pass 0xx set.
+- Current fort shape is serviceable but still too flat; next pass should improve side-wall depth and gatehouse silhouette before further color work.
+- The extraction sheet references live in `tmp/stronghold_castle_extract/sheets/`.
+- 2026-03-26: Stronghold fort second pass.
+  - Added plain Stronghold wall texture `assets/settlements/stronghold/wall-plain.png`.
+  - Stronghold fort compose now uses plain stone for front/back walls, side-wall textures for depth, and tower textures for all four corners.
+  - Generic settlement base path draw is skipped for Stronghold fort mode.
+  - Geometry simplified toward requested rectangle: front wall, back wall, side walls, 4 corner towers, central gatehouse, inner keep.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - Updated artifact: `output/web-game/map-settlement-v9-fort-latest.png`.
+- 2026-03-27: Stronghold DE castle module selection pass completed for user-requested `2xx/4xx/9xx/11xx` inspection.
+  - Reviewed extracted sheets under `tmp/stronghold_castle_extract/ranges/` and individual candidates from 9xx/11xx sets.
+  - Selected stronger wall/tower facades from 11xx and edge/side pieces from 9xx.
+  - Added new Stronghold-derived fort assets:
+    - `assets/settlements/stronghold/wall-front-v2.png` <- `tile_castle_1134`
+    - `assets/settlements/stronghold/wall-left-v2.png` <- `tile_castle_963`
+    - `assets/settlements/stronghold/wall-right-v2.png` <- `tile_castle_985`
+    - `assets/settlements/stronghold/wall-plain-v2.png` <- `tile_castle_1135`
+    - `assets/settlements/stronghold/tower-left-v2.png` <- `tile_castle_1128`
+    - `assets/settlements/stronghold/tower-right-v2.png` <- `tile_castle_1131`
+  - `js/managers/RenderManager.js`
+    - Stronghold fort URLs switched to `*-v2` assets.
+    - `_drawStrongholdFortSprite` geometry updated for clearer 4-sided fort silhouette with 4 corner towers and stronger central gatehouse.
+    - Added `_gradeStrongholdFortSprite` so Stronghold textures are adapted toward in-game terrain/city palette instead of staying overly bright.
+    - Settlement sprite cache bumped to `s:v12`.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - `node tmp/capture_fort_latest.mjs` rerun after starting dev server.
+  - Artifact updated: `output/web-game/map-settlement-v9-fort-latest.png`.
+
+TODO / next-agent suggestions:
+- Stronghold fort now uses better 11xx/9xx modules, but still reads a bit flat at map scale; next pass should focus on gatehouse depth and darker base/contact shadow rather than more raw texture swaps.
+- If user approves, inspect `tile_castle_1147/1148` and additional 9xx edge pieces for more pronounced corner tower faceting.
+- 2026-03-28: Fort perspective/projection reset pass.
+  - Rebuilt `_drawStrongholdFortSprite` from compact single-fort silhouette into a square curtain-wall castle layout with:
+    - outer isometric wall ring
+    - four corner towers
+    - protruding central gatehouse
+    - inner keep block
+    - visible court floor + inner wall drop faces
+  - Added local iso block helper inside fort renderer for towers / gatehouse / keep so fort now reads as pseudo-3D volume instead of flat icon.
+  - Fort non-external `_settlementProfile` updated from overly squashed `2.00 x 1.10` style to taller `2.08 x 1.55` profile so rendered sprite is not vertically compressed on the map.
+  - Settlement sprite cache bumped to `s:v17`.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - `node tmp/capture_fort_latest.mjs` rerun after dev server start.
+  - Artifact updated: `output/web-game/map-settlement-v9-fort-latest.png`.
+
+TODO / next-agent suggestions:
+- New geometry fixes the main perspective issue, but can still be tuned by widening the courtyard slightly and making the inner keep a bit more dominant.
+- If user wants closer Stronghold likeness, next pass should adjust only wall/tower proportions and gatehouse projection, not recolor the stone again.
+- 2026-03-28: Fort projection-angle refinement.
+  - Adjusted outer wall ring points to stop rendering the back/top wall as horizontal; fort now leans into Stronghold-like diagonal wall axes.
+  - Repositioned four corner tower blocks, inner keep, and gatehouse to match the new skewed projection.
+  - Settlement sprite cache bumped to `s:v18`.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - `node tmp/capture_fort_latest.mjs` rerun.
+  - Artifact updated: `output/web-game/map-settlement-v9-fort-latest.png`.
+- 2026-03-28: User-requested wall-only reset.
+  - Broken castle silhouette path effectively bypassed for active fort sprites.
+  - Extracted raw Stronghold wall source assets for inspection:
+    - `assets/settlements/stronghold/wall-only-source.png` (`tile_castle_021`)
+    - `assets/settlements/stronghold/wall-only-plain-source.png` (`tile_walls_060`)
+  - Built temporary wall-only composite sprite:
+    - `assets/settlements/stronghold/wall-only-composite.png`
+  - `js/managers/RenderManager.js`
+    - Added `STRONGHOLD_WALL_ONLY_COMPOSITE_URL`
+    - `_isFortAssetSprite` now accepts `fort-wall-only`
+    - `_getSettlementSprite` returns the wall-only composite first for forts, bypassing castle construction.
+    - Settlement sprite cache bumped to `s:v19`.
+  - Validation:
+    - `npx.cmd eslint js/managers/RenderManager.js` passed.
+    - `npm.cmd run build` passed.
+    - `node tmp/capture_fort_latest.mjs` rerun.
+  - Artifact updated: `output/web-game/map-settlement-v9-fort-latest.png`.
+
+TODO / next-agent suggestions:
+- Current wall-only composite is intentionally a temporary reset, not a final in-game fort. If user wants a Stronghold-authentic wall section, next step should be extracting a diagonal wall run / battlement segment rather than repeating the same front wall module.
+- 2026-03-29: AoE3 benzeri world-map kamera kaydirma (arrow-key + edge-scroll) eklendi.
+  - js/managers/WorldSimManager.js:
+    - getMapCameraPanInput(): yon tuslari + canvas kenarinda edge-scroll vektoru.
+    - updateMapCameraPan(dt): yumusak ivmelenme/sonumleme, zoom'a gore hiz olcekleme, Shift hiz carpani.
+    - Manuel pan algilaninca followParty otomatik kapaniyor.
+    - updateMapSimulation(dt) icine kamera pan adimi entegre edildi.
+  - js/managers/InputManager.js: map modunda Arrow tuslarina preventDefault eklendi.
+  - js/constants/ui.js: movement tutorial metni yon tuslari + ekran kenari kaydirma olacak sekilde guncellendi.
+- 2026-03-29: Boot notice overlay dayaniklilik duzeltmesi.
+  - index.html: __FOC_BOOT_OK__ true oldugunda boot notice overlay otomatik gizleniyor.
+- 2026-03-29: Test ve dogrulama.
+  - tests/unit/world.test.js:
+    - Kamera pan icin iki test eklendi (arrow pan + follow kapatma, edge-scroll pan).
+    - Eski tile expectation guncellendi: getTilePosition(180,240) -> tx=5, ty=7.
+  - npm.cmd run test -- --run tests/unit/world.test.js tests/unit/dimetric-performance-manager.test.js  (44 test) PASS
+  - npm.cmd run lint (0 error, mevcut warningler) PASS
+  - npm.cmd run build PASS
+  - Playwright (develop-web-game client) calistirildi.
+    - output/web-game/camera-pan-aoe3/shot-0.png

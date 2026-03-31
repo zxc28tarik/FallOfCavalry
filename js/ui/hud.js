@@ -7,6 +7,37 @@ import { safeClass, safeText, getEl } from '../utils.js';
 import { TUTORIAL_HINTS, FACTIONS, DIPLOMACY_RELATIONS } from '../constants.js';
 import { getRelation, getStance } from '../systems/factions.js';
 import { getActiveRegionModifiers } from '../systems/region-state.js';
+import { getBuildingDef } from '../data/building-defs.js';
+
+function mapBuildLabel(defId) {
+  const key = String(defId || '').toLowerCase();
+  if (key === 'wall') return 'Duvar';
+  if (key === 'gatehouse') return 'Kapi';
+  if (key === 'keep') return 'Keep';
+  if (key === 'granary') return 'Ambar';
+  const def = getBuildingDef(key);
+  if (!def) return 'Yapi';
+  return String(def.id || 'Yapi');
+}
+
+export function getHudControlLines(state) {
+  if (!state || typeof state !== 'object') return '';
+  if (state.mode !== 'map') return '';
+
+  const mode = state.mapBuildMode && typeof state.mapBuildMode === 'object'
+    ? state.mapBuildMode
+    : null;
+
+  if (mode?.active) {
+    return `Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | Insa: ${mapBuildLabel(mode.defId)} | Sol tik: yerlestir | Sag tik: sil | 1-4/Tab: sec | B/Esc: cik`;
+  }
+
+  if (mode?.selectedBuildingId) {
+    return `Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | Secili yapi var | B: insa modu`;
+  }
+
+  return 'Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | F: takip ac/kapa | B: insa modu';
+}
 
 export class HUDManager {
   constructor(state) {
@@ -51,6 +82,7 @@ export class HUDManager {
       hudStats: getEl('hudStats'),
       hudEvent: getEl('hudEvent'),
       hudEventsBtn: getEl('hudEventsBtn'),
+      hudControlLines: getEl('hudControlLines'),
       rosterPanel: getEl('rosterPanel'),
       rosterEnemy: getEl('rosterEnemy'),
       rosterWarning: getEl('rosterWarning'),
@@ -121,6 +153,7 @@ export class HUDManager {
 
     this.updateEncounterStats();
     this.updateEventLine();
+    this.updateControlLines();
     this.updateRosterPanel();
     this.updateUiPanel();
   }
@@ -170,6 +203,13 @@ export class HUDManager {
     const message = this.state?.lastEventLog || this.state?.currentEventsSummary || this.state?.interactHint;
     safeText(this.elements.hudEvent, message || '');
     safeClass(this.elements.hudEvent, message ? 'remove' : 'add', 'hidden');
+  }
+
+  updateControlLines() {
+    if (!this.elements.hudControlLines) return;
+    const text = getHudControlLines(this.state);
+    safeText(this.elements.hudControlLines, text);
+    safeClass(this.elements.hudControlLines, text ? 'remove' : 'add', 'hidden');
   }
 
   showTransientHint(text, ms = TUTORIAL_HINTS.COOLDOWN_MS) {
