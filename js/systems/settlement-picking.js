@@ -1,5 +1,4 @@
 import * as CONST from '../constants.js';
-import { getDimetricSettlementFootprint } from '../rendering/dimetric/settlement-footprints.js';
 
 function normalizeTileSize(tileSize) {
   return Math.max(1, Number(tileSize) || Number(CONST.WORLD?.TILE_SIZE) || 32);
@@ -23,12 +22,10 @@ function isFinitePoint(x, y) {
 }
 
 export function getSettlementHitRadii(settlement, { isDimetric = false } = {}) {
-  if (!isDimetric) {
-    return { radiusX: 0.95, radiusY: 0.95 };
-  }
-  const fp = getDimetricSettlementFootprint(settlement);
-  const footprintW = Math.max(1, Number(fp?.footprintW) || 1);
-  const footprintH = Math.max(1, Number(fp?.footprintH) || 1);
+  const type = String(settlement?.type || 'village').toLowerCase();
+  if (!isDimetric) return { radiusX: 0.95, radiusY: 0.95 };
+  const footprintW = type === 'city' ? 2.2 : type === 'fort' ? 1.8 : type === 'town' ? 1.6 : 1.25;
+  const footprintH = type === 'city' ? 1.75 : type === 'fort' ? 1.45 : type === 'town' ? 1.35 : 1.1;
   return {
     radiusX: Math.max(0.8, footprintW * 0.60),
     radiusY: Math.max(0.8, footprintH * 0.62),
@@ -36,13 +33,13 @@ export function getSettlementHitRadii(settlement, { isDimetric = false } = {}) {
 }
 
 export function getSettlementInteractRangeTiles(settlement, { isDimetric = false } = {}) {
-  if (isDimetric) {
-    const fp = getDimetricSettlementFootprint(settlement);
-    const span = Math.max(1, Number(fp?.footprintW) || 1, Number(fp?.footprintH) || 1);
-    return Math.max(2.0, 1.25 + (span * 0.95));
-  }
-
   const type = String(settlement?.type || 'village').toLowerCase();
+  if (isDimetric) {
+    if (type === 'city') return 3.35;
+    if (type === 'fort') return 2.95;
+    if (type === 'town') return 2.65;
+    return 2.25;
+  }
   if (type === 'fort' || type === 'city') return 2.35;
   if (type === 'town') return 2.15;
   return 1.9;
@@ -105,4 +102,3 @@ export function findSettlementAtWorldPoint(map, worldX, worldY, options = {}) {
 
   return best;
 }
-

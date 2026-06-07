@@ -1,0 +1,14 @@
+{
+  "sceneId": "polish_city_full",
+  "faction": "polish",
+  "variant": "full",
+  "status": "template",
+  "baseImage": "",
+  "overlayRoot": "assets/city-scenes/polish/overlays/",
+  "slotSource": "js/data/city-scene-defs.js",
+  "notes": [
+    "Fill this template when real Polish art arrives.",
+    "Use the same slot ids as the first-phase common layout."
+  ],
+  "slots": []
+}

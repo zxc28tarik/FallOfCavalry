@@ -1,7 +1,12 @@
 /**
- * EncounterManager — Phase 10B
- * Encounter/roster flow logic extracted from main.js.
+ * EncounterManager - map encounter choice and battle handoff flow.
  */
+import { ensureModeManager } from '../core/ModeManager.js';
+import {
+  ENCOUNTER_TYPE,
+  getEncounterDef,
+  normalizeEncounterType,
+} from '../data/encounter-defs.js';
 
 export class EncounterManager {
   constructor(gameState) {
@@ -18,7 +23,110 @@ export class EncounterManager {
     this.game = game;
   }
 
-  // ─── Phase 10B: Encounter & roster methods ───────────────────────────────────
+  getEncounterType() {
+    return normalizeEncounterType(this.state?.encounter?.encounterType || this.state?.encounter?.type);
+  }
+
+  getPlayerMetric(name) {
+    const party = this.game?.playerParty || this.state?.playerParty || {};
+    const stats = party.stats || party.skills || {};
+    const aliases = {
+      command: ['command', 'leadership', 'commander'],
+      charisma: ['charisma', 'charm', 'diplomacy'],
+      intelligence: ['intelligence', 'intellect', 'scout', 'cunning'],
+    }[name] || [name];
+    for (const key of aliases) {
+      const value = Number(stats[key] ?? party[key]);
+      if (Number.isFinite(value)) return value;
+    }
+    return 0;
+  }
+
+  getRenown() {
+    const value = Number(this.game?.playerParty?.renown ?? this.state?.playerParty?.renown ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  getMorale() {
+    const value = Number(this.game?.playerParty?.morale ?? this.state?.playerParty?.morale ?? 60);
+    return Number.isFinite(value) ? value : 60;
+  }
+
+  getFood() {
+    const suppliesFood = Number(this.state?.supplies?.food ?? this.game?.state?.supplies?.food);
+    if (Number.isFinite(suppliesFood)) return suppliesFood;
+    const items = this.game?.playerParty?.inventory?.items;
+    if (!Array.isArray(items)) return 0;
+    return items.reduce((sum, item) => {
+      const id = String(item?.id || '').toLowerCase();
+      if (!['food', 'grain', 'wheat', 'flour', 'bread', 'meat', 'fish', 'supply', 'supplies'].includes(id)) return sum;
+      return sum + Math.max(0, Number(item?.qty ?? item?.count ?? 0) || 0);
+    }, 0);
+  }
+
+  getGold() {
+    const value = Number(this.game?.playerParty?.gold ?? this.state?.playerParty?.gold ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  computeOptionAccess(option) {
+    if (!option) return { enabled: false, reason: 'Unknown option' };
+    if (option.costGold && this.getGold() < option.costGold) return { enabled: false, reason: `Need ${option.costGold} gold` };
+    if (option.costFood && this.getFood() < option.costFood) return { enabled: false, reason: `Need ${option.costFood} food` };
+    if (option.skill) {
+      const score = this.getPlayerMetric(option.skill);
+      const renown = this.getRenown();
+      if (score < 2 && renown < 25) return { enabled: false, reason: `${option.skill} too low` };
+      const isHardCommand = option.skill === 'command' || option.id === 'intimidate' || option.id === 'demand_surrender';
+      if (isHardCommand && this.getMorale() < 20) return { enabled: false, reason: 'Morale too low' };
+    }
+    return { enabled: true, reason: '' };
+  }
+
+  computeOptionSuccess(option) {
+    const skillScore = option?.skill ? this.getPlayerMetric(option.skill) : 1;
+    const renown = this.getRenown();
+    let chance = 55 + (skillScore * 10) + Math.floor(renown / 8);
+    if (this.getMorale() < 25 && option?.skill === 'command') chance -= 20;
+    chance = Math.max(10, Math.min(95, chance));
+    return {
+      chance,
+      autoSuccess: renown >= 60 && option?.skill && chance >= 80,
+    };
+  }
+
+  getEncounterOptions() {
+    const def = getEncounterDef(this.getEncounterType());
+    return (def.options || []).map((option, index) => {
+      const access = this.computeOptionAccess(option);
+      const success = this.computeOptionSuccess(option);
+      return {
+        ...option,
+        index,
+        enabled: access.enabled,
+        reason: access.reason,
+        successChance: success.chance,
+        autoSuccess: success.autoSuccess,
+      };
+    });
+  }
+
+  buildEncounterPanelData() {
+    const encounter = this.state?.encounter;
+    if (!encounter) return { title: 'Encounter', body: 'No active encounter.', footer: '' };
+    const def = getEncounterDef(this.getEncounterType());
+    const tag = encounter.isSurprise ? 'Surprise' : 'Visible party';
+    const options = this.getEncounterOptions().map((option, index) => {
+      const lock = option.enabled ? '' : ` [locked: ${option.reason}]`;
+      return `${index + 1}. ${option.label}${lock}`;
+    }).join('\n');
+    const result = encounter.lastResult ? `\n\nResult: ${encounter.lastResult}` : '';
+    return {
+      title: `${def.title} - ${tag}`,
+      body: `${def.intro}\n\n${options}${result}`,
+      footer: '1-8 = option | F = fight | C = continue/pass',
+    };
+  }
 
   resolveEncounter(action) {
     const encounter = this.state?.encounter;
@@ -26,16 +134,147 @@ export class EncounterManager {
 
     const g = this.game;
     const enemy = g.worldManager.enemyParties.find((party) => party.id === encounter.enemyId);
-    if (action === 'fight') {
-      this.enterRoster(encounter.enemyId);
+    const type = this.getEncounterType();
+    const options = this.getEncounterOptions();
+    let selected = options.find((option) => option.id === action);
+    if (!selected && action === 'continue') selected = options.find((option) => option.id === 'pass' || option.id === 'let_pass' || option.outcome === 'map');
+    if (!selected && action === 'fight') selected = options.find((option) => option.outcome === 'battle') || { id: 'fight', label: 'Savas', outcome: 'battle', enabled: true };
+    if (!selected) return false;
+
+    if (selected.enabled === false) {
+      encounter.lastResult = `${selected.label}: ${selected.reason}`;
+      this.state.uiPanel = this.buildEncounterPanelData();
+      g.worldManager.updateTransientUIState();
+      return false;
+    }
+
+    if (selected.outcome === 'battle') {
+      this.enterRoster(encounter.enemyId, this.createBattleContext(type, selected));
       return true;
     }
 
+    if (selected.outcome === 'trade') {
+      ensureModeManager(this.state)?.pushOverlay('trade', { encounterType: type, enemyId: encounter.enemyId });
+      encounter.lastResult = 'Trade panel opened.';
+      this.onEncounterOutcome(type, 'trade_opened', this.buildQuestContext(encounter));
+      this.state.uiPanel = this.buildEncounterPanelData();
+      g.worldManager.updateTransientUIState();
+      return true;
+    }
+
+    if (selected.outcome === 'quest_placeholder') {
+      encounter.lastResult = 'Quest system is not implemented yet.';
+      this.onEncounterOutcome(type, selected.id, this.buildQuestContext(encounter));
+      this.state.uiPanel = this.buildEncounterPanelData();
+      g.worldManager.updateTransientUIState();
+      return true;
+    }
+
+    this.applyEncounterOutcome(selected, type);
+    this.onEncounterOutcome(type, this.mapQuestOutcome(type, selected), this.buildQuestContext(encounter));
     this.finishEncounterToMap(enemy, encounter.enemyId);
     return true;
   }
 
-  enterRoster(enemyId) {
+  buildQuestContext(encounter = this.state?.encounter) {
+    const party = this.game?.playerParty || {};
+    const nearestCityId = this.game?.worldManager?.findNearestCityId?.(party.x, party.y) || null;
+    return {
+      issuerFactionId: encounter?.enemySnapshot?.factionId || this.state?.selectedFaction?.id || null,
+      nearestCityId,
+      targetCityId: nearestCityId,
+    };
+  }
+
+  mapQuestOutcome(encounterType, selected) {
+    if (encounterType === ENCOUNTER_TYPE.MESSENGER && ['stop', 'read', 'seize', 'interrogate'].includes(selected?.id)) return 'intercepted';
+    if (encounterType === ENCOUNTER_TYPE.MESSENGER && selected?.id === 'follow') return 'followed';
+    if (encounterType === ENCOUNTER_TYPE.VILLAGERS && ['talk', 'info', 'help'].includes(selected?.id)) return 'informed';
+    return selected?.id || selected?.outcome || null;
+  }
+
+  onEncounterOutcome(encounterType, outcome, context = {}) {
+    const generator = this.game?.questGenerator;
+    const manager = this.game?.questManager;
+    if (!generator || !manager) return null;
+
+    let templateId = null;
+    const normalizedType = normalizeEncounterType(encounterType);
+    if (normalizedType === ENCOUNTER_TYPE.MESSENGER && outcome === 'intercepted') templateId = 'intercept_messenger';
+    if (normalizedType === ENCOUNTER_TYPE.MESSENGER && outcome === 'followed') templateId = 'intercept_messenger';
+    if (normalizedType === ENCOUNTER_TYPE.VILLAGERS && outcome === 'informed') templateId = 'secure_trade_route';
+    if (!templateId) return null;
+
+    const quest = generator.generateFromTemplate(templateId, context);
+    if (quest) manager.addQuest(quest);
+    return quest;
+  }
+
+  createBattleContext(type, option) {
+    const encounter = this.state?.encounter || {};
+    const context = { encounterType: type, encounterOption: option?.id || null };
+    if (encounter.isSurprise && (type === ENCOUNTER_TYPE.BANDIT || type === ENCOUNTER_TYPE.ENEMY_PATROL)) {
+      context.ambushType = 'surprise';
+      context.playerDeployPenalty = true;
+      context.enemySectorAdvantage = [1, 2];
+    }
+    return context;
+  }
+
+  applyEncounterOutcome(option, type) {
+    const party = this.game?.playerParty || {};
+    const encounter = this.state?.encounter;
+    const result = [];
+    const success = option.autoSuccess || Math.random() * 100 <= (option.successChance ?? 55);
+    const applyEffect = (effect) => this.game?.worldManager?.applyEffect?.(effect);
+
+    if (option.costGold) {
+      applyEffect({ type: 'change_player_gold', amount: -option.costGold });
+      result.push(`-${option.costGold} gold`);
+    }
+    if (option.costFood && this.state?.supplies) {
+      this.state.supplies.food = Math.max(0, Number(this.state.supplies.food ?? 0) - option.costFood);
+      result.push(`-${option.costFood} food`);
+    }
+
+    if (option.outcome === 'recruit_bandits') {
+      if ((option.successChance ?? 0) >= 80 && success) {
+        if (!Array.isArray(party.roster)) party.roster = [];
+        party.roster.push({ id: `bandit-${Date.now()}`, name: 'Bandit Volunteers', class: 'infantry', count: 6, hp: 88, maxHp: 88, atk: 11, def: 5, speed: 72, morale: 42 });
+        applyEffect({ type: 'decrease_army_morale', amount: 8 });
+        applyEffect({ type: 'change_player_reputation', amount: -5 });
+        applyEffect({ type: 'change_player_honor', amount: -8 });
+        applyEffect({ type: 'decrease_elite_unit_approval', amount: 1 });
+        result.push('bandits joined, morale/honor dropped, elite units are uneasy');
+      } else {
+        result.push('bandits refused the offer');
+      }
+    } else if (option.outcome === 'recruit') {
+      if (!Array.isArray(party.roster)) party.roster = [];
+      party.roster.push({ id: `${type}-recruit-${Date.now()}`, name: 'Local Recruits', class: 'infantry', count: 3, hp: 82, maxHp: 82, atk: 9, def: 4, speed: 68, morale: 50 });
+      result.push('+3 recruits');
+    } else if (option.outcome === 'resource') {
+      const goldDelta = option.id === 'bribe' ? 0 : (success ? 12 : 0);
+      if (goldDelta !== 0) applyEffect({ type: 'change_player_gold', amount: goldDelta });
+      if (goldDelta > 0) result.push(`+${goldDelta} gold`);
+      if (option.id === 'surrender') {
+        applyEffect({ type: 'decrease_army_morale', amount: 12 });
+        result.push('morale dropped');
+      }
+    } else if (option.outcome === 'reputation') {
+      applyEffect({ type: 'change_player_reputation', amount: success ? 3 : 1 });
+      result.push(success ? '+3 renown' : '+1 renown');
+    } else if (option.outcome === 'info') {
+      result.push(success ? 'useful information gained' : 'nothing reliable learned');
+    }
+
+    if (encounter) {
+      encounter.lastResult = result.join(', ') || `${option.label} resolved`;
+      encounter.resultLog = [...(encounter.resultLog || []), encounter.lastResult];
+    }
+  }
+
+  enterRoster(enemyId, battleContext = {}) {
     const g = this.game;
     if (!this.state || this.state.mode !== 'encounter') return false;
     this.playerRoster = (g.playerParty?.roster || []).map((unit, idx) => ({
@@ -46,14 +285,17 @@ export class EncounterManager {
     this.enemyRoster = g.battleManager.getEnemyUnits(enemyId).map((unit) => ({ ...unit, selected: true }));
     this.rosterCursorIndex = 0;
 
-    if (!this.state.roster || typeof this.state.roster !== 'object') {
-      this.state.roster = {};
-    }
-
-    this.state.roster.enemyId = enemyId;
-    this.state.roster.warning = '';
-    this.state.roster.maxDeploy = this.maxUnitsToDeploy;
-    this.state.setMode('roster');
+    this.state.battle = {
+      phase: 'deploy',
+      deployStep: 'selection',
+      enemyId,
+      warning: '',
+      maxDeploy: this.maxUnitsToDeploy,
+      battleContext: { ...battleContext },
+      ...battleContext,
+    };
+    g.battleManager.battlePhase = 'deploy';
+    ensureModeManager(this.state)?.switchTo('battle', { enemyId, phase: 'deploy', returnTarget: 'map', battleContext: { ...battleContext }, ...battleContext });
     g.worldManager.updateTransientUIState();
     return true;
   }
@@ -65,8 +307,9 @@ export class EncounterManager {
     g.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
     if (this.state) {
       this.state.encounter = null;
+      this.state.uiPanel = null;
       g.battleManager.battleCommandsUI?.hide?.();
-      this.state.setMode('map');
+      ensureModeManager(this.state)?.switchTo('map');
     }
   }
 
@@ -121,34 +364,34 @@ export class EncounterManager {
 
     if (unit.selected) {
       unit.selected = false;
-      if (this.state?.roster) this.state.roster.warning = '';
+      if (this.state?.battle) this.state.battle.warning = '';
       g.worldManager.updateTransientUIState();
       return true;
     }
 
     const selected = g.getSelectedRosterCount();
     if (selected >= this.maxUnitsToDeploy) {
-      if (this.state?.roster) this.state.roster.warning = `Deploy limit reached (${this.maxUnitsToDeploy}).`;
+      if (this.state?.battle) this.state.battle.warning = `Deploy limit reached (${this.maxUnitsToDeploy}).`;
       g.worldManager.updateTransientUIState();
       return false;
     }
 
     unit.selected = true;
-    if (this.state?.roster) this.state.roster.warning = '';
+    if (this.state?.battle) this.state.battle.warning = '';
     g.worldManager.updateTransientUIState();
     return true;
   }
 
-  buildAftermathPanelData() {
+  buildBattleResultPanelData() {
     const g = this.game;
-    const a = this.state?.aftermath;
-    if (!a) return { title: 'Battle Aftermath', body: 'No aftermath data', footer: 'Enter = Continue' };
+    const a = this.state?.battle?.battleResult || g?.battleManager?.battleResult;
+    if (!a) return { title: 'Battle Result', body: 'No battle result data', footer: 'Enter = Continue' };
 
     const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
     const lootLines = (a.loot || []).map((l) => `- ${g.economyManager.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
 
     return {
-      title: 'Battle Aftermath',
+      title: 'Battle Result',
       body: `Outcome: ${outcomeText}
 
 Casualties
@@ -165,8 +408,6 @@ Renown
       footer: 'Continue: Enter / Esc / T / L',
     };
   }
-
-  // ─── Phase 11C: Roster initialization ────────────────────────────────────────
 
   initRosters() {
     const g = this.game;
@@ -188,7 +429,9 @@ Renown
     this.enemyRoster = [];
 
     if (this.state) {
-      this.state.roster = {
+      this.state.battle = {
+        phase: 'deploy',
+        deployStep: 'selection',
         warning: '',
         enemyId: null,
       };

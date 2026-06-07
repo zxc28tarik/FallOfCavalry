@@ -1,0 +1,253 @@
+import * as CONST from '../constants.js';
+import {
+  createInitialWorldAiState,
+  ensureWorldParties as ensureBaseWorldParties,
+  updateWorldParties as updateBaseWorldParties,
+} from '../systems/world-ai.js';
+import {
+  ENCOUNTER_TYPE,
+  canSurpriseEncounter,
+  normalizeEncounterType,
+} from '../data/encounter-defs.js';
+
+const EXTRA_VISIBLE_PARTY_SPECS = Object.freeze([
+  Object.freeze({ kind: 'refugee', type: ENCOUNTER_TYPE.REFUGEE, maxKey: 'MAX_REFUGEE_PARTIES', fallbackMax: 2, speed: 0.72, factionId: 'neutral' }),
+  Object.freeze({ kind: 'merchant', type: ENCOUNTER_TYPE.TRAVELING_MERCHANT, maxKey: 'MAX_TRAVELING_MERCHANT_PARTIES', fallbackMax: 2, speed: 0.82, factionId: 'venice' }),
+  Object.freeze({ kind: 'messenger', type: ENCOUNTER_TYPE.MESSENGER, maxKey: 'MAX_MESSENGER_PARTIES', fallbackMax: 2, speed: 1.28, factionId: 'neutral' }),
+  Object.freeze({ kind: 'villagers', type: ENCOUNTER_TYPE.VILLAGERS, maxKey: 'MAX_VILLAGER_PARTIES', fallbackMax: 2, speed: 0.58, factionId: 'neutral' }),
+  Object.freeze({ kind: 'noble', type: ENCOUNTER_TYPE.NOBLE, maxKey: 'MAX_NOBLE_PARTIES', fallbackMax: 1, speed: 0.92, factionId: 'player' }),
+]);
+
+function randomInRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function makeId(prefix) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getSettlements(worldState) {
+  return Array.isArray(worldState?.settlements) ? worldState.settlements : [];
+}
+
+function getWorldBounds(worldState) {
+  const tile = Number(worldState?.tileSize ?? worldState?.TILE_SIZE ?? CONST.WORLD?.TILE_SIZE ?? 32);
+  const width = Number(worldState?.width ?? CONST.WORLD?.MAP_WIDTH ?? 100) * tile;
+  const height = Number(worldState?.height ?? CONST.WORLD?.MAP_HEIGHT ?? 100) * tile;
+  return { minX: 0, minY: 0, maxX: Math.max(tile, width), maxY: Math.max(tile, height), tileSize: tile };
+}
+
+function clampToBounds(x, y, bounds) {
+  return {
+    x: Math.max(bounds.minX, Math.min(bounds.maxX, x)),
+    y: Math.max(bounds.minY, Math.min(bounds.maxY, y)),
+  };
+}
+
+function pickSettlement(worldState, fallback = null) {
+  const settlements = getSettlements(worldState);
+  if (!settlements.length) return fallback;
+  return settlements[Math.floor(Math.random() * settlements.length)];
+}
+
+function pickRoamTarget(worldState, x, y) {
+  const bounds = getWorldBounds(worldState);
+  const radius = Math.max(bounds.tileSize * 4, Math.min(bounds.maxX, bounds.maxY) * 0.10);
+  return clampToBounds(x + randomInRange(-radius, radius), y + randomInRange(-radius, radius), bounds);
+}
+
+function createVisibleParty(spec, worldState) {
+  const bounds = getWorldBounds(worldState);
+  const home = pickSettlement(worldState);
+  const sx = Number(home?.x ?? randomInRange(bounds.minX, bounds.maxX));
+  const sy = Number(home?.y ?? randomInRange(bounds.minY, bounds.maxY));
+  const clamped = clampToBounds(sx + randomInRange(-bounds.tileSize, bounds.tileSize), sy + randomInRange(-bounds.tileSize, bounds.tileSize), bounds);
+  const target = pickRoamTarget(worldState, clamped.x, clamped.y);
+  return {
+    id: makeId(spec.kind),
+    factionId: spec.factionId,
+    kind: spec.kind,
+    encounterType: spec.type,
+    x: clamped.x,
+    y: clamped.y,
+    targetX: target.x,
+    targetY: target.y,
+    speed: spec.speed,
+    radius: 12,
+    alive: true,
+    homeCityId: home?.id,
+    path: null,
+    pathIndex: 0,
+  };
+}
+
+export class WorldPartyManager {
+  constructor() {
+    this.world = null;
+    this.game = null;
+    this.surpriseCooldownMs = 9000;
+    this._lastSurpriseAt = 0;
+  }
+
+  init(world, game) {
+    this.world = world;
+    this.game = game;
+  }
+
+  getWorldAiCfg() {
+    return {
+      ...(CONST.WORLD_AI || {}),
+      ...(this.game?.getWorldAiCfgWithRegionMods?.() || {}),
+    };
+  }
+
+  ensureWorldParties() {
+    if (!this.world?.state) return [];
+    if (!this.world.worldAi || typeof this.world.worldAi !== 'object') this.world.worldAi = createInitialWorldAiState();
+    if (!Array.isArray(this.world.worldAi.parties)) this.world.worldAi.parties = [];
+
+    const worldState = this.world.state?.map || {};
+    const cfg = this.getWorldAiCfg();
+    ensureBaseWorldParties({
+      aiState: this.world.worldAi,
+      worldState,
+      factions: this.world.state?.factions || CONST.FACTIONS,
+      cfg,
+      currentDay: this.world.state?.day ?? 1,
+      banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
+    });
+
+    EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
+      const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
+      while (this.world.worldAi.parties.filter((p) => p?.alive !== false && p?.kind === spec.kind).length < max) {
+        this.world.worldAi.parties.push(createVisibleParty(spec, worldState));
+      }
+    });
+
+    this.syncVisiblePartiesToWorld();
+    return this.world.worldAi.parties;
+  }
+
+  syncVisiblePartiesToWorld() {
+    const parties = Array.isArray(this.world?.worldAi?.parties)
+      ? this.world.worldAi.parties.filter((p) => p?.alive !== false)
+      : [];
+    this.world.enemyParties = parties.map((party) => ({
+      ...party,
+      worldPartyKind: party.kind,
+      encounterType: normalizeEncounterType(party.encounterType || party.kind),
+      factionId: party?.factionId || CONST.FACTION?.ID?.BANDITS || 'bandits',
+      radius: Number.isFinite(party?.radius) ? party.radius : 12,
+    }));
+    if (this.game) this.game.enemyParties = this.world.enemyParties;
+    if (this.world.state) {
+      this.world.state.aiParties = this.world.enemyParties;
+      this.world.state.worldAi = this.world.worldAi;
+    }
+    return this.world.enemyParties;
+  }
+
+  updateWorldParties(dtSec) {
+    this.ensureWorldParties();
+    const encounters = updateBaseWorldParties({
+      aiState: this.world.worldAi,
+      worldState: this.world.state?.map || {},
+      playerParty: this.game?.playerParty,
+      factions: this.world.state?.factions || CONST.FACTIONS,
+      cfg: this.getWorldAiCfg(),
+      dtSec,
+    });
+    this.syncVisiblePartiesToWorld();
+    return encounters;
+  }
+
+  pickSurpriseType() {
+    const risk = Number(this.world?.state?.encounterRisk?.mult ?? 1);
+    const roll = Math.random();
+    if (roll < 0.34 * risk) return ENCOUNTER_TYPE.BANDIT;
+    if (roll < 0.50 * risk) return ENCOUNTER_TYPE.ENEMY_PATROL;
+    if (roll < 0.64) return ENCOUNTER_TYPE.CARAVAN;
+    if (roll < 0.76) return ENCOUNTER_TYPE.REFUGEE;
+    if (roll < 0.90) return ENCOUNTER_TYPE.TRAVELING_MERCHANT;
+    return ENCOUNTER_TYPE.MESSENGER;
+  }
+
+  createSurpriseParty(type) {
+    const party = this.game?.playerParty || {};
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.max(32, Number(CONST.WORLD?.TILE_SIZE ?? 32) * 1.5);
+    const pos = this.world?.clampToWorld?.(
+      Number(party.x ?? 0) + Math.cos(angle) * dist,
+      Number(party.y ?? 0) + Math.sin(angle) * dist,
+    ) || { x: Number(party.x ?? 0), y: Number(party.y ?? 0) };
+    const factionId = type === ENCOUNTER_TYPE.BANDIT
+      ? 'bandits'
+      : type === ENCOUNTER_TYPE.ENEMY_PATROL
+        ? 'hre'
+        : 'neutral';
+    return {
+      id: makeId(`surprise-${type}`),
+      kind: type === ENCOUNTER_TYPE.ENEMY_PATROL ? 'patrol' : type,
+      encounterType: type,
+      x: pos.x,
+      y: pos.y,
+      radius: 12,
+      speed: 0,
+      vx: 0,
+      vy: 0,
+      temporary: true,
+      surprise: true,
+      factionId,
+    };
+  }
+
+  spawnParty(partyTemplateId, location = {}) {
+    if (!this.world?.state) return null;
+    this.ensureWorldParties();
+    const type = normalizeEncounterType(partyTemplateId || 'caravan');
+    const pos = Number.isFinite(location?.x) && Number.isFinite(location?.y)
+      ? this.world.clampToWorld?.(location.x, location.y) || { x: location.x, y: location.y }
+      : this.world.clampToWorld?.(this.game?.playerParty?.x ?? 0, this.game?.playerParty?.y ?? 0) || { x: 0, y: 0 };
+    const party = {
+      id: makeId(`quest-${type}`),
+      kind: type === ENCOUNTER_TYPE.ENEMY_PATROL ? 'patrol' : type,
+      encounterType: type,
+      factionId: location?.factionId || 'neutral',
+      x: pos.x,
+      y: pos.y,
+      targetX: Number.isFinite(location?.targetX) ? location.targetX : pos.x,
+      targetY: Number.isFinite(location?.targetY) ? location.targetY : pos.y,
+      speed: 0.8,
+      radius: 12,
+      alive: true,
+      questSpawned: true,
+    };
+    this.world.worldAi.parties.push(party);
+    this.syncVisiblePartiesToWorld();
+    return party;
+  }
+
+  checkSurpriseEncounters({ forceType = null } = {}) {
+    if (!this.world?.state || this.world.state.mode !== 'map' || this.world.state.encounter || !this.game?.playerParty) return false;
+    const now = Date.now();
+    if (!forceType && now - this._lastSurpriseAt < this.surpriseCooldownMs) return false;
+
+    const moveContext = this.world.getMovementContextAt?.(this.game.playerParty.x, this.game.playerParty.y) || { encounterMult: 1 };
+    const risk = Number(this.world.state?.encounterRisk?.mult ?? 1);
+    const rateMult = Number(CONST.GAME.ENCOUNTER_RATE_MULT ?? 1) || 1;
+    const chance = Math.max(0, Math.min(0.08, 0.008 * Number(moveContext.encounterMult ?? 1) * risk * rateMult));
+    if (!forceType && Math.random() > chance) return false;
+
+    const type = normalizeEncounterType(forceType || this.pickSurpriseType());
+    if (!canSurpriseEncounter(type)) return false;
+
+    const party = this.createSurpriseParty(type);
+    if (!Array.isArray(this.world.enemyParties)) this.world.enemyParties = [];
+    this.world.enemyParties.push(party);
+    this.world.state.aiParties = this.world.enemyParties;
+    this._lastSurpriseAt = now;
+    return this.world.simManager?.triggerEncounter?.(party, { surprise: true, encounterType: type }) || false;
+  }
+}
+
+export default WorldPartyManager;

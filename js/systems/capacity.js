@@ -1,18 +1,22 @@
 import * as CONST from '../constants.js';
 
 const DEFAULT_WEIGHTS = Object.freeze({
-  grain: 1,
-  meat: 1,
-  wood: 2,
-  iron: 3,
-  cloth: 1,
+  wheat: 3,
+  flour: 3,
+  bread: 2,
+  meat: 2,
+  fish: 2,
+  wood: 4,
+  iron: 5,
+  cloth: 2,
   salt: 1,
 });
 
 function itemWeight(itemId) {
-  const fromConst = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId)?.weight;
+  const normalizedId = CONST.normalizeTradeGoodId?.(itemId) || itemId;
+  const fromConst = (CONST.TRADE_ITEMS || []).find((it) => it.id === normalizedId)?.weight;
   if (Number.isFinite(fromConst)) return fromConst;
-  return DEFAULT_WEIGHTS[itemId] ?? 1;
+  return DEFAULT_WEIGHTS[normalizedId] ?? 1;
 }
 
 export function computeCarryWeight(inventory) {

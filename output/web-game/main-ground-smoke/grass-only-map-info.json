@@ -1,0 +1,24 @@
+{
+  "mode": "map",
+  "dimetricTerrainMode": "tile",
+  "assetsReady": false,
+  "cacheStats": {
+    "chunkCount": 12,
+    "chunkSize": 16,
+    "maxCacheBytes": 100663296,
+    "totalBytes": 25535664,
+    "cacheMB": 24.352706909179688,
+    "maxCacheMB": 96,
+    "chunkBuildsThisFrame": 1,
+    "chunkBuildSkipsThisFrame": 60,
+    "groundStylePreset": "classic",
+    "groundSpritesEnabled": true
+  },
+  "canvas": {
+    "width": 1366,
+    "height": 768
+  },
+  "imageSrcs": [],
+  "consoleErrors": [],
+  "pageErrors": []
+}

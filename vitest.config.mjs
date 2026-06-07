@@ -4,6 +4,7 @@ export default defineConfig({
     include: [
       'tests/unit/**/*.test.js',
       'tests/smoke/**/*.test.mjs',
+      'js/battle/**/*.test.js',
     ],
     exclude: ['node_modules/**', 'dist/**', 'tools/**'],
     environment: 'node',

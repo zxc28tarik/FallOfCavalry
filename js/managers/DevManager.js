@@ -171,7 +171,7 @@ export class DevManager {
 
         this.state.marketOpportunities[settlementKey] = { itemId, bonusPct: 25, expiresDay: Number(this.state.day ?? 1) - 1 };
         g.economyManager.cleanupExpiredMarketOpportunities(this.state.day);
-        const currentEvents = g.gameFlowManager.refreshCurrentEventsSummary(this.state.day);
+        g.gameFlowManager.refreshCurrentEventsSummary(this.state.day);
         push('21) Expired opportunities are cleaned', !this.state.marketOpportunities[settlementKey], this.state.marketOpportunities[settlementKey] ? 'not cleaned' : 'cleaned');
       } else {
         push('20) Opportunity modifies sell price when active', true, 'PASS (missing settlementKey/itemId)');

@@ -8,6 +8,7 @@ import { screenToWorldPrecise } from '../rendering/dimetric/projection.js';
 import { buildDimetricCameraConfig, resolveProjectionMode } from '../rendering/dimetric/view-config.js';
 import { BuildingSystem } from '../systems/building-system.js';
 import { resolveWallVariant } from '../rendering/dimetric/wall-auto-tile.js';
+import { TERRAIN as MAP_TERRAIN } from '../world/map-data.js';
 
 export class WorldManager {
   constructor(gameState) {
@@ -78,6 +79,143 @@ export class WorldManager {
       maxX,
       maxY,
     };
+  }
+
+  getWorldScale() {
+    const mapData = this.state?.map?.mapData || this.state?.map?.__mapData || this.state?.mapData;
+    const scale = mapData?.assetMetadata?.worldScale || this.state?.map?.assetMetadata?.worldScale;
+    if (scale && typeof scale === 'object') return scale;
+    return {
+      unit: 'km',
+      kmPerTileX: CONST.WORLD.MAP_KM_PER_TILE_X,
+      kmPerTileY: CONST.WORLD.MAP_KM_PER_TILE_Y,
+      averageKmPerTile: CONST.WORLD.MAP_AVERAGE_KM_PER_TILE,
+      kmPerWorldPixelX: CONST.WORLD.MAP_KM_PER_WORLD_PIXEL_X,
+      kmPerWorldPixelY: CONST.WORLD.MAP_KM_PER_WORLD_PIXEL_Y,
+      tileSizePx: CONST.WORLD.TILE_SIZE,
+    };
+  }
+
+  getCurrentDay() {
+    return Math.max(0, Math.floor(Number(this.state?.day ?? 0)));
+  }
+
+  getWorldState() {
+    const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
+    const routes = Array.isArray(this.state?.tradeRoutes) ? this.state.tradeRoutes : [];
+    const banditCount = (this.enemyParties || []).filter((party) => String(party?.encounterType || party?.worldPartyKind || party?.kind) === 'bandit').length;
+    return {
+      isAtWar: Boolean(this.state?.warState?.wars?.some?.((war) => war?.active)),
+      banditDensity: Math.max(0, Math.min(1, banditCount / Math.max(1, settlements.length || 8))),
+      tradeRouteDamaged: routes.some((route) => Number(route?.damage ?? 0) > 0 || route?.status === 'damaged'),
+      settlements,
+      routes,
+    };
+  }
+
+  pickQuestTargetRegion(rule, _context = {}) {
+    const current = this.getCurrentRegionContext?.();
+    if (current?.regionId) return current.regionId;
+    const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
+    const target = settlements.find((settlement) => settlement?.id);
+    return target?.id ? `region:${target.id}` : null;
+  }
+
+  pickQuestTargetFort(_rule, _context = {}) {
+    const settlements = Array.isArray(this.state?.map?.settlements) ? this.state.map.settlements : [];
+    const fort = settlements.find((settlement) => {
+      const type = String(settlement?.type || '').toLowerCase();
+      return settlement?.id && (type.includes('fort') || type.includes('castle'));
+    });
+    return fort?.id || null;
+  }
+
+  pickQuestTargetCommander(_rule, _context = {}) {
+    const commanders = Array.isArray(this.state?.commanders) ? this.state.commanders : [];
+    return commanders.find((commander) => commander?.id)?.id || null;
+  }
+
+  applyEffect(effect) {
+    if (!effect || !effect.type) return;
+    const amount = Number(effect.amount ?? 0);
+    switch (effect.type) {
+      case 'increase_city_security':
+        this.game?.cityManager?.increaseSecurity?.(effect.cityId, amount);
+        break;
+      case 'decrease_city_security':
+        this.game?.cityManager?.decreaseSecurity?.(effect.cityId, amount);
+        break;
+      case 'improve_trade_route':
+        this.game?.economyManager?.improveTradeRoute?.(effect.routeId, amount);
+        break;
+      case 'damage_trade_route':
+        this.game?.economyManager?.damageTradeRoute?.(effect.routeId, amount);
+        break;
+      case 'change_faction_relation':
+        (this.game?.factionManager || this.game?.diplomacyManager)?.changeRelation?.(effect.factionId, amount);
+        break;
+      case 'decrease_army_morale':
+        this.decreaseMorale(amount);
+        break;
+      case 'decrease_elite_unit_approval':
+        this.decreaseEliteApproval(amount);
+        break;
+      case 'spawn_world_party':
+        this.simManager?.worldPartyManager?.spawnParty?.(effect.partyTemplateId, effect.location);
+        break;
+      case 'change_player_gold':
+        this.changeGold(amount);
+        break;
+      case 'change_player_reputation':
+        this.changeReputation(amount);
+        break;
+      case 'change_player_honor':
+        this.changeHonor(amount);
+        break;
+      case 'change_player_nam':
+        this.changeNam(amount);
+        break;
+      default:
+        console.warn('Unknown world effect:', effect);
+        break;
+    }
+  }
+
+  changeGold(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.gold = Math.floor(Number(this.game.playerParty.gold ?? 0) + amount);
+  }
+
+  changeReputation(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.renown = Math.max(0, Math.floor(Number(this.game.playerParty.renown ?? 0) + amount));
+  }
+
+  changeHonor(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.honor = Math.floor(Number(this.game.playerParty.honor ?? 0) + amount);
+  }
+
+  changeNam(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.nam = Math.floor(Number(this.game.playerParty.nam ?? 0) + amount);
+  }
+
+  decreaseMorale(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.morale = Math.max(0, Math.floor(Number(this.game.playerParty.morale ?? 0) - Math.abs(amount)));
+  }
+
+  decreaseEliteApproval(amount) {
+    if (!this.game?.playerParty || !Number.isFinite(amount)) return;
+    this.game.playerParty.eliteApproval = Math.max(0, Math.floor(Number(this.game.playerParty.eliteApproval ?? 50) - Math.abs(amount)));
+  }
+
+  worldPixelDistanceToKm(dx, dy) {
+    const scale = this.getWorldScale();
+    const kmX = Number(scale?.kmPerWorldPixelX) || (Number(CONST.WORLD.MAP_KM_PER_TILE_X) / Number(CONST.WORLD.TILE_SIZE || 32));
+    const kmY = Number(scale?.kmPerWorldPixelY) || (Number(CONST.WORLD.MAP_KM_PER_TILE_Y) / Number(CONST.WORLD.TILE_SIZE || 32));
+    return Math.hypot((Number(dx) || 0) * kmX, (Number(dy) || 0) * kmY);
   }
 
   clampToWorld(x, y) {
@@ -248,12 +386,13 @@ export class WorldManager {
 
   buildBuildingAdapter(map = this.state?.map) {
     const tileSize = Number(CONST.WORLD?.TILE_SIZE) || 32;
-    const waterType = String(CONST.TERRAIN?.TYPE?.WATER || 'water').toLowerCase();
     if (!map || !Number.isFinite(map.width) || !Number.isFinite(map.height)) return null;
-    const getTileAt = (x, y) => {
-      if (!Array.isArray(map.tiles)) return null;
+    const mapData = map?.mapData || map?.__mapData || this.state?.mapData || null;
+    const terrain = mapData?.terrain instanceof Uint8Array ? mapData.terrain : null;
+    const getTerrainIdAt = (x, y) => {
+      if (!terrain) return null;
       if (x < 0 || y < 0 || x >= map.width || y >= map.height) return null;
-      return map.tiles[(y * map.width) + x] || null;
+      return terrain[(y * map.width) + x];
     };
     const settlementSet = new Set((map.settlements || []).map((settlement) => {
       const tx = Number.isFinite(settlement?.tx) ? settlement.tx : Math.floor(Number(settlement?.x || 0) / tileSize);
@@ -267,8 +406,7 @@ export class WorldManager {
         return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < map.width && y < map.height;
       },
       isWaterTile(x, y) {
-        const tile = getTileAt(x, y);
-        return String(tile?.type || '').toLowerCase() === waterType;
+        return getTerrainIdAt(x, y) === MAP_TERRAIN.WATER;
       },
       isHardBlockedTile(x, y) {
         return settlementSet.has(`${x},${y}`);
@@ -365,7 +503,9 @@ export class WorldManager {
       return camera;
     }
 
-    const zoom = Math.max(0.5, Math.min(2.5, camera.zoom));
+    const minZoom = Math.max(0.01, Number(CONST.WORLD?.MIN_ZOOM ?? CONST.WORLD?.CAMERA_MIN_ZOOM) || 0.42);
+    const maxZoom = Math.max(minZoom, Number(CONST.WORLD?.CAMERA_MAX_ZOOM) || 2.5);
+    const zoom = Math.max(minZoom, Math.min(maxZoom, camera.zoom));
     camera.zoom = zoom;
 
     const viewW = this.game.canvas.width / zoom;
@@ -383,7 +523,9 @@ export class WorldManager {
     if (!this.game?.playerParty || !this.game?.canvas) return false;
 
     const camera = this.getCameraSafe();
-    const zoom = Math.max(0.5, Math.min(2.5, camera.zoom));
+    const minZoom = Math.max(0.01, Number(CONST.WORLD?.MIN_ZOOM ?? CONST.WORLD?.CAMERA_MIN_ZOOM) || 0.42);
+    const maxZoom = Math.max(minZoom, Number(CONST.WORLD?.CAMERA_MAX_ZOOM) || 2.5);
+    const zoom = Math.max(minZoom, Math.min(maxZoom, camera.zoom));
     const halfW = this.game.canvas.width / zoom / 2;
     const halfH = this.game.canvas.height / zoom / 2;
 
@@ -449,8 +591,9 @@ export class WorldManager {
   ensureRosterState() { return this.simManager.ensureRosterState(); }
   computeEncounterRiskContext() { return this.simManager.computeEncounterRiskContext(); }
   tryTriggerEncounter() { return this.simManager.tryTriggerEncounter(); }
-  triggerEncounter(enemy) { return this.simManager.triggerEncounter(enemy); }
+  triggerEncounter(enemy, context = {}) { return this.simManager.triggerEncounter(enemy, context); }
   processWorldAiEncounters(encounters = []) { return this.simManager.processWorldAiEncounters(encounters); }
+  checkSurpriseEncounters(options = {}) { return this.simManager.worldPartyManager?.checkSurpriseEncounters(options) || false; }
   updateTransientUIState() { return this.simManager.updateTransientUIState(); }
   updatePlayerParty(dt) { return this.simManager.updatePlayerParty(dt); }
   updateEnemyParties(dt) { return this.simManager.updateEnemyParties(dt); }

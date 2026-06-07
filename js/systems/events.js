@@ -88,7 +88,7 @@ export function addEvent(eventState, event, cfg = CONST.EVENTS) {
 export function rollWarEvents({
   eventState,
   warState,
-  factionsState,
+  factionsState: _factionsState,
   worldState,
   currentDay,
   cfg = CONST.EVENTS,

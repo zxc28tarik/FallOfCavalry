@@ -1,21 +1,139 @@
 import * as CONST from '../constants.js';
 import WorldGenerator from '../world/world-generator.js';
 import FogOfWar from '../world/fog-of-war.js';
+import { MapData, LegacyMapView, TERRAIN } from '../world/map-data.js';
+import WorldMapAssetLoader from '../world/world-map-asset-loader.js';
 import { assignInitialSettlementOwners } from '../systems/factions.js';
+import worldMapManifest from '../../assets/world-map/world-map-manifest.json';
 
-const WORLD_GEN_REVISION = '2026-03-19-random-spain-venice-unseeded-v2-no-seam-no-minimap-box';
+const WORLD_GEN_REVISION = '2026-05-03-typed-mapdata-v1-deterministic-settlements';
+const WORLD_ASSET_REVISION = worldMapManifest.id || 'ohm-1648-europe-asset';
 
 export class WorldGenManager {
-  constructor() { this.world = null; this.game = null; }
+  constructor() { this.world = null; this.game = null; this.assetLoader = null; }
   init(world, game) { this.world = world; this.game = game; }
 
-  ensureWorldGenerated(seed) {
+  resolveMapSource() {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      const requested = new URL(window.location.href).searchParams.get('world');
+      if (requested === 'procedural' || requested === 'asset') return requested;
+    }
+    return CONST.WORLD?.MAP_SOURCE || 'asset';
+  }
+
+  createAssetLoader() {
+    const progressByAsset = new Map();
+    const totals = {
+      owner: Number(worldMapManifest.files?.owner?.bytes) || Number(worldMapManifest.tileCount) || 0,
+      terrain: Number(worldMapManifest.files?.terrain?.bytes) || Number(worldMapManifest.tileCount) || 0,
+    };
+    return new WorldMapAssetLoader({
+      onProgress: ({ assetName, loaded, total }) => {
+        progressByAsset.set(assetName, {
+          loaded: Number(loaded) || 0,
+          total: Number(total) || 0,
+        });
+        let loadedTotal = 0;
+        let expectedTotal = 0;
+        for (const [name, entry] of progressByAsset.entries()) {
+          loadedTotal += entry.loaded;
+          expectedTotal += entry.total || totals[name?.replace('.bin', '')] || 0;
+        }
+        expectedTotal = Math.max(expectedTotal, totals.owner + totals.terrain);
+        const percent = expectedTotal > 0 ? (loadedTotal / expectedTotal) * 80 : 0;
+        this.game?.gameFlowManager?.setMapLoadingProgress?.(Math.min(80, percent), `${assetName} yukleniyor`);
+      },
+      onLog: (message, detail) => {
+        if (detail !== undefined) console.info(message, detail);
+        else console.info(message);
+      },
+    });
+  }
+
+  buildLegacyMapView(mapData, seed) {
+    return new LegacyMapView(mapData, {
+      settlements: mapData.settlements,
+      factionZones: mapData.factionZones,
+      rivers: mapData.rivers,
+      roads: mapData.roads,
+      forests: mapData.forests,
+      mountains: mapData.mountains,
+      crossings: mapData.crossings,
+      biomes: mapData.biomes,
+      pois: mapData.pois,
+      politicalOwnerIds: mapData.politicalOwnerIds,
+      politicalOwnerMap: mapData.politicalOwnerMap,
+      assetMetadata: mapData.assetMetadata,
+      seed,
+    });
+  }
+
+  finalizeGeneratedMap(mapData, mapView, normalizedSeed, revision) {
+    this.world.state.map = mapView;
+    // Runtime convenience only; SaveManager must not serialize mapData wholesale.
+    this.world.state.mapData = mapData;
+
+    if (!Array.isArray(this.world.state.map.factionZones) || this.world.state.map.factionZones.length === 0) {
+      this.world.state.map.factionZones = this.buildFactionZonesFromSettlements(this.world.state.map);
+    }
+
+    this.game?.ensureFactionState?.();
+    assignInitialSettlementOwners(this.world.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
+
+    if (!(this.world.state.map.biomes instanceof Uint8Array) || this.world.state.map.biomes.length !== this.world.state.map.width * this.world.state.map.height) {
+      const fallbackBiomes = new Uint8Array(this.world.state.map.width * this.world.state.map.height);
+      for (let idx = 0; idx < mapData.count; idx++) {
+        const terrainId = mapData.terrain[idx];
+        if (terrainId === TERRAIN.WATER) fallbackBiomes[idx] = CONST.BIOME.SEA;
+        else if (terrainId === TERRAIN.SHORE) fallbackBiomes[idx] = CONST.BIOME.SHORE;
+        else if (terrainId === TERRAIN.MOUNTAIN) fallbackBiomes[idx] = CONST.BIOME.MOUNTAIN;
+        else if (terrainId === TERRAIN.SNOW) fallbackBiomes[idx] = CONST.BIOME.SNOW;
+        else if (terrainId === TERRAIN.FOREST) fallbackBiomes[idx] = CONST.BIOME.FOREST;
+        else fallbackBiomes[idx] = CONST.BIOME.PLAINS;
+      }
+      this.world.state.map.biomes = fallbackBiomes;
+      mapData.biomes = fallbackBiomes;
+    }
+
+    this.world._crossingSet = new Set((this.world.state.map.crossings || []).map((p) => `${p.x},${p.y}`));
+    this.world.ensureBuildingSystem?.({
+      map: this.world.state.map,
+      reset: true,
+    });
+    this.rebuildMovementMasks();
+
+    this.world._worldSeedCache = normalizedSeed;
+    this.world._worldGenRevision = revision;
+    this.world.fogOfWar = new FogOfWar(mapData.width, mapData.height, this.world.state.map.fog);
+    if (this.shouldUseFogOfWar(mapData)) {
+      this.updateFogFromPlayer();
+    } else if (mapData.fog instanceof Uint8Array) {
+      mapData.fog.fill(2);
+    }
+    return this.world.state.map;
+  }
+
+  shouldUseFogOfWar(mapData = null) {
+    const activeMapData = mapData || this.world.state?.map?.mapData || this.world.state?.map?.__mapData || this.world.state?.mapData;
+    return activeMapData?.assetMetadata?.mapSource !== 'ohm-1648';
+  }
+
+  async ensureWorldGenerated(seed) {
     if (!this.world.state) return null;
 
     const normalizedSeed = Number.isFinite(seed) ? seed : parseInt(String(seed || this.world.state.seed || 1337), 10) || 1337;
-    const hasExistingTiles = Array.isArray(this.world.state?.map?.tiles) && this.world.state.map.tiles.length > 0;
-    const hasMatchingRevision = this.world._worldGenRevision === WORLD_GEN_REVISION;
-    if (hasExistingTiles && this.world._worldSeedCache === normalizedSeed && hasMatchingRevision) {
+    const mapSource = this.resolveMapSource();
+    const revision = mapSource === 'asset' ? WORLD_ASSET_REVISION : WORLD_GEN_REVISION;
+    const existingMap = this.world.state?.map;
+    const existingMapData = existingMap?.mapData || existingMap?.__mapData || this.world.state?.mapData;
+    const hasExistingMapData = existingMapData instanceof MapData
+      && existingMapData.width > 0
+      && existingMapData.height > 0
+      && existingMapData.count === existingMapData.width * existingMapData.height;
+    const hasMatchingRevision = this.world._worldGenRevision === revision;
+    const hasMatchingSeed = mapSource === 'asset' || this.world._worldSeedCache === normalizedSeed;
+    if (hasExistingMapData && hasMatchingSeed && hasMatchingRevision) {
+      this.world.state.mapData = existingMapData;
       if (!Array.isArray(this.world.state.map.factionZones) || this.world.state.map.factionZones.length === 0) {
         this.world.state.map.factionZones = this.buildFactionZonesFromSettlements(this.world.state.map);
       }
@@ -33,9 +151,39 @@ export class WorldGenManager {
       return this.world.state.map;
     }
 
-    const world = new WorldGenerator(normalizedSeed).generate();
     const tileSize = CONST.WORLD.TILE_SIZE;
-    const settlements = (world.settlements || []).map((settlement, index) => {
+
+    if (mapSource === 'asset') {
+      try {
+        this.assetLoader = this.assetLoader || this.createAssetLoader();
+        this.game?.gameFlowManager?.setMapLoadingProgress?.(0, 'Harita assetleri yukleniyor');
+        const loaded = await this.assetLoader.load();
+        this.game?.gameFlowManager?.setMapLoadingProgress?.(90, 'MapData hazirlaniyor');
+        const mapData = loaded.mapData;
+        mapData.settlements = [];
+        mapData.roads = [];
+        mapData.rivers = [];
+        mapData.crossings = [];
+        mapData.seed = null;
+        mapData.assetLoadMetrics = loaded.metrics;
+        const mapView = this.buildLegacyMapView(mapData, null);
+        mapView.assetLoadMetrics = loaded.metrics;
+        this.game?.gameFlowManager?.setMapLoadingProgress?.(100, 'Harita hazir');
+        return this.finalizeGeneratedMap(mapData, mapView, null, WORLD_ASSET_REVISION);
+      } catch (error) {
+        if (!CONST.WORLD?.ALLOW_PROCEDURAL_FALLBACK) throw error;
+        console.error('[WorldGen] Asset map load failed; falling back to procedural world.', error);
+      }
+    }
+
+    const generator = new WorldGenerator(normalizedSeed);
+    const mapData = generator.generateMapData({
+      chunkSize: 64,
+      tileSize,
+      settlementCoordMode: 'auto',
+    });
+
+    const settlements = (mapData.settlements || []).map((settlement, index) => {
       const tx = Number.isFinite(settlement.tx) ? settlement.tx : settlement.x;
       const ty = Number.isFinite(settlement.ty) ? settlement.ty : settlement.y;
       return {
@@ -47,58 +195,10 @@ export class WorldGenManager {
         y: ty * tileSize + tileSize * 0.5,
       };
     });
+    mapData.settlements = settlements;
 
-    const fog = world.fog instanceof Uint8Array
-      ? world.fog
-      : new Uint8Array(world.width * world.height);
-
-    this.world.state.map = {
-      width: world.width,
-      height: world.height,
-      tiles: Array.isArray(world.tiles) ? world.tiles : [],
-      settlements,
-      factionZones: Array.isArray(world.factionZones) ? world.factionZones : [],
-      rivers: Array.isArray(world.rivers) ? world.rivers : [],
-      roads: Array.isArray(world.roads) ? world.roads : [],
-      forests: Array.isArray(world.forests) ? world.forests : [],
-      mountains: Array.isArray(world.mountains) ? world.mountains : [],
-      crossings: Array.isArray(world.crossings) ? world.crossings : [],
-      biomes: world.biomes instanceof Uint8Array ? world.biomes : null,
-      pois: Array.isArray(world.pois) ? world.pois : [],
-      fog,
-    };
-    if (!Array.isArray(this.world.state.map.factionZones) || this.world.state.map.factionZones.length === 0) {
-      this.world.state.map.factionZones = this.buildFactionZonesFromSettlements(this.world.state.map);
-    }
-
-    this.game?.ensureFactionState?.();
-    assignInitialSettlementOwners(this.world.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
-
-    if (!(this.world.state.map.biomes instanceof Uint8Array) || this.world.state.map.biomes.length !== this.world.state.map.width * this.world.state.map.height) {
-      const fallbackBiomes = new Uint8Array(this.world.state.map.width * this.world.state.map.height);
-      (this.world.state.map.tiles || []).forEach((tile, idx) => {
-        if (tile?.type === CONST.TERRAIN.TYPE.WATER) fallbackBiomes[idx] = CONST.BIOME.SEA;
-        else if (tile?.type === CONST.TERRAIN.TYPE.SHORE) fallbackBiomes[idx] = CONST.BIOME.SHORE;
-        else if (tile?.type === CONST.TERRAIN.TYPE.MOUNTAIN) fallbackBiomes[idx] = CONST.BIOME.MOUNTAIN;
-        else if (tile?.type === CONST.TERRAIN.TYPE.SNOW) fallbackBiomes[idx] = CONST.BIOME.SNOW;
-        else if (tile?.type === CONST.TERRAIN.TYPE.FOREST) fallbackBiomes[idx] = CONST.BIOME.FOREST;
-        else fallbackBiomes[idx] = CONST.BIOME.PLAINS;
-      });
-      this.world.state.map.biomes = fallbackBiomes;
-    }
-
-    this.world._crossingSet = new Set(this.world.state.map.crossings.map((p) => `${p.x},${p.y}`));
-    this.world.ensureBuildingSystem?.({
-      map: this.world.state.map,
-      reset: true,
-    });
-    this.rebuildMovementMasks();
-
-    this.world._worldSeedCache = normalizedSeed;
-    this.world._worldGenRevision = WORLD_GEN_REVISION;
-    this.world.fogOfWar = new FogOfWar(world.width, world.height, this.world.state.map.fog);
-    this.updateFogFromPlayer();
-    return this.world.state.map;
+    const mapView = this.buildLegacyMapView(mapData, mapData.seed ?? normalizedSeed);
+    return this.finalizeGeneratedMap(mapData, mapView, normalizedSeed, WORLD_GEN_REVISION);
   }
 
   rebuildMovementMasks() {
@@ -134,10 +234,18 @@ export class WorldGenManager {
     const map = this.world.state?.map;
     const player = this.game?.playerParty;
     if (!map || !player) return;
-    if (!Array.isArray(map.tiles) || map.tiles.length === 0) return;
+    const mapData = map?.mapData || map?.__mapData || this.world.state?.mapData;
+    if (!(mapData instanceof MapData) || mapData.count <= 0) return;
+    if (!this.shouldUseFogOfWar(mapData)) {
+      if (mapData.fog instanceof Uint8Array && mapData._assetFogRevealed !== true) {
+        mapData.fog.fill(2);
+        mapData._assetFogRevealed = true;
+      }
+      return;
+    }
 
     if (!(map.fog instanceof Uint8Array) || map.fog.length !== map.width * map.height) {
-      map.fog = new Uint8Array(map.width * map.height);
+      mapData.fog = new Uint8Array(map.width * map.height);
     }
 
     if (!this.world.fogOfWar || this.world.fogOfWar.width !== map.width || this.world.fogOfWar.height !== map.height || this.world.fogOfWar.data !== map.fog) {

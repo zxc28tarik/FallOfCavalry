@@ -5,6 +5,7 @@
  */
 
 import * as CONST from '../constants.js';
+import ModeManager from './ModeManager.js';
 
 /**
  * Ana oyun state'i
@@ -13,6 +14,7 @@ export class GameState {
   constructor() {
     // Oyun modu
     this.mode = 'start'; // 'start', 'map', 'city', 'battle', 'encounter'
+    this.modeManager = new ModeManager(this);
     this.paused = false;
     
     // Dünya
@@ -99,13 +101,6 @@ export class GameState {
       x: 0,
       y: 0,
       zoom: 1.0,
-    };
-    
-    // Minimap
-    this.minimap = {
-      baseCanvas: null,
-      dirty: true,
-      tick: 0,
     };
     
     // Tuş atamaları
@@ -384,7 +379,7 @@ export class GameState {
     this.battle = battleData;
     this.battleSpeed = 1.0;
     this.battlePaused = false;
-    this.setMode('battle');
+    this.modeManager.switchTo('battle');
     this.emit('battle:started', battleData);
     
     console.log('[State] Battle started');
@@ -399,7 +394,7 @@ export class GameState {
     this.battle = null;
     this.battleUnits.player = [];
     this.battleUnits.enemy = [];
-    this.setMode('map');
+    this.modeManager.switchTo('map');
     this.emit('battle:ended', { battle: battleData, result });
     
     console.log('[State] Battle ended:', result);

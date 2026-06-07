@@ -299,7 +299,7 @@ export const safeAttr = (el, attr, value) => {
 /**
  * Get element safely
  */
-export const getEl = (id) => {
+export const getEl = (id, options = null) => {
   if (typeof document === 'undefined' || typeof document.getElementById !== 'function') {
     return null;
   }
@@ -309,7 +309,8 @@ export const getEl = (id) => {
   }
 
   const el = document.getElementById(id);
-  if (!el) {
+  const silent = Boolean(options && typeof options === 'object' && options.silent === true);
+  if (!el && !silent) {
     warnOnce(`dom:missing:${id}`, `[DOM] Missing element id: ${id}`);
   }
 

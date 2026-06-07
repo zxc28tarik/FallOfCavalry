@@ -6,6 +6,9 @@ export default class SpriteLoader {
     this.devMode = Boolean(options?.devMode);
     this.warnOnceFn = typeof options?.warnOnce === 'function' ? options.warnOnce : utils.warnOnce;
     this.devLogFn = typeof options?.devLog === 'function' ? options.devLog : utils.devLog;
+    this.manifestData = options?.manifestData && typeof options.manifestData === 'object'
+      ? options.manifestData
+      : null;
 
     this.manifest = { images: {}, atlases: {}, sprites: {}, anims: {} };
     this.images = new Map();
@@ -48,6 +51,16 @@ export default class SpriteLoader {
   }
 
   async loadManifest() {
+    if (this.manifestData) {
+      const data = this.manifestData;
+      this.manifest = {
+        images: data?.images && typeof data.images === 'object' ? data.images : {},
+        atlases: data?.atlases && typeof data.atlases === 'object' ? data.atlases : {},
+        sprites: data?.sprites && typeof data.sprites === 'object' ? data.sprites : {},
+        anims: data?.anims && typeof data.anims === 'object' ? data.anims : {},
+      };
+      return this.manifest;
+    }
     if (!this.manifestResolvedUrl) return this.manifest;
     const url = this.withCacheBust(this.manifestResolvedUrl);
     const response = await fetch(url, { cache: 'no-store' });

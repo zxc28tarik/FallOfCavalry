@@ -36,6 +36,17 @@ function normalizeMarket(market) {
   if (!market.stocks || typeof market.stocks !== 'object') market.stocks = {};
   if (!market.demand || typeof market.demand !== 'object') market.demand = {};
   if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+  const migrateMap = (map, combine = (a, b) => a + b) => {
+    Object.entries(CONST.TRADE_GOOD_ID_ALIASES || {}).forEach(([fromId, toId]) => {
+      if (!Object.prototype.hasOwnProperty.call(map, fromId)) return;
+      if (Object.prototype.hasOwnProperty.call(map, toId)) map[toId] = combine(Number(map[toId] ?? 0), Number(map[fromId] ?? 0));
+      else map[toId] = map[fromId];
+      delete map[fromId];
+    });
+  };
+  migrateMap(market.stocks);
+  migrateMap(market.demand, (a, b) => Number(((a + b) / 2).toFixed(2)));
+  migrateMap(market.momentum, (a, b) => Number(((a + b) / 2).toFixed(2)));
 }
 
 function settlementTier(settlement) {
@@ -67,7 +78,7 @@ function getRegionTradePriceMult(itemId, options) {
   if (!mods.length) return 1;
   let mult = 1;
   mods.forEach((mod) => {
-    if (mod?.id === 'famine' && (itemId === 'grain' || itemId === 'meat')) mult *= 1.4;
+    if (mod?.id === 'famine' && ['wheat', 'flour', 'bread', 'meat', 'fish'].includes(CONST.normalizeTradeGoodId?.(itemId) || itemId)) mult *= 1.4;
     if (mod?.id === 'prosperity') mult *= 0.9;
   });
   return Math.max(0.5, Math.min(2.5, mult));
@@ -93,12 +104,13 @@ export function initMarket(settlement, seed) {
 
 export function getPrice(settlement, market, itemId, side = 'buy', options = null) {
   normalizeMarket(market);
-  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
+  const normalizedId = CONST.normalizeTradeGoodId?.(itemId) || itemId;
+  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === normalizedId);
   if (!item) return 1;
   const tier = settlementTier(settlement);
-  const demandShift = Number(market?.demand?.[itemId] ?? 0);
+  const demandShift = Number(market?.demand?.[normalizedId] ?? 0);
   const demand = Math.max(0.2, 1 + demandShift);
-  const stock = Number(market?.stocks?.[itemId] ?? 0);
+  const stock = Number(market?.stocks?.[normalizedId] ?? 0);
   const scarcity = stock <= 0
     ? 1 + CONST.TRADE_PRICE_PARAMS.maxScarcityBoost
     : 1 + Math.max(-CONST.TRADE_PRICE_PARAMS.maxScarcityBoost, Math.min(CONST.TRADE_PRICE_PARAMS.maxScarcityBoost, (4 - stock) * CONST.TRADE_PRICE_PARAMS.supplyWeight));
@@ -107,14 +119,14 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
 
   let price = item.basePrice * demand * scarcity * tierMult * biomeMult;
   const cfg = resolveMarketCfg(options);
-  const momentum = clampMomentum(Number(market?.momentum?.[itemId] ?? 0), cfg);
+  const momentum = clampMomentum(Number(market?.momentum?.[normalizedId] ?? 0), cfg);
   price *= side === 'buy' ? (1 + momentum) : (1 - (momentum * 0.5));
   price *= getDiplomacyTradeMultiplier(options);
-  price *= getRegionTradePriceMult(itemId, options);
+  price *= getRegionTradePriceMult(normalizedId, options);
   price *= getWarTradeTariffMultiplier(options?.worldEvents, settlement, options?.ownerFactionId, options?.eventsCfg || CONST.EVENTS);
   if (side === 'sell') {
     price *= CONST.TRADE_PRICE_PARAMS.sellFactor;
-    const opportunity = getActiveOpportunity(settlement, itemId, options);
+    const opportunity = getActiveOpportunity(settlement, normalizedId, options);
     if (opportunity) {
       const baseSellPrice = price;
       const boosted = baseSellPrice * (1 + (Number(opportunity.bonusPct) / 100));
@@ -131,7 +143,10 @@ function getActiveOpportunity(settlement, itemId, options) {
   if (!opportunities || typeof opportunities !== 'object') return null;
   const settlementKey = data.settlementKey || settlement?.id || `${settlement?.tx},${settlement?.ty}`;
   const opportunity = opportunities[settlementKey];
-  if (!opportunity || opportunity.itemId !== itemId) return null;
+  if (!opportunity) return null;
+  const normalizedId = CONST.normalizeTradeGoodId?.(itemId) || itemId;
+  const opportunityId = CONST.normalizeTradeGoodId?.(opportunity.itemId) || opportunity.itemId;
+  if (opportunityId !== normalizedId) return null;
   const day = Number(data?.day ?? 1);
   if (Number.isFinite(opportunity.expiresDay) && day > Number(opportunity.expiresDay)) return null;
   return opportunity;
@@ -140,23 +155,24 @@ function getActiveOpportunity(settlement, itemId, options) {
 export function buy(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
   normalizeMarket(market);
+  const normalizedId = CONST.normalizeTradeGoodId?.(itemId) || itemId;
   const count = Math.max(1, Math.floor(qty || 1));
-  const stock = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0));
+  const stock = Math.max(0, Math.floor(market?.stocks?.[normalizedId] ?? 0));
   if (stock <= 0) return { ok: false, message: 'Stok yok.' };
   const amount = Math.min(stock, count);
-  const price = getPrice(settlement, market, itemId, 'buy', options);
+  const price = getPrice(settlement, market, normalizedId, 'buy', options);
   const total = price * amount;
   if ((party.gold || 0) < total) return { ok: false, message: 'Altın yetersiz.' };
 
   party.gold -= total;
-  market.stocks[itemId] = stock - amount;
-  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
-  const existing = party.inventory.items.find((it) => it.id === itemId);
+  market.stocks[normalizedId] = stock - amount;
+  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === normalizedId);
+  const existing = party.inventory.items.find((it) => it.id === normalizedId);
   if (existing) existing.qty = Math.max(0, Math.floor(existing.qty || 0)) + amount;
-  else party.inventory.items.push({ id: itemId, name: item?.name || itemId, qty: amount });
+  else party.inventory.items.push({ id: normalizedId, name: item?.name || normalizedId, qty: amount });
   const cfg = resolveMarketCfg(options);
   const momentumDelta = Number(cfg.MOMENTUM_PER_QTY) * amount;
-  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) + momentumDelta, cfg);
+  market.momentum[normalizedId] = clampMomentum(Number(market?.momentum?.[normalizedId] ?? 0) + momentumDelta, cfg);
   return {
     ok: true,
     message: `${item?.name || itemId} x${amount} alındı.`,
@@ -169,24 +185,27 @@ export function buy(party, market, settlement, itemId, qty, options) {
 export function sell(party, market, settlement, itemId, qty, options) {
   ensureInventory(party);
   normalizeMarket(market);
+  const normalizedId = CONST.normalizeTradeGoodId?.(itemId) || itemId;
   const count = Math.max(1, Math.floor(qty || 1));
-  const entry = party.inventory.items.find((it) => it.id === itemId);
+  const entry = party.inventory.items.find((it) => (CONST.normalizeTradeGoodId?.(it.id) || it.id) === normalizedId);
   const have = Math.max(0, Math.floor(entry?.qty ?? 0));
   if (have <= 0) return { ok: false, message: 'Envanterde yok.' };
 
   const amount = Math.min(have, count);
-  const price = getPrice(settlement, market, itemId, 'sell', options);
+  const price = getPrice(settlement, market, normalizedId, 'sell', options);
   const total = price * amount;
+  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === normalizedId);
   party.gold = Math.max(0, Math.floor((party.gold || 0) + total));
+  entry.id = normalizedId;
+  entry.name = item?.name || entry.name || normalizedId;
   entry.qty = have - amount;
   if (entry.qty <= 0) {
-    party.inventory.items = party.inventory.items.filter((it) => it.id !== itemId);
+    party.inventory.items = party.inventory.items.filter((it) => (CONST.normalizeTradeGoodId?.(it.id) || it.id) !== normalizedId);
   }
-  market.stocks[itemId] = Math.max(0, Math.floor(market?.stocks?.[itemId] ?? 0)) + amount;
+  market.stocks[normalizedId] = Math.max(0, Math.floor(market?.stocks?.[normalizedId] ?? 0)) + amount;
   const cfg = resolveMarketCfg(options);
   const momentumDelta = Number(cfg.MOMENTUM_PER_QTY) * amount;
-  market.momentum[itemId] = clampMomentum(Number(market?.momentum?.[itemId] ?? 0) - momentumDelta, cfg);
-  const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === itemId);
+  market.momentum[normalizedId] = clampMomentum(Number(market?.momentum?.[normalizedId] ?? 0) - momentumDelta, cfg);
   return {
     ok: true,
     message: `${item?.name || itemId} x${amount} satıldı.`,

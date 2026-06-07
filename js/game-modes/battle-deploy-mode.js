@@ -23,6 +23,23 @@ export default class BattleDeployMode {
     const fallbackY = (party?.y ?? 360);
     this.anchorX = fallbackX;
     this.anchorY = fallbackY;
+    this.originAnchorX = fallbackX;
+    this.originAnchorY = fallbackY;
+    this.playerDeployPenalty = Boolean(
+      battle?.playerDeployPenalty
+      || battle?.battleContext?.playerDeployPenalty
+      || battle?.context?.playerDeployPenalty,
+    );
+    this.enemySectorAdvantage = Array.isArray(battle?.enemySectorAdvantage)
+      ? [...battle.enemySectorAdvantage]
+      : (Array.isArray(battle?.battleContext?.enemySectorAdvantage) ? [...battle.battleContext.enemySectorAdvantage] : []);
+    this.deploymentRadius = this.playerDeployPenalty ? Math.max(42, CONST.DEPLOY.PREVIEW_UNIT_SPACING * 1.8) : Infinity;
+    if (this.playerDeployPenalty) {
+      this.anchorX = fallbackX - Math.max(24, CONST.DEPLOY.PREVIEW_UNIT_SPACING);
+      this.anchorY = fallbackY + Math.max(16, Math.floor(CONST.DEPLOY.PREVIEW_UNIT_SPACING * 0.7));
+      this.originAnchorX = this.anchorX;
+      this.originAnchorY = this.anchorY;
+    }
   }
 
   setFormation(f) {
@@ -38,6 +55,17 @@ export default class BattleDeployMode {
 
   setAnchor(worldX, worldY) {
     if (!Number.isFinite(worldX) || !Number.isFinite(worldY)) return false;
+    if (this.playerDeployPenalty) {
+      const dx = worldX - this.originAnchorX;
+      const dy = worldY - this.originAnchorY;
+      const dist = Math.hypot(dx, dy);
+      if (dist > this.deploymentRadius) {
+        const scale = this.deploymentRadius / Math.max(0.001, dist);
+        this.anchorX = this.originAnchorX + dx * scale;
+        this.anchorY = this.originAnchorY + dy * scale;
+        return true;
+      }
+    }
     this.anchorX = worldX;
     this.anchorY = worldY;
     return true;

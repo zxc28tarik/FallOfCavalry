@@ -244,10 +244,11 @@ export function ensureWorldParties({ aiState, worldState, factions, cfg, current
   while (hasRoomByType('bandit', banditCap)) {
     aiState.parties.push(spawnPartyBandit(worldState, factions, cfg));
   }
-  while (hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {
+  const hasSettlements = getSettlements(worldState).length > 0;
+  while (hasSettlements && hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {
     aiState.parties.push(spawnPartyPatrol(worldState, factions, null, cfg));
   }
-  while (hasRoomByType('caravan', Number(cfg?.MAX_CARAVAN_PARTIES ?? 0))) {
+  while (hasSettlements && hasRoomByType('caravan', Number(cfg?.MAX_CARAVAN_PARTIES ?? 0))) {
     aiState.parties.push(spawnPartyCaravan(worldState, factions, null, cfg));
   }
 

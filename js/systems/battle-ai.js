@@ -215,8 +215,6 @@ export function updateEnemyAI({ battle, dtMs, cfg = CONST.BATTLE_AI, bounds } = 
     const localRadius = Number(cfg.AI_LOCAL_RADIUS ?? 200);
     const allyCount = countLocalUnits(unit, enemies, localRadius);
     const enemyCount = countLocalUnits(unit, players, localRadius);
-    const outnumberedRatio = enemyCount / Math.max(1, allyCount);
-
     if (shouldUnitRetreat(unit, { allyCount, enemyCount, cfg })) {
       applyCommandEffects(unit, CONST.BATTLE_COMMANDS.RETREAT);
       continue;

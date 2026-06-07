@@ -1,11 +1,11 @@
 import * as CONST from '../constants.js';
-import { initBattleFx, spawnFx, tickBattleFx, renderBattleFx } from '../rendering/battle-fx.js';
-import { createCamera, addCameraShake, setCameraTarget, updateCamera, applyCameraTransform } from '../rendering/camera.js';
-import { tickWeatherLayer, renderWeatherOverlay } from '../rendering/weather-layer.js';
+import { renderBattleFx } from '../rendering/battle-fx.js';
+import { applyCameraTransform } from '../rendering/camera.js';
+import { renderWeatherOverlay } from '../rendering/weather-layer.js';
 import { getWeatherTint } from '../systems/weather.js';
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import AnimationPlayer from '../rendering/animation.js';
-import * as utils from '../utils.js';
+import { drawMainGroundTile } from '../rendering/main-ground-texture.js';
 
 export class BattleFxManager {
   constructor() { this.battle = null; this.game = null; }
@@ -154,8 +154,7 @@ export class BattleFxManager {
     const ctx = this.game?.ctx;
     const canvas = this.game?.canvas;
     if (!ctx || !canvas) return;
-    ctx.fillStyle = '#1f1f24';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawMainGroundTile(ctx, canvas.width, canvas.height);
 
     const battle = this.battle.state?.battle;
     if (!battle) return;
@@ -189,14 +188,19 @@ export class BattleFxManager {
     const alivePlayer = playerUnits.filter((u) => !u.dead && u.hp > 0).length;
     const aliveEnemy = enemyUnits.filter((u) => !u.dead && u.hp > 0).length;
 
+    const ammoNow = Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)));
+    const ammoStart = Math.max(0, Math.floor(Number(battle.playerAmmoStart ?? 0)));
+    ctx.save();
     ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 1;
     ctx.font = '20px Arial';
     ctx.textAlign = 'center';
     ctx.fillText(`Player: ${alivePlayer}   Enemy: ${aliveEnemy}   H/F/R/X Commands`, canvas.width / 2, 30);
-    const ammoNow = Math.max(0, Math.floor(Number(battle.playerAmmo ?? 0)));
-    const ammoStart = Math.max(0, Math.floor(Number(battle.playerAmmoStart ?? 0)));
     ctx.font = '14px Arial';
     ctx.fillText(`Arrows: ${ammoNow}/${ammoStart}`, canvas.width / 2, 50);
+    ctx.restore();
 
     const cameraCfg = this.getBattleCameraConfig();
     ctx.save();
@@ -262,8 +266,10 @@ export class BattleFxManager {
     ctx.restore();
     ctx.restore();
 
-    const weatherTint = getWeatherTint(this.game?.weatherState || this.battle.state?.weatherState, this.game?.getWeatherConfig?.());
-    renderWeatherOverlay(ctx, canvas.width, canvas.height, weatherTint);
+    if (CONST.DIMETRIC?.ENABLE_WEATHER_EFFECTS === true) {
+      const weatherTint = getWeatherTint(this.game?.weatherState || this.battle.state?.weatherState, this.game?.getWeatherConfig?.());
+      renderWeatherOverlay(ctx, canvas.width, canvas.height, weatherTint);
+    }
 
     const currentEvents = this.game?.refreshCurrentEventsSummary?.(this.battle.state?.day);
     if (isCurrentEventsModalOpen()) renderCurrentEventsModal({ events: currentEvents, currentDay: this.battle.state?.day ?? 1 });

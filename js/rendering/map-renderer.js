@@ -7,7 +7,9 @@
 
 import * as CONST from '../constants.js';
 import { shade } from '../utils.js';
-import h3MapArt from '../data/homm3-map-art.json';
+import { drawMainGroundRegion } from './main-ground-texture.js';
+import { TERRAIN, FLAGS } from '../world/map-data.js';
+import { ChunkManager } from '../world/chunk-manager.js';
 
 // ── Lord adları (faction bazlı) ────────────────────────────────────────────
 const LORD_NAMES = {
@@ -55,168 +57,9 @@ function tileHash(x, y, seed = 0) {
 }
 function tileRand(x, y, seed = 0) { return (tileHash(x, y, seed) & 0x7fffffff) / 0x7fffffff; }
 
-const H3_TERRAIN_DATA = h3MapArt?.terrain || {};
-const H3_PROP_DATA = h3MapArt?.props || {};
-const H3_FRAME_CACHE = new Map();
-const TILE_TO_H3_KEY = Object.freeze({
-  water: 'SEA',
-  shore: 'SHORE',
-  grass: 'PLAINS',
-  forest: 'PLAINS',
-  mountain: 'PLAINS',
-  snow: 'SNOW',
-});
-const H3_SETTLEMENT_PALETTE = Object.freeze({
-  stoneDark: '#343a42',
-  stoneMid: '#505965',
-  stoneLight: '#6a7484',
-  roofDark: '#6b1f21',
-  roofMid: '#8f2a2c',
-  roofLight: '#b03a3c',
-  woodDark: '#4f3018',
-  woodMid: '#734a24',
-  woodLight: '#9f6a32',
-  plaster: '#b7a184',
-  pathDark: '#6e4f2d',
-  pathLight: '#9a7444',
-  outline: 'rgba(0,0,0,0.6)',
-});
-
-function h3Noise(x, y, seed = 0) {
+function terrainNoise(x, y, seed = 0) {
   const n = Math.sin((x * 12.9898) + (y * 78.233) + seed * 31.337) * 43758.5453;
   return n - Math.floor(n);
-}
-
-function h3DecodeBase64Bytes(b64) {
-  if (typeof b64 !== 'string' || !b64) return null;
-  if (typeof globalThis.atob !== 'function') return null;
-  const bin = globalThis.atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function h3FrameCacheKey(prefix, key, source, name) {
-  return `${prefix}:${key || ''}:${source || ''}:${name || ''}`;
-}
-
-function h3GetFrameCanvas(frame, cacheKey) {
-  if (!frame || frame.format !== 'rgba32-base64' || !Array.isArray(frame.size) || frame.size.length !== 2) return null;
-  if (H3_FRAME_CACHE.has(cacheKey)) return H3_FRAME_CACHE.get(cacheKey);
-  if (typeof document === 'undefined') {
-    H3_FRAME_CACHE.set(cacheKey, null);
-    return null;
-  }
-
-  const w = Math.max(1, Number(frame.size[0]) | 0);
-  const h = Math.max(1, Number(frame.size[1]) | 0);
-  const rgba = h3DecodeBase64Bytes(frame.data);
-  if (!rgba || rgba.length < w * h * 4) {
-    H3_FRAME_CACHE.set(cacheKey, null);
-    return null;
-  }
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const cctx = canvas.getContext('2d');
-  if (!cctx) {
-    H3_FRAME_CACHE.set(cacheKey, null);
-    return null;
-  }
-
-  const img = cctx.createImageData(w, h);
-  img.data.set(rgba.subarray(0, w * h * 4));
-  cctx.putImageData(img, 0, 0);
-  H3_FRAME_CACHE.set(cacheKey, canvas);
-  return canvas;
-}
-
-function bitCount4(v) {
-  const n = v & 15;
-  return ((n >> 0) & 1) + ((n >> 1) & 1) + ((n >> 2) & 1) + ((n >> 3) & 1);
-}
-
-function h3PickTerrainFrame(h3Key, edgeMask, tx, ty) {
-  const terrain = H3_TERRAIN_DATA?.[h3Key];
-  const frames = terrain?.frames;
-  if (!Array.isArray(frames) || !frames.length) return null;
-
-  const groups = Array.isArray(terrain?.groups) ? terrain.groups : null;
-  let pool = Array.isArray(groups?.[edgeMask]) ? groups[edgeMask] : null;
-  if (!pool || !pool.length) {
-    let best = null;
-    for (let i = 0; i < 16; i++) {
-      const g = groups?.[i];
-      if (!Array.isArray(g) || !g.length) continue;
-      const diff = bitCount4((i ^ edgeMask) & 15) + Math.abs(bitCount4(i) - bitCount4(edgeMask)) * 0.15;
-      if (!best || diff < best.diff) best = { diff, pool: g };
-    }
-    pool = best?.pool || null;
-  }
-  if (!pool || !pool.length) pool = groups?.[0] || null;
-  if (!pool || !pool.length) {
-    const n = h3Noise(tx * 0.317, ty * 0.229, 1943);
-    const idx = Math.max(0, Math.min(frames.length - 1, Math.floor(n * frames.length)));
-    return frames[idx];
-  }
-
-  const n = h3Noise(tx * 0.317 + edgeMask * 0.11, ty * 0.229 + edgeMask * 0.07, 1943);
-  const pick = Math.max(0, Math.min(pool.length - 1, Math.floor(n * pool.length)));
-  const idx = pool[pick];
-  if (!Number.isFinite(idx) || idx < 0 || idx >= frames.length) return null;
-  return frames[idx];
-}
-
-function h3PickPropFrame(kind, tx, ty) {
-  const frames = H3_PROP_DATA?.[kind]?.frames;
-  if (!Array.isArray(frames) || !frames.length) return null;
-  let seed = 2683;
-  if (kind === 'FOREST') seed = 2671;
-  else if (kind === 'MOUNTAIN_LARGE') seed = 2699;
-  const n = h3Noise(tx * 0.191, ty * 0.277, seed);
-  const idx = Math.max(0, Math.min(frames.length - 1, Math.floor(n * frames.length)));
-  return frames[idx];
-}
-
-function h3DrawPropFrame(ctx, entry, px, py, T, fogLevel, tx, ty, kind, options = null) {
-  if (!entry?.frame) return false;
-  const cacheKey = h3FrameCacheKey('prop', kind, entry.sourceDef, entry.frame.name);
-  const canvas = h3GetFrameCanvas(entry.frame, cacheKey);
-  if (!canvas) return false;
-
-  const fw = canvas.width || 1;
-  const fh = canvas.height || 1;
-  const scaleSeed = kind === 'FOREST' ? 3119 : kind === 'MOUNTAIN_LARGE' ? 3151 : 3137;
-  const scaleN = h3Noise(tx * 0.39 + 7, ty * 0.33 + 9, scaleSeed);
-  const baseScale = kind === 'FOREST'
-    ? 1.85
-    : kind === 'MOUNTAIN_LARGE'
-      ? 3.2
-      : 1.62;
-  const dynScale = kind === 'FOREST'
-    ? 0.26
-    : kind === 'MOUNTAIN_LARGE'
-      ? 0.26
-      : 0.22;
-  const scaleMul = Number.isFinite(options?.scaleMul) ? Math.max(0.35, options.scaleMul) : 1;
-  const targetH = Math.max(8, T * (baseScale + scaleN * dynScale) * scaleMul);
-  const targetW = targetH * (fw / fh);
-  const jitter = kind === 'FOREST' ? 0.16 : kind === 'MOUNTAIN_LARGE' ? 0.20 : 0.12;
-  const jitterMul = Number.isFinite(options?.jitterMul) ? Math.max(0, options.jitterMul) : 1;
-  const jitterX = jitter * jitterMul * T * (h3Noise(tx * 0.91, ty * 0.73, 3163) - 0.5);
-  const extraOffsetX = Number.isFinite(options?.offsetX) ? options.offsetX : 0;
-  const extraOffsetY = Number.isFinite(options?.offsetY) ? options.offsetY : 0;
-  const dx = Math.round(px + (T - targetW) * 0.5 + jitterX + extraOffsetX);
-  const dy = Math.round(py + T - targetH + extraOffsetY);
-
-  ctx.save();
-  const baseAlpha = fogLevel === 1 ? 0.60 : 1.0;
-  const alphaMul = Number.isFinite(options?.alphaMul) ? Math.max(0, options.alphaMul) : 1;
-  ctx.globalAlpha = baseAlpha * alphaMul;
-  ctx.drawImage(canvas, dx, dy, Math.round(targetW), Math.round(targetH));
-  ctx.restore();
-  return true;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -229,7 +72,11 @@ export class MapRenderer {
     this._mapWidth = 0;
     this._mapHeight = 0;
     this._visibleLargeMountainCells = new Set();
-    this._settlementSpriteCache = new Map();
+    this.chunkManager = null;
+    this.fogDirtyChunks = new Set();
+    this.lastMapData = null;
+    this._boundChunkDirty = null;
+    this._chunkRenderStats = { rebuilds: 0, rebuildMsMax: 0 };
   }
 
   // Build O(1) lookup sets for forests/mountains (once per map)
@@ -292,42 +139,55 @@ export class MapRenderer {
     return this._tileTypeAt(map, tx, ty) === 'water';
   }
 
-  _h3KeyAt(map, tx, ty) {
-    return TILE_TO_H3_KEY[this._tileTypeAt(map, tx, ty)] || 'PLAINS';
-  }
-
-  _h3TransitionMask(map, tx, ty, h3Key) {
-    if (!map || !h3Key) return 0;
-    let mask = 0;
-    if (this._h3KeyAt(map, tx, ty - 1) !== h3Key) mask |= 1;
-    if (this._h3KeyAt(map, tx + 1, ty) !== h3Key) mask |= 2;
-    if (this._h3KeyAt(map, tx, ty + 1) !== h3Key) mask |= 4;
-    if (this._h3KeyAt(map, tx - 1, ty) !== h3Key) mask |= 8;
-    return mask;
-  }
-
-  _drawH3TerrainTile(ctx, tile, px, py, T, fog, tx, ty, map) {
-    const h3Key = TILE_TO_H3_KEY[tile?.type] || 'PLAINS';
-    const terrain = H3_TERRAIN_DATA?.[h3Key];
-    if (!terrain?.frames?.length) return false;
-
-    const edgeMask = this._h3TransitionMask(map, tx, ty, h3Key);
-    const frame = h3PickTerrainFrame(h3Key, edgeMask, tx, ty);
-    if (!frame) return false;
-
-    const cacheKey = h3FrameCacheKey('terrain', h3Key, terrain.sourceDef, frame.name);
-    const canvas = h3GetFrameCanvas(frame, cacheKey);
-    if (!canvas) return false;
-
-    ctx.drawImage(canvas, px, py, T, T);
-    if (fog === 1) {
-      ctx.fillStyle = 'rgba(0,0,0,0.38)';
-      ctx.fillRect(px, py, T, T);
-    }
-    return true;
-  }
-
   render(ctx, state) {
+    const map = state?.map || null;
+    const mapData = map?.mapData || map?.__mapData || state?.mapData || null;
+    if (!mapData?.terrain || !mapData?.flags) {
+      return this.renderLegacy(ctx, state);
+    }
+
+    const T = CONST.WORLD.TILE_SIZE;
+    const camera = state?.camera || { x: 0, y: 0, zoom: 1 };
+    const zoom = Number(camera?.zoom) > 0 ? Number(camera.zoom) : 1;
+    const visibleWorldCamera = {
+      x: Number(camera?.x) || 0,
+      y: Number(camera?.y) || 0,
+      w: ctx.canvas.width / zoom,
+      h: ctx.canvas.height / zoom,
+    };
+
+    this._frame++;
+    this.ensureChunkManager(mapData);
+    this.syncDirtyChunks(mapData);
+    this._ensureLookups(map || mapData);
+    this._visibleLargeMountainCells.clear();
+
+    const visibleChunks = this.chunkManager.getVisibleChunks(visibleWorldCamera, T, 1);
+
+    ctx.save();
+    const prevSmoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.scale(zoom, zoom);
+    ctx.translate(-visibleWorldCamera.x, -visibleWorldCamera.y);
+
+    for (const chunk of visibleChunks) {
+      const hadCache = this.chunkManager.cache.has(chunk.key);
+      const entry = this.chunkManager.getOrCreateCacheCanvas(chunk.cx, chunk.cy, T);
+      if (!hadCache || this.chunkManager.isDirty(chunk.cx, chunk.cy)) {
+        this.rebuildChunkCanvas(entry, mapData, chunk.cx, chunk.cy, T);
+        this.chunkManager.clearDirty(chunk.cx, chunk.cy);
+      }
+      ctx.drawImage(entry.canvas, chunk.cx * this.chunkManager.chunkSize * T, chunk.cy * this.chunkManager.chunkSize * T);
+    }
+
+    this.drawVisibleDynamicEntities(ctx, state, visibleWorldCamera, T);
+    this.drawVisibleFog(ctx, mapData, visibleChunks, visibleWorldCamera, T);
+
+    ctx.imageSmoothingEnabled = prevSmoothing;
+    ctx.restore();
+  }
+
+  renderLegacy(ctx, state) {
     const { map, player, camera } = state;
     const T = CONST.WORLD.TILE_SIZE;
     this._frame++;
@@ -368,13 +228,6 @@ export class MapRenderer {
     }
 
     // 4 – Yerleşimler
-    for (const s of map.settlements) {
-      const stx = Number.isFinite(s.tx) ? s.tx : Math.floor(s.x / T);
-      const sty = Number.isFinite(s.ty) ? s.ty : Math.floor(s.y / T);
-      const fog = map.fog ? map.fog[sty * map.width + stx] : 2;
-      if (fog > 0) this._drawSettlement(ctx, s, T);
-    }
-
     // 5 – Düşman lordlar / AI partiler
     for (const p of state.aiParties) {
       this._drawLordParty(ctx, p, T);
@@ -389,6 +242,224 @@ export class MapRenderer {
 
   // ── Ağaç Paletleri — zengin yeşil orman tonları ─────────────────────────
   // Klasik fantezi strateji haritası: koyu orman yeşilleri, ışık sol üstten
+  ensureChunkManager(mapData) {
+    if (this.lastMapData === mapData && this.chunkManager) return this.chunkManager;
+
+    if (this.lastMapData && this.lastMapData.onChunkDirty === this._boundChunkDirty) {
+      this.lastMapData.onChunkDirty = null;
+    }
+
+    this.chunkManager?.clearCache?.();
+    this.fogDirtyChunks = new Set();
+    this.lastMapData = mapData;
+    this.chunkManager = new ChunkManager(mapData, {
+      chunkSize: Math.max(1, Number(mapData.chunkSize) || 64),
+    });
+
+    const activeMapData = mapData;
+    this._boundChunkDirty = (cx, cy, reason = 'terrain') => {
+      if (this.lastMapData !== activeMapData || !this.chunkManager) return;
+      if (reason === 'fog') {
+        this.fogDirtyChunks.add(this.chunkManager.chunkKey(cx, cy));
+        return;
+      }
+      this.chunkManager.markDirtyChunk(cx, cy);
+    };
+    mapData.onChunkDirty = this._boundChunkDirty;
+    return this.chunkManager;
+  }
+
+  syncDirtyChunks(mapData) {
+    if (!this.chunkManager) return;
+    for (const key of mapData.consumeModifiedChunks?.() || []) {
+      this.chunkManager.markDirtyKey(key);
+    }
+    for (const key of mapData.consumeFogModifiedChunks?.() || []) {
+      this.fogDirtyChunks.add(key);
+    }
+  }
+
+  rebuildChunkCanvas(entry, mapData, cx, cy, tileSize) {
+    const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const ctx = entry.ctx || entry.context;
+    if (!ctx) return;
+
+    const S = this.chunkManager.chunkSize;
+    const startX = cx * S;
+    const startY = cy * S;
+    const endX = Math.min(mapData.width, startX + S);
+    const endY = Math.min(mapData.height, startY + S);
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, entry.canvas.width, entry.canvas.height);
+
+    for (let ty = startY; ty < endY; ty++) {
+      const row = ty * mapData.width;
+      const py = (ty - startY) * tileSize;
+      for (let tx = startX; tx < endX; tx++) {
+        const i = row + tx;
+        const px = (tx - startX) * tileSize;
+        this.drawTerrainById(ctx, mapData.terrain[i], px, py, tileSize, tx, ty);
+        this.drawStaticOverlaysByFlags(ctx, mapData.flags[i], px, py, tileSize, tx, ty);
+      }
+    }
+
+    ctx.restore();
+    const elapsed = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started;
+    this._chunkRenderStats.rebuilds++;
+    this._chunkRenderStats.rebuildMsMax = Math.max(this._chunkRenderStats.rebuildMsMax, elapsed);
+  }
+
+  drawTerrainById(ctx, terrainId, px, py, T, tx, ty) {
+    switch (terrainId) {
+      case TERRAIN.WATER:
+        if (typeof this._drawWater === 'function') this._drawWater(ctx, px, py, T, 2, tx, ty);
+        else this._fillTerrainFallback(ctx, px, py, T, 'water');
+        break;
+      case TERRAIN.SHORE:
+        if (typeof this._drawShore === 'function') this._drawShore(ctx, px, py, T, 2, tx, ty, null);
+        else this._fillTerrainFallback(ctx, px, py, T, 'shore');
+        break;
+      case TERRAIN.SNOW:
+        if (typeof this._drawSnow === 'function') this._drawSnow(ctx, px, py, T, 2, tx, ty);
+        else this._fillTerrainFallback(ctx, px, py, T, 'snow');
+        break;
+      case TERRAIN.FOREST:
+      case TERRAIN.MOUNTAIN:
+      case TERRAIN.GRASS:
+      default:
+        if (typeof this._drawGrass === 'function') this._drawGrass(ctx, px, py, T, 2, tx, ty);
+        else this._fillTerrainFallback(ctx, px, py, T, 'grass');
+        break;
+    }
+  }
+
+  drawStaticOverlaysByFlags(ctx, flags, px, py, T, tx, ty) {
+    if (flags & FLAGS.RIVER) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(54,118,145,0.78)';
+      ctx.lineWidth = Math.max(2, T * 0.16);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px + T * 0.08, py + T * 0.56);
+      ctx.quadraticCurveTo(px + T * 0.48, py + T * 0.40, px + T * 0.92, py + T * 0.52);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (flags & FLAGS.ROAD) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(112,84,49,0.72)';
+      ctx.lineWidth = Math.max(1.5, T * 0.10);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(px, py + T * 0.58);
+      ctx.lineTo(px + T, py + T * 0.44);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (flags & FLAGS.MOUNTAIN) {
+      if (typeof this._drawMountain === 'function') this._drawMountain(ctx, px, py, T, 2, tx, ty);
+      else this._drawMountainFallback(ctx, px, py, T);
+    }
+
+    if (flags & FLAGS.FOREST) {
+      if (typeof this._drawForest === 'function') this._drawForest(ctx, px, py, T, 2, tx, ty);
+      else this._drawForestFallback(ctx, px, py, T);
+    }
+  }
+
+  drawVisibleFog(ctx, mapData, visibleChunks, visibleWorldCamera, T) {
+    if (!mapData?.fog) return;
+
+    ctx.save();
+    ctx.fillStyle = '#000';
+
+    for (const chunk of visibleChunks) {
+      const chunkX = chunk.cx * this.chunkManager.chunkSize;
+      const chunkY = chunk.cy * this.chunkManager.chunkSize;
+      const x0 = Math.max(chunkX, Math.floor(visibleWorldCamera.x / T) - 1);
+      const y0 = Math.max(chunkY, Math.floor(visibleWorldCamera.y / T) - 1);
+      const x1 = Math.min(chunkX + this.chunkManager.chunkSize, mapData.width, Math.ceil((visibleWorldCamera.x + visibleWorldCamera.w) / T) + 1);
+      const y1 = Math.min(chunkY + this.chunkManager.chunkSize, mapData.height, Math.ceil((visibleWorldCamera.y + visibleWorldCamera.h) / T) + 1);
+
+      for (let ty = y0; ty < y1; ty++) {
+        const row = ty * mapData.width;
+        const py = ty * T;
+        for (let tx = x0; tx < x1; tx++) {
+          const fog = mapData.fog[row + tx];
+          if (fog >= 2) continue;
+          ctx.globalAlpha = fog === 0 ? 0.82 : 0.38;
+          ctx.fillRect(tx * T, py, T, T);
+        }
+      }
+    }
+
+    this.fogDirtyChunks.clear();
+    ctx.restore();
+  }
+
+  drawVisibleDynamicEntities(ctx, state, visibleWorldCamera, T) {
+    const player = state?.player;
+    if (player && Math.hypot((player.tx ?? 0) - (player.x ?? 0), (player.ty ?? 0) - (player.y ?? 0)) > 0.4) {
+      this._drawMovePath(ctx, player, T);
+    }
+
+    const pad = T * 4;
+    const inView = (entity) => {
+      const x = Number(entity?.x);
+      const y = Number(entity?.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      return x >= visibleWorldCamera.x - pad &&
+        y >= visibleWorldCamera.y - pad &&
+        x <= visibleWorldCamera.x + visibleWorldCamera.w + pad &&
+        y <= visibleWorldCamera.y + visibleWorldCamera.h + pad;
+    };
+
+    for (const party of state?.aiParties || []) {
+      if (inView(party)) this._drawLordParty(ctx, party, T);
+    }
+
+    if (player) this._drawPlayerParty(ctx, player, T);
+  }
+
+  _fillTerrainFallback(ctx, px, py, T, type) {
+    ctx.fillStyle = this._terrainColor(type);
+    ctx.fillRect(px, py, T, T);
+  }
+
+  _drawForestFallback(ctx, px, py, T) {
+    ctx.save();
+    ctx.fillStyle = '#2f6a35';
+    ctx.beginPath();
+    ctx.arc(px + T * 0.35, py + T * 0.45, T * 0.20, 0, Math.PI * 2);
+    ctx.arc(px + T * 0.58, py + T * 0.38, T * 0.24, 0, Math.PI * 2);
+    ctx.arc(px + T * 0.68, py + T * 0.58, T * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  _drawMountainFallback(ctx, px, py, T) {
+    ctx.save();
+    ctx.fillStyle = '#70685a';
+    ctx.beginPath();
+    ctx.moveTo(px + T * 0.12, py + T * 0.84);
+    ctx.lineTo(px + T * 0.50, py + T * 0.18);
+    ctx.lineTo(px + T * 0.88, py + T * 0.84);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,238,214,0.55)';
+    ctx.lineWidth = Math.max(1, T * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(px + T * 0.50, py + T * 0.18);
+    ctx.lineTo(px + T * 0.42, py + T * 0.42);
+    ctx.lineTo(px + T * 0.52, py + T * 0.36);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   static TREE_PALETTES = [
     { dark: '#1A3318', mid: '#2D5A28', light: '#4A8A3A' },  // 0: koyu orman
     { dark: '#1E3A1A', mid: '#356A2E', light: '#55944A' },  // 1: orta yeşil
@@ -408,22 +479,16 @@ export class MapRenderer {
     const isMountain = this._mountainSet?.has(idx);
 
     if (fog >= 1) {
-      const drewH3 = this._drawH3TerrainTile(ctx, tile, px, py, T, fog, x, y, map);
-      if (!drewH3) {
-        if (tile.type === 'water') {
-          this._drawWater(ctx, px, py, T, fog, x, y);
-        } else if (tile.type === 'shore') {
-          this._drawShore(ctx, px, py, T, fog, x, y, map);
-        } else if (tile.type === 'grass' || tile.type === 'forest') {
-          this._drawGrass(ctx, px, py, T, fog, x, y);
-        } else if (tile.type === 'snow') {
-          this._drawSnow(ctx, px, py, T, fog, x, y);
-        } else {
-          let base = this._terrainColor(tile.type);
-          if (fog === 1) base = shade(base, -0.25);
-          ctx.fillStyle = base;
-          ctx.fillRect(px, py, T, T);
-        }
+      if (tile.type === 'water') {
+        this._drawWater(ctx, px, py, T, fog, x, y);
+      } else if (tile.type === 'shore') {
+        this._drawShore(ctx, px, py, T, fog, x, y, map);
+      } else if (tile.type === 'grass' || tile.type === 'forest' || tile.type === 'mountain') {
+        this._drawGrass(ctx, px, py, T, fog, x, y);
+      } else if (tile.type === 'snow') {
+        this._drawSnow(ctx, px, py, T, fog, x, y);
+      } else {
+        drawMainGroundRegion(ctx, px, py, T, T, '#365b22', x * T, y * T);
       }
       if (tile.type !== 'water') {
         this._drawCoastBlend(ctx, px, py, T, fog, x, y, map, tile.type);
@@ -509,8 +574,8 @@ export class MapRenderer {
     const insetVar = shoreLike ? 0.09 : 0.06;
     const waveBase = shoreLike ? 0.07 : 0.05;
     const waveVar = shoreLike ? 0.06 : 0.05;
-    const inset = T * (insetBase + h3Noise(tx * 0.19, ty * 0.23, 8401) * insetVar);
-    const wave = T * (waveBase + h3Noise(tx * 0.31, ty * 0.27, 8407) * waveVar);
+    const inset = T * (insetBase + terrainNoise(tx * 0.19, ty * 0.23, 8401) * insetVar);
+    const wave = T * (waveBase + terrainNoise(tx * 0.31, ty * 0.27, 8407) * waveVar);
 
     ctx.save();
     ctx.fillStyle = sideColor;
@@ -681,28 +746,11 @@ export class MapRenderer {
   }
   _drawGrass(ctx, px, py, T, fog, tx, ty) {
     const dim = fog === 1 ? -0.18 : 0;
-    const v1 = tileRand(tx, ty, 0), v2 = tileRand(tx, ty, 1);
-    // Zengin yeşil taban
-    const gr = 48 + v1 * 28 | 0;
-    const gg = 98 + v1 * 30 + v2 * 18 | 0;
-    const gb = 32 + v2 * 16 | 0;
-    ctx.fillStyle = fog === 1 ? shade(`#${gr.toString(16).padStart(2,'0')}${gg.toString(16).padStart(2,'0')}${gb.toString(16).padStart(2,'0')}`, -0.18) : `rgb(${gr},${gg},${gb})`;
-    ctx.fillRect(px, py, T, T);
-
-    // Organik yeşil lekeler — karo sınırını kırar
-    for (let i = 0; i < 3; i++) {
-      const pv = tileRand(tx, ty, 200 + i * 4);
-      ctx.fillStyle = pv > 0.5 ? `rgba(65,120,40,${fog === 1 ? 0.08 : 0.14})` : `rgba(35,75,22,${fog === 1 ? 0.06 : 0.12})`;
-      ctx.beginPath();
-      ctx.ellipse(
-        px + T * (tileRand(tx, ty, 201 + i * 4) * 1.1 - 0.05),
-        py + T * (tileRand(tx, ty, 202 + i * 4) * 1.1 - 0.05),
-        T * (0.22 + tileRand(tx, ty, 203 + i * 4) * 0.30),
-        T * (0.16 + tileRand(tx, ty, 204 + i * 4) * 0.20),
-        tileRand(tx, ty, 205 + i * 4) * Math.PI, 0, Math.PI * 2);
-      ctx.fill();
+    drawMainGroundRegion(ctx, px, py, T, T, '#365b22', tx * T, ty * T);
+    if (fog === 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      ctx.fillRect(px, py, T, T);
     }
-
     if (fog < 2) return;
 
     // Çimen tutamları
@@ -761,65 +809,6 @@ export class MapRenderer {
     const east = this._hasForestAt(tx + 1, ty);
     const neighborCount = (north ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0) + (east ? 1 : 0);
     const neighbor8 = this._countForestNeighbors8(tx, ty);
-    const hasH3Forest = Array.isArray(H3_PROP_DATA?.FOREST?.frames) && H3_PROP_DATA.FOREST.frames.length > 0;
-    if (hasH3Forest) {
-      const clearingNoise = h3Noise(tx * 0.16, ty * 0.18, 9013);
-      if (neighbor8 >= 4 && clearingNoise > 0.49 && clearingNoise < 0.53) return;
-
-      const densityNoise = h3Noise(tx * 0.71, ty * 0.59, 7123);
-      const threshold = neighbor8 >= 6 ? 0.46 : neighbor8 >= 4 ? 0.56 : neighbor8 >= 2 ? 0.66 : 0.76;
-      if (densityNoise <= threshold) return;
-
-      let drew = false;
-      const styleNoise = h3Noise(tx * 0.53, ty * 0.61, 7129);
-      if (neighbor8 >= 4 && styleNoise > 0.35) {
-        const back = h3PickPropFrame('FOREST', tx - 17, ty + 9);
-        drew = h3DrawPropFrame(ctx, back, px, py, T, fog, tx, ty, 'FOREST', {
-          scaleMul: 0.80 + h3Noise(tx * 0.29, ty * 0.21, 7137) * 0.16,
-          jitterMul: 0.55,
-          offsetX: (h3Noise(tx * 0.91, ty * 0.73, 7141) - 0.5) * T * 0.22,
-          offsetY: -T * (0.14 + h3Noise(tx * 0.33, ty * 0.27, 7147) * 0.08),
-          alphaMul: 0.72,
-        }) || drew;
-      }
-
-      const main = h3PickPropFrame('FOREST', tx, ty);
-      drew = h3DrawPropFrame(ctx, main, px, py, T, fog, tx, ty, 'FOREST', {
-        scaleMul: 0.94 + h3Noise(tx * 0.49, ty * 0.41, 7153) * 0.34,
-        jitterMul: 0.9,
-        offsetX: (h3Noise(tx * 0.45, ty * 0.57, 7159) - 0.5) * T * 0.28,
-        offsetY: -T * (0.03 + h3Noise(tx * 0.17, ty * 0.39, 7163) * 0.06),
-      }) || drew;
-
-      if (neighbor8 >= 2 && styleNoise > 0.62) {
-        const front = h3PickPropFrame('FOREST', tx + 23, ty - 11);
-        drew = h3DrawPropFrame(ctx, front, px, py, T, fog, tx, ty, 'FOREST', {
-          scaleMul: 1.02 + h3Noise(tx * 0.67, ty * 0.51, 7169) * 0.28,
-          jitterMul: 0.75,
-          offsetX: (h3Noise(tx * 0.52, ty * 0.62, 7171) - 0.5) * T * 0.20,
-          offsetY: T * (0.01 + h3Noise(tx * 0.21, ty * 0.18, 7177) * 0.04),
-          alphaMul: 0.96,
-        }) || drew;
-      }
-
-      if (drew) {
-        const bushRoll = h3Noise(tx * 0.37, ty * 0.29, 7183);
-        if (bushRoll > 0.54) {
-          const bx = px + T * (0.24 + h3Noise(tx * 0.59, ty * 0.47, 7187) * 0.52);
-          const by = py + T * (0.62 + h3Noise(tx * 0.43, ty * 0.71, 7191) * 0.22);
-          const palIdx = Math.floor(h3Noise(tx * 0.51, ty * 0.61, 7193) * MapRenderer.TREE_PALETTES.length);
-          this._drawBushCluster(ctx, bx, by, T * 0.11, fog === 1 ? -0.18 : 0, fog, palIdx);
-        }
-        if (bushRoll > 0.80) {
-          const bx = px + T * (0.18 + h3Noise(tx * 0.81, ty * 0.33, 7197) * 0.64);
-          const by = py + T * (0.56 + h3Noise(tx * 0.27, ty * 0.83, 7201) * 0.28);
-          const palIdx = Math.floor(h3Noise(tx * 0.39, ty * 0.57, 7207) * MapRenderer.TREE_PALETTES.length);
-          this._drawBushCluster(ctx, bx, by, T * 0.09, fog === 1 ? -0.18 : 0, fog, palIdx);
-        }
-        return;
-      }
-    }
-
     const dim = fog === 1 ? -0.18 : 0;
 
     ctx.fillStyle = fog === 1 ? '#162415' : '#20361f';
@@ -830,7 +819,7 @@ export class MapRenderer {
     if (west) ctx.fillRect(px - T * 0.08, py, T * 0.24, T);
     if (east) ctx.fillRect(px + T * 0.84, py, T * 0.24, T);
 
-    const treeCount = 4 + Math.floor(neighbor8 * 0.68) + Math.floor(tileRand(tx, ty, 400) * 3);
+    const treeCount = Math.max(2, Math.ceil((4 + Math.floor(neighbor8 * 0.68) + Math.floor(tileRand(tx, ty, 400) * 3)) * 0.5));
     const pineBias = Math.min(0.92, 0.74 + neighborCount * 0.05);
     const minX = west ? -0.10 : 0.04;
     const maxX = east ? 1.10 : 0.96;
@@ -1037,69 +1026,6 @@ export class MapRenderer {
     const west = this._hasMountainAt(tx - 1, ty);
     const east = this._hasMountainAt(tx + 1, ty);
     const neighborCount = (north ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0) + (east ? 1 : 0);
-    const neighbor8 = this._countMountainNeighbors8(tx, ty);
-    const hasH3Mountain = Array.isArray(H3_PROP_DATA?.MOUNTAIN?.frames) && H3_PROP_DATA.MOUNTAIN.frames.length > 0;
-    if (hasH3Mountain) {
-      const passWindow = east && west && !north && !south && neighbor8 >= 5;
-      const passNoise = h3Noise(tx * 0.83, ty * 0.37, 7399);
-      if (passWindow && passNoise > 0.44 && passNoise < 0.62) return;
-
-      const clusterNoise = h3Noise(tx * 0.61, ty * 0.57, 7331);
-      const sparseThreshold = neighbor8 >= 6 ? 0.30 : neighbor8 >= 4 ? 0.44 : neighbor8 >= 2 ? 0.58 : 0.75;
-      if (clusterNoise <= sparseThreshold) return;
-
-      let drew = false;
-      if (neighbor8 >= 5) {
-        const backEntry = h3PickPropFrame('MOUNTAIN', tx - 19, ty + 13);
-        drew = h3DrawPropFrame(ctx, backEntry, px, py, T, fog, tx, ty, 'MOUNTAIN', {
-          scaleMul: 0.78 + h3Noise(tx * 0.27, ty * 0.29, 7411) * 0.12,
-          jitterMul: 0.50,
-          offsetX: (h3Noise(tx * 0.47, ty * 0.53, 7417) - 0.5) * T * 0.22,
-          offsetY: -T * (0.13 + h3Noise(tx * 0.39, ty * 0.31, 7421) * 0.10),
-          alphaMul: 0.72,
-        }) || drew;
-      }
-
-      const largeCell = `${Math.floor(tx / 3)},${Math.floor(ty / 2)}`;
-      const largeNoise = h3Noise(tx * 0.53, ty * 0.47, 7811);
-      const canLarge = neighbor8 >= 6
-        && largeNoise > 0.58
-        && !this._visibleLargeMountainCells.has(largeCell)
-        && Array.isArray(H3_PROP_DATA?.MOUNTAIN_LARGE?.frames)
-        && H3_PROP_DATA.MOUNTAIN_LARGE.frames.length > 0;
-      if (canLarge) {
-        this._visibleLargeMountainCells.add(largeCell);
-        const largeEntry = h3PickPropFrame('MOUNTAIN_LARGE', tx, ty);
-        drew = h3DrawPropFrame(ctx, largeEntry, px, py, T, fog, tx, ty, 'MOUNTAIN_LARGE', {
-          scaleMul: 0.94 + h3Noise(tx * 0.17, ty * 0.21, 7427) * 0.18,
-          jitterMul: 0.82,
-          offsetX: (h3Noise(tx * 0.23, ty * 0.37, 7433) - 0.5) * T * 0.24,
-          offsetY: -T * 0.04,
-        }) || drew;
-      }
-
-      const entry = h3PickPropFrame('MOUNTAIN', tx, ty);
-      drew = h3DrawPropFrame(ctx, entry, px, py, T, fog, tx, ty, 'MOUNTAIN', {
-        scaleMul: 0.90 + h3Noise(tx * 0.33, ty * 0.49, 7439) * 0.24,
-        jitterMul: 0.78,
-        offsetX: (h3Noise(tx * 0.59, ty * 0.41, 7441) - 0.5) * T * 0.20,
-        offsetY: -T * (0.01 + h3Noise(tx * 0.31, ty * 0.23, 7447) * 0.05),
-      }) || drew;
-
-      if (neighbor8 >= 6 && h3Noise(tx * 0.43, ty * 0.45, 7451) > 0.75) {
-        const front = h3PickPropFrame('MOUNTAIN', tx + 29, ty - 7);
-        drew = h3DrawPropFrame(ctx, front, px, py, T, fog, tx, ty, 'MOUNTAIN', {
-          scaleMul: 0.66 + h3Noise(tx * 0.27, ty * 0.37, 7457) * 0.12,
-          jitterMul: 0.45,
-          offsetX: (h3Noise(tx * 0.51, ty * 0.21, 7463) - 0.5) * T * 0.16,
-          offsetY: T * (0.12 + h3Noise(tx * 0.35, ty * 0.25, 7469) * 0.04),
-          alphaMul: 0.88,
-        }) || drew;
-      }
-
-      if (drew) return;
-    }
-
     const dim = fog === 1 ? -0.18 : 0;
 
     const base = py + T * (south ? 0.98 : 0.95);
@@ -1265,9 +1191,9 @@ export class MapRenderer {
       const len = Math.max(1, Math.hypot(dx, dy));
       const nx = -dy / len;
       const ny = dx / len;
-      const bendNoise = h3Noise((a.x + b.x) * 0.007, (a.y + b.y) * 0.009, 8603 + i * 17);
+      const bendNoise = terrainNoise((a.x + b.x) * 0.007, (a.y + b.y) * 0.009, 8603 + i * 17);
       const bendSign = bendNoise > 0.5 ? 1 : -1;
-      const bendAmp = T * (0.08 + h3Noise(a.x * 0.013, a.y * 0.011, 8611 + i * 13) * 0.09);
+      const bendAmp = T * (0.08 + terrainNoise(a.x * 0.013, a.y * 0.011, 8611 + i * 13) * 0.09);
       const midX = (a.x + b.x) * 0.5 + nx * bendAmp * bendSign;
       const midY = (a.y + b.y) * 0.5 + ny * bendAmp * bendSign;
       pts.push({ x: midX, y: midY });
@@ -1295,7 +1221,7 @@ export class MapRenderer {
     for (const r of rivers) {
       if (r.length < 2) continue;
       const pts = this._buildRiverRenderPoints(r, T);
-      const widthNoise = h3Noise((r[0]?.x || 0) * 0.12, (r[0]?.y || 0) * 0.14, 8627);
+      const widthNoise = terrainNoise((r[0]?.x || 0) * 0.12, (r[0]?.y || 0) * 0.14, 8627);
       const widthMul = 0.92 + widthNoise * 0.24;
 
       ctx.strokeStyle = 'rgba(20,52,78,0.48)';
@@ -1401,405 +1327,8 @@ export class MapRenderer {
   // ── Yerleşimler (M&B kale/köy stili) ────────────────────────────────────
   // ══════════════════════════════════════════════════════════════════════════
 
-  _drawSettlement(ctx, settlement, T) {
-    const cx = settlement.x;
-    const cy = settlement.y;
-    const owner = settlement.ownerFactionId || settlement.owner;
-    const factionColor = this._factionColor(owner);
-    const type = String(settlement.type || 'village').toLowerCase();
-    const spriteType = (type === 'city' || type === 'town' || type === 'fort') ? type : 'village';
-    const sprite = this._getSettlementSprite(spriteType, factionColor);
-    const profile = this._settlementVisualProfile(spriteType, T);
-    const tx = Math.floor(cx / Math.max(1, T));
-    const ty = Math.floor(cy / Math.max(1, T));
-
-    ctx.save();
-    this._drawSettlementGroundBlend(ctx, cx, cy, profile, T, tx, ty, factionColor);
-    ctx.fillStyle = 'rgba(0,0,0,0.30)';
-    ctx.beginPath();
-    ctx.ellipse(cx + 1, cy + profile.shadowY, profile.shadowW, profile.shadowH, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (sprite) {
-      const dw = Math.max(10, Math.round(profile.w));
-      const dh = Math.max(8, Math.round(profile.h));
-      const dx = Math.round(cx - dw * 0.5);
-      const dy = Math.round(cy - dh * profile.anchor);
-      ctx.drawImage(sprite, dx, dy, dw, dh);
-    } else {
-      switch (spriteType) {
-        case 'city': this._castle(ctx, cx, cy, T * 0.48, factionColor, 'city'); break;
-        case 'town': this._castle(ctx, cx, cy, T * 0.34, factionColor, 'town'); break;
-        case 'fort': this._castle(ctx, cx, cy, T * 0.28, factionColor, 'fort'); break;
-        default: this._village(ctx, cx, cy, T * 0.29, factionColor);
-      }
-    }
-    ctx.restore();
-
-    this._label(ctx, cx, cy + profile.labelY, settlement.name, 'rgba(255,248,200,0.97)');
-  }
-
-  _settlementVisualProfile(type, T) {
-    const scale = 3.0;
-    switch (type) {
-      case 'city':
-        return { w: T * 2.48 * scale, h: T * 1.72 * scale, anchor: 0.84, labelY: T * 0.66 * scale, shadowW: T * 0.82 * scale, shadowH: T * 0.21 * scale, shadowY: T * 0.34 * scale };
-      case 'town':
-        return { w: T * 2.06 * scale, h: T * 1.46 * scale, anchor: 0.83, labelY: T * 0.56 * scale, shadowW: T * 0.70 * scale, shadowH: T * 0.18 * scale, shadowY: T * 0.31 * scale };
-      case 'fort':
-        return { w: T * 1.80 * scale, h: T * 1.25 * scale, anchor: 0.82, labelY: T * 0.50 * scale, shadowW: T * 0.62 * scale, shadowH: T * 0.16 * scale, shadowY: T * 0.28 * scale };
-      default:
-        return { w: T * 1.58 * scale, h: T * 1.08 * scale, anchor: 0.80, labelY: T * 0.44 * scale, shadowW: T * 0.55 * scale, shadowH: T * 0.15 * scale, shadowY: T * 0.25 * scale };
-    }
-  }
-
-  _drawSettlementGroundBlend(ctx, cx, cy, profile, T, tx, ty, factionColor) {
-    const baseW = profile.shadowW * 1.08;
-    const baseH = profile.shadowH * 1.45;
-    const baseY = cy + profile.shadowY * 1.02;
-    ctx.fillStyle = 'rgba(45,31,15,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(cx + 2, baseY + 2, baseW, baseH, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(122,90,52,0.34)';
-    ctx.beginPath();
-    ctx.ellipse(cx, baseY, baseW * 0.96, baseH * 0.88, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const roadW = Math.max(4, profile.shadowW * 0.18);
-    const roadH = Math.max(8, profile.shadowY * 0.44);
-    ctx.fillStyle = 'rgba(144,110,68,0.42)';
-    ctx.fillRect(Math.round(cx - roadW * 0.5), Math.round(baseY + baseH * 0.10), Math.round(roadW), Math.round(roadH));
-    ctx.fillStyle = 'rgba(186,150,102,0.36)';
-    ctx.fillRect(Math.round(cx - roadW * 0.2), Math.round(baseY + baseH * 0.10), Math.max(2, Math.round(roadW * 0.34)), Math.round(roadH));
-
-    const bushCount = 3 + Math.floor(tileRand(tx, ty, 11117) * 3);
-    const palIdx = Math.floor(tileRand(tx, ty, 11119) * MapRenderer.TREE_PALETTES.length);
-    for (let i = 0; i < bushCount; i++) {
-      const angle = tileRand(tx, ty, 11131 + i * 3) * Math.PI * 2;
-      const rad = baseW * (0.60 + tileRand(tx, ty, 11132 + i * 3) * 0.36);
-      const bx = cx + Math.cos(angle) * rad;
-      const by = baseY + Math.sin(angle) * baseH * 0.68;
-      this._drawBushCluster(ctx, bx, by, T * (0.11 + tileRand(tx, ty, 11133 + i * 3) * 0.05), 0, 2, palIdx);
-    }
-
-    ctx.strokeStyle = shade(factionColor || '#808080', 0.10);
-    ctx.globalAlpha = 0.18;
-    ctx.lineWidth = Math.max(1, T * 0.05);
-    ctx.beginPath();
-    ctx.ellipse(cx, baseY - baseH * 0.06, baseW * 0.80, baseH * 0.62, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  _getSettlementSprite(type, factionColor) {
-    const key = `${type}:${factionColor || 'neutral'}`;
-    if (this._settlementSpriteCache.has(key)) return this._settlementSpriteCache.get(key);
-    const sprite = this._buildSettlementSprite(type, factionColor);
-    this._settlementSpriteCache.set(key, sprite || null);
-    return sprite;
-  }
-
-  _buildSettlementSprite(type, factionColor) {
-    if (typeof document === 'undefined') return null;
-    const dims = {
-      city: [74, 52],
-      town: [62, 45],
-      fort: [54, 40],
-      village: [48, 34],
-    }[type] || [48, 34];
-    const [w, h] = dims;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const cctx = canvas.getContext('2d');
-    if (!cctx) return null;
-    cctx.imageSmoothingEnabled = false;
-
-    const pal = H3_SETTLEMENT_PALETTE;
-    const roofMain = type === 'village' ? pal.woodLight : pal.roofMid;
-    const roofLight = type === 'village' ? shade(pal.woodLight, 0.14) : pal.roofLight;
-    const roofDark = type === 'village' ? pal.woodMid : pal.roofDark;
-    const wallMain = type === 'village' ? pal.plaster : pal.stoneMid;
-    const wallDark = type === 'village' ? shade(pal.plaster, -0.20) : pal.stoneDark;
-    const wallLight = type === 'village' ? shade(pal.plaster, 0.10) : pal.stoneLight;
-
-    this._drawSpriteRect(cctx, 'rgba(0,0,0,0.18)', 6, h - 8, w - 12, 5);
-    this._drawSpriteRect(cctx, pal.pathDark, Math.floor(w * 0.44), h - 10, Math.max(6, Math.floor(w * 0.15)), 9);
-    this._drawSpriteRect(cctx, pal.pathLight, Math.floor(w * 0.47), h - 9, Math.max(3, Math.floor(w * 0.08)), 8);
-
-    if (type === 'city') {
-      this._drawSpriteTower(cctx, 7, 14, 12, 24, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteTower(cctx, 31, 8, 12, 29, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteTower(cctx, 55, 14, 12, 24, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteRect(cctx, wallMain, 14, 20, 46, 17);
-      this._drawSpriteDither(cctx, 14, 20, 46, 17, wallLight, wallDark, 0);
-      this._drawSpriteCrenels(cctx, 14, 20, 46, wallLight, wallDark);
-      this._drawSpriteRect(cctx, 'rgba(20,20,20,0.7)', 33, 28, 8, 9);
-      this._drawSpriteHouse(cctx, 17, 31, 12, 8, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteHouse(cctx, 47, 31, 11, 8, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteRect(cctx, pal.pathDark, 35, 37, 5, 9);
-      this._drawSpriteRect(cctx, pal.pathLight, 36, 37, 2, 9);
-      this._drawSpritePennant(cctx, 37, 7, factionColor);
-    } else if (type === 'town') {
-      this._drawSpriteTower(cctx, 9, 16, 11, 19, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteTower(cctx, 42, 16, 11, 19, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteRect(cctx, wallMain, 17, 20, 30, 15);
-      this._drawSpriteDither(cctx, 17, 20, 30, 15, wallLight, wallDark, 1);
-      this._drawSpriteCrenels(cctx, 17, 20, 30, wallLight, wallDark);
-      this._drawSpriteRect(cctx, 'rgba(20,20,20,0.68)', 28, 27, 7, 8);
-      this._drawSpriteHouse(cctx, 21, 31, 10, 7, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteHouse(cctx, 37, 31, 10, 7, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpritePennant(cctx, 31, 15, factionColor);
-    } else if (type === 'fort') {
-      this._drawSpriteTower(cctx, 20, 9, 14, 24, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark);
-      this._drawSpriteRect(cctx, wallMain, 10, 21, 34, 12);
-      this._drawSpriteDither(cctx, 10, 21, 34, 12, wallLight, wallDark, 2);
-      this._drawSpriteCrenels(cctx, 10, 21, 34, wallLight, wallDark);
-      this._drawSpriteRect(cctx, 'rgba(20,20,20,0.68)', 24, 26, 6, 7);
-      this._drawSpritePennant(cctx, 27, 8, factionColor);
-    } else {
-      this._drawSpriteHouse(cctx, 9, 18, 13, 10, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteHouse(cctx, 25, 16, 14, 11, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteHouse(cctx, 16, 23, 12, 8, pal.plaster, pal.woodDark, pal.woodMid, pal.woodLight);
-      this._drawSpriteRect(cctx, shade(pal.woodDark, -0.12), 5, 27, 38, 2);
-      this._drawSpriteRect(cctx, shade(pal.woodMid, 0.08), 6, 28, 36, 1);
-      this._drawSpritePennant(cctx, 31, 15, factionColor);
-    }
-
-    this._drawSpriteRect(cctx, pal.outline, 0, h - 1, w, 1);
-    return canvas;
-  }
-
-  _drawSpriteRect(ctx, color, x, y, w, h) {
-    const rx = Math.round(x);
-    const ry = Math.round(y);
-    const rw = Math.max(1, Math.round(w));
-    const rh = Math.max(1, Math.round(h));
-    ctx.fillStyle = color;
-    ctx.fillRect(rx, ry, rw, rh);
-  }
-
-  _drawSpriteDither(ctx, x, y, w, h, colorA, colorB, seed = 0) {
-    const sx = Math.round(x);
-    const sy = Math.round(y);
-    const ex = sx + Math.max(1, Math.round(w));
-    const ey = sy + Math.max(1, Math.round(h));
-    for (let yy = sy; yy < ey; yy++) {
-      for (let xx = sx; xx < ex; xx++) {
-        ctx.fillStyle = (((xx + yy + seed) & 1) === 0) ? colorA : colorB;
-        ctx.fillRect(xx, yy, 1, 1);
-      }
-    }
-  }
-
-  _drawSpriteCrenels(ctx, x, y, w, light, dark) {
-    const sx = Math.round(x);
-    const sy = Math.round(y);
-    const width = Math.max(2, Math.round(w));
-    for (let i = 0; i < width; i += 4) {
-      this._drawSpriteRect(ctx, light, sx + i, sy - 2, Math.min(2, width - i), 2);
-    }
-    this._drawSpriteRect(ctx, dark, sx, sy + 1, width, 1);
-  }
-
-  _drawSpriteTower(ctx, x, y, w, h, wallMain, wallLight, wallDark, roofMain, roofLight, roofDark) {
-    this._drawSpriteRect(ctx, wallMain, x, y, w, h);
-    this._drawSpriteDither(ctx, x, y, w, h, wallLight, wallDark, 0);
-    this._drawSpriteCrenels(ctx, x, y, w, wallLight, wallDark);
-    this._drawSpriteRect(ctx, wallDark, x, y + h - 1, w, 1);
-    this._drawSpriteRect(ctx, 'rgba(0,0,0,0.55)', x + Math.floor(w * 0.38), y + Math.floor(h * 0.34), Math.max(2, Math.floor(w * 0.22)), Math.max(4, Math.floor(h * 0.44)));
-
-    const cx = x + Math.floor(w * 0.5);
-    const roofH = Math.max(4, Math.floor(w * 0.95));
-    ctx.fillStyle = roofDark;
-    ctx.beginPath();
-    ctx.moveTo(x - 1, y);
-    ctx.lineTo(cx, y - roofH);
-    ctx.lineTo(x + w + 1, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = roofMain;
-    ctx.beginPath();
-    ctx.moveTo(x, y + 1);
-    ctx.lineTo(cx, y - roofH + 1);
-    ctx.lineTo(x + w, y + 1);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = roofLight;
-    ctx.beginPath();
-    ctx.moveTo(cx, y - roofH + 1);
-    ctx.lineTo(x + Math.floor(w * 0.45), y + 1);
-    ctx.lineTo(x + Math.floor(w * 0.67), y + 1);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  _drawSpriteHouse(ctx, x, y, w, h, wallColor, roofBase, roofMid, roofLight) {
-    this._drawSpriteRect(ctx, wallColor, x, y, w, h);
-    this._drawSpriteRect(ctx, shade(wallColor, -0.18), x, y + h - 1, w, 1);
-    this._drawSpriteRect(ctx, 'rgba(30,20,10,0.62)', x + Math.floor(w * 0.42), y + Math.floor(h * 0.42), Math.max(2, Math.floor(w * 0.18)), Math.max(3, Math.floor(h * 0.58)));
-
-    const cx = x + Math.floor(w * 0.5);
-    const roofH = Math.max(3, Math.floor(h * 0.82));
-    ctx.fillStyle = roofBase;
-    ctx.beginPath();
-    ctx.moveTo(x - 1, y);
-    ctx.lineTo(cx, y - roofH);
-    ctx.lineTo(x + w + 1, y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = roofMid;
-    ctx.beginPath();
-    ctx.moveTo(x, y + 1);
-    ctx.lineTo(cx, y - roofH + 1);
-    ctx.lineTo(x + w, y + 1);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = roofLight;
-    ctx.beginPath();
-    ctx.moveTo(cx, y - roofH + 1);
-    ctx.lineTo(x + Math.floor(w * 0.45), y + 1);
-    ctx.lineTo(x + Math.floor(w * 0.62), y + 1);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  _drawSpritePennant(ctx, x, y, color) {
-    const flagColor = color || '#c0392b';
-    this._drawSpriteRect(ctx, '#3b2816', x, y - 5, 1, 6);
-    this._drawSpriteRect(ctx, shade(flagColor, -0.10), x + 1, y - 5, 5, 3);
-    this._drawSpriteRect(ctx, flagColor, x + 1, y - 4, 5, 2);
-    this._drawSpriteRect(ctx, shade(flagColor, 0.18), x + 2, y - 4, 2, 1);
-    this._drawSpriteRect(ctx, 'rgba(255,255,255,0.55)', x + 2, y - 3, 1, 1);
-  }
-
-  // Kale (şehir/kasaba/kale)
-  _castle(ctx, cx, cy, s, color, type) {
-    const isCity = type === 'city';
-
-    // Zemin gölgesi
-    ctx.fillStyle = 'rgba(0,0,0,0.26)';
-    ctx.beginPath(); ctx.ellipse(cx + 2, cy + s * 0.48, s * 1.15, s * 0.26, 0, 0, Math.PI * 2); ctx.fill();
-
-    const wallC  = shade(color, -0.28);
-    const towerC = shade(color, -0.10);
-    const capC   = shade(color,  0.18);
-
-    // Perde duvarı
-    const ww = s * (isCity ? 1.9 : 1.55);
-    const wh = s * 0.62;
-    const wl = cx - ww / 2;
-    const wt = cy - s * 0.08;
-
-    ctx.fillStyle = wallC;
-    ctx.fillRect(wl, wt, ww, wh);
-    this._crenels(ctx, wl, wt, ww, s * 0.13, capC);
-
-    // Kuleler
-    const tW = s * (isCity ? 0.40 : 0.33);
-    const tH = s * (isCity ? 1.05 : 0.88);
-    const tPositions = isCity
-      ? [wl - tW * 0.28, cx - tW / 2, wl + ww - tW * 0.72]
-      : [wl - tW * 0.28, wl + ww - tW * 0.72];
-
-    for (const tx of tPositions) {
-      const tt = cy - tH * 0.55;
-      ctx.fillStyle = towerC;
-      ctx.fillRect(tx, tt, tW, tH);
-      this._crenels(ctx, tx, tt, tW, s * 0.14, capC);
-
-      // Ok penceresi
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillRect(tx + tW * 0.36, tt + tH * 0.26, tW * 0.14, tH * 0.24);
-    }
-
-    // Kapı kemeri
-    const gw = s * 0.28, gh = s * 0.33;
-    const gx = cx - gw / 2;
-    const gb = wt + wh;
-    ctx.fillStyle = 'rgba(0,0,0,0.62)';
-    ctx.beginPath();
-    ctx.moveTo(gx, gb);
-    ctx.lineTo(gx, gb - gh * 0.55);
-    ctx.arc(cx, gb - gh * 0.55, gw / 2, Math.PI, 0);
-    ctx.lineTo(gx + gw, gb);
-    ctx.closePath(); ctx.fill();
-
-    // Kale bayrağı (orta kule üzerinde)
-    const flagTX = isCity ? tPositions[1] + tW / 2 : tPositions[0] + tW / 2;
-    const flagTY = cy - tH * 0.55;
-    this._pennant(ctx, flagTX, flagTY, s * 0.13, s * 0.22, color);
-
-    // Dış çizgi
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 1;
-    for (const tx of tPositions) ctx.strokeRect(tx, cy - tH * 0.55, tW, tH);
-    ctx.strokeRect(wl, wt, ww, wh);
-  }
-
-  // Merlon (diş) çizimi
-  _crenels(ctx, x, y, width, mh, color) {
-    const n = Math.max(2, Math.floor(width / (mh * 1.5)));
-    const sw = width / (n * 2);
-    ctx.fillStyle = color;
-    for (let i = 0; i < n; i++) ctx.fillRect(x + i * sw * 2, y - mh, sw, mh);
-  }
-
-  // Köy
-  _village(ctx, cx, cy, s, color) {
-    ctx.fillStyle = 'rgba(0,0,0,0.20)';
-    ctx.beginPath(); ctx.ellipse(cx + 1, cy + s * 0.58, s * 0.88, s * 0.22, 0, 0, Math.PI * 2); ctx.fill();
-
-    const wallC = shade(color, -0.18);
-    const roofC = shade(color,  0.22);
-    const houses = [
-      { ox: -s * 0.50, oy: s * 0.14 },
-      { ox:  s * 0.50, oy: s * 0.14 },
-      { ox:  0,        oy: -s * 0.12 },
-    ];
-    for (const h of houses) {
-      const hx = cx + h.ox, hy = cy + h.oy;
-      const hw = s * 0.38, hh = s * 0.33;
-      // Duvar
-      ctx.fillStyle = wallC;
-      ctx.fillRect(hx - hw / 2, hy - hh / 2, hw, hh);
-      // Çatı
-      ctx.fillStyle = roofC;
-      ctx.beginPath();
-      ctx.moveTo(hx, hy - hh / 2 - hh * 0.46);
-      ctx.lineTo(hx + hw / 2 + hw * 0.09, hy - hh / 2 + 1);
-      ctx.lineTo(hx - hw / 2 - hw * 0.09, hy - hh / 2 + 1);
-      ctx.closePath(); ctx.fill();
-      // Kapı
-      ctx.fillStyle = 'rgba(0,0,0,0.48)';
-      ctx.fillRect(hx - hw * 0.10, hy - hh / 2 + hh * 0.44, hw * 0.20, hh * 0.52);
-    }
-    // Çit
-    ctx.strokeStyle = shade(color, -0.32);
-    ctx.lineWidth = 1.2;
-    ctx.setLineDash([s * 0.12, s * 0.08]);
-    ctx.beginPath(); ctx.arc(cx, cy, s * 0.74, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // Küçük üçgen bayrak (kale kulesi için)
-  _pennant(ctx, x, y, poleH, fw, color) {
-    const fh = fw * 0.52;
-    ctx.strokeStyle = '#5c4020'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - poleH); ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x, y - poleH);
-    ctx.lineTo(x + fw, y - poleH + fh * 0.45);
-    ctx.lineTo(x, y - poleH + fh);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = shade(color, 0.28); ctx.lineWidth = 0.8; ctx.stroke();
-  }
-
   // ══════════════════════════════════════════════════════════════════════════
-  // ── Lord Partisi (M&B süvari banner stili) ───────────────────────────────
+  // ── Şehir Çizim Sistemi (Ana Harita) ────────────────────────────────────
   // ══════════════════════════════════════════════════════════════════════════
 
   _drawLordParty(ctx, party, T) {
@@ -2020,12 +1549,9 @@ export class MapRenderer {
   drawTile(ctx, tile, x, y, T, fog, map) { this._drawTile(ctx, tile, x, y, T, fog, map); }
   drawRivers(ctx, rivers, T)  { this._drawRivers(ctx, rivers, T); }
   drawRoads(ctx, roads, T)    { this._drawRoads(ctx, roads, T); }
-  drawSettlement(ctx, s, T)   { this._drawSettlement(ctx, s, T); }
+  drawSettlement(_ctx, _s, _T) {}
   drawAIParty(ctx, p, T)      { this._drawLordParty(ctx, p, T); }
   drawPlayer(ctx, pl, T)      { this._drawPlayerParty(ctx, pl, T); }
 }
 
 export default MapRenderer;
-
-
-

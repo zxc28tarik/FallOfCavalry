@@ -16,9 +16,9 @@ import { emitContractEvent } from '../systems/contracts.js';
 import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
-import * as utils from '../utils.js';
 import { BattleFxManager } from './BattleFxManager.js';
 import { BattleRosterManager } from './BattleRosterManager.js';
+import { ensureModeManager } from '../core/ModeManager.js';
 
 class ObjectPool {
   constructor(size, factory, resetter = null) {
@@ -56,6 +56,8 @@ export class BattleManager {
     this.enemyUnitsById = {};
     this.fxManager = null;
     this.rosterManager = null;
+    this.battlePhase = null;
+    this.battleResult = null;
   }
 
   init(game) {
@@ -290,6 +292,7 @@ export class BattleManager {
     const battle = this.state?.battle;
     if (!battle || this.state?.mode !== 'battle') return false;
     if (battle.phase === 'deploy' && this.battleDeployMode?.active) return false;
+    if (battle.phase !== 'active') return false;
     const playerUnits = battle.playerUnits || [];
     const selectedId = this.state?.battle?.selection?.unitId || null;
     const targets = selectedId ? playerUnits.filter((u) => u.unitId === selectedId) : playerUnits;
@@ -347,6 +350,11 @@ export class BattleManager {
       return;
     }
 
+    if (battle.phase === 'result') {
+      this.game?.updateTransientUIState?.();
+      return;
+    }
+
     if (battle.phase === 'deploy' && this.battleDeployMode?.active) {
       this.game?.updateTransientUIState?.();
       return;
@@ -391,7 +399,9 @@ export class BattleManager {
     }
     const allUnits = [...playerUnits, ...enemyUnits];
     const dtSec = deltaMs / 1000;
-    tickWeatherLayer(dtSec, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
+    if (CONST.DIMETRIC?.ENABLE_WEATHER_EFFECTS === true) {
+      tickWeatherLayer(dtSec, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
+    }
     for (const unit of allUnits) {
       const allies = unit?.side === 'enemy' ? enemyUnits : playerUnits;
       const cohesion = computeUnitCohesion(unit, allies, formationTuning.COHESION_RADIUS, formationTuning.COHESION_ALLY_CAP);
@@ -617,7 +627,7 @@ export class BattleManager {
   resolveBattle(result) {
     if (!this.state || this.state.mode !== 'battle') return false;
     const battle = this.state.battle;
-    if (!battle?.enemyId || battle.result || this.state.aftermath) return false;
+    if (!battle?.enemyId || battle.result || battle.battleResult) return false;
 
     const enemyId = battle.enemyId;
     battle.result = result;
@@ -646,9 +656,11 @@ export class BattleManager {
       : { gold: 0, items: [] };
 
     const playerParty = this.game?.playerParty;
-    if (playerParty) playerParty.gold = (playerParty.gold ?? 0) + Number(lootReward.gold ?? 0);
+    if (playerParty && Number(lootReward.gold ?? 0) !== 0) {
+      this.game?.worldManager?.applyEffect?.({ type: 'change_player_gold', amount: Number(lootReward.gold ?? 0) });
+    }
     for (const item of lootReward.items || []) {
-      const id = item?.id === 'food' ? 'grain' : item?.id;
+      const id = item?.id === 'food' ? 'wheat' : (CONST.normalizeTradeGoodId?.(item?.id) || item?.id);
       this.game?.addItem?.(id, this.game?.getItemName?.(id), Math.max(1, Math.floor(item?.qty ?? 1)));
     }
 
@@ -674,7 +686,9 @@ export class BattleManager {
         routingInfo: { manyRouted },
       })
       : 0;
-    if (playerParty) playerParty.renown = (playerParty.renown ?? 0) + renownDelta;
+    if (playerParty && renownDelta !== 0) {
+      this.game?.worldManager?.applyEffect?.({ type: 'change_player_reputation', amount: renownDelta });
+    }
 
     applyBattleOutcomeToRelations({
       state: this.state.factions,
@@ -712,14 +726,21 @@ export class BattleManager {
       if (taken) this.game?.setLastEventLog?.(`City captured: ${nearCity.name || nearCity.id}`);
     }
 
-    this.state.aftermath = {
+    this.battlePhase = 'result';
+    battle.phase = 'result';
+    this.battleResult = {
+      winner: result === 'victory' ? 'player' : 'enemy',
       result,
       enemyId,
       enemyFactionId: battle.enemyFactionId || CONST.FACTION.ID.BANDITS,
+      playerLosses: dead,
+      enemyLosses: [],
       dead,
       wounded,
       casualties: { dead: dead.length, wounded: wounded.length, survivors: Math.max(0, (playerParty?.roster || []).length) },
       loot: lootReward.items || [],
+      xpGain: 0,
+      reputationChange: renownDelta,
       goldDelta: lootReward.gold || 0,
       renownDelta,
       renownTotal: playerParty?.renown ?? 0,
@@ -727,8 +748,12 @@ export class BattleManager {
       routing: { manyRouted, routedCount: routingCount, totalUnits: (battle.playerUnits || []).length },
       timestamp: Date.now(),
     };
-    this.state.uiPanel = this.game?.buildAftermathPanelData?.();
-    this.state.setMode('aftermath');
+    battle.battleResult = this.battleResult;
+    this.state.uiPanel = this.game?.buildBattleResultPanelData?.();
+    this.battleCommandsUI?.hide?.();
+    this.battleDeployUI?.hide?.();
+    this.battleDeployMode = null;
+    this.state.emit?.('battle:phase:changed', { phase: 'result' });
     this.game?.updateTransientUIState?.();
     return true;
   }
@@ -750,7 +775,7 @@ export class BattleManager {
     };
 
     if (result === 'victory') {
-      push('grain', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
+      push('wheat', 1 + Math.floor(infantryCount / 2) + Math.floor(Math.random() * 2));
       push('leather', Math.max(1, Math.floor(infantryCount / 2)));
       if (archerCount > 0) {
         push('arrows', 2 + Math.floor(archerCount * 1.5));
@@ -758,7 +783,7 @@ export class BattleManager {
       }
       if (Math.random() < 0.2) push('iron', 1 + Math.floor(unitScale / 3));
     } else {
-      push('grain', Math.max(1, Math.floor(unitScale / 2)));
+      push('wheat', Math.max(1, Math.floor(unitScale / 2)));
       if (archerCount > 0) push('arrows', 1 + Math.floor(archerCount / 2));
     }
 
@@ -795,30 +820,34 @@ export class BattleManager {
       if (this.game) this.game.encounterManager.encounterPushbackDistance = previousDistance;
     }
 
-    if (this.game) this.game.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
+    if (this.game?.worldManager) {
+      this.game.worldManager.lastEncounterEndTimeByEnemyId = this.game.worldManager.lastEncounterEndTimeByEnemyId || {};
+      this.game.worldManager.lastEncounterEndTimeByEnemyId[enemyId] = Date.now();
+    }
     this.state.battle = null;
     this.battleCommandsUI?.hide?.();
     this.battleDeployUI?.hide?.();
     this.battleDeployMode = null;
   }
 
-  // ─── Phase 8A: Roster → battle transition ──────────────────────────────────
+  // Phase 8A: Roster to battle transition
 
   confirmRosterSelection() { return this.rosterManager.confirmRosterSelection(); }
 
-  exitAftermathToMap(takeLoot = true) {
+  exitBattleResultToMap(takeLoot = true) {
     const g = this.game;
-    if (!this.state || this.state.mode !== 'aftermath' || !this.state.aftermath) return false;
-    const aftermath = this.state.aftermath;
-    const enemyId = aftermath.enemyId;
-    const result = aftermath.result;
+    const battle = this.state?.battle;
+    const battleResult = battle?.battleResult || this.battleResult;
+    if (!this.state || this.state.mode !== 'battle' || battle?.phase !== 'result' || !battleResult) return false;
+    const enemyId = battleResult.enemyId;
+    const result = battleResult.result;
     const enemy = g.worldManager.enemyParties.find((party) => party?.id === enemyId) || null;
     const linkedWorldPartyId = g.worldManager.worldEncounterPartyByEnemyId?.[enemyId] || null;
 
     if (takeLoot) {
-      g.gameFlowManager.setLastEventLog(`Aftermath: +${aftermath.goldDelta ?? 0}g, +${aftermath.renownDelta ?? 0} renown`);
+      g.gameFlowManager.setLastEventLog(`Battle result: +${battleResult.goldDelta ?? 0}g, +${battleResult.renownDelta ?? 0} renown`);
     } else {
-      g.gameFlowManager.setLastEventLog('Aftermath continued');
+      g.gameFlowManager.setLastEventLog('Battle result continued');
     }
 
     if (linkedWorldPartyId) {
@@ -852,23 +881,24 @@ export class BattleManager {
           cfg: CONST.DIPLOMACY_ACTIONS,
         });
       }
-      const enemyFaction = aftermath.enemyFactionId || CONST.FACTION.ID.BANDITS;
+      const enemyFaction = battleResult.enemyFactionId || CONST.FACTION.ID.BANDITS;
       emitContractEvent({ type: 'BATTLE_WON', enemyFaction, regionId, locationCityId, isTargetLeader }, g.playerParty);
       g.worldManager.cleanupTemporaryEnemy(enemyId, { force: true });
-      g.battleManager.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
+      this.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     } else if (result === 'defeat') {
       g.worldManager.cancelPlayerDestination();
       g.worldManager.cleanupTemporaryEnemy(enemyId);
-      g.battleManager.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
+      this.applyBattleExit(enemy, enemyId, this.defeatPushbackDistance);
     } else {
       g.worldManager.cleanupTemporaryEnemy(enemyId);
-      g.battleManager.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
+      this.applyBattleExit(enemy, enemyId, g.encounterManager.encounterPushbackDistance);
     }
 
     this.state.uiPanel = null;
-    this.state.aftermath = null;
-    this.state.setMode('map');
-    g.saveManager.runAutosave('aftermath-close');
+    this.battleResult = null;
+    this.battlePhase = null;
+    ensureModeManager(this.state)?.switchTo(ensureModeManager(this.state)?.getReturnTarget?.() || 'map');
+    g.saveManager.runAutosave('battle-result-close');
     return true;
   }
 }

@@ -1,0 +1,13 @@
+{
+  "mode": "battle",
+  "battlePhase": "active",
+  "hasBattle": true,
+  "playerUnits": 2,
+  "enemyUnits": 2,
+  "canvas": {
+    "width": 1366,
+    "height": 768
+  },
+  "consoleErrors": [],
+  "pageErrors": []
+}

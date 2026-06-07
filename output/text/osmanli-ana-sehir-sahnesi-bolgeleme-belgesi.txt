@@ -1,0 +1,270 @@
+OSMANLI ANA SEHIR SAHNESI BOLGELEME BELGESI
+
+AMAC
+Bu belge, Osmanli ana sehir gorselini cizecek kisi icin hazirlanmistir.
+Amac, yaklasik 30 farkli yapinin 30 ayri noktaya dagitilmis sekilde degil,
+okunabilir ve oyun icinde calisabilir bir sehir kompozisyonu icinde
+organize edilmesidir.
+
+Bu nedenle ana sehir sahnesi:
+- 12 ana bolge
+- 7 bos gelisim arazisi
+- 1 ana meydan / kamusal acik alan
+mantigiyla kurulmalidir.
+
+
+TEMEL KURAL
+Sehir tamamen dolu gorunmemelidir.
+Bazi alanlar bilerek bos, yari bos, avlulu, sert zeminli veya dusuk
+yogunluklu birakilmalidir.
+Bunun nedeni, ileride bu alanlara bina overlaylerinin oturtulacak olmasidir.
+
+
+ANA KOMPOZISYON MANTIGI
+- Arka ust bolum: ic kale, saray, devlet cekirdegi
+- Orta bolum: ticaret ve kamusal merkez
+- Yan ve alt bantlar: mahalleler ve uretim alanlari
+- Alt on bant: destek yapilari, lojistik, dusuk yogunluklu genisleme alanlari
+
+
+12 ANA BOLGE
+
+1. IC KALE BOLGESI
+Konum:
+- Arka ust sag
+Icerik:
+- Ic kale
+Cizim notu:
+- Sehrin en baskin savunma cekirdegi
+
+2. SARAY VE YONETIM CEKIRDEGI
+Konum:
+- Arka ust orta
+Icerik:
+- Saray
+- Divan
+- Vergi / idare alani
+- Baskent muhafiz alani
+Cizim notu:
+- Devlet merkezi
+- Daha duzenli ve agirbasli gorunmeli
+
+3. ASKERI HAT
+Konum:
+- Ust sol
+Icerik:
+- Kisla
+Cizim notu:
+- Disiplinli
+- Kapali
+- Duzenli
+
+4. MERKEZI TICARET CEKIRDEGI
+Konum:
+- Orta merkez
+Icerik:
+- Bedesten
+Cizim notu:
+- Sehrin ekonomik kalbi
+
+5. HANLAR VE KERVAN HATTI
+Konum:
+- Orta sag
+Icerik:
+- Tuccar hani
+- Kervansaray
+Cizim notu:
+- Transit hareket ve ticaret akisi burada hissedilmeli
+
+6. SAGLIK VE KAMUSAL BOLGE
+Konum:
+- Orta sol-alt
+Icerik:
+- Darussifa
+- Hamam
+Cizim notu:
+- Temiz
+- Sakin
+- Duzenli
+
+7. MEYDAN VE TOREN ALANI
+Konum:
+- Alt orta
+Icerik:
+- At meydani / kamusal acik alan
+Cizim notu:
+- Genis acik alan
+- Bilerek bosluk tasimali
+
+8. FAKIR MAHALLE
+Konum:
+- Alt sol
+Icerik:
+- Fakir konutlar
+- Fakir mahalle
+Cizim notu:
+- Sikisik
+- Sade
+- Yogun
+
+9. ORTA MAHALLE
+Konum:
+- Alt orta-sag
+Icerik:
+- Orta sinif konutlar
+- Orta mahalle
+Cizim notu:
+- Daha duzenli
+- Daha dengeli
+
+10. UST ZUMRE / KONAK BOLGESI
+Konum:
+- Alt sag
+Icerik:
+- Konaklar
+- Ust sinif mahalle
+Cizim notu:
+- Ferah
+- Prestijli
+- Genis
+
+11. URETIM VE KIRLI ZANAAT BOLGESI
+Konum:
+- Sol orta ve sol alt bant
+Icerik:
+- Tabakhane
+- Demirci
+- Marangoz
+- Dokuma
+Cizim notu:
+- Daha agir
+- Daha ham
+- Prestijden uzak
+
+12. GIDA, LOJISTIK VE KENAR ALTYAPISI
+Konum:
+- Alt bant
+Icerik:
+- Firin
+- Degirmen
+- Ahir
+- Ambar
+- Lonca
+- Elcilik
+- Tersane
+Cizim notu:
+- Destek hatti
+- Kenarda
+- Okunur yerlestim
+
+
+7 BOS GELISIM ARAZISI
+Bu alanlar base scene icinde simdilik bos gorunmelidir.
+Ama cizer, gelecekte ne tur yapilarin buralara gelebilecegini bilmelidir.
+
+1. YONETIM REZERVI
+Konum:
+- Saray / divan cevresi
+Gelecekte oturabilecek yapi:
+- Vergi dairesi
+- Ileri idare yapisi
+Base scene'de nasil gorunmeli:
+- Acik avlu
+- Taslik
+- Duvar ici bos parsel
+
+2. BASKENT MUHAFIZ REZERVI
+Konum:
+- Saray yakini
+Gelecekte oturabilecek yapi:
+- Bostancilar karargahi
+Base scene'de nasil gorunmeli:
+- Bos talim alani
+- Muhafiz avlusu
+
+3. TICARET REZERVI
+Konum:
+- Bedesten ile han hatti arasi
+Gelecekte oturabilecek yapi:
+- Lonca konagi
+- Ikinci ticaret yapisi
+Base scene'de nasil gorunmeli:
+- Yari bos pazar uzantisi
+- Sert zemin
+
+4. KERVAN REZERVI
+Konum:
+- Han / kervansaray cevresi
+Gelecekte oturabilecek yapi:
+- Kervansaray
+Base scene'de nasil gorunmeli:
+- Bos kervan avlusu
+- Yuk bosaltma alani
+
+5. FAKIR MAHALLE GENISLEME REZERVI
+Konum:
+- Fakir mahalle kenari
+Gelecekte oturabilecek yapi:
+- Fakir evler
+- Fakir mahalle genislemesi
+Base scene'de nasil gorunmeli:
+- Bos toprak
+- Dusuk yogunluklu acik alan
+
+6. ORTA / ZENGIN KONUT REZERVI
+Konum:
+- Orta mahalle veya konak cevresi
+Gelecekte oturabilecek yapi:
+- Orta evler
+- Mahalle
+- Konak
+Base scene'de nasil gorunmeli:
+- Bahceli veya avlulu bos arsa
+
+7. LIMAN / DIPLOMASI REZERVI
+Konum:
+- Alt sag kenar
+Gelecekte oturabilecek yapi:
+- Tersane
+- Elcilik
+Base scene'de nasil gorunmeli:
+- Kiyi boslugu
+- Servis avlusu
+- Acik duzluk
+
+
+SABIT DOLU GIBI GORUNMESI GEREKEN ALANLAR
+- Ic kale
+- Saray
+- Bedesten cevresi
+- Kisla bolgesi
+- Darussifa veya kamusal saglik cekirdegi
+- En az bir fakir mahalle kitlesi
+- En az bir orta mahalle kitlesi
+- Meydan cevresi
+
+
+BILEREK TAM DOLU CIZILMEMESI GEREKEN ALANLAR
+- Baskent muhafiz alani
+- Vergi / idare ek alani
+- Kervansaray rezervi
+- Lonca / ticaret ek alani
+- Elcilik alani
+- Tersane alani
+- Mahalle genisleme kenarlari
+
+
+SOSYAL VE ISLEVSEL AYRIM
+- Fakir bolge daha sikisik ve sade gorunmeli
+- Orta mahalle daha dengeli ve daha duzenli gorunmeli
+- Ust zumre bolgesi daha genis, daha ferah ve prestijli gorunmeli
+- Uretim bolgesi ticaret ve saray cekirdeginden ayri hissedilmeli
+- Ticaret alani merkezi ve itibarlI olmali
+- Meydan bolgesi sehir nefesi gibi calismali
+
+
+CIZER ICIN SON NOT
+Bu gorsel tam bitmis sabit sehir gibi degil, gelisebilir Osmanli sehir
+sahnesi gibi cizilmelidir.
+Sehir canli ve dolu gorunmeli; ama bazi alanlarda ileride bina
+yerlesecegi belli olan bilincli rezerv bosluklar birakilmalidir.

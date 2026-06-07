@@ -121,7 +121,7 @@ describe('BattleManager - Phase 2B', () => {
 
 describe('BattleManager - Phase 2C', () => {
   function createBM(stateOverrides = {}, gameOverrides = {}) {
-    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'fight', timeSec: 0 }, ...stateOverrides };
+    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'active', timeSec: 0 }, ...stateOverrides };
     const bm = new BattleManager(state);
     bm.init({
       settings: {},
@@ -180,14 +180,14 @@ describe('BattleManager - Phase 2C', () => {
   });
 
   it('applyBattleCommand applies to player units', () => {
-    const bm = createBM({ mode: 'battle', battle: { playerUnits: [{ unitId: 'p1', command: null, commandSpeedMult: 1, commandDefMult: 1 }], enemyUnits: [], phase: 'fight' } });
+    const bm = createBM({ mode: 'battle', battle: { playerUnits: [{ unitId: 'p1', command: null, commandSpeedMult: 1, commandDefMult: 1 }], enemyUnits: [], phase: 'active' } });
     const result = bm.applyBattleCommand('HOLD');
     expect(result).toBe(true);
   });
 
   it('toggleBattleHoldFire toggles ranged units', () => {
     const ranged = { unitId: 'r1', isRanged: true, holdFire: false };
-    const bm = createBM({ mode: 'battle', battle: { playerUnits: [ranged], enemyUnits: [], phase: 'fight', selection: {} } });
+    const bm = createBM({ mode: 'battle', battle: { playerUnits: [ranged], enemyUnits: [], phase: 'active', selection: {} } });
     bm.game.battleCommandsUI = { setToggleState: () => {} };
     const result = bm.toggleBattleHoldFire(null);
     expect(result).toBe(true);
@@ -208,7 +208,7 @@ describe('BattleManager - Phase 2C', () => {
 
 describe('BattleManager - Phase 2D', () => {
   function createBM(stateOverrides = {}, gameOverrides = {}) {
-    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'fight', timeSec: 0 }, ...stateOverrides };
+    const state = { mode: 'battle', battle: { playerUnits: [], enemyUnits: [], phase: 'active', timeSec: 0 }, ...stateOverrides };
     const bm = new BattleManager(state);
     bm.init({
       settings: {},
@@ -273,7 +273,7 @@ describe('BattleManager - Phase 2D', () => {
   });
 
   it('applyBattleExit clears battle state', () => {
-    const state = { mode: 'battle', battle: { phase: 'fight' } };
+    const state = { mode: 'battle', battle: { phase: 'active' } };
     const bm = new BattleManager(state);
     bm.init({
       worldManager: { lastEncounterEndTimeByEnemyId: {} },

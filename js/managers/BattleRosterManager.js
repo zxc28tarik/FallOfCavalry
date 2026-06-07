@@ -9,6 +9,7 @@ import BattleCommandsUI from '../ui/battle-commands.js';
 import BattleDeployMode from '../game-modes/battle-deploy-mode.js';
 import BattleDeployUI from '../ui/battle-deploy-ui.js';
 import * as utils from '../utils.js';
+import { ensureModeManager } from '../core/ModeManager.js';
 
 export class BattleRosterManager {
   constructor() { this.battle = null; this.game = null; }
@@ -193,7 +194,9 @@ export class BattleRosterManager {
     if (!battle || !this.battle.battleDeployMode?.active) return false;
     this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: true, inEncounter: false });
     this.battle.battleDeployMode.applyDeployment(battle.playerUnits || []);
-    battle.phase = 'fight';
+    battle.phase = 'active';
+    this.battle.battlePhase = 'active';
+    this.battle.state?.emit?.('battle:phase:changed', { phase: 'active' });
     this.battle.battleDeployUI?.hide?.();
     return true;
   }
@@ -204,7 +207,7 @@ export class BattleRosterManager {
     this.battle.battleDeployMode = null;
     if (this.battle.state) {
       this.battle.state.battle = null;
-      this.battle.state.setMode('map');
+      ensureModeManager(this.battle.state)?.switchTo('map');
     }
     return true;
   }
@@ -222,15 +225,19 @@ export class BattleRosterManager {
 
   confirmRosterSelection() {
     const g = this.game;
-    if (!this.battle.state || this.battle.state.mode !== 'roster') return false;
+    const battleState = this.battle.state?.battle;
+    if (!this.battle.state || this.battle.state.mode !== 'battle' || battleState?.phase !== 'deploy') return false;
     const selected = g.encounterManager.playerRoster.filter((unit) => unit.selected && g.worldManager.getEffectiveCount(unit) > 0);
     if (selected.length < 1) {
-      this.battle.state.roster.warning = 'Select at least 1 unit to deploy.';
+      battleState.warning = 'Select at least 1 unit to deploy.';
       g.worldManager.updateTransientUIState();
       return false;
     }
 
-    const enemyId = this.battle.state.roster?.enemyId ?? this.battle.state.encounter?.enemyId ?? 'enemy-unknown';
+    const enemyId = battleState?.enemyId ?? this.battle.state.encounter?.enemyId ?? 'enemy-unknown';
+    const battleContext = (battleState?.battleContext && typeof battleState.battleContext === 'object')
+      ? { ...battleState.battleContext }
+      : {};
     const enemyParty = (g.worldManager.enemyParties || []).find((party) => party?.id === enemyId) || null;
     const enemyFactionId = enemyParty?.factionId || CONST.FACTION.ID.BANDITS;
     const playerUnits = g.battleManager.createBattleUnitsFromRoster(selected, 'player');
@@ -241,7 +248,7 @@ export class BattleRosterManager {
 
     g.worldManager.cancelPlayerDestination();
     this.battle.state.encounter = null;
-    this.battle.state.roster.warning = '';
+    battleState.warning = '';
     initBattleFx(this.battle.getBattleFxConfig());
     this.battle.state.battle = {
       enemyId,
@@ -256,13 +263,15 @@ export class BattleRosterManager {
       playerAmmo: battleAmmo.ammo,
       targetRetargetTimer: 0,
       settlement: g.economyManager.getActiveSettlementForCity(),
-      context: { nearCityId: g.worldManager.findNearestCityId(g.playerParty?.x, g.playerParty?.y) },
+      context: { nearCityId: g.worldManager.findNearestCityId(g.playerParty?.x, g.playerParty?.y), ...battleContext },
+      battleContext,
+      ...battleContext,
       phase: 'deploy',
       camera: createCamera(),
     };
 
     this.battle.currentBattleTerrain = getBattleTerrainContext(this.battle.state, this.battle.state.battle);
-    this.battle.state.setMode('battle');
+    ensureModeManager(this.battle.state)?.switchTo('battle', { enemyId, phase: 'deploy', returnTarget: 'map', battleContext, ...battleContext });
     g.battleManager.battleCommandsUI?.show?.();
     g.battleManager.startBattleDeployment();
     g.worldManager.updateTransientUIState();

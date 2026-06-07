@@ -10,40 +10,40 @@ export const DIMETRIC_QUALITY_PROFILES = Object.freeze([
   Object.freeze({
     level: 1,
     lodBias: 0,
-    featureDensityScale: 0.90,
-    chunkBudgetScale: 0.92,
+    featureDensityScale: 0.96,
+    chunkBudgetScale: 0.96,
     enableBanners: true,
     enableActorOcclusionGhosts: true,
   }),
   Object.freeze({
     level: 2,
-    lodBias: 1,
-    featureDensityScale: 0.78,
-    chunkBudgetScale: 0.84,
+    lodBias: 0,
+    featureDensityScale: 0.90,
+    chunkBudgetScale: 0.90,
     enableBanners: true,
     enableActorOcclusionGhosts: true,
   }),
   Object.freeze({
     level: 3,
-    lodBias: 1,
-    featureDensityScale: 0.66,
-    chunkBudgetScale: 0.72,
-    enableBanners: false,
+    lodBias: 0,
+    featureDensityScale: 0.80,
+    chunkBudgetScale: 0.82,
+    enableBanners: true,
     enableActorOcclusionGhosts: true,
   }),
   Object.freeze({
     level: 4,
-    lodBias: 2,
-    featureDensityScale: 0.54,
-    chunkBudgetScale: 0.58,
+    lodBias: 1,
+    featureDensityScale: 0.68,
+    chunkBudgetScale: 0.68,
     enableBanners: false,
     enableActorOcclusionGhosts: false,
   }),
   Object.freeze({
     level: 5,
-    lodBias: 2,
-    featureDensityScale: 0.42,
-    chunkBudgetScale: 0.45,
+    lodBias: 1,
+    featureDensityScale: 0.56,
+    chunkBudgetScale: 0.56,
     enableBanners: false,
     enableActorOcclusionGhosts: false,
   }),
@@ -144,7 +144,7 @@ export class DimetricPerformanceManager {
   }
 
   getPressureAdjustment() {
-    if (!this.stagePressureEnabled || this.frameTimes.length === 0) return 0;
+    if (!this.stagePressureEnabled || this.frameTimes.length < 8) return 0;
 
     const avgMs = Math.max(0.01, this.getAverageFrameMs());
     const stages = this.getStageAverages();
@@ -154,12 +154,25 @@ export class DimetricPerformanceManager {
     const fxShare = fxMs / avgMs;
 
     let pressure = 0;
-    if (avgMs > 17.4) pressure += 1;
-    if (avgMs > 21.5) pressure += 1;
-    if (worldMs > 8 && worldShare > 0.62) pressure += 1;
-    else if (fxMs > 3 && fxShare > 0.28) pressure += 1;
+    if (avgMs > 20.5) pressure += 1;
+    if (avgMs > 28.0) pressure += 1;
+    if (worldMs > 10.0 && worldShare > 0.60) pressure += 1;
+    else if (fxMs > 5.5 && fxShare > 0.34) pressure += 1;
 
     return clampInt(pressure, 0, 2);
+  }
+
+  getAverageStageMs(stageName) {
+    const stage = typeof stageName === 'string' ? stageName.trim().toLowerCase() : '';
+    if (!stage) return 0;
+    return Number(this.getStageAverages()[stage]) || 0;
+  }
+
+  getFrameChunkBuildLimit() {
+    const worldMs = this.getAverageStageMs('world');
+    if (worldMs > 16) return 1;
+    if (worldMs >= 8) return 2;
+    return 4;
   }
 
   getStageAverages() {

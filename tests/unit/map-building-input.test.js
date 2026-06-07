@@ -34,7 +34,16 @@ function makeHarness(overrides = {}) {
     worldManager,
     economyManager: { enterCityServicesForSettlement: vi.fn(() => false), enterCityServices: vi.fn() },
     poiManager: { openPoiModal: vi.fn() },
-    uiManager: { toggleCampMode: vi.fn(), closeAccountingModal: vi.fn(), settingsUI: null, codexUI: null, helpOverlayVisible: false, toggleHelpOverlay: vi.fn() },
+    uiManager: {
+      toggleCampMode: vi.fn(),
+      closeAccountingModal: vi.fn(),
+      settingsUI: null,
+      codexUI: null,
+      helpOverlayVisible: false,
+      toggleHelpOverlay: vi.fn(),
+      toggleWorldMapOverlay: vi.fn(),
+      isWorldMapVisible: vi.fn(() => false),
+    },
     gameFlowManager: { setPaused: vi.fn(), togglePaused: vi.fn(), closeSettings: vi.fn(), refreshCurrentEventsSummary: vi.fn(() => []) },
     saveManager: { closeSaveLoadPanel: vi.fn(), openSaveLoadPanel: vi.fn(), quickSave: vi.fn(), quickLoad: vi.fn() },
     battleManager: { exitAftermathToMap: vi.fn(), getWoundedUnits: vi.fn(() => []) },
@@ -105,5 +114,29 @@ describe('Map building input flow', () => {
     expect(game.mapBuildMode.selectedBuildingId).toBe('keep_a');
     expect(worldManager.setPlayerDestination).not.toHaveBeenCalled();
     expect(state.interactHint).toContain('Secili yapi');
+  });
+
+  it('toggles world map overlay with M shortcut in map mode', () => {
+    const { input, game } = makeHarness();
+    const savedDoc = global.document;
+    global.document = { addEventListener: () => {} };
+    input.setupKeyboardShortcuts();
+    global.document = savedDoc;
+
+    input.keyboardHandler({ key: 'm', preventDefault: () => {} });
+    expect(game.uiManager.toggleWorldMapOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes world map overlay with Escape before pause flow', () => {
+    const { input, game } = makeHarness();
+    game.uiManager.isWorldMapVisible.mockReturnValue(true);
+    const savedDoc = global.document;
+    global.document = { addEventListener: () => {} };
+    input.setupKeyboardShortcuts();
+    global.document = savedDoc;
+
+    input.keyboardHandler({ key: 'Escape', preventDefault: () => {} });
+    expect(game.uiManager.toggleWorldMapOverlay).toHaveBeenCalledWith(false);
+    expect(game.gameFlowManager.setPaused).not.toHaveBeenCalled();
   });
 });

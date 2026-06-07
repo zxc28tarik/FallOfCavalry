@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fall Of Cavalry - Offline Prototype</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23181818'/%3E%3Cpath d='M20 44h24l-5-8h-14z' fill='%23d4af37'/%3E%3Cpath d='M32 10l9 22H23z' fill='%23f6e5a3'/%3E%3Ccircle cx='32' cy='30' r='4' fill='%238b1e1e'/%3E%3C/svg%3E" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -26,7 +27,7 @@
           Bu oyun ES module import kullanıyor. <b>file://</b> ile açınca tarayıcı JS’i engelleyebilir ve menü boş görünebilir.
           <br><br>
           Klasörde terminal açıp şunu çalıştır:
-          <pre class="boot-notice-pre">python -m http.server 4173</pre>
+          <pre class="boot-notice-pre">npm run dev -- --host 127.0.0.1 --port 4173</pre>
           Sonra şuradan aç:
           <pre class="boot-notice-pre">http://127.0.0.1:4173/index.html</pre>
           <div class="mt-2 text-xs opacity-80">
@@ -40,6 +41,10 @@
 
         <!-- Canvas -->
         <canvas id="gameCanvas" class="absolute inset-0 w-full h-full"></canvas>
+
+        <button id="worldMapToggleBtn" class="world-map-launcher action-btn btn-dark hidden" type="button">
+            Harita <span class="kbd">M</span>
+        </button>
 
 
 
@@ -113,11 +118,6 @@
 
                 <div class="mt-2 flex flex-col gap-2">
                     <label class="flex items-center justify-between text-xs">
-                        <span class="opacity-85">Minimap</span>
-                        <input id="toggleMinimap" type="checkbox" checked />
-                    </label>
-
-                    <label class="flex items-center justify-between text-xs">
                         <span class="opacity-85">Moral</span>
                         <input id="toggleMorale" type="checkbox" checked />
                     </label>
@@ -173,11 +173,6 @@
                 </div>
                 <div id="questText" class="mt-2 text-sm leading-snug opacity-90">-</div>
             </div>
-
-            <!-- Minimap -->
-            <div id="hudMinimapPanel" class="hud-minimap frame-dark">
-                <canvas id="hudMiniMap" class="minimap" width="200" height="200"></canvas>
-            </div>
         </div>
 
         <!-- Tooltip -->
@@ -209,6 +204,20 @@
             <div id="uiPanelTitle" class="ui-panel-title royal-font">Panel</div>
             <div id="uiPanelBody" class="ui-panel-body"></div>
             <div id="uiPanelFooter" class="ui-panel-footer"></div>
+        </div>
+
+        <div id="worldMapOverlay" class="world-map-overlay hidden" aria-live="polite">
+            <div class="world-map-card frame-dark">
+                <div class="world-map-header">
+                    <div>
+                        <div class="royal-font world-map-title">Sefer Haritasi</div>
+                        <div id="worldMapSummary" class="world-map-summary">Harita hazirlaniyor...</div>
+                    </div>
+                    <button id="worldMapCloseBtn" class="action-btn btn-dark" type="button">Kapat</button>
+                </div>
+                <canvas id="worldMapCanvas" class="world-map-canvas" width="920" height="580"></canvas>
+                <div id="worldMapFooter" class="world-map-footer">M: ac/kapa</div>
+            </div>
         </div>
 
         <!-- ✅ eksik overlay’ler eklendi -->
@@ -338,6 +347,41 @@
                 <div class="modal-actions">
                     <button id="btnTuningReset" class="action-btn btn-dark">Varsayılanlara Dön</button>
                     <button id="btnTuningSave" class="action-btn btn-primary">Kaydet</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="citySceneModal" class="city-scene-wrap hidden">
+            <div class="city-scene-shell">
+                <div class="city-scene-shell__header frame-dark">
+                    <div>
+                        <div id="citySceneTitle" class="royal-font text-2xl font-extrabold">-</div>
+                        <div id="citySceneSubtitle" class="text-sm opacity-85 mt-1">-</div>
+                        <div id="citySceneRelation" class="text-xs opacity-75 mt-2">-</div>
+                    </div>
+                    <div class="city-scene-shell__header-actions">
+                        <button id="btnCloseCityScene" class="action-btn btn-dark">Sehri Terk Et</button>
+                    </div>
+                </div>
+
+                <div class="city-scene-shell__body">
+                    <div class="city-scene-stage-wrap frame-dark">
+                        <div id="citySceneSummary" class="city-scene-summary"></div>
+                        <div id="citySceneStage" class="city-scene-stage" data-theme="ottoman">
+                            <div class="city-scene-stage__base"></div>
+                            <div id="citySceneHotspots" class="city-scene-hotspots"></div>
+                        </div>
+                        <div class="city-scene-stage-footer">
+                            <div id="citySceneWarnings" class="city-scene-warnings"></div>
+                            <div id="citySceneServiceChips" class="city-scene-service-chips"></div>
+                        </div>
+                    </div>
+
+                    <div class="city-scene-panel frame-dark">
+                        <div id="cityScenePanelTitle" class="city-scene-panel__title royal-font">Sehir Sahnesi</div>
+                        <div id="cityScenePanelMeta" class="city-scene-panel__meta"></div>
+                        <div id="cityScenePanelBody" class="city-scene-panel__body"></div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -9,7 +9,7 @@ function normalizeKind(kind) {
 }
 
 function normalizeProfile(profile) {
-  const safe = String(profile || 'stronghold').toLowerCase();
+  const safe = String(profile || 'classic').toLowerCase();
   return safe === 'classic' ? 'classic' : 'stronghold';
 }
 
@@ -21,15 +21,15 @@ function alphaAt(srcPixels, width, height, x, y) {
 }
 
 function quantStep(kind, profile) {
-  if (profile === 'classic') return kind === 'FOREST' ? 26 : 24;
+  if (profile === 'classic') return kind === 'FOREST' ? 20 : 22;
   return kind === 'FOREST' ? 22 : 20;
 }
 
 function applyKindTone(kind, profile, r, g, b, x, y, width, height) {
   if (kind === 'FOREST') {
-    r -= profile === 'stronghold' ? 10 : 6;
-    g += profile === 'stronghold' ? 14 : 10;
-    b -= profile === 'stronghold' ? 10 : 7;
+    r -= profile === 'stronghold' ? 10 : 15;
+    g += profile === 'stronghold' ? 14 : 21;
+    b -= profile === 'stronghold' ? 10 : 17;
 
     if (profile === 'stronghold' && b > g * 0.92 && r > g * 0.88) {
       r -= 8;
@@ -37,22 +37,23 @@ function applyKindTone(kind, profile, r, g, b, x, y, width, height) {
       b -= 14;
     }
   } else {
-    r -= profile === 'stronghold' ? 4 : 2;
-    g += profile === 'stronghold' ? 1 : 2;
-    b += profile === 'stronghold' ? 5 : 6;
+    r -= profile === 'stronghold' ? 4 : 1;
+    g += profile === 'stronghold' ? 1 : 5;
+    b += profile === 'stronghold' ? 5 : 4;
   }
 
-  if (profile === 'stronghold') {
-    const lightFactor = (1 - (y / Math.max(1, height - 1))) * 0.55 + (1 - (x / Math.max(1, width - 1))) * 0.25;
+  if (profile === 'stronghold' || profile === 'classic') {
+    const lightFactor = (1 - (y / Math.max(1, height - 1))) * (profile === 'classic' ? 0.42 : 0.55)
+      + (1 - (x / Math.max(1, width - 1))) * (profile === 'classic' ? 0.18 : 0.25);
     const light = Math.max(0, Math.min(1, lightFactor));
     if (kind === 'FOREST') {
-      r += 10 * light;
-      g += 16 * light;
-      b += 4 * light;
+      r += (profile === 'classic' ? 7 : 10) * light;
+      g += (profile === 'classic' ? 20 : 16) * light;
+      b += (profile === 'classic' ? 6 : 4) * light;
     } else {
-      r += 8 * light;
-      g += 10 * light;
-      b += 12 * light;
+      r += (profile === 'classic' ? 12 : 8) * light;
+      g += (profile === 'classic' ? 12 : 10) * light;
+      b += (profile === 'classic' ? 8 : 12) * light;
     }
   }
 
@@ -83,7 +84,7 @@ export function styleDimetricPropPixels(srcPixels, width, height, options = {}) 
 
       const ditherIdx = (y & 3) * 4 + (x & 3);
       const d = BAYER4[ditherIdx] - 7.5;
-      const bias = kind === 'FOREST' ? d * (profile === 'stronghold' ? 1.8 : 1.5) : d * (profile === 'stronghold' ? 2.4 : 2.1);
+      const bias = kind === 'FOREST' ? d * (profile === 'stronghold' ? 1.8 : 2.0) : d * (profile === 'stronghold' ? 2.4 : 2.35);
       r = clampByte(Math.round((r + bias) / q) * q);
       g = clampByte(Math.round((g + (bias * 0.90)) / q) * q);
       b = clampByte(Math.round((b + (bias * 0.82)) / q) * q);
@@ -93,14 +94,14 @@ export function styleDimetricPropPixels(srcPixels, width, height, options = {}) 
         || alphaAt(srcPixels, width, height, x, y - 1) < 10
         || alphaAt(srcPixels, width, height, x, y + 1) < 10;
       if (edge) {
-        const mul = profile === 'stronghold' ? 0.50 : 0.58;
+        const mul = profile === 'stronghold' ? 0.50 : 0.46;
         r = clampByte(r * mul);
         g = clampByte(g * mul);
         b = clampByte(b * mul);
       } else if (alphaAt(srcPixels, width, height, x - 1, y - 1) < 10) {
         const boost = kind === 'FOREST'
-          ? (profile === 'stronghold' ? [9, 12, 6] : [7, 9, 5])
-          : (profile === 'stronghold' ? [12, 14, 11] : [11, 12, 9]);
+          ? (profile === 'stronghold' ? [9, 12, 6] : [11, 17, 8])
+          : (profile === 'stronghold' ? [12, 14, 11] : [14, 14, 10]);
         r = clampByte(r + boost[0]);
         g = clampByte(g + boost[1]);
         b = clampByte(b + boost[2]);

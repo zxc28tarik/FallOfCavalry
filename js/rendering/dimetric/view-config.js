@@ -66,10 +66,10 @@ export function getDimetricPropStyleUrlOverride() {
 }
 
 function normalizeDimetricPropStyleProfile(profile) {
-  return parseDimetricPropStyleProfile(profile) || 'stronghold';
+  return parseDimetricPropStyleProfile(profile) || 'classic';
 }
 
-export function resolveDimetricPropStyleProfile(defaultProfile = 'stronghold', options = {}) {
+export function resolveDimetricPropStyleProfile(defaultProfile = 'classic', options = {}) {
   const fallback = normalizeDimetricPropStyleProfile(defaultProfile);
   const allowUrlOverride = options?.allowUrlOverride !== false;
   const override = getDimetricPropStyleUrlOverride();

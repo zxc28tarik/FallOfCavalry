@@ -80,31 +80,31 @@ function terrainNoise(tx, ty) {
 
 const GROUND_STYLE_PRESETS = Object.freeze({
   stronghold: Object.freeze({
-    SEA: [72, 106, 138],
-    SHORE: [146, 124, 86],
-    PLAINS: [97, 123, 63],
-    FOREST: [77, 103, 54],
-    HILLS: [116, 109, 80],
-    MOUNTAIN: [124, 119, 104],
-    SNOW: [206, 212, 219],
+    SEA: [57, 94, 124],
+    SHORE: [158, 135, 82],
+    PLAINS: [91, 139, 57],
+    FOREST: [55, 99, 42],
+    HILLS: [128, 111, 70],
+    MOUNTAIN: [114, 103, 82],
+    SNOW: [210, 216, 219],
   }),
   classic: Object.freeze({
-    SEA: [122, 157, 188],
-    SHORE: [174, 152, 116],
-    PLAINS: [91, 152, 83],
-    FOREST: [89, 127, 63],
-    HILLS: [138, 122, 100],
-    MOUNTAIN: [122, 112, 102],
-    SNOW: [230, 237, 245],
+    SEA: [52, 103, 139],
+    SHORE: [181, 156, 88],
+    PLAINS: [91, 151, 58],
+    FOREST: [46, 104, 43],
+    HILLS: [139, 119, 72],
+    MOUNTAIN: [116, 105, 86],
+    SNOW: [224, 232, 236],
   }),
 });
 
 function normalizeGroundStylePreset(raw) {
-  const value = String(raw || 'stronghold').trim().toLowerCase();
+  const value = String(raw || 'classic').trim().toLowerCase();
   return value === 'classic' ? 'classic' : 'stronghold';
 }
 
-function biomeBaseRgb(biome, preset = 'stronghold') {
+export function biomeBaseRgb(biome, preset = 'classic') {
   const style = GROUND_STYLE_PRESETS[normalizeGroundStylePreset(preset)] || GROUND_STYLE_PRESETS.stronghold;
   const BIOME = CONST.BIOME || {};
   if (biome === BIOME.SEA) return style.SEA;
@@ -119,33 +119,236 @@ function biomeBaseRgb(biome, preset = 'stronghold') {
   return style.PLAINS;
 }
 
-function resolveBiomeTextureStyle(biome) {
+export function biomeBaseLayerRgb(biome, preset = 'classic', tx = 0, ty = 0) {
+  const base = biomeBaseRgb(biome, preset);
+  return shadeColor(base, (terrainNoise(tx, ty) - 0.5) * 14);
+}
+
+export function resolveBiomeBasePixelsPerTile(mapWidth, mapHeight) {
+  const tiles = Math.max(0, Math.floor(finite(mapWidth, 0)) * Math.floor(finite(mapHeight, 0)));
+  return tiles > 4000000 ? 1 : 2;
+}
+
+export class DimetricBiomeBaseLayer {
+  constructor({
+    canvasFactory = defaultCanvasFactory,
+  } = {}) {
+    this.canvasFactory = typeof canvasFactory === 'function' ? canvasFactory : defaultCanvasFactory;
+    this.canvas = null;
+    this.pixelsPerTile = 1;
+    this.byteSize = 0;
+    this.buildCount = 0;
+    this._mapRef = null;
+    this._mapWidth = 0;
+    this._mapHeight = 0;
+    this._groundStylePreset = 'classic';
+    this._groundSpriteVariants = null;
+    this._biomes = null;
+    this._resolveBiomeAt = null;
+  }
+
+  configure({
+    map,
+    mapWidth,
+    mapHeight,
+    resolveBiomeAt,
+    groundStylePreset = 'classic',
+    groundSpriteVariants = null,
+  } = {}) {
+    const safeWidth = Math.max(1, Math.floor(finite(mapWidth ?? map?.width, 1)));
+    const safeHeight = Math.max(1, Math.floor(finite(mapHeight ?? map?.height, 1)));
+    const safePreset = normalizeGroundStylePreset(groundStylePreset);
+    const safeGroundSprites = groundSpriteVariants && typeof groundSpriteVariants === 'object' ? groundSpriteVariants : null;
+    const needsRebuild = this._mapRef !== map
+      || this._mapWidth !== safeWidth
+      || this._mapHeight !== safeHeight
+      || this._groundStylePreset !== safePreset
+      || this._groundSpriteVariants !== safeGroundSprites
+      || !this.canvas;
+
+    if (!needsRebuild) return this;
+    this._mapRef = map;
+    this._mapWidth = safeWidth;
+    this._mapHeight = safeHeight;
+    this._groundStylePreset = safePreset;
+    this._groundSpriteVariants = safeGroundSprites;
+    this._biomes = map?.biomes instanceof Uint8Array ? map.biomes : null;
+    this._resolveBiomeAt = typeof resolveBiomeAt === 'function' ? resolveBiomeAt : null;
+    this.pixelsPerTile = resolveBiomeBasePixelsPerTile(safeWidth, safeHeight);
+    this.canvas = this._buildCanvas({
+      map,
+      mapWidth: safeWidth,
+      mapHeight: safeHeight,
+      resolveBiomeAt,
+      groundStylePreset: safePreset,
+    });
+    this.byteSize = this.canvas ? this.canvas.width * this.canvas.height * 4 : 0;
+    this.buildCount += 1;
+    return this;
+  }
+
+  drawVisible(ctx, camera, {
+    visible,
+    view,
+    worldToScreen,
+  } = {}) {
+    if (!ctx || !camera || !this.canvas || !visible || !view?.config || typeof worldToScreen !== 'function') return false;
+    if (!hasCtxMethod(ctx, 'drawImage')) return false;
+    const minX = clampInt(visible.minX, 0, this._mapWidth - 1);
+    const minY = clampInt(visible.minY, 0, this._mapHeight - 1);
+    const maxX = clampInt(visible.maxX, 0, this._mapWidth - 1);
+    const maxY = clampInt(visible.maxY, 0, this._mapHeight - 1);
+    if (maxX < minX || maxY < minY) return false;
+
+    safeCtxSave(ctx);
+    if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = false;
+    this._drawVisibleDiamonds(ctx, camera, { visible, view, worldToScreen });
+    safeCtxRestore(ctx);
+    return true;
+  }
+
+  getStats() {
+    return {
+      width: this.canvas?.width || 0,
+      height: this.canvas?.height || 0,
+      pixelsPerTile: this.pixelsPerTile,
+      byteSize: this.byteSize,
+      buildCount: this.buildCount,
+      groundStylePreset: this._groundStylePreset,
+    };
+  }
+
+  _buildCanvas({
+    map,
+    mapWidth,
+    mapHeight,
+    resolveBiomeAt,
+    groundStylePreset,
+  }) {
+    const scale = this.pixelsPerTile;
+    const canvas = this.canvasFactory(mapWidth * scale, mapHeight * scale);
+    const ctx = canvas?.getContext?.('2d');
+    if (!canvas || !ctx) return null;
+    const biomes = map?.biomes instanceof Uint8Array ? map.biomes : null;
+    const resolve = typeof resolveBiomeAt === 'function'
+      ? resolveBiomeAt
+      : (x, y) => biomes?.[(y * mapWidth) + x] ?? CONST.BIOME?.PLAINS;
+
+    if (typeof ctx.createImageData === 'function' && typeof ctx.putImageData === 'function') {
+      const image = ctx.createImageData(canvas.width, canvas.height);
+      const data = image.data;
+      for (let ty = 0; ty < mapHeight; ty += 1) {
+        for (let tx = 0; tx < mapWidth; tx += 1) {
+          const biome = biomes ? biomes[(ty * mapWidth) + tx] : resolve(tx, ty);
+          const rgb = biomeBaseLayerRgb(biome, groundStylePreset, tx, ty);
+          for (let py = 0; py < scale; py += 1) {
+            for (let px = 0; px < scale; px += 1) {
+              const idx = (((ty * scale + py) * canvas.width) + (tx * scale + px)) * 4;
+              data[idx] = rgb[0];
+              data[idx + 1] = rgb[1];
+              data[idx + 2] = rgb[2];
+              data[idx + 3] = 255;
+            }
+          }
+        }
+      }
+      ctx.putImageData(image, 0, 0);
+      return canvas;
+    }
+
+    for (let ty = 0; ty < mapHeight; ty += 1) {
+      for (let tx = 0; tx < mapWidth; tx += 1) {
+        const biome = biomes ? biomes[(ty * mapWidth) + tx] : resolve(tx, ty);
+        ctx.fillStyle = rgbCss(biomeBaseLayerRgb(biome, groundStylePreset, tx, ty));
+        ctx.fillRect(tx * scale, ty * scale, scale, scale);
+      }
+    }
+    return canvas;
+  }
+
+  _resolveRgbAt(tx, ty) {
+    const safeX = clampInt(tx, 0, this._mapWidth - 1);
+    const safeY = clampInt(ty, 0, this._mapHeight - 1);
+    const idx = (safeY * this._mapWidth) + safeX;
+    const biome = this._biomes ? this._biomes[idx] : this._resolveBiomeAt?.(safeX, safeY);
+    return biomeBaseLayerRgb(biome, this._groundStylePreset, safeX, safeY);
+  }
+
+  _resolveCellAt(tx, ty) {
+    const safeX = clampInt(tx, 0, this._mapWidth - 1);
+    const safeY = clampInt(ty, 0, this._mapHeight - 1);
+    const idx = (safeY * this._mapWidth) + safeX;
+    const biome = this._biomes ? this._biomes[idx] : this._resolveBiomeAt?.(safeX, safeY);
+    const resolveBiomeAt = (x, y) => {
+      if (x < 0 || y < 0 || x >= this._mapWidth || y >= this._mapHeight) return CONST.BIOME?.SEA;
+      const i = (y * this._mapWidth) + x;
+      return this._biomes ? this._biomes[i] : this._resolveBiomeAt?.(x, y);
+    };
+    return buildTerrainCell({
+      tx: safeX,
+      ty: safeY,
+      isoX: 0,
+      isoY: 0,
+      biome,
+      mapWidth: this._mapWidth,
+      mapHeight: this._mapHeight,
+      resolveBiomeAt,
+    });
+  }
+
+  _drawVisibleDiamonds(ctx, camera, { visible, view, worldToScreen } = {}) {
+    if (!hasCtxMethod(ctx, 'beginPath') || !hasCtxMethod(ctx, 'moveTo') || !hasCtxMethod(ctx, 'lineTo') || !hasCtxMethod(ctx, 'fill')) return;
+    const halfW = finite(view?.config?.tileW, 64) * finite(camera?.zoom, 1) * 0.5;
+    const halfH = finite(view?.config?.tileH, 32) * finite(camera?.zoom, 1) * 0.5;
+    if (halfW <= 0 || halfH <= 0) return;
+    const minX = clampInt(visible.minX, 0, this._mapWidth - 1);
+    const minY = clampInt(visible.minY, 0, this._mapHeight - 1);
+    const maxX = clampInt(visible.maxX, 0, this._mapWidth - 1);
+    const maxY = clampInt(visible.maxY, 0, this._mapHeight - 1);
+    for (let ty = minY; ty <= maxY; ty += 1) {
+      for (let tx = minX; tx <= maxX; tx += 1) {
+        const c = worldToScreen(tx, ty, camera, view.config, 0);
+        const cx = finite(c?.x, 0);
+        const cy = finite(c?.y, 0);
+        const cell = this._resolveCellAt(tx, ty);
+        drawTerrainCellBase(ctx, cell, cx, cy, halfW, halfH, {
+          groundPreset: this._groundStylePreset,
+          groundSpriteVariants: this._groundSpriteVariants,
+          tileW: halfW * 2,
+          tileH: halfH * 2,
+        });
+      }
+    }
+  }
+}
+
+export function resolveBiomeTextureStyle(biome) {
   const BIOME = CONST.BIOME || {};
-  if (biome === BIOME.SEA) return Object.freeze({ grain: 10, grainAlpha: 0.09, speckCount: 3, tuftCount: 0, shadowDelta: -10, lightDelta: 8 });
-  if (biome === BIOME.SHORE) return Object.freeze({ grain: 12, grainAlpha: 0.10, speckCount: 4, tuftCount: 1, shadowDelta: -12, lightDelta: 6 });
-  if (biome === BIOME.FOREST) return Object.freeze({ grain: 13, grainAlpha: 0.12, speckCount: 4, tuftCount: 5, shadowDelta: -14, lightDelta: 6 });
-  if (biome === BIOME.HILLS) return Object.freeze({ grain: 11, grainAlpha: 0.11, speckCount: 4, tuftCount: 2, shadowDelta: -13, lightDelta: 6 });
-  if (biome === BIOME.MOUNTAIN) return Object.freeze({ grain: 9, grainAlpha: 0.09, speckCount: 3, tuftCount: 0, shadowDelta: -14, lightDelta: 5 });
-  if (biome === BIOME.SNOW) return Object.freeze({ grain: 8, grainAlpha: 0.08, speckCount: 2, tuftCount: 0, shadowDelta: -8, lightDelta: 7 });
-  return Object.freeze({ grain: 14, grainAlpha: 0.12, speckCount: 5, tuftCount: 6, shadowDelta: -12, lightDelta: 7 });
+  if (biome === BIOME.SEA) return Object.freeze({ grain: 10, grainAlpha: 0.10, speckCount: 3, tuftCount: 0, shadowDelta: -13, lightDelta: 11, mottleCount: 2 });
+  if (biome === BIOME.SHORE) return Object.freeze({ grain: 12, grainAlpha: 0.13, speckCount: 4, tuftCount: 2, shadowDelta: -17, lightDelta: 11, mottleCount: 3 });
+  if (biome === BIOME.FOREST) return Object.freeze({ grain: 15, grainAlpha: 0.17, speckCount: 5, tuftCount: 3, shadowDelta: -25, lightDelta: 11, mottleCount: 4 });
+  if (biome === BIOME.HILLS) return Object.freeze({ grain: 13, grainAlpha: 0.15, speckCount: 5, tuftCount: 2, shadowDelta: -21, lightDelta: 12, mottleCount: 4 });
+  if (biome === BIOME.MOUNTAIN) return Object.freeze({ grain: 12, grainAlpha: 0.14, speckCount: 4, tuftCount: 0, shadowDelta: -25, lightDelta: 11, mottleCount: 3 });
+  if (biome === BIOME.SNOW) return Object.freeze({ grain: 8, grainAlpha: 0.09, speckCount: 3, tuftCount: 0, shadowDelta: -10, lightDelta: 9, mottleCount: 1 });
+  return Object.freeze({ grain: 15, grainAlpha: 0.16, speckCount: 5, tuftCount: 3, shadowDelta: -20, lightDelta: 12, mottleCount: 4 });
 }
 
 function drawGrassTufts(ctx, cell, cx, cy, halfW, halfH, alphaMul = 1) {
   if (!hasCtxMethod(ctx, 'beginPath') || !hasCtxMethod(ctx, 'moveTo') || !hasCtxMethod(ctx, 'lineTo') || !hasCtxMethod(ctx, 'stroke')) return;
   const seedA = terrainNoise((cell.tx * 1.33) + 8.1, (cell.ty * 0.71) + 2.7);
   const seedB = terrainNoise((cell.tx * 0.49) + 3.2, (cell.ty * 1.17) + 9.4);
-  const hue = [113, 133, 72];
-  const dry = [132, 118, 82];
+  const hue = [74, 137, 48];
+  const dry = [149, 128, 70];
   const blend = Math.max(0, Math.min(1, (seedA * 0.65) + (seedB * 0.35)));
   const color = [
     Math.round((hue[0] * (1 - blend)) + (dry[0] * blend)),
     Math.round((hue[1] * (1 - blend)) + (dry[1] * blend)),
     Math.round((hue[2] * (1 - blend)) + (dry[2] * blend)),
   ];
-  ctx.strokeStyle = rgbCss(color, 0.22 * alphaMul);
+  ctx.strokeStyle = rgbCss(color, 0.46 * alphaMul);
   ctx.lineWidth = 1;
 
-  const bladeCount = 2 + Math.floor(seedA * 3);
+  const bladeCount = 3 + Math.floor(seedA * 4);
   const baseY = cy + (halfH * 0.38);
   for (let i = 0; i < bladeCount; i += 1) {
     const n = terrainNoise(cell.tx * 1.17 + i * 0.77, cell.ty * 1.09 + i * 0.53);
@@ -161,7 +364,7 @@ function drawGrassTufts(ctx, cell, cx, cy, halfW, halfH, alphaMul = 1) {
   }
 }
 
-function drawCellTexture(ctx, cell, cx, cy, halfW, halfH, baseRgb, textureStyle) {
+export function drawCellTexture(ctx, cell, cx, cy, halfW, halfH, baseRgb, textureStyle) {
   if (!ctx) return;
   const grain = Math.max(0, Math.floor(finite(textureStyle?.grain, 10)));
   const grainAlpha = Math.max(0, Math.min(0.35, finite(textureStyle?.grainAlpha, 0.10)));
@@ -169,6 +372,7 @@ function drawCellTexture(ctx, cell, cx, cy, halfW, halfH, baseRgb, textureStyle)
   const tuftCount = Math.max(0, Math.floor(finite(textureStyle?.tuftCount, 0)));
   const shadowDelta = finite(textureStyle?.shadowDelta, -12);
   const lightDelta = finite(textureStyle?.lightDelta, 8);
+  const mottleCount = Math.max(0, Math.floor(finite(textureStyle?.mottleCount, 0)));
   const shadowRgb = shadeColor(baseRgb, shadowDelta);
   const lightRgb = shadeColor(baseRgb, lightDelta);
 
@@ -223,9 +427,25 @@ function drawCellTexture(ctx, cell, cx, cy, halfW, halfH, baseRgb, textureStyle)
     }
   }
 
+  for (let i = 0; i < mottleCount; i += 1) {
+    const n = terrainNoise(cell.tx * 0.43 + i * 1.31, cell.ty * 0.59 + i * 0.73);
+    const n2 = terrainNoise(cell.tx * 0.91 + i * 0.47, cell.ty * 0.51 + i * 1.19);
+    const n3 = terrainNoise(cell.tx * 1.37 + i * 0.29, cell.ty * 0.33 + i * 0.89);
+    const px = cx - (halfW * 0.44) + (n * halfW * 0.88);
+    const py = cy - (halfH * 0.38) + (n2 * halfH * 0.76);
+    const color = n3 > 0.52 ? lightRgb : shadowRgb;
+    ctx.fillStyle = rgbCss(color, 0.07 + n3 * 0.05);
+    if (hasCtxMethod(ctx, 'fillRect')) {
+      const w = 2 + Math.floor(n * 3);
+      const h = 1 + Math.floor(n2 * 2);
+      ctx.fillRect(Math.round(px), Math.round(py), w, h);
+    }
+  }
+
   if (tuftCount > 0) {
-    for (let i = 0; i < tuftCount; i += 1) {
-      drawGrassTufts(ctx, { tx: cell.tx + (i * 0.13), ty: cell.ty + (i * 0.17) }, cx, cy, halfW, halfH, 1);
+    const tuftChance = terrainNoise(cell.tx * 0.37 + 5.4, cell.ty * 0.41 + 2.8);
+    if (tuftChance > 0.44) {
+      drawGrassTufts(ctx, cell, cx, cy, halfW, halfH, Math.min(1, 0.55 + tuftCount * 0.12));
     }
   }
 }
@@ -246,9 +466,62 @@ function pickGroundSpriteForBiome(biome, variants, tx, ty) {
   return pool[idx] || null;
 }
 
+function resolveSpriteImage(sprite) {
+  return sprite?.image || sprite;
+}
+
+function wrapTextureOffset(value, size) {
+  const safeSize = Math.max(1, finite(size, 1));
+  return ((Math.floor(finite(value, 0)) % safeSize) + safeSize) % safeSize;
+}
+
+function drawWrappedTextureRegion(ctx, image, sx, sy, sw, sh, dx, dy, dw, dh) {
+  const imageWidth = Math.max(1, finite(image?.naturalWidth || image?.width, 1));
+  const imageHeight = Math.max(1, finite(image?.naturalHeight || image?.height, 1));
+  const sourceW = Math.max(1, finite(sw, dw));
+  const sourceH = Math.max(1, finite(sh, dh));
+  const scaleX = Math.max(0.001, finite(dw, sourceW) / sourceW);
+  const scaleY = Math.max(0.001, finite(dh, sourceH) / sourceH);
+  let remainingY = sourceH;
+  let destY = dy;
+  let sourceY = wrapTextureOffset(sy, imageHeight);
+
+  while (remainingY > 0) {
+    const sliceH = Math.min(remainingY, imageHeight - sourceY);
+    let remainingX = sourceW;
+    let destX = dx;
+    let sourceX = wrapTextureOffset(sx, imageWidth);
+
+    while (remainingX > 0) {
+      const sliceW = Math.min(remainingX, imageWidth - sourceX);
+      ctx.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sliceW,
+        sliceH,
+        destX,
+        destY,
+        sliceW * scaleX,
+        sliceH * scaleY,
+      );
+      remainingX -= sliceW;
+      destX += sliceW * scaleX;
+      sourceX = 0;
+    }
+
+    remainingY -= sliceH;
+    destY += sliceH * scaleY;
+    sourceY = 0;
+  }
+}
+
 function chunkKey(chunkX, chunkY) {
   return `${chunkX},${chunkY}`;
 }
+
+export const DIMETRIC_TERRAIN_MAX_CACHE_BYTES = Number(CONST.DIMETRIC?.TERRAIN_MAX_CACHE_BYTES)
+  || (96 * 1024 * 1024);
 
 function lerpPoint(a, b, t) {
   return [
@@ -356,7 +629,114 @@ function drawCellCoastline(ctx, cell, cx, cy, halfW, halfH) {
   if (mask & TRANSITION_BITS.W) drawEdge(left, top);
 }
 
-function drawCellTransitions(ctx, cell, cx, cy, halfW, halfH, groundStylePreset = 'stronghold') {
+function buildTerrainCell({
+  tx,
+  ty,
+  isoX,
+  isoY,
+  biome,
+  mapWidth,
+  mapHeight,
+  resolveBiomeAt,
+} = {}) {
+  const transitionMask = computeTransitionMask({
+    tx,
+    ty,
+    mapWidth,
+    mapHeight,
+    resolveBiomeAt,
+    centerBiome: biome,
+  });
+  const transitionNeighbors = collectTransitionNeighbors(
+    tx,
+    ty,
+    transitionMask,
+    mapWidth,
+    mapHeight,
+    resolveBiomeAt,
+  );
+  const coastlineMask = computeCoastlineMask({
+    tx,
+    ty,
+    mapWidth,
+    mapHeight,
+    resolveBiomeAt,
+    centerBiome: biome,
+  });
+  return {
+    tx,
+    ty,
+    isoX,
+    isoY,
+    biome,
+    transitionMask,
+    transitionNeighbors,
+    coastlineMask,
+  };
+}
+
+function drawTerrainCellBase(ctx, cell, cx, cy, halfW, halfH, {
+  groundPreset = 'classic',
+  groundSpriteVariants = null,
+  tileW = halfW * 2,
+  tileH = halfH * 2,
+} = {}) {
+  if (!ctx || !cell) return false;
+  const base = biomeBaseRgb(cell.biome, groundPreset);
+  const textureStyle = resolveBiomeTextureStyle(cell.biome);
+  const noise = terrainNoise(cell.tx, cell.ty);
+  const fill = shadeColor(base, (noise - 0.5) * 14);
+  const edge = shadeColor(base, -14);
+  const groundSprite = pickGroundSpriteForBiome(cell.biome, groundSpriteVariants, cell.tx, cell.ty);
+  const spriteImage = resolveSpriteImage(groundSprite);
+  const canDrawSprite = Boolean(spriteImage && hasCtxMethod(ctx, 'drawImage'));
+
+  if (canDrawSprite) {
+    const mode = groundSprite?.mode || 'image';
+    const sh = Math.max(1, finite(groundSprite.height, tileH));
+    const dx = Math.round(cx - halfW);
+    const dy = mode === 'world-texture-diamond'
+      ? Math.round(cy - halfH)
+      : Math.round(cy + halfH - sh);
+    safeCtxSave(ctx);
+    if (mode === 'world-texture-diamond') drawDiamondPath(ctx, cx, cy, halfW + 0.85, halfH + 0.45);
+    else drawDiamondPath(ctx, cx, cy, halfW, halfH);
+    safeCtxClip(ctx);
+    if (mode === 'world-texture-diamond') {
+      const sourceTileW = Math.max(1, finite(groundSprite.width, 64));
+      const sourceTileH = Math.max(1, finite(groundSprite.height, 32));
+      const sourceX = ((finite(cell.tx, 0) - finite(cell.ty, 0)) * sourceTileW * 0.5) - (sourceTileW * 0.5);
+      const sourceY = ((finite(cell.tx, 0) + finite(cell.ty, 0)) * sourceTileH * 0.5) - (sourceTileH * 0.5);
+      drawWrappedTextureRegion(ctx, spriteImage, sourceX, sourceY, sourceTileW, sourceTileH, dx, dy, tileW, tileH);
+    } else {
+      ctx.drawImage(spriteImage, dx, dy, tileW, sh);
+    }
+    if (mode !== 'world-texture-diamond' && hasCtxMethod(ctx, 'fillRect')) {
+      ctx.fillStyle = rgbCss(shadeColor(base, (noise - 0.5) * 10), 0.16);
+      ctx.fillRect(dx, Math.round(cy - halfH), tileW, tileH + 3);
+    }
+    safeCtxRestore(ctx);
+  } else {
+    drawDiamondPath(ctx, cx, cy, halfW, halfH);
+    ctx.fillStyle = rgbCss(fill);
+    ctx.fill();
+    safeCtxSave(ctx);
+    drawDiamondPath(ctx, cx, cy, halfW, halfH);
+    safeCtxClip(ctx);
+    drawCellTexture(ctx, cell, cx, cy, halfW, halfH, fill, textureStyle);
+    safeCtxRestore(ctx);
+  }
+  drawCellTransitions(ctx, cell, cx, cy, halfW, halfH, groundPreset);
+  drawCellCoastline(ctx, cell, cx, cy, halfW, halfH);
+  if (!canDrawSprite && hasCtxMethod(ctx, 'stroke')) {
+    ctx.strokeStyle = rgbCss(edge, 0.28);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  return true;
+}
+
+function drawCellTransitions(ctx, cell, cx, cy, halfW, halfH, groundStylePreset = 'classic') {
   const mask = Number(cell?.transitionMask) || 0;
   if (!mask || !cell?.transitionNeighbors) return;
 
@@ -456,13 +836,13 @@ export function computeDimetricVisibleTileBounds({
 export class DimetricTerrainChunkCache {
   constructor({
     chunkSize = 16,
-    maxChunks = 192,
-    groundStylePreset = 'stronghold',
+    maxCacheBytes = DIMETRIC_TERRAIN_MAX_CACHE_BYTES,
+    groundStylePreset = 'classic',
     groundSpriteVariants = null,
     canvasFactory = defaultCanvasFactory,
   } = {}) {
     this.chunkSize = Math.max(4, Math.floor(finite(chunkSize, 16)));
-    this.maxChunks = Math.max(2, Math.floor(finite(maxChunks, 192)));
+    this.maxCacheBytes = Math.max(1, Math.floor(finite(maxCacheBytes, DIMETRIC_TERRAIN_MAX_CACHE_BYTES)));
     this._groundStylePreset = normalizeGroundStylePreset(groundStylePreset);
     this._groundSpriteVariants = groundSpriteVariants && typeof groundSpriteVariants === 'object'
       ? groundSpriteVariants
@@ -470,6 +850,12 @@ export class DimetricTerrainChunkCache {
     this.canvasFactory = typeof canvasFactory === 'function' ? canvasFactory : defaultCanvasFactory;
     this._chunks = new Map();
     this._tick = 0;
+    this._totalBytes = 0;
+    this._visibleKeys = new Set();
+    this._frameBuildLimit = 4;
+    this._frameBuilds = 0;
+    this._frameBuildSkips = 0;
+    this._budgetBlockedThisFrame = false;
     this._mapRef = null;
     this._tileW = 64;
     this._tileH = 32;
@@ -478,6 +864,22 @@ export class DimetricTerrainChunkCache {
   clear() {
     this._chunks.clear();
     this._tick = 0;
+    this._totalBytes = 0;
+    this._frameBuilds = 0;
+    this._frameBuildSkips = 0;
+  }
+
+  beginFrame({
+    visibleKeys = null,
+    frameBuildLimit = 4,
+  } = {}) {
+    this._visibleKeys = visibleKeys instanceof Set
+      ? new Set(visibleKeys)
+      : new Set(Array.isArray(visibleKeys) ? visibleKeys : []);
+    this._frameBuildLimit = Math.max(1, Math.min(4, Math.floor(finite(frameBuildLimit, 4))));
+    this._frameBuilds = 0;
+    this._frameBuildSkips = 0;
+    this._budgetBlockedThisFrame = false;
   }
 
   configure({
@@ -485,14 +887,14 @@ export class DimetricTerrainChunkCache {
     tileW = 64,
     tileH = 32,
     chunkSize = this.chunkSize,
-    maxChunks = this.maxChunks,
+    maxCacheBytes = this.maxCacheBytes,
     groundStylePreset = this._groundStylePreset,
     groundSpriteVariants = this._groundSpriteVariants,
   } = {}) {
     const safeTileW = Math.max(2, finite(tileW, 64));
     const safeTileH = Math.max(2, finite(tileH, 32));
     const safeChunkSize = Math.max(4, Math.floor(finite(chunkSize, this.chunkSize)));
-    const safeMaxChunks = Math.max(2, Math.floor(finite(maxChunks, this.maxChunks)));
+    const safeMaxCacheBytes = Math.max(1, Math.floor(finite(maxCacheBytes, this.maxCacheBytes)));
     const safeGroundPreset = normalizeGroundStylePreset(groundStylePreset);
     const safeGroundSprites = groundSpriteVariants && typeof groundSpriteVariants === 'object'
       ? groundSpriteVariants
@@ -501,7 +903,7 @@ export class DimetricTerrainChunkCache {
       || this._tileW !== safeTileW
       || this._tileH !== safeTileH
       || this.chunkSize !== safeChunkSize
-      || this.maxChunks !== safeMaxChunks
+      || this.maxCacheBytes !== safeMaxCacheBytes
       || this._groundStylePreset !== safeGroundPreset
       || this._groundSpriteVariants !== safeGroundSprites;
     if (needsReset) this.clear();
@@ -509,7 +911,7 @@ export class DimetricTerrainChunkCache {
     this._tileW = safeTileW;
     this._tileH = safeTileH;
     this.chunkSize = safeChunkSize;
-    this.maxChunks = safeMaxChunks;
+    this.maxCacheBytes = safeMaxCacheBytes;
     this._groundStylePreset = safeGroundPreset;
     this._groundSpriteVariants = safeGroundSprites;
   }
@@ -528,17 +930,60 @@ export class DimetricTerrainChunkCache {
       cached.lastUsed = ++this._tick;
       return cached;
     }
+    if (this._frameBuilds >= this._frameBuildLimit) {
+      this._frameBuildSkips += 1;
+      return null;
+    }
+    if (this._budgetBlockedThisFrame) {
+      this._frameBuildSkips += 1;
+      return null;
+    }
+    const safeChunkX = Math.floor(finite(chunkX, 0));
+    const safeChunkY = Math.floor(finite(chunkY, 0));
+    const safeMapWidth = Math.max(1, Math.floor(finite(mapWidth, 1)));
+    const safeMapHeight = Math.max(1, Math.floor(finite(mapHeight, 1)));
+    const estimatedBytes = this._estimateChunkByteSize({
+      chunkX: safeChunkX,
+      chunkY: safeChunkY,
+      mapWidth: safeMapWidth,
+      mapHeight: safeMapHeight,
+    });
+    if (estimatedBytes > this.maxCacheBytes) {
+      this._frameBuildSkips += 1;
+      return null;
+    }
+    this._evictIfNeeded(estimatedBytes);
+    if (this._totalBytes + estimatedBytes > this.maxCacheBytes) {
+      this._budgetBlockedThisFrame = true;
+      this._frameBuildSkips += 1;
+      return null;
+    }
     const built = this._buildChunk({
-      chunkX: Math.floor(finite(chunkX, 0)),
-      chunkY: Math.floor(finite(chunkY, 0)),
-      mapWidth: Math.max(1, Math.floor(finite(mapWidth, 1))),
-      mapHeight: Math.max(1, Math.floor(finite(mapHeight, 1))),
+      chunkX: safeChunkX,
+      chunkY: safeChunkY,
+      mapWidth: safeMapWidth,
+      mapHeight: safeMapHeight,
       resolveBiomeAt,
     });
     if (!built) return null;
+    built.byteSize = Math.max(0, Math.floor(finite(built.width, 0) * finite(built.height, 0) * 4));
+    if (built.byteSize > this.maxCacheBytes) {
+      this._frameBuildSkips += 1;
+      return null;
+    }
     built.lastUsed = ++this._tick;
     this._chunks.set(key, built);
+    this._totalBytes += built.byteSize;
+    this._frameBuilds += 1;
     this._evictIfNeeded();
+    if (this._totalBytes > this.maxCacheBytes) {
+      const inserted = this._chunks.get(key);
+      this._chunks.delete(key);
+      this._totalBytes = Math.max(0, this._totalBytes - (Number(inserted?.byteSize) || 0));
+      this._budgetBlockedThisFrame = true;
+      this._frameBuildSkips += 1;
+      return null;
+    }
     return built;
   }
 
@@ -546,25 +991,70 @@ export class DimetricTerrainChunkCache {
     return {
       chunkCount: this._chunks.size,
       chunkSize: this.chunkSize,
-      maxChunks: this.maxChunks,
+      maxCacheBytes: this.maxCacheBytes,
+      totalBytes: this._totalBytes,
+      cacheMB: this._totalBytes / (1024 * 1024),
+      maxCacheMB: this.maxCacheBytes / (1024 * 1024),
+      chunkBuildsThisFrame: this._frameBuilds,
+      chunkBuildSkipsThisFrame: this._frameBuildSkips,
       groundStylePreset: this._groundStylePreset,
       groundSpritesEnabled: Boolean(this._groundSpriteVariants),
     };
   }
 
-  _evictIfNeeded() {
-    while (this._chunks.size > this.maxChunks) {
+  _evictIfNeeded(extraBytes = 0) {
+    const neededBytes = Math.max(0, Math.floor(finite(extraBytes, 0)));
+    while ((this._totalBytes + neededBytes) > this.maxCacheBytes) {
       let oldestKey = null;
       let oldestTick = Infinity;
       for (const [key, value] of this._chunks.entries()) {
+        if (this._visibleKeys.has(key)) continue;
         if (value.lastUsed < oldestTick) {
           oldestTick = value.lastUsed;
           oldestKey = key;
         }
       }
       if (oldestKey === null) break;
+      const evicted = this._chunks.get(oldestKey);
+      this._totalBytes = Math.max(0, this._totalBytes - (Number(evicted?.byteSize) || 0));
       this._chunks.delete(oldestKey);
     }
+  }
+
+  _estimateChunkByteSize({
+    chunkX,
+    chunkY,
+    mapWidth,
+    mapHeight,
+  }) {
+    const startX = chunkX * this.chunkSize;
+    const startY = chunkY * this.chunkSize;
+    const endX = Math.min(mapWidth - 1, startX + this.chunkSize - 1);
+    const endY = Math.min(mapHeight - 1, startY + this.chunkSize - 1);
+    if (startX > endX || startY > endY) return 0;
+
+    const halfW = this._tileW * 0.5;
+    const halfH = this._tileH * 0.5;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (let ty = startY; ty <= endY; ty += 1) {
+      for (let tx = startX; tx <= endX; tx += 1) {
+        const isoX = (tx - ty) * halfW;
+        const isoY = (tx + ty) * halfH;
+        minX = Math.min(minX, isoX - halfW);
+        minY = Math.min(minY, isoY - halfH);
+        maxX = Math.max(maxX, isoX + halfW);
+        maxY = Math.max(maxY, isoY + halfH);
+      }
+    }
+
+    const padding = 2;
+    const width = Math.max(1, Math.ceil((maxX - minX) + (padding * 2) + 1));
+    const height = Math.max(1, Math.ceil((maxY - minY) + (padding * 2) + 1));
+    return width * height * 4;
   }
 
   _buildChunk({
@@ -593,44 +1083,20 @@ export class DimetricTerrainChunkCache {
         const isoX = (tx - ty) * halfW;
         const isoY = (tx + ty) * halfH;
         const biome = resolveBiomeAt(tx, ty);
-        const transitionMask = computeTransitionMask({
-          tx,
-          ty,
-          mapWidth,
-          mapHeight,
-          resolveBiomeAt,
-          centerBiome: biome,
-        });
-        const transitionNeighbors = collectTransitionNeighbors(
-          tx,
-          ty,
-          transitionMask,
-          mapWidth,
-          mapHeight,
-          resolveBiomeAt,
-        );
-        const coastlineMask = computeCoastlineMask({
-          tx,
-          ty,
-          mapWidth,
-          mapHeight,
-          resolveBiomeAt,
-          centerBiome: biome,
-        });
         minX = Math.min(minX, isoX - halfW);
         minY = Math.min(minY, isoY - halfH);
         maxX = Math.max(maxX, isoX + halfW);
         maxY = Math.max(maxY, isoY + halfH);
-        cells.push({
+        cells.push(buildTerrainCell({
           tx,
           ty,
           isoX,
           isoY,
           biome,
-          transitionMask,
-          transitionNeighbors,
-          coastlineMask,
-        });
+          mapWidth,
+          mapHeight,
+          resolveBiomeAt,
+        }));
       }
     }
     if (cells.length === 0) return null;
@@ -650,43 +1116,12 @@ export class DimetricTerrainChunkCache {
     for (const cell of cells) {
       const cx = cell.isoX - baseX;
       const cy = cell.isoY - baseY;
-      const base = biomeBaseRgb(cell.biome, groundPreset);
-      const textureStyle = resolveBiomeTextureStyle(cell.biome);
-      const noise = terrainNoise(cell.tx, cell.ty);
-      const fill = shadeColor(base, (noise - 0.5) * 14);
-      const edge = shadeColor(base, -20);
-      const groundSprite = pickGroundSpriteForBiome(cell.biome, this._groundSpriteVariants, cell.tx, cell.ty);
-      const canDrawSprite = Boolean(groundSprite && hasCtxMethod(ctx, 'drawImage'));
-
-      if (canDrawSprite) {
-        const sh = Math.max(1, finite(groundSprite.height, this._tileH));
-        const dx = Math.round(cx - halfW);
-        const dy = Math.round(cy + halfH - sh);
-        ctx.drawImage(groundSprite, dx, dy, this._tileW, sh);
-        // Keep biome tint influence so all tiles still match world palette.
-        safeCtxSave(ctx);
-        drawDiamondPath(ctx, cx, cy, halfW, halfH);
-        safeCtxClip(ctx);
-        if (hasCtxMethod(ctx, 'fillRect')) {
-          ctx.fillStyle = rgbCss(shadeColor(base, (noise - 0.5) * 10), 0.20);
-          ctx.fillRect(dx, Math.round(cy - halfH), this._tileW, this._tileH + 3);
-        }
-        safeCtxRestore(ctx);
-      } else {
-        drawDiamondPath(ctx, cx, cy, halfW, halfH);
-        ctx.fillStyle = rgbCss(fill);
-        ctx.fill();
-        safeCtxSave(ctx);
-        drawDiamondPath(ctx, cx, cy, halfW, halfH);
-        safeCtxClip(ctx);
-        drawCellTexture(ctx, cell, cx, cy, halfW, halfH, fill, textureStyle);
-        safeCtxRestore(ctx);
-      }
-      drawCellTransitions(ctx, cell, cx, cy, halfW, halfH, groundPreset);
-      drawCellCoastline(ctx, cell, cx, cy, halfW, halfH);
-      ctx.strokeStyle = rgbCss(edge, 0.38);
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      drawTerrainCellBase(ctx, cell, cx, cy, halfW, halfH, {
+        groundPreset,
+        groundSpriteVariants: this._groundSpriteVariants,
+        tileW: this._tileW,
+        tileH: this._tileH,
+      });
     }
 
     return {

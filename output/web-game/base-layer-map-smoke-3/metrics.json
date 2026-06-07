@@ -1,0 +1,65 @@
+{
+  "errors": [],
+  "metrics": [
+    {
+      "requestedZoom": 1,
+      "zoom": 1,
+      "visibleForest": 176,
+      "visibleMountain": 0,
+      "cache": {
+        "chunkCount": 46,
+        "chunkSize": 16,
+        "maxCacheBytes": 100663296,
+        "totalBytes": 97886712,
+        "cacheMB": 93.35204315185547,
+        "maxCacheMB": 96,
+        "chunkBuildsThisFrame": 1,
+        "chunkBuildSkipsThisFrame": 4,
+        "groundStylePreset": "classic",
+        "groundFrameMode": "homm3",
+        "terrainFramesEnabled": true,
+        "groundSpritesEnabled": false
+      },
+      "base": {
+        "width": 1995,
+        "height": 1504,
+        "pixelsPerTile": 1,
+        "byteSize": 12001920,
+        "buildCount": 1,
+        "groundStylePreset": "classic",
+        "groundFrameMode": "homm3"
+      },
+      "hasRenderModeState": false
+    },
+    {
+      "requestedZoom": 0.5,
+      "zoom": 0.5,
+      "visibleForest": 550,
+      "visibleMountain": 0,
+      "cache": {
+        "chunkCount": 47,
+        "chunkSize": 16,
+        "maxCacheBytes": 100663296,
+        "totalBytes": 100014684,
+        "cacheMB": 95.38143539428711,
+        "maxCacheMB": 96,
+        "chunkBuildsThisFrame": 1,
+        "chunkBuildSkipsThisFrame": 68,
+        "groundStylePreset": "classic",
+        "groundFrameMode": "homm3",
+        "terrainFramesEnabled": true,
+        "groundSpritesEnabled": false
+      },
+      "base": {
+        "width": 1995,
+        "height": 1504,
+        "pixelsPerTile": 1,
+        "byteSize": 12001920,
+        "buildCount": 1,
+        "groundStylePreset": "classic",
+        "groundFrameMode": "homm3"
+      },
+      "hasRenderModeState": false
+    }
+  ]
+}

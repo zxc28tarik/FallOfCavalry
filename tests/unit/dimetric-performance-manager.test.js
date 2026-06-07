@@ -125,4 +125,19 @@ describe('dimetric performance manager', () => {
     expect(telemetry.effectiveLevel).toBe(1);
     expect(telemetry.adaptivePressure).toBe(0);
   });
+
+  it('derives chunk build limits from world stage budget', () => {
+    const mgr = new DimetricPerformanceManager({ stageWindowSize: 10 });
+
+    mgr.recordFrameBreakdown({ world: 7.5 });
+    expect(mgr.getFrameChunkBuildLimit()).toBe(4);
+
+    mgr.reset();
+    mgr.recordFrameBreakdown({ world: 12 });
+    expect(mgr.getFrameChunkBuildLimit()).toBe(2);
+
+    mgr.reset();
+    mgr.recordFrameBreakdown({ world: 18 });
+    expect(mgr.getFrameChunkBuildLimit()).toBe(1);
+  });
 });

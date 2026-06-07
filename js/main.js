@@ -25,6 +25,9 @@ import { DevManager } from './managers/DevManager.js';
 import { DiplomacyManager } from './managers/DiplomacyManager.js';
 import { EncounterManager } from './managers/EncounterManager.js';
 import { GameFlowManager } from './managers/GameFlowManager.js';
+import { QuestManager } from './managers/QuestManager.js';
+import { QuestGenerator } from './systems/QuestGenerator.js';
+import QuestCompletionOverlay from './ui/QuestCompletionOverlay.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -53,7 +56,7 @@ class FallOfCavalry {
     this.audioSystem = null;
     // startScreen → GameFlowManager
     // cityUI → CityManager
-    // campUI, accountingUI, settingsUI, codexUI, poiUI, helpOverlayVisible, minimapRenderer, listenersBound, weatherState → UIManager
+    // campUI, accountingUI, settingsUI, codexUI, poiUI, helpOverlayVisible, listenersBound, weatherState → UIManager
     // battleCommandsUI, battleDeployMode, battleDeployUI, currentBattleTerrain, defeatPushbackDistance, enemyUnitsById → BattleManager
     // tuningUI, TuningUIClass, _tuningPauseMode → TuningManager
     // activePoi, pendingPoiAmbush → PoiManager
@@ -110,6 +113,7 @@ class FallOfCavalry {
     }
 
     this.state = this.state || new GameState();
+    this.modeManager = this.state.modeManager;
     this.battleManager = this.battleManager || new BattleManager(this.state);
     this.battleManager.init(this);
     this.worldManager = this.worldManager || new WorldManager(this.state);
@@ -140,6 +144,15 @@ class FallOfCavalry {
     this.renderManager.init(this);
     this.cityManager = this.cityManager || new CityManager(this.state);
     this.cityManager.init(this);
+    this.questGenerator = this.questGenerator || new QuestGenerator(this.worldManager, this.cityManager, this.economyManager, this.diplomacyManager);
+    this.questManager = this.questManager || new QuestManager(this.modeManager, this.worldManager, this.questGenerator);
+    this.questCompletionOverlay = this.questCompletionOverlay || new QuestCompletionOverlay({ modeManager: this.modeManager, questManager: this.questManager });
+    this.state.on?.('overlay:pushed', ({ panel, context }) => {
+      if (panel === 'questCompletion') this.questCompletionOverlay.show(context);
+    });
+    this.state.on?.('overlay:popped', ({ panel }) => {
+      if (panel?.name === 'questCompletion') this.questCompletionOverlay.hide();
+    });
     this.encounterManager = this.encounterManager || new EncounterManager(this.state);
     this.encounterManager.init(this);
     this.devManager = this.devManager || new DevManager(this.state);
@@ -161,6 +174,7 @@ class FallOfCavalry {
     this.uiManager.updateBuildInfoBadge();
     this.uiManager.applyDevOnlyDomLock();
     this.uiManager.setupSettingsUI();
+    this.uiManager.setupWorldMapOverlay();
     this.uiManager.setupHelpOverlay();
     this.uiManager.setupMenuActions();
     this.gameFlowManager.setupStartFlow();
@@ -182,6 +196,66 @@ class FallOfCavalry {
     this.initialized = true;
     utils.devLog(this.state, '✅ FallOfCavalry - Ready!');
     return true;
+  }
+
+  get cityUI() {
+    return this.cityManager?.cityUI || null;
+  }
+
+  set cityUI(value) {
+    if (this.cityManager) this.cityManager.cityUI = value;
+  }
+
+  setupCityServicesUI() {
+    return this.cityManager?.setupCityServicesUI?.();
+  }
+
+  buildCityPanelData() {
+    return this.economyManager?.buildCityPanelData?.();
+  }
+
+  buildBattleResultPanelData() {
+    return this.encounterManager?.buildBattleResultPanelData?.();
+  }
+
+  getCityFactionContext(settlement) {
+    return this.diplomacyManager?.getCityFactionContext?.(settlement) || null;
+  }
+
+  ensureInventoryModel() {
+    return this.economyManager?.ensureInventoryModel?.();
+  }
+
+  getItemName(itemId) {
+    return this.economyManager?.getItemName?.(itemId) || itemId;
+  }
+
+  getWoundedUnits() {
+    return this.battleManager?.getWoundedUnits?.() || [];
+  }
+
+  setLastEventLog(...args) {
+    return this.gameFlowManager?.setLastEventLog?.(...args);
+  }
+
+  runAutosave(...args) {
+    return this.saveManager?.runAutosave?.(...args);
+  }
+
+  updateTransientUIState() {
+    return this.worldManager?.updateTransientUIState?.();
+  }
+
+  refreshCurrentEventsSummary(...args) {
+    return this.gameFlowManager?.refreshCurrentEventsSummary?.(...args) || [];
+  }
+
+  getEffectiveTuning() {
+    return this.tuningManager?.getEffectiveTuning?.() || {};
+  }
+
+  getWorldAiCfgWithRegionMods() {
+    return this.worldManager?.getWorldAiCfgWithRegionMods?.() || {};
   }
 
   getSelectedRosterCount() {

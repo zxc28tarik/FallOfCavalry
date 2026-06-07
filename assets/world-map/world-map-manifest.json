@@ -1,0 +1,80 @@
+{
+  "id": "ohm-1648-europe-v1-3m",
+  "mapSource": "ohm-1648",
+  "date": "1648-12-31",
+  "width": 1995,
+  "height": 1504,
+  "tileCount": 3000480,
+  "bbox": {
+    "south": 25,
+    "west": -15,
+    "north": 71,
+    "east": 55
+  },
+  "projection": "equirectangular",
+  "worldScale": {
+    "unit": "km",
+    "calculation": "spherical-mid-latitude-approximation",
+    "centerLatitude": 48,
+    "approxWidthKm": 5214.13,
+    "approxHeightKm": 5120.72,
+    "kmPerTileX": 2.6136,
+    "kmPerTileY": 3.4047,
+    "averageKmPerTile": 3.0092,
+    "kmPerWorldPixelX": 0.08168,
+    "kmPerWorldPixelY": 0.1064,
+    "tileSizePx": 32
+  },
+  "terrainEncoding": {
+    "water": 0,
+    "land": 1
+  },
+  "ownerEncoding": {
+    "unassigned": 0,
+    "factions": {
+      "1": "ottoman",
+      "2": "spanish",
+      "3": "austria",
+      "4": "hre",
+      "5": "france",
+      "6": "netherlands",
+      "7": "portugal",
+      "8": "sweden",
+      "9": "denmark",
+      "10": "polish",
+      "11": "russia",
+      "12": "safavid",
+      "13": "venice",
+      "14": "genoa",
+      "15": "papal_states",
+      "16": "swiss",
+      "17": "morocco",
+      "18": "tuscany",
+      "19": "savoy"
+    }
+  },
+  "files": {
+    "owner": {
+      "path": "owner.bin",
+      "bytes": 3000480,
+      "sha256": "80d22633006d52fcab24c3dfc518f9b7eac2ee802848a7e66efee5ab9ca85c80"
+    },
+    "terrain": {
+      "path": "terrain.bin",
+      "bytes": 3000480,
+      "sha256": "f5ce58d2e8d37aad4b88d7c577d5e4afdf4e52b675aa6c5217c30816e30a8da2"
+    },
+    "factionColors": {
+      "path": "faction-colors.json",
+      "bytes": 3347,
+      "sha256": "4701d72b5db5204a8a96c7219c2dc209cba0e129cc82c9f8b1249e316eec2946"
+    }
+  },
+  "downsampledFrom": {
+    "id": "ohm-1648-europe-v1",
+    "width": 3456,
+    "height": 2605,
+    "tileCount": 9002880,
+    "method": "nearest-neighbor-center-sample"
+  }
+}

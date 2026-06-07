@@ -8,6 +8,55 @@ import { ensureWorldParties } from '../systems/world-ai.js';
 import * as suppliesSystem from '../systems/supplies.js';
 import * as campSystem from '../systems/camp.js';
 import * as PoiSystem from '../systems/poi-system.js';
+import {
+  applySavedCityStateCollection,
+  serializeAllSettlementCityStates,
+} from '../systems/city-state.js';
+import { ensureModeManager } from '../core/ModeManager.js';
+
+const FORBIDDEN_MAP_SAVE_KEYS = new Set([
+  'mapData',
+  '__mapData',
+  'tiles',
+  'terrain',
+  'flags',
+  'fog',
+  'heightMap',
+  'owner',
+  'distToSea',
+  'cityState',
+  'modifiedChunks',
+  'fogModifiedChunks',
+]);
+
+function cloneWhitelistedSaveValue(value, seen = new WeakSet()) {
+  if (value == null) return value;
+  if (typeof value !== 'object') return value;
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) return undefined;
+
+  if (seen.has(value)) return undefined;
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => cloneWhitelistedSaveValue(entry, seen))
+      .filter((entry) => entry !== undefined);
+  }
+
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (FORBIDDEN_MAP_SAVE_KEYS.has(key) || typeof entry === 'function') continue;
+    const cloned = cloneWhitelistedSaveValue(entry, seen);
+    if (cloned !== undefined) out[key] = cloned;
+  }
+  return out;
+}
+
+function cloneWhitelistedSaveArray(value) {
+  return Array.isArray(value)
+    ? value.map((entry) => cloneWhitelistedSaveValue(entry)).filter((entry) => entry !== undefined)
+    : [];
+}
 
 export class SaveManager {
   constructor(gameState) {
@@ -184,6 +233,31 @@ Esc close`,
 
   // ── Phase 4C: Core serialization ──────────────────────────────────
 
+  buildMapSavePayload() {
+    const map = this.state?.map || {};
+    const mapData = map?.mapData || map?.__mapData || this.state?.mapData || {};
+
+    return {
+      width: Number.isFinite(map.width) ? map.width : (Number.isFinite(mapData.width) ? mapData.width : 0),
+      height: Number.isFinite(map.height) ? map.height : (Number.isFinite(mapData.height) ? mapData.height : 0),
+      seed: map.seed ?? mapData.seed ?? this.state?.seed ?? null,
+      mapSource: map.assetMetadata?.mapSource ?? mapData.assetMetadata?.mapSource ?? null,
+      worldMapVersion: map.assetMetadata?.worldMapVersion ?? mapData.assetMetadata?.worldMapVersion ?? null,
+      projection: map.assetMetadata?.projection ?? mapData.assetMetadata?.projection ?? null,
+      bbox: cloneWhitelistedSaveValue(map.assetMetadata?.bbox ?? mapData.assetMetadata?.bbox ?? null),
+      worldScale: cloneWhitelistedSaveValue(map.assetMetadata?.worldScale ?? mapData.assetMetadata?.worldScale ?? null),
+      assetHashes: map.assetMetadata?.hashes ?? mapData.assetMetadata?.hashes ?? null,
+      heightEncoding: map.heightEncoding ?? mapData.heightEncoding ?? null,
+      heightRange: map.heightRange ?? mapData.heightRange ?? null,
+      settlements: cloneWhitelistedSaveArray(map.settlements ?? mapData.settlements),
+      factionZones: cloneWhitelistedSaveArray(map.factionZones ?? mapData.factionZones),
+      rivers: cloneWhitelistedSaveArray(map.rivers ?? mapData.rivers),
+      roads: cloneWhitelistedSaveArray(map.roads ?? mapData.roads),
+      crossings: cloneWhitelistedSaveArray(map.crossings ?? mapData.crossings),
+      pois: cloneWhitelistedSaveArray(map.pois ?? mapData.pois),
+    };
+  }
+
   buildSavePayload() {
     const nowIso = new Date().toISOString();
     const playerParty = this.game?.playerParty;
@@ -240,6 +314,7 @@ Esc close`,
     return {
       schemaVersion: 1,
       savedAt: nowIso,
+      map: this.buildMapSavePayload(),
       game: {
         day: Number.isFinite(this.state?.day) ? this.state.day : 1,
         mode: typeof this.state?.mode === 'string' ? this.state.mode : 'map',
@@ -322,6 +397,7 @@ Esc close`,
         dailyLedger: this.state?.dailyLedger && typeof this.state.dailyLedger === 'object' ? this.state.dailyLedger : { tradePL: 0 },
         inventory,
         buildings: buildingState,
+        cityState: serializeAllSettlementCityStates(settlements),
         tuning: this.state?.tuning && typeof this.state.tuning === 'object' ? this.state.tuning : {},
         factions: this.state?.factions && typeof this.state.factions === 'object' ? this.state.factions : null,
       },
@@ -335,10 +411,13 @@ Esc close`,
 
     this.state.day = Number.isFinite(game.day) ? game.day : 1;
     this.state.paused = Boolean(game.paused);
+    const minZoom = Math.max(0.01, Number(CONST.WORLD?.MIN_ZOOM ?? CONST.WORLD?.CAMERA_MIN_ZOOM) || 0.42);
+    const maxZoom = Math.max(minZoom, Number(CONST.WORLD?.CAMERA_MAX_ZOOM) || 2.5);
+    const savedZoom = Number.isFinite(game?.camera?.zoom) ? game.camera.zoom : 1;
     this.state.camera = {
       x: Number.isFinite(game?.camera?.x) ? game.camera.x : 0,
       y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
-      zoom: Number.isFinite(game?.camera?.zoom) ? game.camera.zoom : 1,
+      zoom: Math.max(minZoom, Math.min(maxZoom, savedZoom)),
     };
 
     const p = game.playerParty || {};
@@ -501,6 +580,7 @@ Esc close`,
     this.state.factions = ensureFactionState(game.factions, CONST.DIPLOMACY_RELATIONS);
     this.game?.ensureFactionState?.();
     assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
+    applySavedCityStateCollection(settlements, game.cityState);
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
@@ -519,16 +599,15 @@ Esc close`,
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
     if (!safeModes.has(loadedMode)) {
-      this.state.setMode('map');
+      ensureModeManager(this.state)?.switchTo('map');
       this.game?.setLastEventLog?.('Loaded into map for safety');
     } else {
-      this.state.setMode(loadedMode);
+      ensureModeManager(this.state)?.switchTo(loadedMode);
     }
 
     this.state.encounter = null;
     this.state.battle = null;
     this.state.accounting = null;
-    this.state.aftermath = null;
     this.state.lastSaveMeta = { slot, at: Date.now() };
     this.game?.setupSettingsUI?.();
     this.game?.updateTransientUIState?.();

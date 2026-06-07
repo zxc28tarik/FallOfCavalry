@@ -12,6 +12,7 @@ export const GAME = Object.freeze({
 
   // Karşılaşma
   ENCOUNTER_COOLDOWN_SEC: 2.2,
+  ENCOUNTER_RATE_MULT: 0.005,
   PLAYER_GHOST_DURATION_SEC: 8,
 
   // Savaş
@@ -26,6 +27,7 @@ export const GAME = Object.freeze({
   STARTING_GOLD: 1000,
   STARTING_ARMY: 50,
   STARTING_RENOWN: 0,
+  PLAYER_WORLD_SPEED_MULT: 15,
 
   // 2.x Hareket / encounter tuning
   ROAD_SPEED_MULT: 1.2,
@@ -98,6 +100,21 @@ export const FACTION = Object.freeze({
     POLISH: 'polish',
     SPANISH: 'spanish',
     VENICE: 'venice',
+    RUSSIA: 'russia',
+    FRANCE: 'france',
+    ENGLAND: 'england',
+    SWEDEN: 'sweden',
+    PORTUGAL: 'portugal',
+    DENMARK: 'denmark',
+    SAFAVID: 'safavid',
+    AUSTRIA: 'austria',
+    NETHERLANDS: 'netherlands',
+    GENOA: 'genoa',
+    PAPAL_STATES: 'papal_states',
+    SWISS: 'swiss',
+    MOROCCO: 'morocco',
+    TUSCANY: 'tuscany',
+    SAVOY: 'savoy',
     BANDIT: 'bandit',
   },
 
@@ -111,6 +128,20 @@ export const FACTIONS = Object.freeze([
   { id: FACTION.ID.SPANISH, name: 'İspanya Krallığı', color: '#f57c00', doctrine: 'Tercio Taktiği', desc: 'Efsanevi Tercio birlikleriyle Batı Avrupaya hükmedin.', startingGold: 115, startingArmy: 0, startingRenown: 12, armyHint: 'Mızrakçı ve tüfekçi karması.' },
   { id: FACTION.ID.POLISH, name: 'Polonya Krallığı', color: '#8e44ad', doctrine: 'Kanatlı Hussarlar', desc: 'Efsanevi hussarlarla kuzeyde hükümranlık kurun.', startingGold: 100, startingArmy: 0, startingRenown: 10, armyHint: 'Süvari ağırlıklı saldırı gücü.' },
   { id: FACTION.ID.VENICE, name: 'Venedik Cumhuriyeti', color: '#1e88e5', doctrine: 'Ticaret Gücü', desc: 'Zengin ticaret ağı ve paralı askerlerle stratejik üstünlük.', startingGold: 200, startingArmy: 0, startingRenown: 8, armyHint: 'Az ama seçkin birlikler, yüksek altın.' },
+  { id: FACTION.ID.RUSSIA, name: 'Rus Carligi', color: '#9ba978', doctrine: 'Step Siniri', desc: 'Dogu Avrupa ve kuzey bozkirlarinda genisleyen carlik.', playable: false },
+  { id: FACTION.ID.FRANCE, name: 'Fransa Kralligi', color: '#597aa8', doctrine: 'Kraliyet Ordusu', desc: 'Bati Avrupa merkezli mavi sancakli krallik.', playable: false },
+  { id: FACTION.ID.SWEDEN, name: 'Isvec Kralligi', color: '#d7a544', doctrine: 'Kuzey Ordusu', desc: 'Baltik ve Iskandinavya uzerinde yukselen kuzey gucu.', playable: false },
+  { id: FACTION.ID.PORTUGAL, name: 'Portekiz Kralligi', color: '#6fa15f', doctrine: 'Atlantik Ticareti', desc: 'Iberyanin bati kiyisindaki denizci krallik.', playable: false },
+  { id: FACTION.ID.DENMARK, name: 'Danimarka-Norvec', color: '#c66f50', doctrine: 'Kuzey Bogazlari', desc: 'Kuzey deniz yollarini tutan krallik.', playable: false },
+  { id: FACTION.ID.SAFAVID, name: 'Safevi Devleti', color: '#4f9b84', doctrine: 'Kizilbas Ocagi', desc: 'Iran ve Kafkas hattinda Osmanlinin dogu rakibi.', playable: false },
+  { id: FACTION.ID.AUSTRIA, name: 'Haus Osterreich', color: '#ecc545', doctrine: 'Habsburg Topraklari', desc: 'Avusturya, Bohemya ve Macar cekirdeginin hanedan gucu.', playable: false },
+  { id: FACTION.ID.NETHERLANDS, name: 'Birlesik Hollanda Cumhuriyeti', color: '#dea82d', doctrine: 'Deniz Ticareti', desc: 'Kuzey Denizi ticaret aglarini tutan cumhuriyet.', playable: false },
+  { id: FACTION.ID.GENOA, name: 'Cenova Cumhuriyeti', color: '#b86d70', doctrine: 'Ligurya Ticareti', desc: 'Akdeniz ticareti ve banka aglariyla ayakta duran denizci cumhuriyet.', playable: false },
+  { id: FACTION.ID.PAPAL_STATES, name: 'Papal Devleti', color: '#ba97bf', doctrine: 'Ruhani Otorite', desc: 'Orta Italya merkezli papalik topraklari.', playable: false },
+  { id: FACTION.ID.SWISS, name: 'Isvicre Konfederasyonu', color: '#d6cdb5', doctrine: 'Dag Konfederasyonu', desc: 'Alplerin savunmaci kanton birligi.', playable: false },
+  { id: FACTION.ID.MOROCCO, name: "Saltanatu's-Serife", color: '#8f3a49', doctrine: 'Magreb Sultanligi', desc: 'Fas ve bati Magreb hattinda serif hanedan otoritesi.', playable: false },
+  { id: FACTION.ID.TUSCANY, name: 'Toskana Grandukaligi', color: '#c6ae57', doctrine: 'Toskana Sehirleri', desc: 'Orta Italya ticaret ve zanaat merkezleri.', playable: false },
+  { id: FACTION.ID.SAVOY, name: 'Savoy Dukaligi', color: '#bf805f', doctrine: 'Alp Gecitleri', desc: 'Alpler ve Piyemonte hattinda stratejik dukalik.', playable: false },
 ]);
 
 export const FACTION_WAR = Object.freeze({

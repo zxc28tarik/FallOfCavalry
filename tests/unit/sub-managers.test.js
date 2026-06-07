@@ -579,6 +579,33 @@ describe('WorldSimManager', () => {
     expect(mgr.world.enemyParties.length).toBeGreaterThan(0);
   });
 
+  it('initEnemyParties seeds all encounter party types', () => {
+    const mgr = createSimMgr({
+      state: { mode: 'map', map: makeMap(), factions: {} },
+    });
+    mgr.initEnemyParties();
+    const types = new Set(mgr.world.enemyParties.map((party) => party.encounterType));
+    expect(types.has('bandit')).toBe(true);
+    expect(types.has('caravan')).toBe(true);
+    expect(types.has('enemy_patrol')).toBe(true);
+    expect(types.has('refugee')).toBe(true);
+    expect(types.has('traveling_merchant')).toBe(true);
+    expect(types.has('messenger')).toBe(true);
+    expect(types.has('villagers')).toBe(true);
+    expect(types.has('noble')).toBe(true);
+  });
+
+  it('checkSurpriseEncounters can trigger a surprise bandit encounter', () => {
+    const mgr = createSimMgr({
+      state: { mode: 'map', map: makeMap(), factions: {}, encounterRisk: { mult: 1 }, setMode(m) { this.mode = m; } },
+    });
+    const result = mgr.worldPartyManager.checkSurpriseEncounters({ forceType: 'bandit' });
+    expect(result).toBe(true);
+    expect(mgr.world.state.mode).toBe('encounter');
+    expect(mgr.world.state.encounter.encounterType).toBe('bandit');
+    expect(mgr.world.state.encounter.isSurprise).toBe(true);
+  });
+
   it('initEnemyParties preserves existing aiParties from state', () => {
     const saved = [{ id: 'saved-1', x: 100, y: 100, factionId: 'bandits', radius: 12, speed: 40 }];
     const mgr = createSimMgr({

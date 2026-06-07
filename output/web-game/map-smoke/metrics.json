@@ -1,0 +1,54 @@
+[
+  {
+    "zoom": 1,
+    "stateZoom": 1,
+    "renderMode": "close",
+    "terrainMode": "homm3",
+    "cacheMB": 62.91,
+    "maxCacheMB": 96,
+    "chunkCount": 31,
+    "chunkBuildsThisFrame": 1,
+    "visibleForest": 171,
+    "visibleMountain": 0,
+    "worldStageMs": 23.22
+  },
+  {
+    "zoom": 0.7,
+    "stateZoom": 0.7,
+    "renderMode": "close",
+    "terrainMode": "homm3",
+    "cacheMB": 95.38,
+    "maxCacheMB": 96,
+    "chunkCount": 47,
+    "chunkBuildsThisFrame": 1,
+    "visibleForest": 334,
+    "visibleMountain": 0,
+    "worldStageMs": 31.4
+  },
+  {
+    "zoom": 0.5,
+    "stateZoom": 0.5,
+    "renderMode": "reduced",
+    "terrainMode": "homm3",
+    "cacheMB": 95.38,
+    "maxCacheMB": 96,
+    "chunkCount": 47,
+    "chunkBuildsThisFrame": 1,
+    "visibleForest": 283,
+    "visibleMountain": 0,
+    "worldStageMs": 87.35
+  },
+  {
+    "zoom": 0.42,
+    "stateZoom": 0.42,
+    "renderMode": "reduced",
+    "terrainMode": "homm3",
+    "cacheMB": 95.38,
+    "maxCacheMB": 96,
+    "chunkCount": 47,
+    "chunkBuildsThisFrame": 1,
+    "visibleForest": 382,
+    "visibleMountain": 0,
+    "worldStageMs": 203.56
+  }
+]

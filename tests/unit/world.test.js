@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import * as CONST from '../../js/constants.js';
 import { WorldManager } from '../../js/managers/WorldManager.js';
 
 describe('WorldManager - Phase 3A', () => {
@@ -126,6 +127,16 @@ describe('WorldManager - Phase 3B', () => {
     const wm = createWM({ camera: { x: 99999, y: 99999, zoom: 1 } });
     const cam = wm.clampCameraToWorld();
     expect(cam.x).toBeLessThan(99999);
+  });
+
+  it('clampCameraToWorld applies the expanded world zoom range', () => {
+    const wm = createWM({ camera: { x: 0, y: 0, zoom: 0.001 } });
+    const minCam = wm.clampCameraToWorld();
+    expect(minCam.zoom).toBe(CONST.WORLD.CAMERA_MIN_ZOOM);
+
+    wm.state.camera.zoom = 999;
+    const maxCam = wm.clampCameraToWorld();
+    expect(maxCam.zoom).toBe(CONST.WORLD.CAMERA_MAX_ZOOM);
   });
 
   it('centerCameraOnParty returns false without party', () => {
@@ -347,8 +358,8 @@ describe('WorldManager - Phase 3D', () => {
     expect(wm.state.encounterRisk).toHaveProperty('mult');
   });
 
-  it('updateTransientUIState syncs roster state in roster mode', () => {
-    const wm = createWM({ mode: 'roster' }, {
+  it('updateTransientUIState syncs deploy selection state in battle deploy phase', () => {
+    const wm = createWM({ mode: 'battle', battle: { phase: 'deploy', deployStep: 'selection' } }, {
       playerRoster: [{ id: 'u1', hp: 100, maxHp: 100, atk: 14 }],
       enemyRoster: [{ id: 'e1', hp: 50, maxHp: 100, atk: 10 }],
     });
@@ -364,7 +375,7 @@ describe('WorldManager - Phase 3D', () => {
   });
 
   it('updatePlayerParty moves party toward destination', () => {
-    const party = { x: 100, y: 100, radius: 12, speed: 180, destX: 200, destY: 100, hasDestination: true, arrivalFeedbackTimer: 0 };
+    const party = { x: 100, y: 100, radius: 12, speed: 180, destX: 500, destY: 100, hasDestination: true, arrivalFeedbackTimer: 0 };
     const wm = createWM({}, { playerParty: party });
     wm.rebuildMovementMasks();
     wm.updatePlayerParty(0.1);

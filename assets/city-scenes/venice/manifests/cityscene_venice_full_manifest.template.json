@@ -1,0 +1,14 @@
+{
+  "sceneId": "venice_city_full",
+  "faction": "venice",
+  "variant": "full",
+  "status": "template",
+  "baseImage": "",
+  "overlayRoot": "assets/city-scenes/venice/overlays/",
+  "slotSource": "js/data/city-scene-defs.js",
+  "notes": [
+    "Fill this template when real Venice art arrives.",
+    "Use the same slot ids as the first-phase common layout."
+  ],
+  "slots": []
+}

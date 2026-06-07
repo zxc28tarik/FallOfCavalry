@@ -2,10 +2,10 @@ export function isDevMode() {
   try {
     const url = new URL(window.location.href);
     if (url.searchParams.get('dev') === '1') return true;
-  } catch (_e) { /* URL parse hatası — tarayıcı dışı ortam */ }
+  } catch { /* URL parse hatası — tarayıcı dışı ortam */ }
   try {
     return localStorage.getItem('foc:dev') === '1';
-  } catch (_e) { /* localStorage erişim hatası */ }
+  } catch { /* localStorage erişim hatası */ }
   return false;
 }
 

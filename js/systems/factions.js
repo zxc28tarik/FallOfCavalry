@@ -14,12 +14,6 @@ function clampRelation(value, cfg = CONST.DIPLOMACY_RELATIONS) {
   return Math.max(min, Math.min(max, Math.round(numeric)));
 }
 
-function keyFor(a, b) {
-  const left = String(a || 'unknown');
-  const right = String(b || 'unknown');
-  return left < right ? `${left}|${right}` : `${right}|${left}`;
-}
-
 function isObjectLike(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
 }

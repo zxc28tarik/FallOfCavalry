@@ -25,6 +25,10 @@ describe('EconomyManager - Phase 5A', () => {
     const em = new EconomyManager(state);
     em.init({
       playerParty: { x: 0, y: 0, inventory: { items: [], capacity: null } },
+      gameFlowManager: {
+        enterCity: () => { state.mode = 'city'; },
+        exitCity: () => { state.mode = 'map'; },
+      },
       ...gameOverrides,
     });
     em.itemCatalog = CATALOG;
@@ -70,10 +74,10 @@ describe('EconomyManager - Phase 5A', () => {
     expect(result.id).toBe('s1');
   });
 
-  it('getActiveSettlementForCity returns fallback when no settlements', () => {
+  it('getActiveSettlementForCity returns null when no settlements', () => {
     const em = createEM({ map: { settlements: [] } });
     const result = em.getActiveSettlementForCity();
-    expect(result.id).toBe('city-fallback');
+    expect(result).toBeNull();
   });
 
   it('ensureInventoryModel initializes missing inventory', () => {
@@ -90,6 +94,15 @@ describe('EconomyManager - Phase 5A', () => {
   it('getItemName returns id when not found', () => {
     const em = createEM();
     expect(em.getItemName('unknown')).toBe('unknown');
+  });
+
+  it('default trade catalog uses expanded Turkish trade goods', () => {
+    const em = new EconomyManager({});
+    expect(CONST.TRADE_ITEMS).toHaveLength(34);
+    expect(em.itemCatalog).toHaveLength(34);
+    expect(em.getItemName('wheat')).toBe('Buğday');
+    expect(em.getItemName('grain')).toBe('Buğday');
+    expect(CONST.TRADE_GOOD_BY_ID.jewelry.basePrice).toBe(200);
   });
 
   it('addItem adds new item to inventory', () => {
@@ -240,6 +253,10 @@ describe('EconomyManager - Phase 5C', () => {
       maybeShowTutorialHint: () => {},
       runAutosave: () => {},
       getCityFactionContext: () => null,
+      gameFlowManager: {
+        enterCity: () => { state.mode = 'city'; },
+        exitCity: () => { state.mode = 'map'; },
+      },
       cityUI: { show: () => {}, hide: () => {} },
       ...gameOverrides,
     });
@@ -295,8 +312,8 @@ describe('EconomyManager - Phase 5C', () => {
   it('tradeCurrentItem buy deducts gold', () => {
     const settlement = {
       id: 's1', type: 'town',
-      marketStock: [{ id: 'grain', qty: 10 }, { id: 'iron', qty: 10 }],
-      priceMultiplier: { grain: 1, iron: 1 },
+      marketStock: [{ id: 'wheat', qty: 10 }, { id: 'iron', qty: 10 }],
+      priceMultiplier: { wheat: 1, iron: 1 },
     };
     const em = createEM({ city: settlement });
     em.cityMarketCursor = 0;
@@ -331,7 +348,7 @@ describe('EconomyManager - Phase 5C', () => {
     expect(unit.hp).toBeGreaterThan(50);
   });
 
-  // Phase 5D — processDailyEconomy
+  // Phase 5D - processDailyEconomy
   function createEMForDaily(stateOverride = {}, gameOverride = {}) {
     const state = {
       day: 1,
@@ -400,7 +417,7 @@ describe('EconomyManager - Phase 5C', () => {
     expect(result).toBeUndefined();
   });
 
-  // Phase 6A — InputManager: setupPartyInputHandlers
+  // Phase 6A - InputManager: setupPartyInputHandlers
   describe('InputManager - Phase 6A', () => {
     it('instantiates with correct initial state', () => {
       const im = new GameInputManager({});
@@ -460,10 +477,10 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // Phase 6B — GameInputManager: setupKeyboardShortcuts
+  // Phase 6B - GameInputManager: setupKeyboardShortcuts
   describe('GameInputManager - Phase 6B', () => {
     // Helper: build a GameInputManager with a pre-wired keyboardHandler
-    // (bypasses the document guard — vitest runs in Node, no browser document)
+    // (bypasses the document guard - vitest runs in Node, no browser document)
     function makeIMWithHandler(gameOverride = {}) {
       const game = {
         state: { mode: 'map', devMode: false },
@@ -476,6 +493,8 @@ describe('EconomyManager - Phase 5C', () => {
           toggleHelpOverlay: vi.fn(),
           toggleCampMode: vi.fn(),
           closeAccountingModal: vi.fn(),
+          toggleWorldMapOverlay: vi.fn(),
+          isWorldMapVisible: vi.fn(() => false),
           setupPoiUI: vi.fn(),
         },
         saveManager: {
@@ -524,7 +543,7 @@ describe('EconomyManager - Phase 5C', () => {
           applyBattleCommand: vi.fn(),
           toggleBattleHoldFire: vi.fn(),
           resolveBattle: vi.fn(),
-          exitAftermathToMap: vi.fn(),
+          exitBattleResultToMap: vi.fn(),
           getWoundedUnits: vi.fn(() => []),
         },
         worldManager: {
@@ -604,7 +623,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 7A — RenderManager: simple render screens ───────────────────────
+  // --- Phase 7A - RenderManager: simple render screens -----
   describe('RenderManager - Phase 7A', () => {
     function makeRM(stateOverride = {}, gameOverride = {}) {
       const state = { day: 1, mode: 'map', debug: { fps: 60 }, player: { gold: 100 }, ...stateOverride };
@@ -691,7 +710,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 7B — RenderManager: renderWorldTerrain ──────────────────────────
+  // --- Phase 7B - RenderManager: renderWorldTerrain -----
   describe('RenderManager - Phase 7B', () => {
     function makeRMTerrain(stateOverride = {}, gameOverride = {}) {
       const state = { day: 1, map: null, clueMarker: null, ...stateOverride };
@@ -719,6 +738,8 @@ describe('EconomyManager - Phase 5C', () => {
         ...gameOverride,
       };
       rm.init(game);
+      rm.useDimetric = false;
+      rm.projectionMode = 'legacy_topdown';
       return { rm, game, mockCtx };
     }
 
@@ -741,6 +762,7 @@ describe('EconomyManager - Phase 5C', () => {
         tiles: [{ type: 0 }, { type: 0 }, { type: 0 }, { type: 0 }],
         width: 2,
         height: 2,
+        biomes: new Uint8Array(4),
         rivers: [],
         roads: [],
         pois: [],
@@ -755,13 +777,13 @@ describe('EconomyManager - Phase 5C', () => {
       const map = { tiles: [{ type: 0 }], width: 1, height: 1, rivers: [], roads: [], pois: [], settlements: [] };
       const { rm, mockCtx } = makeRMTerrain({ map, clueMarker: null });
       rm.renderWorldTerrain(mockCtx, camera);
-      // arc would be called only for clue marker — should NOT have been called for null clue
+      // arc would be called only for clue marker - should NOT have been called for null clue
       // (arc may be called for settlements, so just check no throw)
       expect(() => rm.renderWorldTerrain(mockCtx, camera)).not.toThrow();
     });
   });
 
-  // ─── Phase 7C — RenderManager: renderMap + renderWorldOverlays ──────────────
+  // --- Phase 7C - RenderManager: renderMap + renderWorldOverlays -----
   describe('RenderManager - Phase 7C', () => {
     function makeRMMap(stateOverride = {}, gameOverride = {}) {
       const state = { day: 1, mode: 'map', debug: { fps: 60, enabled: false }, player: { gold: 0 }, ...stateOverride };
@@ -793,7 +815,6 @@ describe('EconomyManager - Phase 5C', () => {
         state,
         uiManager: {
           weatherState: null,
-          minimapRenderer: { render: vi.fn() },
           getWeatherConfig: vi.fn(() => ({})),
         },
         worldManager: {
@@ -818,6 +839,8 @@ describe('EconomyManager - Phase 5C', () => {
         ...gameOverride,
       };
       rm.init(game);
+      rm.useDimetric = false;
+      rm.projectionMode = 'legacy_topdown';
       return { rm, game, mockCtx };
     }
 
@@ -867,15 +890,13 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 8A — BattleManager: confirmRosterSelection + exitAftermathToMap ──
+  // --- Phase 8A - BattleManager: confirmRosterSelection + exitBattleResultToMap --
   describe('BattleManager - Phase 8A', () => {
     function makeBM8A(stateOverride = {}, gameOverride = {}) {
       const state = {
-        mode: 'roster',
-        roster: { enemyId: 'enemy-1', warning: '' },
+        mode: 'battle',
         encounter: { enemyId: 'enemy-1' },
-        battle: null,
-        aftermath: null,
+        battle: { phase: 'deploy', deployStep: 'selection', enemyId: 'enemy-1', warning: '' },
         escortState: null,
         factions: {},
         map: { settlements: [] },
@@ -930,7 +951,7 @@ describe('EconomyManager - Phase 5C', () => {
       return { bm, game, state };
     }
 
-    it('confirmRosterSelection() returns false when mode is not roster', () => {
+    it('confirmRosterSelection() returns false when mode is not battle deploy', () => {
       const { bm } = makeBM8A({ mode: 'map' });
       expect(bm.confirmRosterSelection()).toBe(false);
     });
@@ -951,24 +972,24 @@ describe('EconomyManager - Phase 5C', () => {
       expect(state.battle).toBeDefined();
     });
 
-    it('exitAftermathToMap() returns false when mode is not aftermath', () => {
-      const { bm } = makeBM8A({ mode: 'map', aftermath: null });
-      expect(bm.exitAftermathToMap()).toBe(false);
+    it('exitBattleResultToMap() returns false when battle is not in result phase', () => {
+      const { bm } = makeBM8A({ mode: 'map', battle: null });
+      expect(bm.exitBattleResultToMap()).toBe(false);
     });
 
-    it('exitAftermathToMap() resets state.aftermath to null and calls runAutosave', () => {
+    it('exitBattleResultToMap() clears battle result and calls runAutosave', () => {
       const { bm, game, state } = makeBM8A({
-        mode: 'aftermath',
-        aftermath: { enemyId: 'e1', result: 'defeat', goldDelta: 0, renownDelta: 0 },
+        mode: 'battle',
+        battle: { phase: 'result', battleResult: { enemyId: 'e1', result: 'defeat', goldDelta: 0, renownDelta: 0 } },
       });
       game.worldManager.enemyParties = [{ id: 'e1', x: 0, y: 0 }];
-      bm.exitAftermathToMap();
-      expect(state.aftermath).toBeNull();
-      expect(game.saveManager.runAutosave).toHaveBeenCalledWith('aftermath-close');
+      bm.exitBattleResultToMap();
+      expect(state.battle).toBeNull();
+      expect(game.saveManager.runAutosave).toHaveBeenCalledWith('battle-result-close');
     });
   });
 
-  // ─── Phase 8B — CityManager: setupCityServicesUI ───────────────────────────
+  // --- Phase 8B - CityManager: setupCityServicesUI -----
   describe('CityManager - Phase 8B', () => {
     function makeCM8B(stateOverride = {}, gameOverride = {}) {
       const state = { mode: 'city', city: null, markets: {}, day: 1, ...stateOverride };
@@ -1016,19 +1037,19 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('setupCityServicesUI() sets game.cityUI when null', () => {
       const { cm, game } = makeCM8B();
-      // CityServicesUI constructor will throw in test env (no DOM) — just check no crash or handle gracefully
+      // CityServicesUI constructor will throw in test env (no DOM) - just check no crash or handle gracefully
       try {
         cm.setupCityServicesUI();
         // If it succeeds (mock env), cityUI should be set
         expect(game.cityUI).toBeDefined();
       } catch {
-        // CityServicesUI or utils.getEl may throw in Node/vitest env — acceptable
+        // CityServicesUI or utils.getEl may throw in Node/vitest env - acceptable
         expect(true).toBe(true);
       }
     });
   });
 
-  // ─── Phase 8C — PoiManager: investigateActivePoi ───────────────────────────
+  // --- Phase 8C - PoiManager: investigateActivePoi -----
   describe('PoiManager - Phase 8C', () => {
     function makePM8C(stateOverride = {}, gameOverride = {}) {
       const state = { day: 1, seed: 42, supplies: { food: 100 }, regionState: {}, clueMarker: null, marketOpportunities: {}, ...stateOverride };
@@ -1070,7 +1091,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
 
     it('investigateActivePoi() returns false when canInteract is false (cooldown)', async () => {
-      // PoiSystem.canInteract is a real module — mock it indirectly via state
+      // PoiSystem.canInteract is a real module - mock it indirectly via state
       const { pm, game } = makePM8C();
       game.activePoi = { id: 'poi-1', x: 5, y: 5, type: 'camp' };
       // canInteract checks state.investigatedPois for cooldown
@@ -1086,15 +1107,15 @@ describe('EconomyManager - Phase 5C', () => {
       const { pm, game } = makePM8C();
       const poi = { id: 'poi-2', x: 3, y: 3, type: 'ruin' };
       game.activePoi = poi;
-      // investigateActivePoi will call PoiSystem.rollOutcome — result depends on seed/day
+      // investigateActivePoi will call PoiSystem.rollOutcome - result depends on seed/day
       // Just ensure it returns a boolean and doesn't throw
       expect(() => pm.investigateActivePoi()).not.toThrow();
     });
   });
 
-  // ─── Phase 9A: TuningManager ─────────────────────────────────────────────────
+  // --- Phase 9A: TuningManager -----
 
-  describe('TuningManager — Phase 9A', () => {
+  describe('TuningManager - Phase 9A', () => {
     function makeTM9A() {
       const state = { tuning: {}, tuningDraft: null, devMode: false };
       const tm = new TuningManager(state);
@@ -1162,9 +1183,9 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 9B: UIManager ─────────────────────────────────────────────────────
+  // --- Phase 9B: UIManager -----
 
-  describe('UIManager — Phase 9B', () => {
+  describe('UIManager - Phase 9B', () => {
     function makeUM9B() {
       const state = { mode: 'start', tuning: {}, devMode: false };
       const um = new UIManager(state);
@@ -1255,14 +1276,14 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('setupDOMReferences() method exists on UIManager', () => {
       const { um } = makeUM9B();
-      // setupDOMReferences uses real DOM APIs — just verify the method is defined
+      // setupDOMReferences uses real DOM APIs - just verify the method is defined
       expect(typeof um.setupDOMReferences).toBe('function');
     });
   });
 
-  // ─── Phase 9C: DevManager ─────────────────────────────────────────────────────
+  // --- Phase 9C: DevManager -----
 
-  describe('DevManager — Phase 9C', () => {
+  describe('DevManager - Phase 9C', () => {
     function makeDM9C() {
       const state = { devMode: false, debug: null, mode: 'start', tuning: {} };
       const dm = new DevManager(state);
@@ -1303,7 +1324,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 10A: DiplomacyManager ────────────────────────────────────────────
+  // --- Phase 10A: DiplomacyManager -----
 
   describe('DiplomacyManager - Phase 10A', () => {
     function makeDM10A(stateOverrides = {}) {
@@ -1343,7 +1364,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 10B: EncounterManager ─────────────────────────────────────────────
+  // --- Phase 10B: EncounterManager -----
 
   describe('EncounterManager - Phase 10B', () => {
     function makeEM10B(stateOverrides = {}, gameOverrides = {}) {
@@ -1400,15 +1421,52 @@ describe('EconomyManager - Phase 5C', () => {
       expect(() => em.applyEncounterPushback({})).not.toThrow();
     });
 
-    it('buildAftermathPanelData returns default when aftermath is missing', () => {
+    it('buildBattleResultPanelData returns default when battle result is missing', () => {
       const { em } = makeEM10B();
-      const result = em.buildAftermathPanelData();
-      expect(result.title).toBe('Battle Aftermath');
-      expect(result.body).toBe('No aftermath data');
+      const result = em.buildBattleResultPanelData();
+      expect(result.title).toBe('Battle Result');
+      expect(result.body).toBe('No battle result data');
+    });
+
+    it('buildEncounterPanelData lists type-specific options', () => {
+      const { em } = makeEM10B({
+        encounter: { enemyId: 'e1', encounterType: 'bandit', isSurprise: false },
+      });
+      const panel = em.buildEncounterPanelData();
+      expect(panel.title).toContain('Haydut');
+      expect(panel.body).toContain('1. Savas');
+      expect(panel.body).toContain('Teklif et');
+    });
+
+    it('resolveEncounter opens trade as an overlay', () => {
+      const { em, state } = makeEM10B({
+        encounter: { enemyId: 'caravan-1', encounterType: 'caravan', isSurprise: false },
+      });
+      const result = em.resolveEncounter('trade');
+      expect(result).toBe(true);
+      expect(state.mode).toBe('encounter');
+      expect(state.modeManager.overlayStack.at(-1).name).toBe('trade');
+      expect(state.modeManager.overlayStack.at(-1).context.encounterType).toBe('caravan');
+    });
+
+    it('surprise bandit fight carries ambush context into battle deploy', () => {
+      const { em, state, game } = makeEM10B({
+        encounter: { enemyId: 'bandit-1', encounterType: 'bandit', isSurprise: true },
+      });
+      game.worldManager.enemyParties = [{ id: 'bandit-1', x: 120, y: 100, radius: 12, encounterType: 'bandit' }];
+      game.battleManager.getEnemyUnits = () => [{ id: 'e-u1', name: 'Raider', hp: 80, maxHp: 80, atk: 10, def: 4 }];
+      game.playerParty.roster = [{ id: 'p-u1', name: 'Infantry', hp: 100, maxHp: 100, atk: 12, def: 6 }];
+      const result = em.resolveEncounter('fight');
+      expect(result).toBe(true);
+      expect(state.mode).toBe('battle');
+      expect(state.battle.phase).toBe('deploy');
+      expect(state.battle.battleContext.ambushType).toBe('surprise');
+      expect(state.battle.battleContext.playerDeployPenalty).toBe(true);
+      expect(state.battle.battleContext.enemySectorAdvantage).toEqual([1, 2]);
     });
   });
 
-  // ─── Phase 10C: GameFlowManager ──────────────────────────────────────────────
+  // --- Phase 10C: GameFlowManager -----
 
   describe('GameFlowManager - Phase 10C', () => {
     function makeGFM10C(stateOverrides = {}, gameOverrides = {}) {
@@ -1457,7 +1515,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 10C: PoiManager extension ─────────────────────────────────────────
+  // --- Phase 10C: PoiManager extension -----
 
   describe('PoiManager extension - Phase 10C', () => {
     it('updatePoiInteractHint is a no-op when state is null', () => {
@@ -1481,7 +1539,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 11A: GameFlowManager extensions ───────────────────────────────────
+  // --- Phase 11A: GameFlowManager extensions -----
 
   describe('GameFlowManager - Phase 11A extensions', () => {
     function makeGFM11A(gameOverrides = {}) {
@@ -1538,7 +1596,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 11B: UIManager extensions ─────────────────────────────────────────
+  // --- Phase 11B: UIManager extensions -----
 
   describe('UIManager - Phase 11B extensions', () => {
     function makeUM11B(stateOverrides = {}, gameOverrides = {}) {
@@ -1578,7 +1636,7 @@ describe('EconomyManager - Phase 5C', () => {
 
     it('applyDevOnlyDomLock is a no-op in non-browser env', () => {
       const { um } = makeUM11B();
-      // document is undefined in Node test env — should not throw
+      // document is undefined in Node test env - should not throw
       expect(() => um.applyDevOnlyDomLock()).not.toThrow();
     });
 
@@ -1594,7 +1652,7 @@ describe('EconomyManager - Phase 5C', () => {
     });
   });
 
-  // ─── Phase 11C: WorldManager + EncounterManager + UIManager misc ─────────────
+  // --- Phase 11C: WorldManager + EncounterManager + UIManager misc -----
 
   describe('WorldManager - Phase 11C extensions', () => {
     it('despawnEnemyParty returns false when enemyId is null', () => {

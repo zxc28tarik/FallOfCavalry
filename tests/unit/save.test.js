@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SaveManager } from '../../js/managers/SaveManager.js';
+import * as CONST from '../../js/constants.js';
 
 describe('SaveManager - Phase 4A', () => {
   function createSM(stateOverrides = {}, gameOverrides = {}) {
@@ -338,6 +339,21 @@ describe('SaveManager - Phase 4C', () => {
     expect(payload.game.buildings).toEqual(buildingState);
   });
 
+  it('buildSavePayload writes cityState into a separate save block', () => {
+    const settlement = {
+      id: 91,
+      name: 'Istanbul',
+      type: CONST.SETTLEMENT.TYPE.CITY,
+      owner: CONST.FACTION.ID.OTTOMAN,
+      ownerFactionId: CONST.FACTION.ID.PLAYER,
+    };
+    const sm = createSM({ map: { settlements: [settlement], buildingState: null } });
+    const payload = sm.buildSavePayload();
+    expect(payload.game.cityState).toBeTruthy();
+    expect(Array.isArray(payload.game.cityState.settlements)).toBe(true);
+    expect(payload.game.cityState.settlements[0].settlementId).toBe(91);
+  });
+
   // applySavePayload
   it('applySavePayload returns false without playerParty', () => {
     const sm = createSM({}, { playerParty: null });
@@ -354,6 +370,11 @@ describe('SaveManager - Phase 4C', () => {
     const sm = createSM();
     sm.applySavePayload({ game: { playerParty: { gold: 9999 } } });
     expect(sm.game.playerParty.gold).toBe(9999);
+  });
+  it('applySavePayload clamps legacy save camera zoom', () => {
+    const sm = createSM();
+    sm.applySavePayload({ game: { camera: { x: 5, y: 7, zoom: 0.1 } } });
+    expect(sm.state.camera).toMatchObject({ x: 5, y: 7, zoom: CONST.WORLD.MIN_ZOOM });
   });
 
   it('applySavePayload forwards building payload to world manager', () => {
@@ -445,6 +466,41 @@ describe('SaveManager - Phase 4C', () => {
     const sm = createSM();
     sm.applySavePayload({ game: { mode: 'city' } });
     expect(sm.state.mode).toBe('city');
+  });
+
+  it('applySavePayload restores saved cityState onto settlements', () => {
+    const settlement = {
+      id: 77,
+      name: 'Bursa',
+      type: CONST.SETTLEMENT.TYPE.CITY,
+      owner: CONST.FACTION.ID.OTTOMAN,
+      ownerFactionId: CONST.FACTION.ID.PLAYER,
+    };
+    const sm = createSM({ map: { settlements: [settlement], buildingState: null } });
+    sm.applySavePayload({
+      game: {
+        cityState: {
+          version: 1,
+          settlements: [
+            {
+              settlementId: 77,
+              cityState: {
+                version: 1,
+                sceneId: 'ottoman_city_full',
+                artSetKey: 'ottoman:full_city',
+                historicalFactionId: CONST.FACTION.ID.OTTOMAN,
+                tier: 4,
+                role: 'capital',
+                occupancyRatio: 0.9,
+                parcels: [],
+              },
+            },
+          ],
+        },
+      },
+    });
+    expect(sm.state.map.settlements[0].cityState).toBeTruthy();
+    expect(sm.state.map.settlements[0].cityState.sceneId).toBe('ottoman_city_full');
   });
 
   it('applySavePayload clears encounter and battle state', () => {

@@ -6,5 +6,6 @@
 export * from './constants/battle.js';
 export * from './constants/world.js';
 export * from './constants/economy.js';
+export * from './constants/quest-types.js';
 export * from './constants/systems.js';
 export * from './constants/ui.js';

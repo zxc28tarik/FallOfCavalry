@@ -38,6 +38,12 @@ describe('Managers', () => {
   it('CityManager.enterCity / exitCity should change mode', () => {
     const mockState = { mode: 'map' };
     const manager = new CityManager(mockState);
+    manager.init({
+      gameFlowManager: {
+        enterCity: () => { mockState.mode = 'city'; },
+        exitCity: () => { mockState.mode = 'map'; },
+      },
+    });
     const city = { id: 'city1', name: 'Test City' };
     manager.enterCity(city);
     expect(mockState.mode).toBe('city');

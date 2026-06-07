@@ -214,6 +214,9 @@ export class SaveSystem {
           : { tradePL: 0 },
         inventory: game.inventory && typeof game.inventory === 'object' ? game.inventory : { items: [], capacity: null },
         buildings: normalizeBuildingState(game.buildings),
+        cityState: game.cityState && typeof game.cityState === 'object' && !Array.isArray(game.cityState)
+          ? game.cityState
+          : { version: 1, settlements: [] },
         tuning: game.tuning && typeof game.tuning === 'object' && !Array.isArray(game.tuning) ? game.tuning : {},
       },
     };

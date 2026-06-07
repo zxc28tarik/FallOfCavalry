@@ -1,13 +1,14 @@
 // FallOfCavalry - Economy constants
+import { ALL_TRADE_GOODS } from './trade-goods.js';
+export {
+  TRADE_GOODS,
+  ALL_TRADE_GOODS,
+  TRADE_GOOD_BY_ID,
+  TRADE_GOOD_ID_ALIASES,
+  normalizeTradeGoodId,
+} from './trade-goods.js';
 
-export const TRADE_ITEMS = Object.freeze([
-  { id: 'grain', name: 'Grain', basePrice: 4, weight: 1 },
-  { id: 'meat', name: 'Meat', basePrice: 6, weight: 1 },
-  { id: 'wood', name: 'Wood', basePrice: 5, weight: 2 },
-  { id: 'iron', name: 'Iron', basePrice: 11, weight: 3 },
-  { id: 'cloth', name: 'Cloth', basePrice: 7, weight: 1 },
-  { id: 'salt', name: 'Salt', basePrice: 8, weight: 1 },
-]);
+export const TRADE_ITEMS = Object.freeze(ALL_TRADE_GOODS.map((item) => Object.freeze({ ...item })));
 
 export const TRADE_PRICE_PARAMS = Object.freeze({
   supplyWeight: 0.08,
@@ -32,12 +33,12 @@ export const MARKET = Object.freeze({
 });
 
 export const MARKET_BIOME_PRODUCTION = Object.freeze({
-  PLAINS: Object.freeze({ grain: 3, meat: 2, cloth: 0 }),
-  FOREST: Object.freeze({ wood: 3, meat: 2 }),
-  HILLS: Object.freeze({ iron: 3, wood: 2 }),
-  SHORE: Object.freeze({ salt: 3, cloth: 2 }),
-  MOUNTAIN: Object.freeze({ iron: 3, meat: -2 }),
-  SNOW: Object.freeze({ meat: -2, grain: -3 }),
+  PLAINS: Object.freeze({ wheat: 3, flour: 1, meat: 2, wool: 1 }),
+  FOREST: Object.freeze({ wood: 3, timber: 2, meat: 2, fur: 1 }),
+  HILLS: Object.freeze({ iron: 3, stone: 2, wood: 2 }),
+  SHORE: Object.freeze({ fish: 3, salt: 3, olive_oil: 1, cloth: 1 }),
+  MOUNTAIN: Object.freeze({ iron: 3, stone: 3, fur: 1, meat: -2 }),
+  SNOW: Object.freeze({ fur: 2, meat: -2, wheat: -3 }),
 });
 
 export const SUPPLIES = Object.freeze({

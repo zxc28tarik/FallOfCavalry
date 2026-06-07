@@ -235,7 +235,7 @@ export class GameLoop {
   // UPDATE HANDLERS
   // ========================================================================
   
-  updateStart(dt) {
+  updateStart(_dt) {
     // Start ekranında update yok
   }
   

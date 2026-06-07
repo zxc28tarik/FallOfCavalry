@@ -1,3 +1,25 @@
 dist/
 node_modules/
 .claude/
+
+# Local scratch space and devserver/runtime artifacts
+tmp/
+
+# Ephemeral validation/debug outputs
+output/web-game/tmp-*
+output/web-game/*-report.json
+output/web-game/*-smoke.png
+output/web-game/*-validate-*.png
+
+# Generated analysis scratch files
+assets/settlements/generated/analysis/
+
+# Generated world-map extraction artifacts
+assets/world-map/raw-ohm-*.json
+assets/world-map/raw-ohm-probe-*.json
+assets/world-map/numbered-*.png
+assets/world-map/final-numbered-*.png
+assets/world-map/*preview*.png
+assets/world-map/*compare*.png
+assets/world-map/*legend*.png
+assets/world-map/*report*.json

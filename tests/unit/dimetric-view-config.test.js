@@ -71,7 +71,7 @@ describe('dimetric view config', () => {
     setWindowHref('http://localhost:5173/?prop_style=retro');
     expect(getDimetricPropStyleUrlOverride()).toBeNull();
     expect(resolveDimetricPropStyleProfile('classic')).toBe('classic');
-    expect(resolveDimetricPropStyleProfile('invalid-default')).toBe('stronghold');
+    expect(resolveDimetricPropStyleProfile('invalid-default')).toBe('classic');
   });
 
   it('blocks prop style URL override when allowUrlOverride=false', () => {

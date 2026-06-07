@@ -1,0 +1,14 @@
+{
+  "sceneId": "hre_city_full",
+  "faction": "hre",
+  "variant": "full",
+  "status": "template",
+  "baseImage": "",
+  "overlayRoot": "assets/city-scenes/hre/overlays/",
+  "slotSource": "js/data/city-scene-defs.js",
+  "notes": [
+    "Fill this template when real HRE art arrives.",
+    "Use the same slot ids as the first-phase common layout."
+  ],
+  "slots": []
+}

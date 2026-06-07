@@ -4,8 +4,7 @@
  */
 
 import { safeClass, safeText, getEl } from '../utils.js';
-import { TUTORIAL_HINTS, FACTIONS, DIPLOMACY_RELATIONS } from '../constants.js';
-import { getRelation, getStance } from '../systems/factions.js';
+import { TUTORIAL_HINTS, FACTIONS } from '../constants.js';
 import { getActiveRegionModifiers } from '../systems/region-state.js';
 import { getBuildingDef } from '../data/building-defs.js';
 
@@ -36,7 +35,7 @@ export function getHudControlLines(state) {
     return `Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | Secili yapi var | B: insa modu`;
   }
 
-  return 'Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | F: takip ac/kapa | B: insa modu';
+  return 'Kamera: Ok tuslari/WASD + ekran kenari | Shift: hizli kaydirma | F: takip ac/kapa | M: harita | B: insa modu';
 }
 
 export class HUDManager {
@@ -81,7 +80,7 @@ export class HUDManager {
       hudDay: getEl('hudDay'),
       hudStats: getEl('hudStats'),
       hudEvent: getEl('hudEvent'),
-      hudEventsBtn: getEl('hudEventsBtn'),
+      hudEventsBtn: getEl('hudEventsBtn', { silent: true }),
       hudControlLines: getEl('hudControlLines'),
       rosterPanel: getEl('rosterPanel'),
       rosterEnemy: getEl('rosterEnemy'),
@@ -105,7 +104,7 @@ export class HUDManager {
       btnQuitToMenu: getEl('btnQuitToMenu'),
       helpBtn: getEl('helpBtn'),
       settingsBtn: getEl('settingsBtn'),
-      codexBtn: getEl('codexBtn'),
+      codexBtn: getEl('codexBtn', { silent: true }),
     };
   }
 
@@ -248,8 +247,9 @@ export class HUDManager {
   updateVisibility(mode) {
     if (!this.elements.hud) return;
     safeClass(this.elements.hud, mode === 'start' ? 'add' : 'remove', 'hidden');
-    safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
-    const panelMode = mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen);
+    const battleDeploySelection = mode === 'battle' && this.state?.battle?.phase === 'deploy' && this.state?.battle?.deployStep === 'selection';
+    safeClass(this.elements.rosterPanel, battleDeploySelection ? 'remove' : 'add', 'hidden');
+    const panelMode = mode === 'city' || mode === 'encounter' || (mode === 'battle' && this.state?.battle?.phase === 'result') || Boolean(this.state?.saveLoadOpen);
     safeClass(this.elements.uiPanel, panelMode ? 'remove' : 'add', 'hidden');
     this.updateRosterPanel();
     this.updateUiPanel();
@@ -259,14 +259,15 @@ export class HUDManager {
     if (!this.elements.rosterPanel) return;
 
     const mode = this.state?.mode;
-    safeClass(this.elements.rosterPanel, mode === 'roster' ? 'remove' : 'add', 'hidden');
-    if (mode !== 'roster') return;
+    const battleDeploySelection = mode === 'battle' && this.state?.battle?.phase === 'deploy' && this.state?.battle?.deployStep === 'selection';
+    safeClass(this.elements.rosterPanel, battleDeploySelection ? 'remove' : 'add', 'hidden');
+    if (!battleDeploySelection) return;
 
-    const enemyId = this.state?.roster?.enemyId ?? this.state?.encounter?.enemyId ?? 'unknown';
+    const enemyId = this.state?.battle?.enemyId ?? this.state?.encounter?.enemyId ?? 'unknown';
     const selected = Number.isFinite(this.state?.rosterSelectedCount) ? this.state.rosterSelectedCount : 0;
-    const maxDeploy = Number.isFinite(this.state?.roster?.maxDeploy) ? this.state.roster.maxDeploy : 0;
+    const maxDeploy = Number.isFinite(this.state?.battle?.maxDeploy) ? this.state.battle.maxDeploy : 0;
     safeText(this.elements.rosterEnemy, `Battle Prep vs ${enemyId}  |  Selected ${selected}/${maxDeploy}`);
-    safeText(this.elements.rosterWarning, this.state?.roster?.warning || '');
+    safeText(this.elements.rosterWarning, this.state?.battle?.warning || '');
 
     if (this.elements.rosterPlayerList) {
       const roster = Array.isArray(this.state?.playerRoster) ? this.state.playerRoster : [];
@@ -274,7 +275,6 @@ export class HUDManager {
       const playerRows = roster.map((unit, idx) => {
         const marker = idx === cursorIndex ? '>' : ' ';
         const selected = unit?.selected ? '[x]' : '[ ]';
-        const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
         const statusTag = unit?.status === 'wounded' ? ' (W)' : '';
         return `${marker} ${selected} ${unit?.name ?? 'Unit'}${statusTag} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
       });
@@ -284,7 +284,6 @@ export class HUDManager {
     if (this.elements.rosterEnemyList) {
       const roster = Array.isArray(this.state?.enemyRoster) ? this.state.enemyRoster : [];
       const enemyRows = roster.map((unit) => {
-        const effective = Number.isFinite(unit?.effectiveCount) ? unit.effectiveCount : 0;
         return `${unit?.name ?? 'Unit'} [${unit?.class ?? 'unit'}] HP ${Math.max(0, Math.floor(unit?.hp ?? 0))}/${Math.max(1, Math.floor(unit?.maxHp ?? unit?.hp ?? 1))}`;
       });
       safeText(this.elements.rosterEnemyList, enemyRows.join('\n'));
@@ -295,7 +294,7 @@ export class HUDManager {
     if (!this.elements.uiPanel) return;
     const mode = this.state?.mode;
     const panelData = this.state?.uiPanel;
-    const visible = (mode === 'aftermath' || mode === 'city' || Boolean(this.state?.saveLoadOpen)) && panelData;
+    const visible = (mode === 'city' || mode === 'encounter' || (mode === 'battle' && this.state?.battle?.phase === 'result') || Boolean(this.state?.saveLoadOpen)) && panelData;
     safeClass(this.elements.uiPanel, visible ? 'remove' : 'add', 'hidden');
     if (!visible) return;
     safeText(this.elements.uiPanelTitle, panelData.title || 'Panel');

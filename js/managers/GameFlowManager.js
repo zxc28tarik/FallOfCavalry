@@ -10,6 +10,8 @@ import { getRelation, setRelation } from '../systems/factions.js';
 import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
 import { showWinScreen, showLoseScreen } from '../ui/modals.js';
 import { applySettingsPatch, serializeSettings, deserializeSettings } from '../systems/settings.js';
+import { findFactionStartTile } from '../world/world-map-asset-loader.js';
+import { ensureModeManager } from '../core/ModeManager.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -26,6 +28,10 @@ export class GameFlowManager {
     this.state.settings = serializeSettings(game.settings);
   }
 
+  switchMode(modeName, context = {}) {
+    return ensureModeManager(this.state)?.switchTo(modeName, context);
+  }
+
   // ─── Phase 10C: Game flow methods ────────────────────────────────────────────
 
   setupStartFlow() {
@@ -34,7 +40,7 @@ export class GameFlowManager {
       this.startScreen = new StartScreen({
         state: this.state,
         saveSystem: g.saveManager.saveSystem,
-        onStart: ({ faction, seed }) => {
+        onStart: async ({ faction, seed }) => {
           this.state.seed = seed;
           this.state.selectedFaction = {
             id: faction.id,
@@ -53,8 +59,21 @@ export class GameFlowManager {
             g.playerParty.factionId = faction.id;
           }
 
-          g.worldManager.ensureWorldGenerated(seed);
-          g.gameFlowManager.startNewGame();
+          try {
+            this.startScreen?.setLoading?.(true, 'Harita yukleniyor...');
+            this.startScreen?.setLoadingProgress?.(10, 'Harita verisi hazirlaniyor');
+            await g.worldManager.ensureWorldGenerated(seed);
+            this.startScreen?.setLoadingProgress?.(75, 'Harita gorselleri yukleniyor');
+            await g.renderManager?.loadSpriteAssets?.();
+            this.startScreen?.setLoadingProgress?.(100, 'Harita hazir');
+            g.gameFlowManager.startNewGame();
+            console.info('[GameFlow] Game started after asset map load');
+          } catch (error) {
+            console.error('[GameFlow] Failed to start new game', error);
+            this.startScreen?.setInfoMessage?.('Harita yuklenemedi. Konsolu kontrol et.');
+          } finally {
+            this.startScreen?.setLoading?.(false);
+          }
         },
         onContinue: () => this.continueGame(),
         onLoad: () => g.saveManager.openSaveLoadPanel(),
@@ -81,38 +100,60 @@ export class GameFlowManager {
     const canContinue = Boolean(g.saveManager.saveSystem?.hasSave?.());
     g.hudManager?.setContinueEnabled?.(canContinue);
     if (!canContinue) {
-      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      this.startScreen?.setInfoMessage?.('Kayit bulunamadi.');
       return false;
     }
 
     const payload = g.saveManager.saveSystem?.loadLatest?.();
     if (!payload) {
-      this.startScreen?.setInfoMessage?.('Kayıt bulunamadı.');
+      this.startScreen?.setInfoMessage?.('Kayit bulunamadi.');
       return false;
     }
 
-    const ok = g.saveManager.applySavePayload(payload, { slot: 'autosave' });
-    if (!ok) {
-      this.startScreen?.setInfoMessage?.('Kayıt yüklenemedi.');
+    const loadAndApply = async () => {
+      this.startScreen?.setLoading?.(true, 'Harita yukleniyor...');
+      this.startScreen?.setLoadingProgress?.(10, 'Harita verisi hazirlaniyor');
+      await g.worldManager.ensureWorldGenerated(payload?.game?.seed ?? this.state?.seed);
+      this.startScreen?.setLoadingProgress?.(75, 'Harita gorselleri yukleniyor');
+      await g.renderManager?.loadSpriteAssets?.();
+
+      const ok = g.saveManager.applySavePayload(payload, { slot: 'autosave' });
+      if (!ok) {
+        this.startScreen?.setInfoMessage?.('Kayit yuklenemedi.');
+        return false;
+      }
+      this.startScreen?.setLoadingProgress?.(100, 'Harita hazir');
+
+      if (!g.started && g.gameLoop?.start) {
+        g.started = true;
+        g.gameLoop.start();
+      }
+
+      g.mode = 'playing';
+      if (this.state?.mode !== 'map') this.switchMode('map');
+      g.saveManager.startAutosaveLoop();
+      g.hudManager?.setPaused?.(false);
+      g.hudManager?.setMenuVisible?.(false);
+      g.hudManager?.setSettingsVisible?.(false);
+      utils.safeClass(g.dom.startModal, 'add', 'hidden');
+      utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
+      g.worldManager.clampCameraToWorld();
+      g.worldManager.updateTransientUIState();
+      console.info('[GameFlow] Save loaded after asset map load');
+      return true;
+    };
+
+    return loadAndApply().catch((error) => {
+      console.error('[GameFlow] Failed to continue game', error);
+      this.startScreen?.setInfoMessage?.('Kayit yuklenemedi.');
       return false;
-    }
+    }).finally(() => {
+      this.startScreen?.setLoading?.(false);
+    });
+  }
 
-    if (!g.started && g.gameLoop?.start) {
-      g.started = true;
-      g.gameLoop.start();
-    }
-
-    g.mode = 'playing';
-    if (this.state?.mode !== 'map') this.state.setMode('map');
-    g.saveManager.startAutosaveLoop();
-    g.hudManager?.setPaused?.(false);
-    g.hudManager?.setMenuVisible?.(false);
-    g.hudManager?.setSettingsVisible?.(false);
-    utils.safeClass(g.dom.startModal, 'add', 'hidden');
-    utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
-    g.worldManager.clampCameraToWorld();
-    g.worldManager.updateTransientUIState();
-    return true;
+  setMapLoadingProgress(percent, message = 'Harita yukleniyor') {
+    this.startScreen?.setLoadingProgress?.(percent, message);
   }
 
   setPaused(isPaused) {
@@ -194,12 +235,12 @@ export class GameFlowManager {
       return false;
     }
 
-    if (!Array.isArray(this.state?.map?.tiles) || this.state.map.tiles.length === 0) {
-      g.worldManager.ensureWorldGenerated(this.state?.seed);
-    }
+    const map = this.state?.map;
+    const mapData = map?.mapData || map?.__mapData || this.state?.mapData;
+    if (!mapData?.terrain || mapData.terrain.length === 0) return false;
 
     if (this.state.mode !== 'map') {
-      this.state.setMode('map');
+      this.switchMode('map');
     }
 
     g.worldManager.updateTransientUIState();
@@ -228,7 +269,7 @@ export class GameFlowManager {
     g.hudManager?.setSettingsVisible?.(false);
 
     if (this.state?.mode !== 'start') {
-      this.state.setMode('start');
+      this.switchMode('start');
     } else {
       g.uiManager.onModeChanged('menu', 'start');
     }
@@ -259,17 +300,19 @@ export class GameFlowManager {
 
     // Oyuncuyu kendi faction'ının ilk şehrine konumlandır
     const factionId = this.state?.selectedFaction?.id;
-    const settlements = g.worldManager?.state?.map?.settlements || [];
-    const startCity = settlements.find(s => s.owner === factionId && s.type === 'city')
-                   || settlements.find(s => s.owner === factionId)
-                   || settlements[0];
-    if (startCity && g.playerParty) {
-      g.playerParty.x = startCity.x;
-      g.playerParty.y = startCity.y;
+    const map = g.worldManager?.state?.map;
+    const mapData = map?.mapData || map?.__mapData || g.worldManager?.state?.mapData;
+    const startTile = findFactionStartTile(mapData, factionId);
+    const tileSize = Number(CONST.WORLD?.TILE_SIZE) || 32;
+    if (startTile && g.playerParty) {
+      const startX = (startTile.tx + 0.5) * tileSize;
+      const startY = (startTile.ty + 0.5) * tileSize;
+      g.playerParty.x = startX;
+      g.playerParty.y = startY;
       const cam = this.state?.camera;
       if (cam) {
-        cam.x = startCity.x - CONST.GAME.VIEW_WIDTH / 2;
-        cam.y = startCity.y - CONST.GAME.VIEW_HEIGHT / 2;
+        cam.x = startX - CONST.GAME.VIEW_WIDTH / 2;
+        cam.y = startY - CONST.GAME.VIEW_HEIGHT / 2;
       }
       g.worldManager?.updateFogFromPlayer?.();
     }
@@ -307,7 +350,6 @@ export class GameFlowManager {
   // ─── Phase 12B: Campaign, settings, and event methods ────────────────────────
 
   getCurrentEvents(day = Number(this.state?.day ?? 1)) {
-    const g = this.game;
     this.state.events = this.state.events && typeof this.state.events === 'object' ? this.state.events : createInitialEventState();
     return getActiveEvents(this.state.events, day);
   }
@@ -402,6 +444,14 @@ export class GameFlowManager {
     if (g.mode === 'playing') return this.setPaused(true);
     if (g.mode === 'paused') return this.setPaused(false);
     return true;
+  }
+
+  enterCity(cityId) {
+    this.switchMode('city', { cityId, returnTarget: 'map' });
+  }
+
+  exitCity() {
+    this.switchMode(ensureModeManager(this.state)?.getReturnTarget?.() || 'map');
   }
 
   // ─── Phase 12C: destroy ───────────────────────────────────────────────────────

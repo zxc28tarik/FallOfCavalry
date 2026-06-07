@@ -139,7 +139,7 @@ function createDeliveryContract({ cityId, day, rng, map, ownerFactionId, cityNam
       type: 'DELIVER',
       cityId,
       title: 'Deliver Food Caravan',
-      desc: `Move grain from ${cityName} to ${settlementName(target, 'target city')}.`,
+      desc: `Move wheat from ${cityName} to ${settlementName(target, 'target city')}.`,
       rewardGold: CONST.CONTRACTS.REWARD_GOLD_BASE * 1.35,
       rewardRenown: CONST.CONTRACTS.REWARD_RENOWN_BASE * 0.9,
       ownerFactionId,

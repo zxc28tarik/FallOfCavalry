@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WorldGenerator } from '../../js/world/world-generator.js';
+import { initializeGeneratedCityStates } from '../../js/systems/city-state.js';
+import { MapData, TERRAIN } from '../../js/world/map-data.js';
 
 // ─── Constructor ────────────────────────────────────────────────────────────
 
@@ -171,52 +173,48 @@ describe('WorldGenerator - buildDistanceToSea', () => {
   });
 });
 
-// ─── createTiles ────────────────────────────────────────────────────────────
+// ─── createTerrainLayer ─────────────────────────────────────────────────────
 
-describe('WorldGenerator - createTiles', () => {
-  it('returns array of length MAP_W * MAP_H', () => {
+describe('WorldGenerator - createTerrainLayer', () => {
+  it('returns Uint8Array of length MAP_W * MAP_H', () => {
     const g = new WorldGenerator(1);
     const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.5);
     const dist = new Float32Array(g.MAP_W * g.MAP_H).fill(0);
-    const tiles = g.createTiles(hm, dist);
-    expect(tiles.length).toBe(g.MAP_W * g.MAP_H);
+    const terrain = g.createTerrainLayer(hm, dist);
+    expect(terrain).toBeInstanceOf(Uint8Array);
+    expect(terrain.length).toBe(g.MAP_W * g.MAP_H);
   });
 
   it('assigns WATER type for tiles below sea level', () => {
     const g = new WorldGenerator(1);
     const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.1); // below SEA_LEVEL 0.40
     const dist = new Float32Array(g.MAP_W * g.MAP_H).fill(0);
-    const tiles = g.createTiles(hm, dist);
-    expect(tiles[0].type).toBe('water');
+    const terrain = g.createTerrainLayer(hm, dist);
+    expect(terrain[0]).toBe(TERRAIN.WATER);
   });
 
   it('assigns GRASS type for mid-height tiles', () => {
     const g = new WorldGenerator(1);
     const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.55); // above SHORE_MAX, below MOUNTAIN_MIN
     const dist = new Float32Array(g.MAP_W * g.MAP_H).fill(5);
-    const tiles = g.createTiles(hm, dist);
-    expect(tiles[0].type).toBe('grass');
+    const terrain = g.createTerrainLayer(hm, dist);
+    expect(terrain[0]).toBe(TERRAIN.GRASS);
   });
 
   it('assigns SNOW type for high altitude tiles', () => {
     const g = new WorldGenerator(1);
-    const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.95); // above SNOW_ALTITUDE 0.88
+    const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.97); // above SNOW_ALTITUDE
     const dist = new Float32Array(g.MAP_W * g.MAP_H).fill(5);
-    const tiles = g.createTiles(hm, dist);
-    expect(tiles[0].type).toBe('snow');
+    const terrain = g.createTerrainLayer(hm, dist);
+    expect(terrain[0]).toBe(TERRAIN.SNOW);
   });
 
-  it('every tile has x, y, type, height, distToSea fields', () => {
+  it('does not create legacy tile objects', () => {
     const g = new WorldGenerator(1);
     const hm = new Float32Array(g.MAP_W * g.MAP_H).fill(0.55);
     const dist = new Float32Array(g.MAP_W * g.MAP_H).fill(2);
-    const tiles = g.createTiles(hm, dist);
-    const t = tiles[0];
-    expect(t).toHaveProperty('x');
-    expect(t).toHaveProperty('y');
-    expect(t).toHaveProperty('type');
-    expect(t).toHaveProperty('height');
-    expect(t).toHaveProperty('distToSea');
+    const terrain = g.createTerrainLayer(hm, dist);
+    expect(typeof terrain[0]).toBe('number');
   });
 });
 
@@ -260,17 +258,33 @@ describe('WorldGenerator - determineSettlementType', () => {
   });
 });
 
-// ─── generate() structural smoke test ──────────────────────────────────────
+describe('WorldGenerator - city-state seeding', () => {
+  it('seeded settlements receive cityState metadata', () => {
+    const g = new WorldGenerator(7);
+    const settlements = [
+      g._makeSettlement(0, 10, 10, 'ottoman', 'city'),
+      g._makeSettlement(1, 20, 20, 'ottoman', 'fort'),
+    ];
+    settlements.forEach((s, i) => { s.id = i; });
+    initializeGeneratedCityStates(settlements);
+    expect(settlements[0].cityState).toBeTruthy();
+    expect(settlements[0].cityState.sceneId).toBeTruthy();
+    expect(Array.isArray(settlements[0].cityState.parcels)).toBe(true);
+  });
+});
 
-describe('WorldGenerator - generate()', () => {
-  // generate() üretilen dünyayı test eden smoke testler
+// ─── generateMapData() structural smoke test ────────────────────────────────
+
+describe('WorldGenerator - generateMapData()', () => {
+  // generateMapData() typed MapData smoke tests
   // Aynı seed → aynı sonuç garantisi
 
   it('returns required fields', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     expect(world).toHaveProperty('width');
     expect(world).toHaveProperty('height');
-    expect(world).toHaveProperty('tiles');
+    expect(world).toHaveProperty('terrain');
+    expect(world).toHaveProperty('heightMap');
     expect(world).toHaveProperty('settlements');
     expect(world).toHaveProperty('rivers');
     expect(world).toHaveProperty('roads');
@@ -281,54 +295,54 @@ describe('WorldGenerator - generate()', () => {
     expect(world).toHaveProperty('seed');
   });
 
-  it('tiles length equals width * height', () => {
-    const world = new WorldGenerator(1337).generate();
-    expect(world.tiles.length).toBe(world.width * world.height);
+  it('terrain length equals width * height', () => {
+    const world = new WorldGenerator(1337).generateMapData();
+    expect(world.terrain.length).toBe(world.width * world.height);
   });
 
   it('biomes is Uint8Array of correct size', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     expect(world.biomes).toBeInstanceOf(Uint8Array);
     expect(world.biomes.length).toBe(world.width * world.height);
   });
 
   it('fog is Uint8Array of correct size', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     expect(world.fog).toBeInstanceOf(Uint8Array);
     expect(world.fog.length).toBe(world.width * world.height);
   });
 
   it('produces some settlements', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     expect(world.settlements.length).toBeGreaterThan(0);
   });
 
   it('seed is deterministic — same seed yields same settlement count', () => {
-    const a = new WorldGenerator(42).generate();
-    const b = new WorldGenerator(42).generate();
+    const a = new WorldGenerator(42).generateMapData();
+    const b = new WorldGenerator(42).generateMapData();
     expect(a.settlements.length).toBe(b.settlements.length);
-    expect(a.tiles[100].type).toBe(b.tiles[100].type);
+    expect(a.terrain[100]).toBe(b.terrain[100]);
   });
 
   it('different seeds yield different worlds', () => {
-    const a = new WorldGenerator(1).generate();
-    const b = new WorldGenerator(9999).generate();
+    const a = new WorldGenerator(1).generateMapData();
+    const b = new WorldGenerator(9999).generateMapData();
     // Haritanın ortasından karşılaştır (kenarlarda hep su olabilir)
     const mid = Math.floor((a.width * a.height) / 2);
-    const typesA = a.tiles.slice(mid, mid + 100).map((t) => t.type).join('');
-    const typesB = b.tiles.slice(mid, mid + 100).map((t) => t.type).join('');
+    const typesA = Array.from(a.terrain.slice(mid, mid + 100)).join(',');
+    const typesB = Array.from(b.terrain.slice(mid, mid + 100)).join(',');
     expect(typesA).not.toBe(typesB);
   });
 
-  it('all tiles have valid type string', () => {
-    const world = new WorldGenerator(1337).generate();
-    const validTypes = new Set(['water', 'shore', 'grass', 'forest', 'mountain', 'snow']);
-    const invalid = world.tiles.filter((t) => !validTypes.has(t.type));
+  it('all terrain ids are valid', () => {
+    const world = new WorldGenerator(1337).generateMapData();
+    const validTypes = new Set(Object.values(TERRAIN));
+    const invalid = Array.from(world.terrain).filter((terrainId) => !validTypes.has(terrainId));
     expect(invalid.length).toBe(0);
   });
 
   it('settlements have required fields', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     for (const s of world.settlements) {
       expect(s).toHaveProperty('id');
       expect(s).toHaveProperty('x');
@@ -339,13 +353,13 @@ describe('WorldGenerator - generate()', () => {
   });
 
   it('no duplicate settlement ids', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     const ids = world.settlements.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('roads array contains path arrays', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     expect(Array.isArray(world.roads)).toBe(true);
     if (world.roads.length > 0) {
       expect(world.roads[0]).toHaveProperty('path');
@@ -354,7 +368,7 @@ describe('WorldGenerator - generate()', () => {
   });
 
   it('crossings are within map bounds', () => {
-    const world = new WorldGenerator(1337).generate();
+    const world = new WorldGenerator(1337).generateMapData();
     for (const c of world.crossings) {
       expect(c.x).toBeGreaterThanOrEqual(0);
       expect(c.x).toBeLessThan(world.width);

@@ -7,23 +7,36 @@
     "dev": "vite",
     "build": "vite build",
     "build:export": "node tools/export-build.mjs",
+    "extract-ohm-world-map": "node scripts/extract-ohm-world-map.js",
+    "final-number-world-map": "node scripts/create-final-numbered-boundary-map.js",
+    "number-world-map": "node scripts/create-numbered-boundary-template.js",
     "test:unit": "vitest run tests/unit/",
     "test:smoke": "vitest run tests/smoke/",
     "test": "vitest run",
     "lint": "eslint js/ tests/",
     "lint:fix": "eslint js/ tests/ --fix",
     "format": "prettier --write \"js/**/*.js\" \"tests/**/*.{js,mjs}\"",
-    "format:check": "prettier --check \"js/**/*.js\" \"tests/**/*.{js,mjs}\""
+    "format:check": "prettier --check \"js/**/*.js\" \"tests/**/*.{js,mjs}\"",
+    "validate": "npm run validate:static && npm run test:unit && npm run build",
+    "validate:static": "node scripts/check-conflicts.mjs && npm run lint",
+    "validate:smoke": "node tmp/web_game_playwright_client.mjs --url http://127.0.0.1:5173",
+    "gen:battle-assets": "node scripts/generate-battle-placeholders.mjs",
+    "validate:modular-frames": "node scripts/validate-modular-atlas-frames.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
+    "osmtogeojson": "^3.0.0-beta.5",
+    "pngjs": "^7.0.0",
     "prettier": "^3.8.1",
     "vite": "^5.4.21",
     "vitest": "^1.6.1"
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
   }
 }

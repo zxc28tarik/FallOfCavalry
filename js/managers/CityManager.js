@@ -1,5 +1,5 @@
 /**
- * CityManager — Phase 8B
+ * CityManager - Phase 8B
  * Manages city services UI setup (recruit, buy, sell, contracts, diplomacy).
  */
 
@@ -24,30 +24,82 @@ export class CityManager {
     this.game = game;
   }
 
-  update(dt) {
+  update(_dt) {
     if (this.state.mode !== 'city') return;
-    // City update logic — extended in future phases
+    // City update logic - extended in future phases
   }
 
   enterCity(city) {
     this.currentCity = city;
-    this.state.mode = 'city';
+    this.state.currentCity = city;
+    this.game?.gameFlowManager?.enterCity?.(city?.id);
   }
 
   exitCity() {
     this.currentCity = null;
-    this.state.mode = 'map';
+    this.state.currentCity = null;
+    this.game?.gameFlowManager?.exitCity?.();
   }
 
-  render(ctx) {
-    // City render logic — handled by RenderManager
+  render(_ctx) {
+    // City render logic - handled by RenderManager
   }
 
-  // ─── Phase 8B: City services UI wiring ──────────────────────────────────────
+  increaseSecurity(cityId, amount = 0) {
+    const city = this.findCityById(cityId);
+    if (!city) return false;
+    city.security = Math.max(0, Math.min(100, Math.floor(Number(city.security ?? 50) + Number(amount || 0))));
+    return true;
+  }
+
+  decreaseSecurity(cityId, amount = 0) {
+    return this.increaseSecurity(cityId, -Math.abs(Number(amount || 0)));
+  }
+
+  findCityById(cityId) {
+    if (!cityId) return null;
+    return (this.state?.map?.settlements || []).find((settlement) => settlement?.id === cityId) || null;
+  }
+
+  pickQuestTargetCity(rule, _context = {}) {
+    const settlements = (this.state?.map?.settlements || []).filter((settlement) => settlement?.id);
+    if (!settlements.length) return null;
+    if (rule === 'city_with_low_security') {
+      const sorted = [...settlements].sort((a, b) => Number(a.security ?? 50) - Number(b.security ?? 50));
+      return sorted[0]?.id || null;
+    }
+    return settlements[0]?.id || null;
+  }
+
+  findNearestCityToLocation(locationId) {
+    const target = this.findCityById(locationId);
+    const settlements = (this.state?.map?.settlements || []).filter((settlement) => settlement?.id);
+    if (!target || !settlements.length) return null;
+    let best = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const city of settlements) {
+      if (city.id === target.id) continue;
+      const dist = Math.hypot(Number(city.x ?? 0) - Number(target.x ?? 0), Number(city.y ?? 0) - Number(target.y ?? 0));
+      if (dist < bestDist) {
+        best = city;
+        bestDist = dist;
+      }
+    }
+    return best?.id || null;
+  }
+
+  // --- Phase 8B: City services UI wiring -----
 
   setupCityServicesUI() {
     const g = this.game;
-    if (this.cityUI) return;
+    if (g?.cityUI && !this.cityUI) {
+      this.cityUI = g.cityUI;
+      return;
+    }
+    if (this.cityUI) {
+      g.cityUI = this.cityUI;
+      return;
+    }
     this.cityUI = new CityServicesUI({
       state: this.state,
       party: g.playerParty,
@@ -117,7 +169,7 @@ export class CityManager {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
         }
         g.gameFlowManager.setLastEventLog(result?.message || 'İşlem tamamlandı.');
-        if (result?.ok && itemId === 'grain') {
+        if (result?.ok && (CONST.normalizeTradeGoodId?.(itemId) || itemId) === 'wheat') {
           emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, g.playerParty);
         }
         if (result?.ok) g.saveManager.runAutosave('trade');
@@ -169,20 +221,39 @@ export class CityManager {
           g.gameFlowManager.setLastEventLog(summary.message);
         }
       },
+      onHeal: (index) => {
+        g.economyManager.cityHealerCursor = Math.max(0, Math.floor(Number(index) || 0));
+        const ok = g.economyManager.healCurrentUnit();
+        if (ok) g.saveManager.runAutosave('healing');
+      },
+      onConstruct: (result) => {
+        g.gameFlowManager.setLastEventLog(result?.message || 'Insaat tamamlandi.');
+        g.saveManager.runAutosave('city-build');
+      },
       getFactionContext: (settlement) => g.diplomacyManager.getCityFactionContext(settlement),
       onClose: () => g.economyManager.exitCityServices(),
     });
 
     this.cityUI.bind({
-      cityRoot: utils.getEl('settlementModal'),
+      cityRoot: utils.getEl('citySceneModal') || utils.getEl('settlementModal'),
       btnRecruit: utils.getEl('btnRecruit'),
       btnTrade: utils.getEl('btnTrade'),
-      btnContracts: utils.getEl('btnContracts'),
-      cityClose: utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
+      btnContracts: utils.getEl('btnContracts', { silent: true }),
+      cityClose: utils.getEl('btnCloseCityScene') || utils.getEl('btnLeaveSettlement') || utils.getEl('btnCloseSettlement'),
       cityList: utils.getEl('settlementLore'),
-      cityTitle: utils.getEl('settlementTitle'),
-      citySubtitle: utils.getEl('settlementSubtitle'),
-      cityRelation: utils.getEl('settlementRelation'),
+      cityTitle: utils.getEl('citySceneTitle') || utils.getEl('settlementTitle'),
+      citySubtitle: utils.getEl('citySceneSubtitle') || utils.getEl('settlementSubtitle'),
+      cityRelation: utils.getEl('citySceneRelation') || utils.getEl('settlementRelation'),
+      citySummary: utils.getEl('citySceneSummary'),
+      cityWarnings: utils.getEl('citySceneWarnings'),
+      citySceneStage: utils.getEl('citySceneStage'),
+      citySceneHotspots: utils.getEl('citySceneHotspots'),
+      cityServiceChips: utils.getEl('citySceneServiceChips'),
+      cityPanelTitle: utils.getEl('cityScenePanelTitle'),
+      cityPanelMeta: utils.getEl('cityScenePanelMeta'),
+      cityPanelBody: utils.getEl('cityScenePanelBody'),
     });
+
+    g.cityUI = this.cityUI;
   }
 }

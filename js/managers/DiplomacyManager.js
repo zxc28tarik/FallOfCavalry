@@ -24,6 +24,22 @@ export class DiplomacyManager {
     return CONST.FACTIONS.find((f) => f.id === factionId)?.name || factionId || 'Unknown';
   }
 
+  changeRelation(factionId, amount = 0) {
+    if (!factionId) return false;
+    this.ensureFactionState();
+    const current = getRelation(this.state.factions, CONST.FACTION.ID.PLAYER, factionId, CONST.DIPLOMACY_RELATIONS);
+    setRelation(this.state.factions, CONST.FACTION.ID.PLAYER, factionId, current + Number(amount || 0), CONST.DIPLOMACY_RELATIONS);
+    this.syncWarStateFromRelations();
+    return true;
+  }
+
+  pickQuestIssuerFaction(_context = {}) {
+    this.ensureFactionState();
+    const known = this.state?.factions?.knownFactions || CONST.FACTIONS.map((f) => f.id);
+    const candidate = known.find((id) => id && id !== CONST.FACTION.ID.PLAYER && id !== 'player');
+    return candidate || null;
+  }
+
   ensureFactionState() {
     if (!this.state || typeof this.state !== 'object') return;
     const g = this.game;

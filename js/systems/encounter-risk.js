@@ -29,7 +29,7 @@ export function computeRiskMultiplier({ state, movementCtx, biomeKey, inCamp, su
   }
 
   const scarcityThreshold = Number(tuning.SCARCITY_STOCK_THRESHOLD ?? 4);
-  const grainStock = Number(market?.stocks?.grain);
+  const grainStock = Number(market?.stocks?.wheat ?? market?.stocks?.grain);
   const meatStock = Number(market?.stocks?.meat);
   const hasScarcity = (Number.isFinite(grainStock) && grainStock < scarcityThreshold)
     || (Number.isFinite(meatStock) && meatStock < scarcityThreshold);

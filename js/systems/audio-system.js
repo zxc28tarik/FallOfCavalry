@@ -42,7 +42,7 @@ export class AudioSystem {
     try {
       this.context = new AudioContextCtor();
       return true;
-    } catch (err) {
+    } catch {
       warnOnce('audio:context-init-failed', '[AudioSystem] AudioContext init failed');
       this.enabled = false;
       return false;
@@ -58,7 +58,7 @@ export class AudioSystem {
         await this.context.resume();
       }
       return true;
-    } catch (err) {
+    } catch {
       warnOnce('audio:resume-failed', '[AudioSystem] Audio resume failed');
       return false;
     }
@@ -75,7 +75,7 @@ export class AudioSystem {
       audio.loop = Boolean(loop);
       audio.volume = Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : 1;
       return audio;
-    } catch (err) {
+    } catch {
       warnOnce('audio:html-audio-create-failed', '[AudioSystem] HTMLAudio create failed');
       return null;
     }
@@ -105,7 +105,7 @@ export class AudioSystem {
         await Promise.resolve(audio.play());
       }
       return true;
-    } catch (err) {
+    } catch {
       warnOnce('audio:play-failed', '[AudioSystem] Audio play failed');
       this.activeSounds.delete(audio);
       return false;
@@ -118,7 +118,7 @@ export class AudioSystem {
         if (audio && typeof audio.pause === 'function') {
           audio.pause();
         }
-      } catch (err) {
+      } catch {
         // no-op
       }
     });

@@ -1,0 +1,2561 @@
+{
+  "sourceImage": {
+    "width": 1445,
+    "height": 1089,
+    "pixels": 1573605
+  },
+  "crop": {
+    "x0": 20,
+    "y0": 20,
+    "x1": 1425,
+    "y1": 1069,
+    "width": 1405,
+    "height": 1049
+  },
+  "targetGrid": {
+    "width": 3456,
+    "height": 2605,
+    "tiles": 9002880
+  },
+  "terrainCounts": {
+    "water": 2673803,
+    "land": 6329077,
+    "unexpected": {}
+  },
+  "ownerCounts": {
+    "waterOwner0": 2673803,
+    "landOwner0": 0,
+    "waterOwnerNonZero": 0
+  },
+  "sourceMaskCounts": {
+    "source": {
+      "water": 437577,
+      "land": 1036268,
+      "dark": 213688,
+      "darkWaterOverlap": 2833,
+      "waterCandidate": 444934,
+      "connectedWaterBeforeDarkFill": 434744,
+      "waterPercent": 29.689
+    },
+    "target": {
+      "water": 2673803,
+      "land": 6329077,
+      "waterPercent": 29.699
+    }
+  },
+  "boundaryExtraction": {
+    "method": "dark-line-mask-from-boundary-source-v1",
+    "rawBoundaryPixels": 85141,
+    "boundaryPixels": 171649,
+    "boundaryPercent": 11.646,
+    "boundarySourceSize": {
+      "width": 1445,
+      "height": 1088
+    },
+    "targetBoundaryPixels": 1048438,
+    "targetBoundaryPercent": 11.646
+  },
+  "seeds": [
+    {
+      "id": 5,
+      "slug": "france",
+      "name": "Royaume de France",
+      "shortName": "France",
+      "seed": {
+        "x": 260,
+        "y": 474
+      },
+      "labelCenter": {
+        "x": 260,
+        "y": 475
+      },
+      "sourceRgb": [
+        102,
+        141,
+        178
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 591,
+        "y": 1128
+      }
+    },
+    {
+      "id": 4,
+      "slug": "hre",
+      "name": "Heiliges Romisches Reich Deutscher Nation",
+      "shortName": "HRE",
+      "seed": {
+        "x": 515,
+        "y": 365
+      },
+      "labelCenter": {
+        "x": 515,
+        "y": 365
+      },
+      "sourceRgb": [
+        149,
+        135,
+        118
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1218,
+        "y": 857
+      }
+    },
+    {
+      "id": 1,
+      "slug": "ottoman",
+      "name": "Devlet-i Aliyye-i Osmaniyye",
+      "shortName": "Ottoman",
+      "seed": {
+        "x": 994,
+        "y": 789
+      },
+      "labelCenter": {
+        "x": 995,
+        "y": 790
+      },
+      "sourceRgb": [
+        183,
+        111,
+        85
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 2397,
+        "y": 1911
+      }
+    },
+    {
+      "id": 12,
+      "slug": "safavid",
+      "name": "Devlet-i Safeviyye",
+      "shortName": "Safavid",
+      "seed": {
+        "x": 1359,
+        "y": 807
+      },
+      "labelCenter": {
+        "x": 1360,
+        "y": 810
+      },
+      "sourceRgb": [
+        138,
+        113,
+        145
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 3295,
+        "y": 1955
+      }
+    },
+    {
+      "id": 11,
+      "slug": "russia",
+      "name": "Russkoye Tsarstvo",
+      "shortName": "Russia",
+      "seed": {
+        "x": 1139,
+        "y": 180
+      },
+      "labelCenter": {
+        "x": 1139,
+        "y": 180
+      },
+      "sourceRgb": [
+        161,
+        154,
+        92
+      ],
+      "source": "detected-label-cluster",
+      "targetSeed": {
+        "x": 2754,
+        "y": 398
+      }
+    },
+    {
+      "id": 10,
+      "slug": "poland_lithuania",
+      "name": "Rzeczpospolita Obojga Narodow",
+      "shortName": "Poland",
+      "seed": {
+        "x": 855,
+        "y": 315
+      },
+      "labelCenter": {
+        "x": 855,
+        "y": 315
+      },
+      "sourceRgb": [
+        193,
+        132,
+        125
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 2055,
+        "y": 733
+      }
+    },
+    {
+      "id": 2,
+      "slug": "spain",
+      "name": "Monarquia Hispanica",
+      "shortName": "Spain",
+      "seed": {
+        "x": 185,
+        "y": 719
+      },
+      "labelCenter": {
+        "x": 185,
+        "y": 720
+      },
+      "sourceRgb": [
+        207,
+        163,
+        69
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 406,
+        "y": 1737
+      }
+    },
+    {
+      "id": 8,
+      "slug": "sweden",
+      "name": "Konungariket Sverige",
+      "shortName": "Sweden",
+      "seed": {
+        "x": 635,
+        "y": 110
+      },
+      "labelCenter": {
+        "x": 635,
+        "y": 110
+      },
+      "sourceRgb": [
+        91,
+        137,
+        163
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1513,
+        "y": 224
+      }
+    },
+    {
+      "id": 9,
+      "slug": "denmark_norway",
+      "name": "Kongerigerne Danmark og Norge",
+      "shortName": "Denmark",
+      "seed": {
+        "x": 455,
+        "y": 120
+      },
+      "labelCenter": {
+        "x": 455,
+        "y": 120
+      },
+      "sourceRgb": [
+        206,
+        143,
+        108
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1070,
+        "y": 248
+      }
+    },
+    {
+      "id": 6,
+      "slug": "netherlands",
+      "name": "Republiek der Zeven Verenigde Nederlanden",
+      "shortName": "Netherlands",
+      "seed": {
+        "x": 330,
+        "y": 305
+      },
+      "labelCenter": {
+        "x": 330,
+        "y": 305
+      },
+      "sourceRgb": [
+        195,
+        150,
+        63
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 763,
+        "y": 708
+      }
+    },
+    {
+      "id": 3,
+      "slug": "austria",
+      "name": "Haus Osterreich",
+      "shortName": "Austria",
+      "seed": {
+        "x": 645,
+        "y": 445
+      },
+      "labelCenter": {
+        "x": 645,
+        "y": 445
+      },
+      "sourceRgb": [
+        204,
+        155,
+        61
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1538,
+        "y": 1056
+      }
+    },
+    {
+      "id": 17,
+      "slug": "morocco",
+      "name": "Saltanatu's-Serife",
+      "shortName": "Morocco",
+      "seed": {
+        "x": 288,
+        "y": 969
+      },
+      "labelCenter": {
+        "x": 288,
+        "y": 969
+      },
+      "sourceRgb": [
+        203,
+        164,
+        95
+      ],
+      "source": "detected-label-cluster",
+      "targetSeed": {
+        "x": 660,
+        "y": 2358
+      }
+    },
+    {
+      "id": 7,
+      "slug": "portugal",
+      "name": "Reino de Portugal",
+      "shortName": "Portugal",
+      "seed": {
+        "x": 70,
+        "y": 710
+      },
+      "labelCenter": {
+        "x": 70,
+        "y": 710
+      },
+      "sourceRgb": [
+        152,
+        143,
+        85
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 123,
+        "y": 1714
+      }
+    },
+    {
+      "id": 15,
+      "slug": "papal_states",
+      "name": "Stato della Chiesa",
+      "shortName": "Papal",
+      "seed": {
+        "x": 556,
+        "y": 642
+      },
+      "labelCenter": {
+        "x": 555,
+        "y": 640
+      },
+      "sourceRgb": [
+        128,
+        117,
+        124
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1319,
+        "y": 1546
+      }
+    },
+    {
+      "id": 16,
+      "slug": "swiss",
+      "name": "Eidgenossenschaft",
+      "shortName": "Swiss",
+      "seed": {
+        "x": 424,
+        "y": 499
+      },
+      "labelCenter": {
+        "x": 425,
+        "y": 500
+      },
+      "sourceRgb": [
+        159,
+        139,
+        121
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 994,
+        "y": 1190
+      }
+    },
+    {
+      "id": 19,
+      "slug": "savoy",
+      "name": "Ducato di Savoia",
+      "shortName": "Savoy",
+      "seed": {
+        "x": 370,
+        "y": 540
+      },
+      "labelCenter": {
+        "x": 370,
+        "y": 540
+      },
+      "sourceRgb": [
+        177,
+        135,
+        108
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 861,
+        "y": 1292
+      }
+    },
+    {
+      "id": 14,
+      "slug": "genoa",
+      "name": "Repubblica di Genova",
+      "shortName": "Genoa",
+      "seed": {
+        "x": 408,
+        "y": 583
+      },
+      "labelCenter": {
+        "x": 410,
+        "y": 585
+      },
+      "sourceRgb": [
+        127,
+        127,
+        123
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 955,
+        "y": 1399
+      }
+    },
+    {
+      "id": 18,
+      "slug": "tuscany",
+      "name": "Granducato di Toscana",
+      "shortName": "Tuscany",
+      "seed": {
+        "x": 500,
+        "y": 620
+      },
+      "labelCenter": {
+        "x": 500,
+        "y": 620
+      },
+      "sourceRgb": [
+        188,
+        158,
+        89
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1181,
+        "y": 1491
+      }
+    },
+    {
+      "id": 13,
+      "slug": "venice",
+      "name": "Serenissima Repubblica di Venezia",
+      "shortName": "Venice",
+      "seed": {
+        "x": 529,
+        "y": 529
+      },
+      "labelCenter": {
+        "x": 530,
+        "y": 530
+      },
+      "sourceRgb": [
+        97,
+        150,
+        136
+      ],
+      "source": "label-hint-fallback",
+      "targetSeed": {
+        "x": 1253,
+        "y": 1265
+      }
+    }
+  ],
+  "regionDefs": [
+    {
+      "ownerId": 1,
+      "slug": "ottoman",
+      "name": "Devlet-i Aliyye-i Osmaniyye"
+    },
+    {
+      "ownerId": 2,
+      "slug": "spain",
+      "name": "Monarquia Hispanica"
+    },
+    {
+      "ownerId": 3,
+      "slug": "austria",
+      "name": "Haus Osterreich"
+    },
+    {
+      "ownerId": 4,
+      "slug": "hre",
+      "name": "Heiliges Romisches Reich Deutscher Nation"
+    },
+    {
+      "ownerId": 5,
+      "slug": "france",
+      "name": "Royaume de France"
+    },
+    {
+      "ownerId": 6,
+      "slug": "netherlands",
+      "name": "Republiek der Zeven Verenigde Nederlanden"
+    },
+    {
+      "ownerId": 7,
+      "slug": "portugal",
+      "name": "Reino de Portugal"
+    },
+    {
+      "ownerId": 8,
+      "slug": "sweden",
+      "name": "Konungariket Sverige"
+    },
+    {
+      "ownerId": 9,
+      "slug": "denmark_norway",
+      "name": "Kongerigerne Danmark og Norge"
+    },
+    {
+      "ownerId": 10,
+      "slug": "poland_lithuania",
+      "name": "Rzeczpospolita Obojga Narodow"
+    },
+    {
+      "ownerId": 11,
+      "slug": "russia",
+      "name": "Russkoye Tsarstvo"
+    },
+    {
+      "ownerId": 12,
+      "slug": "safavid",
+      "name": "Devlet-i Safeviyye"
+    },
+    {
+      "ownerId": 13,
+      "slug": "venice",
+      "name": "Serenissima Repubblica di Venezia"
+    },
+    {
+      "ownerId": 14,
+      "slug": "genoa",
+      "name": "Repubblica di Genova"
+    },
+    {
+      "ownerId": 15,
+      "slug": "papal_states",
+      "name": "Stato della Chiesa"
+    },
+    {
+      "ownerId": 16,
+      "slug": "swiss",
+      "name": "Eidgenossenschaft"
+    },
+    {
+      "ownerId": 17,
+      "slug": "morocco",
+      "name": "Saltanatu's-Serife"
+    },
+    {
+      "ownerId": 18,
+      "slug": "tuscany",
+      "name": "Granducato di Toscana"
+    },
+    {
+      "ownerId": 19,
+      "slug": "savoy",
+      "name": "Ducato di Savoia"
+    }
+  ],
+  "regionSeeds": [
+    {
+      "regionId": 101,
+      "ownerId": 1,
+      "slug": "ottoman_balkans",
+      "name": "Ottoman Balkans",
+      "seed": [
+        775,
+        565
+      ]
+    },
+    {
+      "regionId": 102,
+      "ownerId": 1,
+      "slug": "ottoman_anatolia",
+      "name": "Ottoman Anatolia",
+      "seed": [
+        965,
+        760
+      ]
+    },
+    {
+      "regionId": 103,
+      "ownerId": 1,
+      "slug": "ottoman_levant",
+      "name": "Ottoman Levant",
+      "seed": [
+        1050,
+        900
+      ]
+    },
+    {
+      "regionId": 201,
+      "ownerId": 2,
+      "slug": "spain_iberia",
+      "name": "Spanish Iberia",
+      "seed": [
+        185,
+        705
+      ]
+    },
+    {
+      "regionId": 202,
+      "ownerId": 2,
+      "slug": "spain_naples",
+      "name": "Spanish Naples",
+      "seed": [
+        660,
+        715
+      ]
+    },
+    {
+      "regionId": 203,
+      "ownerId": 2,
+      "slug": "spain_islands",
+      "name": "Spanish Islands",
+      "seed": [
+        450,
+        725
+      ]
+    },
+    {
+      "regionId": 301,
+      "ownerId": 3,
+      "slug": "austria_core",
+      "name": "Haus Osterreich",
+      "seed": [
+        625,
+        450
+      ]
+    },
+    {
+      "regionId": 401,
+      "ownerId": 4,
+      "slug": "hre_core",
+      "name": "Holy Roman Empire",
+      "seed": [
+        505,
+        365
+      ]
+    },
+    {
+      "regionId": 501,
+      "ownerId": 5,
+      "slug": "france_core",
+      "name": "France",
+      "seed": [
+        255,
+        470
+      ]
+    },
+    {
+      "regionId": 601,
+      "ownerId": 6,
+      "slug": "netherlands_core",
+      "name": "Netherlands",
+      "seed": [
+        315,
+        310
+      ]
+    },
+    {
+      "regionId": 701,
+      "ownerId": 7,
+      "slug": "portugal_core",
+      "name": "Portugal",
+      "seed": [
+        58,
+        705
+      ]
+    },
+    {
+      "regionId": 801,
+      "ownerId": 8,
+      "slug": "sweden_core",
+      "name": "Sweden",
+      "seed": [
+        610,
+        105
+      ]
+    },
+    {
+      "regionId": 901,
+      "ownerId": 9,
+      "slug": "norway_core",
+      "name": "Norway",
+      "seed": [
+        455,
+        125
+      ]
+    },
+    {
+      "regionId": 902,
+      "ownerId": 9,
+      "slug": "denmark_core",
+      "name": "Denmark",
+      "seed": [
+        455,
+        210
+      ]
+    },
+    {
+      "regionId": 1001,
+      "ownerId": 10,
+      "slug": "poland_lithuania_core",
+      "name": "Poland-Lithuania",
+      "seed": [
+        835,
+        315
+      ]
+    },
+    {
+      "regionId": 1101,
+      "ownerId": 11,
+      "slug": "russia_core",
+      "name": "Russia",
+      "seed": [
+        1170,
+        175
+      ]
+    },
+    {
+      "regionId": 1201,
+      "ownerId": 12,
+      "slug": "safavid_core",
+      "name": "Safavid",
+      "seed": [
+        1342,
+        820
+      ]
+    },
+    {
+      "regionId": 1301,
+      "ownerId": 13,
+      "slug": "venice_core",
+      "name": "Venice",
+      "seed": [
+        535,
+        520
+      ]
+    },
+    {
+      "regionId": 1401,
+      "ownerId": 14,
+      "slug": "genoa_core",
+      "name": "Genoa",
+      "seed": [
+        415,
+        588
+      ]
+    },
+    {
+      "regionId": 1501,
+      "ownerId": 15,
+      "slug": "papal_core",
+      "name": "Papal States",
+      "seed": [
+        550,
+        640
+      ]
+    },
+    {
+      "regionId": 1601,
+      "ownerId": 16,
+      "slug": "swiss_core",
+      "name": "Swiss Confederacy",
+      "seed": [
+        425,
+        492
+      ]
+    },
+    {
+      "regionId": 1701,
+      "ownerId": 17,
+      "slug": "morocco_core",
+      "name": "Saltanatu's-Serife",
+      "seed": [
+        265,
+        980
+      ]
+    },
+    {
+      "regionId": 1801,
+      "ownerId": 18,
+      "slug": "tuscany_core",
+      "name": "Tuscany",
+      "seed": [
+        486,
+        620
+      ]
+    },
+    {
+      "regionId": 1901,
+      "ownerId": 19,
+      "slug": "savoy_core",
+      "name": "Savoy",
+      "seed": [
+        367,
+        525
+      ]
+    }
+  ],
+  "criticalRects": {
+    "hreCore": {
+      "name": "hreCore",
+      "sourceRect": [
+        390,
+        320,
+        625,
+        520
+      ],
+      "baselineWaterPercent": 66.31,
+      "targetRect": {
+        "x0": 910,
+        "y0": 744,
+        "x1": 1489,
+        "y1": 1242
+      },
+      "total": 288342,
+      "water": 0,
+      "land": 288342,
+      "waterPercent": 0,
+      "waterPercentDeltaFromBaseline": -66.31,
+      "landPercent": 100,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 4,
+          "name": "Heiliges Romisches Reich Deutscher Nation",
+          "count": 202079,
+          "percent": 70.08
+        },
+        {
+          "id": 3,
+          "name": "Haus Osterreich",
+          "count": 47525,
+          "percent": 16.48
+        },
+        {
+          "id": 16,
+          "name": "Eidgenossenschaft",
+          "count": 29678,
+          "percent": 10.29
+        },
+        {
+          "id": 13,
+          "name": "Serenissima Repubblica di Venezia",
+          "count": 6142,
+          "percent": 2.13
+        },
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 2704,
+          "percent": 0.94
+        },
+        {
+          "id": 19,
+          "name": "Ducato di Savoia",
+          "count": 214,
+          "percent": 0.07
+        }
+      ],
+      "focus": {
+        "Heiliges Romisches Reich Deutscher Nation": {
+          "id": 4,
+          "count": 202079,
+          "percent": 70.08
+        },
+        "Eidgenossenschaft": {
+          "id": 16,
+          "count": 29678,
+          "percent": 10.29
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 47525,
+          "percent": 16.48
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 0,
+          "percent": 0
+        },
+        "Serenissima Repubblica di Venezia": {
+          "id": 13,
+          "count": 6142,
+          "percent": 2.13
+        },
+        "Ducato di Savoia": {
+          "id": 19,
+          "count": 214,
+          "percent": 0.07
+        },
+        "Repubblica di Genova": {
+          "id": 14,
+          "count": 0,
+          "percent": 0
+        },
+        "Stato della Chiesa": {
+          "id": 15,
+          "count": 0,
+          "percent": 0
+        },
+        "Royaume de France": {
+          "id": 5,
+          "count": 2704,
+          "percent": 0.94
+        },
+        "Rzeczpospolita Obojga Narodow": {
+          "id": 10,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "hreWider": {
+      "name": "hreWider",
+      "sourceRect": [
+        330,
+        285,
+        705,
+        585
+      ],
+      "targetRect": {
+        "x0": 762,
+        "y0": 658,
+        "x1": 1685,
+        "y1": 1404
+      },
+      "total": 688558,
+      "water": 10378,
+      "land": 678180,
+      "waterPercent": 1.51,
+      "waterPercentDeltaFromBaseline": null,
+      "landPercent": 98.49,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 4,
+          "name": "Heiliges Romisches Reich Deutscher Nation",
+          "count": 278059,
+          "percent": 40.38
+        },
+        {
+          "id": 3,
+          "name": "Haus Osterreich",
+          "count": 144172,
+          "percent": 20.94
+        },
+        {
+          "id": 13,
+          "name": "Serenissima Repubblica di Venezia",
+          "count": 57682,
+          "percent": 8.38
+        },
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 49359,
+          "percent": 7.17
+        },
+        {
+          "id": 16,
+          "name": "Eidgenossenschaft",
+          "count": 47905,
+          "percent": 6.96
+        },
+        {
+          "id": 1,
+          "name": "Devlet-i Aliyye-i Osmaniyye",
+          "count": 42280,
+          "percent": 6.14
+        },
+        {
+          "id": 19,
+          "name": "Ducato di Savoia",
+          "count": 29142,
+          "percent": 4.23
+        },
+        {
+          "id": 6,
+          "name": "Republiek der Zeven Verenigde Nederlanden",
+          "count": 24350,
+          "percent": 3.54
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 10378,
+          "percent": 1.51
+        },
+        {
+          "id": 10,
+          "name": "Rzeczpospolita Obojga Narodow",
+          "count": 2918,
+          "percent": 0.42
+        }
+      ],
+      "focus": {
+        "Heiliges Romisches Reich Deutscher Nation": {
+          "id": 4,
+          "count": 278059,
+          "percent": 40.38
+        },
+        "Eidgenossenschaft": {
+          "id": 16,
+          "count": 47905,
+          "percent": 6.96
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 144172,
+          "percent": 20.94
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 24350,
+          "percent": 3.54
+        },
+        "Serenissima Repubblica di Venezia": {
+          "id": 13,
+          "count": 57682,
+          "percent": 8.38
+        },
+        "Royaume de France": {
+          "id": 5,
+          "count": 49359,
+          "percent": 7.17
+        },
+        "Rzeczpospolita Obojga Narodow": {
+          "id": 10,
+          "count": 2918,
+          "percent": 0.42
+        },
+        "water/owner0": {
+          "id": 0,
+          "count": 10378,
+          "percent": 1.51
+        }
+      }
+    },
+    "franceCore": {
+      "name": "franceCore",
+      "sourceRect": [
+        170,
+        390,
+        350,
+        585
+      ],
+      "targetRect": {
+        "x0": 368,
+        "y0": 918,
+        "x1": 812,
+        "y1": 1404
+      },
+      "total": 215784,
+      "water": 2566,
+      "land": 213218,
+      "waterPercent": 1.19,
+      "waterPercentDeltaFromBaseline": null,
+      "landPercent": 98.81,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 211171,
+          "percent": 97.86
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 2566,
+          "percent": 1.19
+        },
+        {
+          "id": 19,
+          "name": "Ducato di Savoia",
+          "count": 2047,
+          "percent": 0.95
+        }
+      ],
+      "focus": {
+        "Royaume de France": {
+          "id": 5,
+          "count": 211171,
+          "percent": 97.86
+        },
+        "Konungariket Sverige": {
+          "id": 8,
+          "count": 0,
+          "percent": 0
+        },
+        "Heiliges Romisches Reich Deutscher Nation": {
+          "id": 4,
+          "count": 0,
+          "percent": 0
+        },
+        "Ducato di Savoia": {
+          "id": 19,
+          "count": 2047,
+          "percent": 0.95
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 0,
+          "percent": 0
+        },
+        "water/owner0": {
+          "id": 0,
+          "count": 2566,
+          "percent": 1.19
+        }
+      }
+    },
+    "iberia": {
+      "name": "iberia",
+      "sourceRect": [
+        20,
+        610,
+        315,
+        850
+      ],
+      "targetRect": {
+        "x0": 0,
+        "y0": 1465,
+        "x1": 726,
+        "y1": 2062
+      },
+      "total": 433422,
+      "water": 117965,
+      "land": 315457,
+      "waterPercent": 27.22,
+      "waterPercentDeltaFromBaseline": null,
+      "landPercent": 72.78,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 2,
+          "name": "Monarquia Hispanica",
+          "count": 215831,
+          "percent": 49.8
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 117965,
+          "percent": 27.22
+        },
+        {
+          "id": 7,
+          "name": "Reino de Portugal",
+          "count": 61968,
+          "percent": 14.3
+        },
+        {
+          "id": 17,
+          "name": "Saltanatu's-Serife",
+          "count": 29861,
+          "percent": 6.89
+        },
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 7797,
+          "percent": 1.8
+        }
+      ],
+      "focus": {
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 215831,
+          "percent": 49.8
+        },
+        "Reino de Portugal": {
+          "id": 7,
+          "count": 61968,
+          "percent": 14.3
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 0,
+          "percent": 0
+        },
+        "Saltanatu's-Serife": {
+          "id": 17,
+          "count": 29861,
+          "percent": 6.89
+        },
+        "Royaume de France": {
+          "id": 5,
+          "count": 7797,
+          "percent": 1.8
+        },
+        "water/owner0": {
+          "id": 0,
+          "count": 117965,
+          "percent": 27.22
+        }
+      }
+    },
+    "savoyBox": {
+      "name": "savoyBox",
+      "sourceRect": [
+        330,
+        500,
+        400,
+        570
+      ],
+      "baselineWaterPercent": 9.57,
+      "targetRect": {
+        "x0": 762,
+        "y0": 1191,
+        "x1": 935,
+        "y1": 1366
+      },
+      "total": 30275,
+      "water": 0,
+      "land": 30275,
+      "waterPercent": 0,
+      "waterPercentDeltaFromBaseline": -9.57,
+      "landPercent": 100,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 19,
+          "name": "Ducato di Savoia",
+          "count": 19648,
+          "percent": 64.9
+        },
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 7051,
+          "percent": 23.29
+        },
+        {
+          "id": 16,
+          "name": "Eidgenossenschaft",
+          "count": 3576,
+          "percent": 11.81
+        }
+      ],
+      "focus": {
+        "Ducato di Savoia": {
+          "id": 19,
+          "count": 19648,
+          "percent": 64.9
+        },
+        "Royaume de France": {
+          "id": 5,
+          "count": 7051,
+          "percent": 23.29
+        },
+        "Heiliges Romisches Reich Deutscher Nation": {
+          "id": 4,
+          "count": 0,
+          "percent": 0
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Repubblica di Genova": {
+          "id": 14,
+          "count": 0,
+          "percent": 0
+        },
+        "Eidgenossenschaft": {
+          "id": 16,
+          "count": 3576,
+          "percent": 11.81
+        }
+      }
+    },
+    "portugalFull": {
+      "name": "portugalFull",
+      "sourceRect": [
+        25,
+        650,
+        110,
+        790
+      ],
+      "baselineWaterPercent": 8.91,
+      "targetRect": {
+        "x0": 12,
+        "y0": 1564,
+        "x1": 222,
+        "y1": 1913
+      },
+      "total": 73290,
+      "water": 3536,
+      "land": 69754,
+      "waterPercent": 4.82,
+      "waterPercentDeltaFromBaseline": -4.09,
+      "landPercent": 95.18,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 7,
+          "name": "Reino de Portugal",
+          "count": 42308,
+          "percent": 57.73
+        },
+        {
+          "id": 2,
+          "name": "Monarquia Hispanica",
+          "count": 27446,
+          "percent": 37.45
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 3536,
+          "percent": 4.82
+        }
+      ],
+      "focus": {
+        "Reino de Portugal": {
+          "id": 7,
+          "count": 42308,
+          "percent": 57.73
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 27446,
+          "percent": 37.45
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "portugalNorth": {
+      "name": "portugalNorth",
+      "sourceRect": [
+        30,
+        650,
+        110,
+        715
+      ],
+      "baselineWaterPercent": 7.59,
+      "targetRect": {
+        "x0": 24,
+        "y0": 1564,
+        "x1": 222,
+        "y1": 1726
+      },
+      "total": 32076,
+      "water": 2231,
+      "land": 29845,
+      "waterPercent": 6.96,
+      "waterPercentDeltaFromBaseline": -0.63,
+      "landPercent": 93.04,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 7,
+          "name": "Reino de Portugal",
+          "count": 20069,
+          "percent": 62.57
+        },
+        {
+          "id": 2,
+          "name": "Monarquia Hispanica",
+          "count": 9776,
+          "percent": 30.48
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 2231,
+          "percent": 6.96
+        }
+      ],
+      "focus": {
+        "Reino de Portugal": {
+          "id": 7,
+          "count": 20069,
+          "percent": 62.57
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 9776,
+          "percent": 30.48
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "portugalSouth": {
+      "name": "portugalSouth",
+      "sourceRect": [
+        30,
+        715,
+        115,
+        795
+      ],
+      "baselineWaterPercent": 8.22,
+      "targetRect": {
+        "x0": 24,
+        "y0": 1725,
+        "x1": 234,
+        "y1": 1925
+      },
+      "total": 42000,
+      "water": 0,
+      "land": 42000,
+      "waterPercent": 0,
+      "waterPercentDeltaFromBaseline": -8.22,
+      "landPercent": 100,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 2,
+          "name": "Monarquia Hispanica",
+          "count": 21663,
+          "percent": 51.58
+        },
+        {
+          "id": 7,
+          "name": "Reino de Portugal",
+          "count": 20337,
+          "percent": 48.42
+        }
+      ],
+      "focus": {
+        "Reino de Portugal": {
+          "id": 7,
+          "count": 20337,
+          "percent": 48.42
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 21663,
+          "percent": 51.58
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "italySmallStates": {
+      "name": "italySmallStates",
+      "sourceRect": [
+        340,
+        480,
+        650,
+        740
+      ],
+      "targetRect": {
+        "x0": 787,
+        "y0": 1142,
+        "x1": 1550,
+        "y1": 1788
+      },
+      "total": 492898,
+      "water": 175195,
+      "land": 317703,
+      "waterPercent": 35.54,
+      "waterPercentDeltaFromBaseline": null,
+      "landPercent": 64.46,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 175195,
+          "percent": 35.54
+        },
+        {
+          "id": 13,
+          "name": "Serenissima Repubblica di Venezia",
+          "count": 59310,
+          "percent": 12.03
+        },
+        {
+          "id": 15,
+          "name": "Stato della Chiesa",
+          "count": 58523,
+          "percent": 11.87
+        },
+        {
+          "id": 3,
+          "name": "Haus Osterreich",
+          "count": 41317,
+          "percent": 8.38
+        },
+        {
+          "id": 16,
+          "name": "Eidgenossenschaft",
+          "count": 39312,
+          "percent": 7.98
+        },
+        {
+          "id": 2,
+          "name": "Monarquia Hispanica",
+          "count": 32896,
+          "percent": 6.67
+        },
+        {
+          "id": 19,
+          "name": "Ducato di Savoia",
+          "count": 29126,
+          "percent": 5.91
+        },
+        {
+          "id": 18,
+          "name": "Granducato di Toscana",
+          "count": 23507,
+          "percent": 4.77
+        },
+        {
+          "id": 5,
+          "name": "Royaume de France",
+          "count": 15418,
+          "percent": 3.13
+        },
+        {
+          "id": 4,
+          "name": "Heiliges Romisches Reich Deutscher Nation",
+          "count": 11310,
+          "percent": 2.29
+        }
+      ],
+      "focus": {
+        "Serenissima Repubblica di Venezia": {
+          "id": 13,
+          "count": 59310,
+          "percent": 12.03
+        },
+        "Repubblica di Genova": {
+          "id": 14,
+          "count": 1599,
+          "percent": 0.32
+        },
+        "Granducato di Toscana": {
+          "id": 18,
+          "count": 23507,
+          "percent": 4.77
+        },
+        "Stato della Chiesa": {
+          "id": 15,
+          "count": 58523,
+          "percent": 11.87
+        },
+        "Ducato di Savoia": {
+          "id": 19,
+          "count": 29126,
+          "percent": 5.91
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 41317,
+          "percent": 8.38
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 32896,
+          "percent": 6.67
+        },
+        "Devlet-i Aliyye-i Osmaniyye": {
+          "id": 1,
+          "count": 5385,
+          "percent": 1.09
+        },
+        "water/owner0": {
+          "id": 0,
+          "count": 175195,
+          "percent": 35.54
+        }
+      }
+    },
+    "safevidRect": {
+      "name": "safevidRect",
+      "sourceRect": [
+        1260,
+        610,
+        1425,
+        1040
+      ],
+      "baselineWaterPercent": 48.46,
+      "targetRect": {
+        "x0": 3050,
+        "y0": 1465,
+        "x1": 3456,
+        "y1": 2533
+      },
+      "total": 433608,
+      "water": 19873,
+      "land": 413735,
+      "waterPercent": 4.58,
+      "waterPercentDeltaFromBaseline": -43.88,
+      "landPercent": 95.42,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 12,
+          "name": "Devlet-i Safeviyye",
+          "count": 290326,
+          "percent": 66.96
+        },
+        {
+          "id": 1,
+          "name": "Devlet-i Aliyye-i Osmaniyye",
+          "count": 123409,
+          "percent": 28.46
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 19873,
+          "percent": 4.58
+        }
+      ],
+      "focus": {
+        "Devlet-i Safeviyye": {
+          "id": 12,
+          "count": 290326,
+          "percent": 66.96
+        },
+        "Devlet-i Aliyye-i Osmaniyye": {
+          "id": 1,
+          "count": 123409,
+          "percent": 28.46
+        },
+        "Russkoye Tsarstvo": {
+          "id": 11,
+          "count": 0,
+          "percent": 0
+        },
+        "Stato della Chiesa": {
+          "id": 15,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "caspianRect": {
+      "name": "caspianRect",
+      "sourceRect": [
+        1370,
+        460,
+        1425,
+        630
+      ],
+      "baselineWaterPercent": 99.08,
+      "targetRect": {
+        "x0": 3320,
+        "y0": 1092,
+        "x1": 3456,
+        "y1": 1515
+      },
+      "total": 57528,
+      "water": 55827,
+      "land": 1701,
+      "waterPercent": 97.04,
+      "waterPercentDeltaFromBaseline": -2.04,
+      "landPercent": 2.96,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 55827,
+          "percent": 97.04
+        },
+        {
+          "id": 12,
+          "name": "Devlet-i Safeviyye",
+          "count": 1701,
+          "percent": 2.96
+        }
+      ],
+      "focus": {
+        "Devlet-i Safeviyye": {
+          "id": 12,
+          "count": 1701,
+          "percent": 2.96
+        },
+        "Russkoye Tsarstvo": {
+          "id": 11,
+          "count": 0,
+          "percent": 0
+        },
+        "Devlet-i Aliyye-i Osmaniyye": {
+          "id": 1,
+          "count": 0,
+          "percent": 0
+        }
+      }
+    },
+    "netherlands": {
+      "name": "netherlands",
+      "sourceRect": [
+        285,
+        260,
+        370,
+        335
+      ],
+      "targetRect": {
+        "x0": 651,
+        "y0": 595,
+        "x1": 861,
+        "y1": 783
+      },
+      "total": 39480,
+      "water": 12144,
+      "land": 27336,
+      "waterPercent": 30.76,
+      "waterPercentDeltaFromBaseline": null,
+      "landPercent": 69.24,
+      "landOwner0": 0,
+      "waterOwnerNonZero": 0,
+      "topOwners": [
+        {
+          "id": 6,
+          "name": "Republiek der Zeven Verenigde Nederlanden",
+          "count": 27301,
+          "percent": 69.15
+        },
+        {
+          "id": 0,
+          "name": "water/owner0",
+          "count": 12144,
+          "percent": 30.76
+        },
+        {
+          "id": 4,
+          "name": "Heiliges Romisches Reich Deutscher Nation",
+          "count": 35,
+          "percent": 0.09
+        }
+      ],
+      "focus": {
+        "Republiek der Zeven Verenigde Nederlanden": {
+          "id": 6,
+          "count": 27301,
+          "percent": 69.15
+        },
+        "Heiliges Romisches Reich Deutscher Nation": {
+          "id": 4,
+          "count": 35,
+          "percent": 0.09
+        },
+        "Royaume de France": {
+          "id": 5,
+          "count": 0,
+          "percent": 0
+        },
+        "Haus Osterreich": {
+          "id": 3,
+          "count": 0,
+          "percent": 0
+        },
+        "Monarquia Hispanica": {
+          "id": 2,
+          "count": 0,
+          "percent": 0
+        },
+        "Granducato di Toscana": {
+          "id": 18,
+          "count": 0,
+          "percent": 0
+        },
+        "water/owner0": {
+          "id": 0,
+          "count": 12144,
+          "percent": 30.76
+        }
+      }
+    }
+  },
+  "ownerExtraction": {
+    "method": "region-seed-boundary-fill-v1",
+    "seedCoordinateSystem": "source PNG pixel coordinates before crop-to-target resize",
+    "stats": {
+      "method": "region-seed-boundary-fill-v1",
+      "seedCount": 24,
+      "seedConflicts": 0,
+      "initialAssigned": 627859,
+      "seedResults": [
+        {
+          "regionId": 101,
+          "ownerId": 1,
+          "slug": "ottoman_balkans",
+          "name": "Ottoman Balkans",
+          "seed": [
+            775,
+            565
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 775,
+            "y": 565
+          }
+        },
+        {
+          "regionId": 102,
+          "ownerId": 1,
+          "slug": "ottoman_anatolia",
+          "name": "Ottoman Anatolia",
+          "seed": [
+            965,
+            760
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 965,
+            "y": 760
+          }
+        },
+        {
+          "regionId": 103,
+          "ownerId": 1,
+          "slug": "ottoman_levant",
+          "name": "Ottoman Levant",
+          "seed": [
+            1050,
+            900
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 1050,
+            "y": 900
+          }
+        },
+        {
+          "regionId": 201,
+          "ownerId": 2,
+          "slug": "spain_iberia",
+          "name": "Spanish Iberia",
+          "seed": [
+            185,
+            705
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 185,
+            "y": 705
+          }
+        },
+        {
+          "regionId": 202,
+          "ownerId": 2,
+          "slug": "spain_naples",
+          "name": "Spanish Naples",
+          "seed": [
+            660,
+            715
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 659,
+            "y": 718
+          }
+        },
+        {
+          "regionId": 203,
+          "ownerId": 2,
+          "slug": "spain_islands",
+          "name": "Spanish Islands",
+          "seed": [
+            450,
+            725
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 434,
+            "y": 709
+          }
+        },
+        {
+          "regionId": 301,
+          "ownerId": 3,
+          "slug": "austria_core",
+          "name": "Haus Osterreich",
+          "seed": [
+            625,
+            450
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 626,
+            "y": 451
+          }
+        },
+        {
+          "regionId": 401,
+          "ownerId": 4,
+          "slug": "hre_core",
+          "name": "Holy Roman Empire",
+          "seed": [
+            505,
+            365
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 505,
+            "y": 365
+          }
+        },
+        {
+          "regionId": 501,
+          "ownerId": 5,
+          "slug": "france_core",
+          "name": "France",
+          "seed": [
+            255,
+            470
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 253,
+            "y": 471
+          }
+        },
+        {
+          "regionId": 601,
+          "ownerId": 6,
+          "slug": "netherlands_core",
+          "name": "Netherlands",
+          "seed": [
+            315,
+            310
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 315,
+            "y": 310
+          }
+        },
+        {
+          "regionId": 701,
+          "ownerId": 7,
+          "slug": "portugal_core",
+          "name": "Portugal",
+          "seed": [
+            58,
+            705
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 58,
+            "y": 702
+          }
+        },
+        {
+          "regionId": 801,
+          "ownerId": 8,
+          "slug": "sweden_core",
+          "name": "Sweden",
+          "seed": [
+            610,
+            105
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 609,
+            "y": 104
+          }
+        },
+        {
+          "regionId": 901,
+          "ownerId": 9,
+          "slug": "norway_core",
+          "name": "Norway",
+          "seed": [
+            455,
+            125
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 455,
+            "y": 125
+          }
+        },
+        {
+          "regionId": 902,
+          "ownerId": 9,
+          "slug": "denmark_core",
+          "name": "Denmark",
+          "seed": [
+            455,
+            210
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 455,
+            "y": 210
+          }
+        },
+        {
+          "regionId": 1001,
+          "ownerId": 10,
+          "slug": "poland_lithuania_core",
+          "name": "Poland-Lithuania",
+          "seed": [
+            835,
+            315
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 835,
+            "y": 315
+          }
+        },
+        {
+          "regionId": 1101,
+          "ownerId": 11,
+          "slug": "russia_core",
+          "name": "Russia",
+          "seed": [
+            1170,
+            175
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 1170,
+            "y": 175
+          }
+        },
+        {
+          "regionId": 1201,
+          "ownerId": 12,
+          "slug": "safavid_core",
+          "name": "Safavid",
+          "seed": [
+            1342,
+            820
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 1343,
+            "y": 822
+          }
+        },
+        {
+          "regionId": 1301,
+          "ownerId": 13,
+          "slug": "venice_core",
+          "name": "Venice",
+          "seed": [
+            535,
+            520
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 533,
+            "y": 522
+          }
+        },
+        {
+          "regionId": 1401,
+          "ownerId": 14,
+          "slug": "genoa_core",
+          "name": "Genoa",
+          "seed": [
+            415,
+            588
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 413,
+            "y": 584
+          }
+        },
+        {
+          "regionId": 1501,
+          "ownerId": 15,
+          "slug": "papal_core",
+          "name": "Papal States",
+          "seed": [
+            550,
+            640
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 547,
+            "y": 637
+          }
+        },
+        {
+          "regionId": 1601,
+          "ownerId": 16,
+          "slug": "swiss_core",
+          "name": "Swiss Confederacy",
+          "seed": [
+            425,
+            492
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 428,
+            "y": 495
+          }
+        },
+        {
+          "regionId": 1701,
+          "ownerId": 17,
+          "slug": "morocco_core",
+          "name": "Saltanatu's-Serife",
+          "seed": [
+            265,
+            980
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 265,
+            "y": 980
+          }
+        },
+        {
+          "regionId": 1801,
+          "ownerId": 18,
+          "slug": "tuscany_core",
+          "name": "Tuscany",
+          "seed": [
+            486,
+            620
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 486,
+            "y": 620
+          }
+        },
+        {
+          "regionId": 1901,
+          "ownerId": 19,
+          "slug": "savoy_core",
+          "name": "Savoy",
+          "seed": [
+            367,
+            525
+          ],
+          "connected": true,
+          "alreadyOwned": false,
+          "start": {
+            "x": 367,
+            "y": 523
+          }
+        }
+      ],
+      "unassignedBeforeFill": 408409,
+      "neighborAssigned": 397554,
+      "nearestSeedAssigned": 10855,
+      "landOwner0": 0
+    }
+  },
+  "waterMask": {
+    "method": "seeded-connected-region-grow",
+    "waterSeeds": [
+      {
+        "name": "Atlantic",
+        "point": [
+          115,
+          270
+        ],
+        "rgb": [
+          179,
+          194,
+          192
+        ],
+        "connected": true
+      },
+      {
+        "name": "North Sea",
+        "point": [
+          400,
+          250
+        ],
+        "rgb": [
+          175,
+          191,
+          191
+        ],
+        "connected": true
+      },
+      {
+        "name": "Baltic Sea",
+        "point": [
+          705,
+          150
+        ],
+        "rgb": [
+          176,
+          191,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Western Mediterranean",
+        "point": [
+          360,
+          800
+        ],
+        "rgb": [
+          177,
+          192,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Central Mediterranean",
+        "point": [
+          690,
+          775
+        ],
+        "rgb": [
+          166,
+          185,
+          185
+        ],
+        "connected": true
+      },
+      {
+        "name": "Aegean Sea",
+        "point": [
+          885,
+          770
+        ],
+        "rgb": [
+          144,
+          164,
+          170
+        ],
+        "connected": true
+      },
+      {
+        "name": "Black Sea",
+        "point": [
+          1085,
+          620
+        ],
+        "rgb": [
+          174,
+          191,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Caspian Sea",
+        "point": [
+          1395,
+          515
+        ],
+        "rgb": [
+          174,
+          190,
+          189
+        ],
+        "connected": true
+      },
+      {
+        "name": "Red Sea",
+        "point": [
+          1095,
+          1055
+        ],
+        "rgb": [
+          143,
+          165,
+          170
+        ],
+        "connected": true
+      }
+    ],
+    "candidateRule": "Non-dark pixel is a candidate when it has blue/green sea tint, nearest water-seed RGB distance < 2600, and is at least 28% closer to a water sample than to any faction land seed color.",
+    "connectedFill": true,
+    "darkTextTerrainFill": "Dark/text pixels are not direct water candidates; after connected water grow, dark pixels inherit nearest classified terrain through BFS.",
+    "connectedPixelsBeforeDarkFill": 434744
+  },
+  "waterMaskRules": {
+    "waterFunction": "makeSourceMasks(png, crop, seeds) -> seeded connected water mask",
+    "preliminaryWaterFunction": "isPreliminaryWaterPixel(rgb), used only to avoid picking obvious water while resolving faction seed sample colors",
+    "darkTextFunction": "isDarkTextPixel(rgb)",
+    "legacySeaSamplesUsedOnlyForSeedSearch": [
+      [
+        174,
+        190,
+        189
+      ],
+      [
+        154,
+        159,
+        161
+      ],
+      [
+        174,
+        191,
+        190
+      ],
+      [
+        179,
+        194,
+        192
+      ]
+    ],
+    "waterSeedSamples": [
+      {
+        "name": "Atlantic",
+        "point": [
+          115,
+          270
+        ],
+        "rgb": [
+          179,
+          194,
+          192
+        ],
+        "connected": true
+      },
+      {
+        "name": "North Sea",
+        "point": [
+          400,
+          250
+        ],
+        "rgb": [
+          175,
+          191,
+          191
+        ],
+        "connected": true
+      },
+      {
+        "name": "Baltic Sea",
+        "point": [
+          705,
+          150
+        ],
+        "rgb": [
+          176,
+          191,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Western Mediterranean",
+        "point": [
+          360,
+          800
+        ],
+        "rgb": [
+          177,
+          192,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Central Mediterranean",
+        "point": [
+          690,
+          775
+        ],
+        "rgb": [
+          166,
+          185,
+          185
+        ],
+        "connected": true
+      },
+      {
+        "name": "Aegean Sea",
+        "point": [
+          885,
+          770
+        ],
+        "rgb": [
+          144,
+          164,
+          170
+        ],
+        "connected": true
+      },
+      {
+        "name": "Black Sea",
+        "point": [
+          1085,
+          620
+        ],
+        "rgb": [
+          174,
+          191,
+          190
+        ],
+        "connected": true
+      },
+      {
+        "name": "Caspian Sea",
+        "point": [
+          1395,
+          515
+        ],
+        "rgb": [
+          174,
+          190,
+          189
+        ],
+        "connected": true
+      },
+      {
+        "name": "Red Sea",
+        "point": [
+          1095,
+          1055
+        ],
+        "rgb": [
+          143,
+          165,
+          170
+        ],
+        "connected": true
+      }
+    ],
+    "waterConditions": [
+      "isWaterCandidatePixel(rgb, waterSeedSamples, factionSeedColors)",
+      "then growConnectedWater(candidateMask) from WATER_SEEDS",
+      "then fillDarkTerrainFromNeighbors(rawConnectedWater, darkMask)"
+    ],
+    "darkTextConditions": [
+      "luma(rgb) <= 115",
+      "and max(rgb)-min(rgb) < 110"
+    ],
+    "computedOn": "source PNG crop pixels before nearest-neighbor resize",
+    "possibleHreFailure": "If HRE is still water, the candidate rule is still too broad or connected water leaks inland through candidate corridors.",
+    "resizeNote": "terrain.bin is created by nearest-neighbor resizing the source water mask; target water ratio should stay close to source water ratio."
+  },
+  "ownerClassification": {
+    "method": "region seed flood fill; political boundary mask and water mask are barriers",
+    "thresholdConfigUsed": false,
+    "floodFillUsedForInitialOwnerAssignment": true,
+    "fillUnassignedLand": "After all region seeds expand, remaining non-water pixels such as boundary/text pixels inherit the nearest neighboring assigned region through BFS.",
+    "factionColorsUsedForExtraction": false
+  },
+  "regionCounts": {
+    "uniqueRegions": 25,
+    "unassignedLandRegions": 0
+  }
+}

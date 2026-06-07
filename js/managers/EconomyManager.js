@@ -11,6 +11,7 @@ import { tickHealing } from '../systems/casualties.js';
 import * as suppliesSystem from '../systems/supplies.js';
 import * as campSystem from '../systems/camp.js';
 import { getActiveRegionModifiers } from '../systems/region-state.js';
+import { ensureSettlementCityState } from '../systems/city-state.js';
 
 export class EconomyManager {
   constructor(gameState) {
@@ -20,15 +21,23 @@ export class EconomyManager {
     this.cityCursor = 0;
     this.cityMarketCursor = 0;
     this.cityHealerCursor = 0;
-    this.itemCatalog = [
-      { id: 'grain', name: 'Grain', unitValue: 4, baseBuy: 4, baseSell: 2 },
-      { id: 'wood', name: 'Wood', unitValue: 5, baseBuy: 5, baseSell: 3 },
-      { id: 'leather', name: 'Leather', unitValue: 7, baseBuy: 7, baseSell: 4 },
-      { id: 'iron', name: 'Iron', unitValue: 11, baseBuy: 11, baseSell: 7 },
-      { id: 'arrows', name: 'Arrows', unitValue: 5, baseBuy: 5, baseSell: 3 },
-      { id: 'cloth', name: 'Cloth', unitValue: 6, baseBuy: 6, baseSell: 4 },
-      { id: 'tools', name: 'Tools', unitValue: 9, baseBuy: 9, baseSell: 6 },
-    ];
+    this.itemCatalog = this.createItemCatalog();
+  }
+
+  createItemCatalog() {
+    return (CONST.TRADE_ITEMS || []).map((item) => ({
+      ...item,
+      unitValue: Number(item.basePrice ?? item.unitValue ?? 1),
+      baseBuy: Number(item.basePrice ?? item.baseBuy ?? item.unitValue ?? 1),
+      baseSell: Math.max(1, Math.floor(Number(item.basePrice ?? item.baseBuy ?? item.unitValue ?? 1) * 0.68)),
+    }));
+  }
+
+  normalizeCatalogItemId(itemId) {
+    const raw = String(itemId || '').trim();
+    if (!raw) return raw;
+    if ((this.itemCatalog || []).some((item) => item.id === raw)) return raw;
+    return CONST.normalizeTradeGoodId?.(raw) || raw;
   }
 
   init(game) {
@@ -40,7 +49,7 @@ export class EconomyManager {
     campSystem.ensureCampState(this.state);
   }
 
-  // ── Phase 5A: Pure economy utilities & inventory ──────────────────
+  // -- Phase 5A: Pure economy utilities & inventory -----
 
   getSettlementTier(settlement) {
     const type = String(settlement?.type || '').toLowerCase();
@@ -59,6 +68,54 @@ export class EconomyManager {
       return `${tx},${ty}`;
     }
     return null;
+  }
+
+  ensureTradeRoutes() {
+    if (!Array.isArray(this.state.tradeRoutes)) {
+      const settlements = (this.state?.map?.settlements || []).filter((settlement) => settlement?.id);
+      this.state.tradeRoutes = [];
+      for (let i = 0; i < settlements.length - 1; i += 1) {
+        this.state.tradeRoutes.push({
+          id: `route:${settlements[i].id}:${settlements[i + 1].id}`,
+          fromCityId: settlements[i].id,
+          toCityId: settlements[i + 1].id,
+          quality: 1,
+          damage: 0,
+        });
+      }
+    }
+    return this.state.tradeRoutes;
+  }
+
+  improveTradeRoute(routeId, amount = 1) {
+    const route = this.ensureTradeRoutes().find((entry) => entry?.id === routeId);
+    if (!route) return false;
+    route.quality = Math.max(0, Number(route.quality ?? 1) + Number(amount || 0));
+    route.damage = Math.max(0, Number(route.damage ?? 0) - Math.abs(Number(amount || 0)));
+    route.status = route.damage > 0 ? 'damaged' : 'open';
+    return true;
+  }
+
+  damageTradeRoute(routeId, amount = 1) {
+    const route = this.ensureTradeRoutes().find((entry) => entry?.id === routeId);
+    if (!route) return false;
+    route.damage = Math.max(0, Number(route.damage ?? 0) + Math.abs(Number(amount || 0)));
+    route.status = 'damaged';
+    return true;
+  }
+
+  pickQuestTargetRoute(rule, context = {}) {
+    const routes = this.ensureTradeRoutes();
+    if (!routes.length) return null;
+    if (rule === 'route_connected_to_target_city' && context.targetCityId) {
+      const route = routes.find((entry) => entry?.fromCityId === context.targetCityId || entry?.toCityId === context.targetCityId);
+      return route?.id || null;
+    }
+    if (rule === 'route_with_recent_loss') {
+      const route = routes.find((entry) => entry?.recentLoss || Number(entry?.damage ?? 0) > 0);
+      return route?.id || routes[0]?.id || null;
+    }
+    return routes[0]?.id || null;
   }
 
   cleanupExpiredMarketOpportunities(day = this.state?.day) {
@@ -92,7 +149,7 @@ export class EconomyManager {
         nearest = s;
       }
     }
-    return nearest || { id: 'city-fallback', name: 'Settlement', type: 'town' };
+    return nearest || null;
   }
 
   ensureInventoryModel() {
@@ -110,8 +167,9 @@ export class EconomyManager {
       Object.entries(inv).forEach(([id, qty]) => {
         if (id === 'items' || id === 'capacity' || id === 'gold') return;
         if (!Number.isFinite(qty) || qty <= 0) return;
-        const cat = itemCatalog.find((i) => i.id === id);
-        mapped.push({ id, name: cat?.name || id, qty: Math.floor(qty), unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
+        const normalizedId = this.normalizeCatalogItemId(id);
+        const cat = itemCatalog.find((i) => i.id === normalizedId);
+        mapped.push({ id: normalizedId, name: cat?.name || normalizedId, qty: Math.floor(qty), unitValue: cat?.unitValue ?? cat?.baseBuy ?? 1 });
       });
       playerParty.inventory = {
         items: mapped,
@@ -120,39 +178,49 @@ export class EconomyManager {
     }
 
     if (!Number.isFinite(playerParty.inventory.capacity)) playerParty.inventory.capacity = null;
+    playerParty.inventory.items.forEach((item) => {
+      const normalizedId = this.normalizeCatalogItemId(item?.id);
+      if (normalizedId && normalizedId !== item.id) {
+        item.id = normalizedId;
+        item.name = this.getItemName(normalizedId);
+      }
+    });
   }
 
   getItemName(itemId) {
-    return (this.itemCatalog).find((item) => item.id === itemId)?.name || itemId;
+    const normalizedId = this.normalizeCatalogItemId(itemId);
+    return (this.itemCatalog).find((item) => item.id === normalizedId)?.name || normalizedId;
   }
 
   getItemQty(itemId) {
     this.ensureInventoryModel();
-    if (!itemId) return 0;
-    const item = (this.game?.playerParty?.inventory?.items || []).find((entry) => entry.id === itemId);
+    const normalizedId = this.normalizeCatalogItemId(itemId);
+    if (!normalizedId) return 0;
+    const item = (this.game?.playerParty?.inventory?.items || []).find((entry) => entry.id === normalizedId);
     return Math.max(0, Math.floor(item?.qty ?? 0));
   }
 
   addItem(itemId, name, qty = 1, unitValue = null) {
     this.ensureInventoryModel();
     const playerParty = this.game?.playerParty;
-    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !playerParty?.inventory?.items) return false;
+    const normalizedId = this.normalizeCatalogItemId(itemId);
+    if (!normalizedId || !Number.isFinite(qty) || qty <= 0 || !playerParty?.inventory?.items) return false;
     const itemCatalog = this.itemCatalog;
     const list = playerParty.inventory.items;
-    const existing = list.find((entry) => entry.id === itemId);
+    const existing = list.find((entry) => entry.id === normalizedId);
     const amount = Math.floor(qty);
     if (existing) {
       existing.qty = Math.max(0, Math.floor(existing.qty ?? 0) + amount);
-      if (!existing.name) existing.name = name || this.getItemName(itemId);
-      if (!Number.isFinite(existing.unitValue)) existing.unitValue = unitValue ?? itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1;
+      if (!existing.name) existing.name = name || this.getItemName(normalizedId);
+      if (!Number.isFinite(existing.unitValue)) existing.unitValue = unitValue ?? itemCatalog.find((i) => i.id === normalizedId)?.unitValue ?? 1;
       return true;
     }
 
     list.push({
-      id: itemId,
-      name: name || this.getItemName(itemId),
+      id: normalizedId,
+      name: name || this.getItemName(normalizedId),
       qty: amount,
-      unitValue: Number.isFinite(unitValue) ? unitValue : (itemCatalog.find((i) => i.id === itemId)?.unitValue ?? 1),
+      unitValue: Number.isFinite(unitValue) ? unitValue : (itemCatalog.find((i) => i.id === normalizedId)?.unitValue ?? 1),
     });
     return true;
   }
@@ -160,9 +228,10 @@ export class EconomyManager {
   removeItem(itemId, qty) {
     this.ensureInventoryModel();
     const playerParty = this.game?.playerParty;
-    if (!itemId || !Number.isFinite(qty) || qty <= 0 || !playerParty?.inventory?.items) return false;
+    const normalizedId = this.normalizeCatalogItemId(itemId);
+    if (!normalizedId || !Number.isFinite(qty) || qty <= 0 || !playerParty?.inventory?.items) return false;
     const list = playerParty.inventory.items;
-    const idx = list.findIndex((entry) => entry.id === itemId);
+    const idx = list.findIndex((entry) => entry.id === normalizedId);
     if (idx < 0) return false;
     const next = Math.floor(list[idx].qty ?? 0) - Math.floor(qty);
     if (next < 0) return false;
@@ -183,7 +252,7 @@ export class EconomyManager {
     });
   }
 
-  // ── Phase 5B: Settlement, market, city-offer methods ─────────────
+  // -- Phase 5B: Settlement, market, city-offer methods -----
 
   getOrCreateMarketForSettlement(settlement) {
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
@@ -287,17 +356,19 @@ export class EconomyManager {
     this.cityOffers = this.state.city?.recruit?.offers || [];
   }
 
-  // ── Phase 5C: City services, trading, healing ─────────────────────
+  // -- Phase 5C: City services, trading, healing -----
 
   enterCityServicesForSettlement(settlement) {
     if (!this.state) return false;
     this.game?.setupCityServicesUI?.();
+    this.game?.cityManager?.setupCityServicesUI?.();
     this.game?.maybeShowTutorialHint?.({ nearSettlement: true, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: false });
     this.state.city = settlement && typeof settlement === 'object'
       ? settlement
       : this.getActiveSettlementForCity();
     const activeSettlement = this.state.city;
     if (!activeSettlement || typeof activeSettlement !== 'object') return false;
+    ensureSettlementCityState(activeSettlement);
     activeSettlement.tier = this.getSettlementTier(activeSettlement);
     const recruitPool = recruitmentSystem.getRecruitPool(activeSettlement, this.state?.seed);
     activeSettlement.recruitPool = recruitPool;
@@ -313,6 +384,7 @@ export class EconomyManager {
       warState: this.state?.warState,
     })
       .map((contract) => ({ ...contract, factionId: activeSettlement.ownerFactionId || activeSettlement.owner || null }));
+    activeSettlement.contractBoard = contracts;
 
     if (this.state?.escortState?.active && this.state.escortState.toCityId === activeSettlement.id) {
       const escortSuccess = Number(this.state.escortState.banditEncounters ?? 0) <= Number(this.state.escortState.maxBanditEncounters ?? 1);
@@ -325,8 +397,9 @@ export class EconomyManager {
       this.state.escortState.active = false;
       this.game?.setLastEventLog?.(escortSuccess ? 'Escort route completed successfully.' : 'Escort failed: too many bandit encounters.');
     }
-    this.state.setMode('city');
-    this.game?.cityUI?.show?.(activeSettlement, { recruitPool, market, contracts });
+    this.game?.gameFlowManager?.enterCity?.(activeSettlement.id);
+    const cityUI = this.game?.cityUI || this.game?.cityManager?.cityUI;
+    cityUI?.show?.(activeSettlement, { recruitPool, market, contracts });
     this.game?.updateTransientUIState?.();
     return true;
   }
@@ -336,8 +409,9 @@ export class EconomyManager {
   }
 
   exitCityServices() {
-    this.game?.cityUI?.hide?.();
-    if (this.state?.mode === 'city') this.state.setMode('map');
+    const cityUI = this.game?.cityUI || this.game?.cityManager?.cityUI;
+    cityUI?.hide?.();
+    if (this.state?.mode === 'city') this.game?.gameFlowManager?.exitCity?.();
     this.game?.updateTransientUIState?.();
     return true;
   }
@@ -555,7 +629,7 @@ Up/Down select, Enter heal, Esc back`,
     return true;
   }
 
-  // ── Phase 5A continued ─────────────────────────────────────────────
+  // -- Phase 5A continued -----
 
   getLogisticsSpeedMult() {
     const starvingMult = this.state?.status?.starving ? CONST.SUPPLIES.STARVATION_SPEED_MULT : 1;
@@ -567,7 +641,7 @@ Up/Down select, Enter heal, Esc back`,
     return { starvingMult, overcapMult, weight, cap };
   }
 
-  // ── Phase 5D: Daily economy hub ───────────────────────────────────
+  // -- Phase 5D: Daily economy hub -----
 
   processDailyEconomy(day) {
     const playerParty = this.game?.playerParty;
@@ -605,7 +679,7 @@ Up/Down select, Enter heal, Esc back`,
 
     const supplyRes = suppliesSystem.applyEndOfDay(this.state, playerParty, { inCamp: Boolean(this.state?.camp?.active) });
 
-    let raid = { happened: false, lossText: '' };
+    const raid = { happened: false, lossText: '' };
     if (this.state?.camp?.active) {
       campSystem.applyCampBenefits(playerParty);
       const raided = campSystem.rollRaid(this.state, Math.random);

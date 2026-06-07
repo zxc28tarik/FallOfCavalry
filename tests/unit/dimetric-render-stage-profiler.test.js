@@ -42,7 +42,6 @@ describe('RenderManager dimetric stage profiler', () => {
       uiManager: {
         weatherState: null,
         getWeatherConfig: vi.fn(() => ({})),
-        minimapRenderer: { render: vi.fn() },
       },
       worldManager: {
         getCameraSafe: vi.fn(() => ({ x: 0, y: 0, zoom: 1 })),

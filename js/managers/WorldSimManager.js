@@ -1,20 +1,30 @@
 import * as CONST from '../constants.js';
 import { getStance } from '../systems/factions.js';
 import { computeRiskMultiplier, riskLabel } from '../systems/encounter-risk.js';
-import { ensureWorldParties, createInitialWorldAiState, updateWorldParties, getBanditCap } from '../systems/world-ai.js';
+import { getBanditCap } from '../systems/world-ai.js';
 import { getBanditCapFromEvents } from '../systems/events.js';
 import { tickWeatherLayer } from '../rendering/weather-layer.js';
 import { isCurrentEventsModalOpen, renderCurrentEventsModal } from '../ui/modals.js';
 import { setContractsRuntimeContext } from '../systems/contracts.js';
 import { createInitialRegionState, getActiveRegionModifiers } from '../systems/region-state.js';
+import { ensureModeManager } from '../core/ModeManager.js';
+import WorldPartyManager from './WorldPartyManager.js';
+import { normalizeEncounterType } from '../data/encounter-defs.js';
 
 export class WorldSimManager {
   constructor() {
     this.world = null;
     this.game = null;
+    this.worldPartyManager = null;
     this.cameraPanVelocity = { x: 0, y: 0 };
   }
-  init(world, game) { this.world = world; this.game = game; }
+  init(world, game) {
+    this.world = world;
+    this.game = game;
+    if (this.world) this.world.simManager = this;
+    this.worldPartyManager = new WorldPartyManager();
+    this.worldPartyManager.init(world, game);
+  }
 
   hasTypingFocus() {
     if (typeof document === 'undefined') return false;
@@ -121,49 +131,13 @@ export class WorldSimManager {
 
   initEnemyParties() {
     if (!this.world.state) return;
-    if (!this.world.worldAi || typeof this.world.worldAi !== 'object') {
-      if (this.game) this.world.worldAi = createInitialWorldAiState();
-    }
-    if (!Array.isArray(this.world.worldAi?.parties)) {
-      if (this.world.worldAi) this.world.worldAi.parties = [];
-    }
-
-    const worldState = this.world.state?.map || {};
-    ensureWorldParties({
-      aiState: this.world.worldAi,
-      worldState,
-      factions: this.world.state?.factions || CONST.FACTIONS,
-      cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
-      currentDay: this.world.state?.day ?? 1,
-      banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
-    });
-
-    this.world.enemyParties = [];
     if (Array.isArray(this.world.state.aiParties) && this.world.state.aiParties.length > 0) {
-      this.world.enemyParties = this.world.state.aiParties.map((party) => ({
-        ...party,
-        factionId: party?.factionId || CONST.FACTION.ID.BANDITS,
-      }));
+      this.world.enemyParties = this.world.state.aiParties;
       this.world.state.aiParties = this.world.enemyParties;
+      if (this.game) this.game.enemyParties = this.world.enemyParties;
       return;
     }
-
-    const bounds = this.world.getWorldBounds();
-    const mapSpanX = Math.max(200, bounds.maxX - bounds.minX);
-    const mapSpanY = Math.max(200, bounds.maxY - bounds.minY);
-    const baseX = bounds.minX + mapSpanX * 0.35;
-    const baseY = bounds.minY + mapSpanY * 0.35;
-
-    this.world.enemyParties = [
-      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDIT },
-      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.HRE },
-      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.OTTOMAN },
-      { id: 'enemy-1', x: baseX, y: baseY, radius: 12, speed: 40, vx: 0.45, vy: 0.3, factionId: CONST.FACTION.ID.BANDITS },
-      { id: 'enemy-2', x: baseX + 320, y: baseY + 120, radius: 12, speed: 35, vx: -0.35, vy: 0.38, factionId: CONST.FACTION.ID.BANDITS },
-      { id: 'enemy-3', x: baseX + 140, y: baseY + 360, radius: 12, speed: 30, vx: 0.32, vy: -0.4, factionId: CONST.FACTION.ID.BANDITS },
-    ];
-    this.world.state.aiParties = this.world.enemyParties;
-    this.world.state.worldAi = this.world.worldAi;
+    this.worldPartyManager?.ensureWorldParties();
   }
 
   initPlayerParty() {
@@ -288,35 +262,48 @@ export class WorldSimManager {
       const moveContext = this.world.getMovementContextAt(this.game.playerParty.x, this.game.playerParty.y);
       const riskCtx = this.computeEncounterRiskContext();
       this.world.state.encounterRisk = riskCtx;
-      let chance = 0.1 * moveContext.encounterMult * (Number(riskCtx?.mult) || 1);
+      const rateMult = Number(CONST.GAME.ENCOUNTER_RATE_MULT ?? 1) || 1;
+      let chance = 0.1 * moveContext.encounterMult * (Number(riskCtx?.mult) || 1) * rateMult;
       if (moveContext.onRiver && !moveContext.onCrossing) {
         chance *= 1.35;
       }
 
-      if (Math.random() > Math.max(0.01, Math.min(0.95, chance))) continue;
+      if (Math.random() > Math.max(0, Math.min(0.95, chance))) continue;
 
-      this.triggerEncounter(enemy);
+      this.triggerEncounter(enemy, { encounterType: enemy.encounterType || enemy.worldPartyKind || enemy.kind });
       return true;
     }
 
     return false;
   }
 
-  triggerEncounter(enemy) {
+  triggerEncounter(enemy, context = {}) {
     if (!this.world.state || this.world.state.mode !== 'map' || !enemy?.id) return false;
 
+    const encounterType = normalizeEncounterType(context.encounterType || enemy.encounterType || enemy.worldPartyKind || enemy.kind || enemy.type);
+    const isSurprise = Boolean(context.surprise || enemy.surprise);
     this.world.cancelPlayerDestination();
     this.world.state.encounter = {
       enemyId: enemy.id,
+      encounterType,
+      type: encounterType,
+      isSurprise,
+      surprise: isSurprise,
+      worldPartyId: context.worldPartyId || enemy.worldPartyId || null,
       startedAt: Date.now(),
       enemySnapshot: {
         id: enemy.id,
         x: enemy.x,
         y: enemy.y,
         radius: enemy.radius,
+        kind: enemy.worldPartyKind || enemy.kind,
+        factionId: enemy.factionId,
+        encounterType,
       },
+      resultLog: [],
     };
-    this.world.state.setMode('encounter');
+    this.world.state.uiPanel = this.game?.encounterManager?.buildEncounterPanelData?.();
+    ensureModeManager(this.world.state)?.switchTo('encounter', { enemyId: enemy.id, encounterType, surprise: isSurprise, returnTarget: 'map' });
     this.game?.maybeShowTutorialHint?.({ nearSettlement: false, nearPoi: false, inCamp: false, inBattleDeploy: false, inBattleFight: false, inEncounter: true });
     return true;
   }
@@ -344,11 +331,15 @@ export class WorldSimManager {
         temporary: true,
         factionId: party.factionId,
         worldPartyKind: party.kind,
+        encounterType: normalizeEncounterType(party.encounterType || party.kind),
       });
     }
 
     this.world.worldEncounterPartyByEnemyId[enemyId] = party.id;
-    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12 });
+    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12, worldPartyKind: party.kind, encounterType: party.encounterType, factionId: party.factionId }, {
+      encounterType: party.encounterType || party.kind,
+      worldPartyId: party.id,
+    });
   }
 
   updateTransientUIState() {
@@ -366,7 +357,7 @@ export class WorldSimManager {
       this.world.state.lastEventLogUntil = 0;
     }
 
-    if (this.world.state.mode === 'roster') {
+    if (this.world.state.mode === 'battle' && this.world.state.battle?.phase === 'deploy' && this.world.state.battle?.deployStep === 'selection') {
       this.world.state.playerRoster = (this.game?.playerRoster || []).map((unit) => ({
         ...unit,
         status: unit?.status || 'healthy',
@@ -387,16 +378,22 @@ export class WorldSimManager {
       const settlement = this.world.state.city;
       this.world.state.currentCityFactionContext = this.game?.getCityFactionContext?.(settlement);
       if (settlement?.id) {
-        this.game?.cityUI?.setData?.({
+        const cityUI = this.game?.cityUI || this.game?.cityManager?.cityUI;
+        cityUI?.setData?.({
           settlement,
           recruitPool: settlement.recruitPool || [],
           market: this.world.state?.markets?.[settlement.id] || null,
+          contracts: settlement.contractBoard || [],
         });
       }
     }
 
-    if (this.world.state.mode === 'aftermath') {
-      this.world.state.uiPanel = this.game?.buildAftermathPanelData?.();
+    if (this.world.state.mode === 'encounter') {
+      this.world.state.uiPanel = this.game?.encounterManager?.buildEncounterPanelData?.();
+    }
+
+    if (this.world.state.mode === 'battle' && this.world.state.battle?.phase === 'result') {
+      this.world.state.uiPanel = this.game?.buildBattleResultPanelData?.();
     }
     if (this.world.state.mode !== 'city') this.world.state.currentCityFactionContext = null;
 
@@ -467,7 +464,10 @@ export class WorldSimManager {
       return;
     }
 
-    const step = party.speed * currentContext.speedMult * logistics.starvingMult * logistics.overcapMult * dt;
+    const playerSpeedMult = Number.isFinite(CONST.GAME.PLAYER_WORLD_SPEED_MULT)
+      ? Math.max(0.01, CONST.GAME.PLAYER_WORLD_SPEED_MULT)
+      : 1;
+    const step = party.speed * playerSpeedMult * currentContext.speedMult * logistics.starvingMult * logistics.overcapMult * dt;
     if (step >= dist) {
       this.world.completePlayerArrival();
       return;
@@ -581,28 +581,15 @@ export class WorldSimManager {
     this.updateMapCameraPan(dt);
     this.updatePlayerParty(dt);
     if ((this.game?.getEffectiveTuning?.() || {}).WORLD_AI?.ENABLED ?? CONST.WORLD_AI?.ENABLED) {
-      const worldState = this.world.state?.map || {};
-      ensureWorldParties({
-        aiState: this.world.worldAi,
-        worldState,
-        factions: this.world.state?.factions || CONST.FACTIONS,
-        cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
-        currentDay: this.world.state?.day ?? 1,
-        banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
-      });
+      this.worldPartyManager?.ensureWorldParties();
       this.game?.syncWarStateFromRelations?.();
-      const encounters = updateWorldParties({
-        aiState: this.world.worldAi,
-        worldState,
-        playerParty: this.game?.playerParty,
-        factions: this.world.state?.factions || CONST.FACTIONS,
-        cfg: this.game?.getWorldAiCfgWithRegionMods?.() || {},
-        dtSec: dt,
-      });
+      const encounters = this.worldPartyManager?.updateWorldParties(dt) || [];
       this.processWorldAiEncounters(encounters);
+      this.worldPartyManager?.checkSurpriseEncounters?.();
     } else {
       this.updateEnemyParties(dt);
       this.tryTriggerEncounter();
+      this.worldPartyManager?.checkSurpriseEncounters?.();
     }
 
     const party = this.game?.playerParty;
@@ -623,7 +610,9 @@ export class WorldSimManager {
     });
 
     this.world.updateFogFromPlayer();
-    tickWeatherLayer(dt, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
+    if (CONST.DIMETRIC?.ENABLE_WEATHER_EFFECTS === true) {
+      tickWeatherLayer(dt, this.game?.canvas?.width ?? CONST.GAME.VIEW_WIDTH, this.game?.canvas?.height ?? CONST.GAME.VIEW_HEIGHT);
+    }
   }
 
   cleanupTemporaryEnemy(enemyId, { force = false } = {}) {

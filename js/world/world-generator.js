@@ -5,6 +5,8 @@
 
 import * as CONST from '../constants.js';
 import * as utils from '../utils.js';
+import { initializeGeneratedCityStates } from '../systems/city-state.js';
+import { FLAGS, HEIGHT_ENCODING, HEIGHT_RANGE, MapData, TERRAIN as MAP_TERRAIN } from './map-data.js';
 
 export class WorldGenerator {
   constructor(seed) {
@@ -12,56 +14,45 @@ export class WorldGenerator {
     this.rng = utils.mulberry32(this.seed);
     this._lastFactionZones = [];
     
-    this.MAP_W = CONST.WORLD.MAP_WIDTH;
-    this.MAP_H = CONST.WORLD.MAP_HEIGHT;
+    this.MAP_W = CONST.WORLD.PROCEDURAL_MAP_WIDTH || CONST.WORLD.MAP_WIDTH;
+    this.MAP_H = CONST.WORLD.PROCEDURAL_MAP_HEIGHT || CONST.WORLD.MAP_HEIGHT;
     this.TILE = CONST.WORLD.TILE_SIZE;
+    this._lastPoliticalOwnerIds = [''];
+    this._lastPoliticalOwnerMap = null;
   }
   
-  /**
-   * Ana dünya oluşturma fonksiyonu
-   */
-  generate() {
-    // Height map oluştur
+  generateMapData(options = {}) {
     const heightMap = this.buildHeightField();
-    
-    // Blur (smooth)
     this.blurField(heightMap, this.MAP_W, this.MAP_H, 2);
     this.normalizeField(heightMap);
-    
-    // Distance to sea hesapla
+
     const distToSea = this.buildDistanceToSea(heightMap, this.MAP_W, this.MAP_H);
-    
-    // Tile'ları oluştur
-    const tiles = this.createTiles(heightMap, distToSea);
-
-    // 7-biyom alanı
-    const biomes = this.createBiomes(tiles, heightMap);
-    
-    // Nehirler
+    const terrain = this.createTerrainLayer(heightMap, distToSea);
+    const biomes = this.createBiomes(terrain, heightMap);
     const rivers = this.generateRivers(heightMap);
-    
-    // Ormanlar ve dağlar
     const { forests, mountains } = this.placeVegetationAndMountains(heightMap);
-    
-    // Yerleşimler
-    const settlements = this.placeSettlements(heightMap, tiles);
-    
-    // Yollar
+    const settlements = this.placeSettlements(heightMap, terrain);
     const roads = this.connectRoads(settlements);
-
-    // Nehir geçişleri (bridge / ford)
     const crossings = this.generateCrossings(rivers, roads);
-
-    // Minimal POI
     const pois = this.generatePOIs(biomes, settlements);
-    
-    // Fog of war
     const fog = this.initFogOfWar();
-    
-    return {
-      width: this.MAP_W,
-      height: this.MAP_H,
-      tiles,
+
+    const flags = new Uint16Array(this.MAP_W * this.MAP_H);
+    this.applyStaticFlags(flags, {
+      forests,
+      mountains,
+      rivers,
+      roads,
+      settlements,
+    });
+
+    const mapData = new MapData(this.MAP_W, this.MAP_H, {
+      ...options,
+      terrain,
+      heightMap: this.quantizeHeightMap(heightMap),
+      distToSea,
+      flags,
+      fog,
       settlements,
       factionZones: Array.isArray(this._lastFactionZones) ? this._lastFactionZones.map((z) => ({ ...z })) : [],
       rivers,
@@ -71,11 +62,44 @@ export class WorldGenerator {
       pois,
       forests,
       mountains,
-      fog,
-      heightMap,
-      distToSea,
+      politicalOwnerIds: Array.isArray(this._lastPoliticalOwnerIds) ? this._lastPoliticalOwnerIds.slice() : [''],
+      politicalOwnerMap: this._lastPoliticalOwnerMap,
       seed: this.seed,
+      heightEncoding: options.heightEncoding || HEIGHT_ENCODING.NORMALIZED_U16_V1,
+      heightRange: options.heightRange || HEIGHT_RANGE,
+    });
+
+    mapData.modifiedChunks.clear();
+    mapData.fogModifiedChunks.clear();
+    return mapData;
+  }
+
+  quantizeHeightMap(heightMap) {
+    const out = new Uint16Array(heightMap.length);
+    for (let i = 0; i < heightMap.length; i++) {
+      const value = Number(heightMap[i]) || 0;
+      out[i] = Math.max(0, Math.min(65535, Math.round(value * 65535)));
+    }
+    return out;
+  }
+
+  applyStaticFlags(flags, layers = {}) {
+    const add = (x, y, flag) => {
+      if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.MAP_W || y >= this.MAP_H) return;
+      flags[y * this.MAP_W + x] |= flag;
     };
+
+    for (const f of layers.forests || []) add(f.x, f.y, FLAGS.FOREST);
+    for (const m of layers.mountains || []) add(m.x, m.y, FLAGS.MOUNTAIN);
+    for (const river of layers.rivers || []) {
+      for (const p of river || []) add(p.x, p.y, FLAGS.RIVER);
+    }
+    for (const road of layers.roads || []) {
+      for (const p of road?.path || []) add(p.x, p.y, FLAGS.ROAD);
+    }
+    for (const settlement of layers.settlements || []) {
+      add(settlement.tx ?? settlement.x, settlement.ty ?? settlement.y, FLAGS.SETTLEMENT);
+    }
   }
 
   rand() {
@@ -185,42 +209,58 @@ export class WorldGenerator {
   
   buildDistanceToSea(heightMap, w, h) {
     const dist = new Float32Array(w * h);
-    const queue = [];
+    const queue = new Uint32Array(w * h);
+    let head = 0;
+    let tail = 0;
     
     // Initialize - deniz tile'ları 0, diğerleri infinity
     for (let i = 0; i < w * h; i++) {
       if (heightMap[i] < CONST.WORLD.SEA_LEVEL) {
         dist[i] = 0;
-        queue.push(i);
+        queue[tail++] = i;
       } else {
         dist[i] = 9999;
       }
     }
     
     // BFS
-    while (queue.length > 0) {
-      const idx = queue.shift();
+    while (head < tail) {
+      const idx = queue[head++];
       const x = idx % w;
       const y = Math.floor(idx / w);
       const currentDist = dist[idx];
       
-      // 4 directions
-      const neighbors = [
-        { x: x + 1, y },
-        { x: x - 1, y },
-        { x, y: y + 1 },
-        { x, y: y - 1 },
-      ];
-      
-      for (const n of neighbors) {
-        if (n.x >= 0 && n.x < w && n.y >= 0 && n.y < h) {
-          const ni = n.y * w + n.x;
-          const newDist = currentDist + 1;
-          
-          if (newDist < dist[ni]) {
-            dist[ni] = newDist;
-            queue.push(ni);
-          }
+      const newDist = currentDist + 1;
+
+      if (x + 1 < w) {
+        const ni = idx + 1;
+        if (newDist < dist[ni]) {
+          dist[ni] = newDist;
+          queue[tail++] = ni;
+        }
+      }
+
+      if (x > 0) {
+        const ni = idx - 1;
+        if (newDist < dist[ni]) {
+          dist[ni] = newDist;
+          queue[tail++] = ni;
+        }
+      }
+
+      if (y + 1 < h) {
+        const ni = idx + w;
+        if (newDist < dist[ni]) {
+          dist[ni] = newDist;
+          queue[tail++] = ni;
+        }
+      }
+
+      if (y > 0) {
+        const ni = idx - w;
+        if (newDist < dist[ni]) {
+          dist[ni] = newDist;
+          queue[tail++] = ni;
         }
       }
     }
@@ -231,46 +271,50 @@ export class WorldGenerator {
   // ========================================================================
   // BIOME ASSIGNMENT
   // ========================================================================
-  
-  createTiles(heightMap, distToSea) {
-    const tiles = [];
-    
+
+  terrainIdAt(terrainSource, index) {
+    return terrainSource?.[index] ?? MAP_TERRAIN.GRASS;
+  }
+
+  isWaterTerrainAt(terrainSource, index) {
+    return this.terrainIdAt(terrainSource, index) === MAP_TERRAIN.WATER;
+  }
+
+  isShoreTerrainAt(terrainSource, index) {
+    return this.terrainIdAt(terrainSource, index) === MAP_TERRAIN.SHORE;
+  }
+
+  createTerrainLayer(heightMap, distToSea) {
+    const terrain = new Uint8Array(this.MAP_W * this.MAP_H);
+
     for (let y = 0; y < this.MAP_H; y++) {
       for (let x = 0; x < this.MAP_W; x++) {
         const i = y * this.MAP_W + x;
         const h = heightMap[i];
         const d = distToSea[i];
-        
-        let type = CONST.TERRAIN.TYPE.GRASS;
-        
+
+        let type = MAP_TERRAIN.GRASS;
+
         if (h < CONST.WORLD.SEA_LEVEL) {
-          type = CONST.TERRAIN.TYPE.WATER;
+          type = MAP_TERRAIN.WATER;
         } else if (h < CONST.WORLD.SHORE_MAX && d <= 1) {
-          type = CONST.TERRAIN.TYPE.SHORE;
+          type = MAP_TERRAIN.SHORE;
         } else if (h > CONST.WORLD.SNOW_ALTITUDE) {
-          type = CONST.TERRAIN.TYPE.SNOW;
+          type = MAP_TERRAIN.SNOW;
         } else if (h > CONST.WORLD.MOUNTAIN_MIN) {
-          type = CONST.TERRAIN.TYPE.MOUNTAIN;
+          type = MAP_TERRAIN.MOUNTAIN;
         }
-        
-        tiles.push({
-          x,
-          y,
-          type,
-          height: h,
-          distToSea: d,
-          explored: false,
-          visible: false,
-        });
+
+        terrain[i] = type;
       }
     }
 
-    this.smoothTileTypes(tiles, heightMap);
-    return tiles;
+    this.smoothTerrainLayer(terrain, heightMap);
+    return terrain;
   }
 
-  smoothTileTypes(tiles, heightMap) {
-    const out = tiles.map((t) => t?.type || CONST.TERRAIN.TYPE.GRASS);
+  smoothTerrainLayer(terrain, heightMap) {
+    const out = new Uint8Array(terrain);
     const idxOf = (x, y) => y * this.MAP_W + x;
 
     const countCardinal = (arr, x, y, matchFn) => {
@@ -301,28 +345,28 @@ export class WorldGenerator {
       return c;
     };
 
-    const isWater = (t) => t === CONST.TERRAIN.TYPE.WATER;
-    const isMountainLike = (t) => t === CONST.TERRAIN.TYPE.MOUNTAIN || t === CONST.TERRAIN.TYPE.SNOW;
+    const isWater = (t) => t === MAP_TERRAIN.WATER;
+    const isMountainLike = (t) => t === MAP_TERRAIN.MOUNTAIN || t === MAP_TERRAIN.SNOW;
 
     for (let y = 0; y < this.MAP_H; y++) {
       for (let x = 0; x < this.MAP_W; x++) {
         const i = idxOf(x, y);
         const type = out[i];
         const h = heightMap[i] ?? 0;
-        if (type === CONST.TERRAIN.TYPE.WATER) {
+        if (type === MAP_TERRAIN.WATER) {
           const waterN = countCardinal(out, x, y, isWater);
-          if (waterN <= 1 && h > CONST.WORLD.SEA_LEVEL - 0.03) out[i] = CONST.TERRAIN.TYPE.SHORE;
+          if (waterN <= 1 && h > CONST.WORLD.SEA_LEVEL - 0.03) out[i] = MAP_TERRAIN.SHORE;
           continue;
         }
-        if (type === CONST.TERRAIN.TYPE.SHORE) {
+        if (type === MAP_TERRAIN.SHORE) {
           const waterN = countCardinal(out, x, y, isWater);
-          if (waterN === 0 || (waterN === 1 && h > CONST.WORLD.SEA_LEVEL + 0.01)) out[i] = CONST.TERRAIN.TYPE.GRASS;
-          else if (waterN >= 3 && h < CONST.WORLD.SEA_LEVEL + 0.015) out[i] = CONST.TERRAIN.TYPE.WATER;
+          if (waterN === 0 || (waterN === 1 && h > CONST.WORLD.SEA_LEVEL + 0.01)) out[i] = MAP_TERRAIN.GRASS;
+          else if (waterN >= 3 && h < CONST.WORLD.SEA_LEVEL + 0.015) out[i] = MAP_TERRAIN.WATER;
           continue;
         }
-        if (type === CONST.TERRAIN.TYPE.MOUNTAIN) {
+        if (type === MAP_TERRAIN.MOUNTAIN) {
           const mN = count8(out, x, y, isMountainLike);
-          if (mN <= 1 && h < CONST.WORLD.MOUNTAIN_MIN + 0.05) out[i] = CONST.TERRAIN.TYPE.GRASS;
+          if (mN <= 1 && h < CONST.WORLD.MOUNTAIN_MIN + 0.05) out[i] = MAP_TERRAIN.GRASS;
         }
       }
     }
@@ -336,24 +380,24 @@ export class WorldGenerator {
         const water4 = countCardinal(out, x, y, isWater);
         const water8 = count8(out, x, y, isWater);
 
-        if (type === CONST.TERRAIN.TYPE.GRASS) {
+        if (type === MAP_TERRAIN.GRASS) {
           if (h < CONST.WORLD.SEA_LEVEL + 0.06 && water4 >= 1 && water8 >= 2) {
-            refined[i] = CONST.TERRAIN.TYPE.SHORE;
+            refined[i] = MAP_TERRAIN.SHORE;
           }
           continue;
         }
 
-        if (type === CONST.TERRAIN.TYPE.SHORE) {
-          if (water4 === 0 && water8 <= 1) refined[i] = CONST.TERRAIN.TYPE.GRASS;
-          else if (water4 <= 1 && water8 <= 2 && h > CONST.WORLD.SEA_LEVEL + 0.006) refined[i] = CONST.TERRAIN.TYPE.GRASS;
-          else if (water4 >= 3 && water8 >= 5 && h < CONST.WORLD.SEA_LEVEL + 0.01) refined[i] = CONST.TERRAIN.TYPE.WATER;
+        if (type === MAP_TERRAIN.SHORE) {
+          if (water4 === 0 && water8 <= 1) refined[i] = MAP_TERRAIN.GRASS;
+          else if (water4 <= 1 && water8 <= 2 && h > CONST.WORLD.SEA_LEVEL + 0.006) refined[i] = MAP_TERRAIN.GRASS;
+          else if (water4 >= 3 && water8 >= 5 && h < CONST.WORLD.SEA_LEVEL + 0.01) refined[i] = MAP_TERRAIN.WATER;
           continue;
         }
 
-        if (type === CONST.TERRAIN.TYPE.WATER) {
-          const shore4 = countCardinal(out, x, y, (t) => t === CONST.TERRAIN.TYPE.SHORE);
+        if (type === MAP_TERRAIN.WATER) {
+          const shore4 = countCardinal(out, x, y, (t) => t === MAP_TERRAIN.SHORE);
           if (shore4 === 0 && water4 <= 1 && h > CONST.WORLD.SEA_LEVEL - 0.01) {
-            refined[i] = CONST.TERRAIN.TYPE.SHORE;
+            refined[i] = MAP_TERRAIN.SHORE;
           }
         }
       }
@@ -362,19 +406,19 @@ export class WorldGenerator {
     for (let y = 1; y < this.MAP_H - 1; y++) {
       for (let x = 1; x < this.MAP_W - 1; x++) {
         const i = idxOf(x, y);
-        if (refined[i] !== CONST.TERRAIN.TYPE.SHORE) continue;
+        if (refined[i] !== MAP_TERRAIN.SHORE) continue;
         const h = heightMap[i] ?? 0;
         const cardWater = countCardinal(refined, x, y, isWater);
         const diagWater = count8(refined, x, y, isWater);
         if (cardWater === 0 && diagWater >= 2 && h > CONST.WORLD.SEA_LEVEL + 0.025) {
-          refined[i] = CONST.TERRAIN.TYPE.GRASS;
+          refined[i] = MAP_TERRAIN.GRASS;
         }
       }
     }
 
     this.reduceInlandWater(refined, heightMap);
 
-    for (let i = 0; i < tiles.length; i++) tiles[i].type = refined[i];
+    terrain.set(refined);
   }
 
   reduceInlandWater(types, heightMap) {
@@ -387,7 +431,7 @@ export class WorldGenerator {
     for (let y = 0; y < this.MAP_H; y++) {
       for (let x = 0; x < this.MAP_W; x++) {
         const start = idxOf(x, y);
-        if (visited[start] || types[start] !== CONST.TERRAIN.TYPE.WATER) continue;
+        if (visited[start] || types[start] !== MAP_TERRAIN.WATER) continue;
 
         const stack = [start];
         visited[start] = 1;
@@ -406,7 +450,7 @@ export class WorldGenerator {
             const ny = cy + dy;
             if (nx < 0 || ny < 0 || nx >= this.MAP_W || ny >= this.MAP_H) continue;
             const ni = idxOf(nx, ny);
-            if (visited[ni] || types[ni] !== CONST.TERRAIN.TYPE.WATER) continue;
+            if (visited[ni] || types[ni] !== MAP_TERRAIN.WATER) continue;
             visited[ni] = 1;
             stack.push(ni);
           }
@@ -415,7 +459,7 @@ export class WorldGenerator {
         if (touchesBoundary || component.length > maxInlandLakeTiles) continue;
         for (const ci of component) {
           const h = heightMap[ci] ?? 0;
-          types[ci] = h < CONST.WORLD.SEA_LEVEL + 0.004 ? CONST.TERRAIN.TYPE.SHORE : CONST.TERRAIN.TYPE.GRASS;
+          types[ci] = h < CONST.WORLD.SEA_LEVEL + 0.004 ? MAP_TERRAIN.SHORE : MAP_TERRAIN.GRASS;
         }
       }
     }
@@ -423,7 +467,7 @@ export class WorldGenerator {
 
 
 
-  createBiomes(tiles, heightMap) {
+  createBiomes(terrainSource, heightMap) {
     const size = this.MAP_W * this.MAP_H;
     const biomes = new Uint8Array(size);
 
@@ -431,14 +475,14 @@ export class WorldGenerator {
       const latitude = y / Math.max(1, this.MAP_H - 1);
       for (let x = 0; x < this.MAP_W; x++) {
         const idx = y * this.MAP_W + x;
-        const tile = tiles[idx];
+        const terrainId = this.terrainIdAt(terrainSource, idx);
         const h = heightMap[idx] ?? 0;
 
-        if (tile?.type === CONST.TERRAIN.TYPE.WATER) {
+        if (terrainId === MAP_TERRAIN.WATER) {
           biomes[idx] = CONST.BIOME.SEA;
           continue;
         }
-        if (tile?.type === CONST.TERRAIN.TYPE.SHORE) {
+        if (terrainId === MAP_TERRAIN.SHORE) {
           biomes[idx] = CONST.BIOME.SHORE;
           continue;
         }
@@ -463,16 +507,16 @@ export class WorldGenerator {
       }
     }
 
-    return this.smoothBiomes(biomes, tiles);
+    return this.smoothBiomes(biomes, terrainSource);
   }
 
-  smoothBiomes(biomes, tiles) {
+  smoothBiomes(biomes, terrainSource) {
     const out = new Uint8Array(biomes);
     for (let y = 0; y < this.MAP_H; y++) {
       for (let x = 0; x < this.MAP_W; x++) {
         const idx = y * this.MAP_W + x;
-        const tile = tiles[idx];
-        if (tile?.type === CONST.TERRAIN.TYPE.WATER || tile?.type === CONST.TERRAIN.TYPE.SHORE) continue;
+        const terrainId = this.terrainIdAt(terrainSource, idx);
+        if (terrainId === MAP_TERRAIN.WATER || terrainId === MAP_TERRAIN.SHORE) continue;
 
         const counts = new Map();
         let total = 0;
@@ -482,8 +526,8 @@ export class WorldGenerator {
             const ny = y + dy;
             if (nx < 0 || ny < 0 || nx >= this.MAP_W || ny >= this.MAP_H) continue;
             const ni = ny * this.MAP_W + nx;
-            const nt = tiles[ni];
-            if (nt?.type === CONST.TERRAIN.TYPE.WATER || nt?.type === CONST.TERRAIN.TYPE.SHORE) continue;
+            const nt = this.terrainIdAt(terrainSource, ni);
+            if (nt === MAP_TERRAIN.WATER || nt === MAP_TERRAIN.SHORE) continue;
             const b = biomes[ni];
             counts.set(b, (counts.get(b) || 0) + 1);
             total++;
@@ -929,7 +973,7 @@ export class WorldGenerator {
   // SETTLEMENTS
   // ========================================================================
 
-  placeSettlements(heightMap, tiles) {
+  placeSettlements(heightMap, terrain) {
     const all = [];
     const REF_MAP_W = 180;
     const REF_MAP_H = 120;
@@ -944,10 +988,17 @@ export class WorldGenerator {
 
     const BASE_FACTION_CONFIG = [
       { id: CONST.FACTION.ID.OTTOMAN, cities: 6, forts: 30, villages: 100, ux: 136 / REF_MAP_W, uy: 78 / REF_MAP_H, inf: 1.52 },
+      { id: CONST.FACTION.ID.RUSSIA,  cities: 5, forts: 22, villages: 92,  ux: 140 / REF_MAP_W, uy: 30 / REF_MAP_H, inf: 1.42 },
       { id: CONST.FACTION.ID.HRE,     cities: 5, forts: 20, villages: 80,  ux: 42 / REF_MAP_W,  uy: 54 / REF_MAP_H, inf: 1.22 },
+      { id: CONST.FACTION.ID.FRANCE,  cities: 4, forts: 14, villages: 60,  ux: 48 / REF_MAP_W,  uy: 58 / REF_MAP_H, inf: 1.05 },
       { id: CONST.FACTION.ID.SPANISH, cities: 5, forts: 20, villages: 80,  ux: 34 / REF_MAP_W,  uy: 94 / REF_MAP_H, inf: 1.20 },
       { id: CONST.FACTION.ID.POLISH,  cities: 2, forts: 10, villages: 40,  ux: 72 / REF_MAP_W,  uy: 26 / REF_MAP_H, inf: 1.08 },
       { id: CONST.FACTION.ID.VENICE,  cities: 1, forts: 5,  villages: 20,  ux: 92 / REF_MAP_W,  uy: 96 / REF_MAP_H, inf: 0.84 },
+      { id: CONST.FACTION.ID.ENGLAND, cities: 3, forts: 10, villages: 42,  ux: 28 / REF_MAP_W,  uy: 42 / REF_MAP_H, inf: 0.92 },
+      { id: CONST.FACTION.ID.SWEDEN,  cities: 3, forts: 12, villages: 48,  ux: 96 / REF_MAP_W,  uy: 22 / REF_MAP_H, inf: 1.00 },
+      { id: CONST.FACTION.ID.PORTUGAL, cities: 1, forts: 5, villages: 18, ux: 18 / REF_MAP_W, uy: 84 / REF_MAP_H, inf: 0.68 },
+      { id: CONST.FACTION.ID.DENMARK, cities: 1, forts: 5,  villages: 20,  ux: 66 / REF_MAP_W,  uy: 34 / REF_MAP_H, inf: 0.72 },
+      { id: CONST.FACTION.ID.SAFAVID, cities: 4, forts: 16, villages: 64,  ux: 156 / REF_MAP_W, uy: 74 / REF_MAP_H, inf: 1.10 },
     ];
 
     const scaleCount = (base, min = 1) => Math.max(min, Math.round(base * countScale));
@@ -1007,6 +1058,8 @@ export class WorldGenerator {
     const settlementCountOverrides = {
       [CONST.FACTION.ID.VENICE]: { cities: 8, forts: 15, villages: 26 },
       [CONST.FACTION.ID.POLISH]: { cities: 3, forts: 15, villages: 80 },
+      [CONST.FACTION.ID.PORTUGAL]: { cities: 2, forts: 6, villages: 18 },
+      [CONST.FACTION.ID.DENMARK]: { cities: 2, forts: 6, villages: 18 },
     };
     for (const fc of FACTION_CONFIG) {
       const override = settlementCountOverrides[fc.id];
@@ -1021,11 +1074,18 @@ export class WorldGenerator {
       FACTION_CONFIG.map((fc) => [fc.id, (fc.cities + fc.forts + fc.villages) / Math.max(1, totalConfigured)])
     );
     const zoneHints = {
-      [CONST.FACTION.ID.SPANISH]: { cx: 0.22, cy: 0.83, aspect: 1.45 },
-      [CONST.FACTION.ID.HRE]: { cx: 0.26, cy: 0.50, aspect: 1.16 },
-      [CONST.FACTION.ID.POLISH]: { cx: 0.35, cy: 0.16, aspect: 1.85 },
-      [CONST.FACTION.ID.OTTOMAN]: { cx: 0.83, cy: 0.54, aspect: 0.56 },
-      [CONST.FACTION.ID.VENICE]: { cx: 0.60, cy: 0.84, aspect: 0.55 },
+      [CONST.FACTION.ID.PORTUGAL]: { cx: 0.12, cy: 0.66, aspect: 0.36 },
+      [CONST.FACTION.ID.SPANISH]: { cx: 0.19, cy: 0.69, aspect: 1.04 },
+      [CONST.FACTION.ID.FRANCE]: { cx: 0.29, cy: 0.55, aspect: 0.88 },
+      [CONST.FACTION.ID.ENGLAND]: { cx: 0.21, cy: 0.38, aspect: 0.76 },
+      [CONST.FACTION.ID.HRE]: { cx: 0.40, cy: 0.54, aspect: 0.86 },
+      [CONST.FACTION.ID.VENICE]: { cx: 0.48, cy: 0.66, aspect: 0.36 },
+      [CONST.FACTION.ID.POLISH]: { cx: 0.52, cy: 0.40, aspect: 1.28 },
+      [CONST.FACTION.ID.SWEDEN]: { cx: 0.48, cy: 0.22, aspect: 0.82 },
+      [CONST.FACTION.ID.DENMARK]: { cx: 0.38, cy: 0.32, aspect: 0.70 },
+      [CONST.FACTION.ID.RUSSIA]: { cx: 0.74, cy: 0.28, aspect: 2.15 },
+      [CONST.FACTION.ID.OTTOMAN]: { cx: 0.62, cy: 0.67, aspect: 1.72 },
+      [CONST.FACTION.ID.SAFAVID]: { cx: 0.86, cy: 0.64, aspect: 0.86 },
     };
     const clamp01 = (v) => utils.clamp(v, 0, 1);
     const buildFactionZone = (fc) => {
@@ -1074,6 +1134,14 @@ export class WorldGenerator {
       return (centerDist * 6.0) / Math.max(0.5, inf);
     };
     const computeTerritoryOwner = (x, y) => {
+      const nx = x / Math.max(1, this.MAP_W - 1);
+      const ny = y / Math.max(1, this.MAP_H - 1);
+
+      if (ny >= 0.69 && nx >= 0.46 && nx <= 0.80) return CONST.FACTION.ID.OTTOMAN; // Arabia is Ottoman.
+      if (ny >= 0.75 && nx >= 0.18 && nx <= 0.62) return CONST.FACTION.ID.OTTOMAN; // North African Ottoman belt.
+      if (ny >= 0.53 && nx >= 0.78) return CONST.FACTION.ID.SAFAVID;
+      if (ny <= 0.40 && nx >= 0.56) return CONST.FACTION.ID.RUSSIA;
+
       let best = null;
       let bestScore = Infinity;
       for (const zone of factionZones) {
@@ -1093,6 +1161,22 @@ export class WorldGenerator {
         territoryOwners[yy * this.MAP_W + xx] = computeTerritoryOwner(xx, yy);
       }
     }
+    const terrainAt = (x, y) => {
+      if (x < 0 || y < 0 || x >= this.MAP_W || y >= this.MAP_H) return MAP_TERRAIN.WATER;
+      return this.terrainIdAt(terrain, y * this.MAP_W + x);
+    };
+    const isShoreTile = (x, y) => terrainAt(x, y) === MAP_TERRAIN.SHORE;
+    const isLandTile = (x, y) => terrainAt(x, y) !== MAP_TERRAIN.WATER;
+
+    const politicalOwnerIds = ['', ...FACTION_CONFIG.map((fc) => fc.id)];
+    const politicalOwnerIndex = new Map(politicalOwnerIds.map((id, idx) => [id, idx]));
+    const politicalOwnerMap = new Uint8Array(this.MAP_W * this.MAP_H);
+    for (let i = 0; i < politicalOwnerMap.length; i++) {
+      const owner = territoryOwners[i];
+      politicalOwnerMap[i] = this.isWaterTerrainAt(terrain, i) ? 0 : (politicalOwnerIndex.get(owner) || 0);
+    }
+    this._lastPoliticalOwnerIds = politicalOwnerIds;
+    this._lastPoliticalOwnerMap = politicalOwnerMap;
     const getTerritoryOwner = (x, y) => {
       if (x < 0 || y < 0 || x >= this.MAP_W || y >= this.MAP_H) return null;
       return territoryOwners[y * this.MAP_W + x];
@@ -1113,13 +1197,11 @@ export class WorldGenerator {
 
     const isGoodTile = (x, y, owner, _type, borderBuffer = 0) => {
       if (x < edgePadding || y < edgePadding || x >= this.MAP_W - edgePadding || y >= this.MAP_H - edgePadding) return false;
-      const tile = tiles ? tiles[y * this.MAP_W + x] : null;
-      if (!tile || tile.type === 'water') return false;
-      if (tile.type === 'shore') {
+      if (!isLandTile(x, y)) return false;
+      if (isShoreTile(x, y)) {
         const cardinals = [[1, 0], [-1, 0], [0, 1], [0, -1]];
         const landNeighbors = cardinals.filter(([dx, dy]) => {
-          const t = tiles[(y + dy) * this.MAP_W + (x + dx)];
-          return t && t.type !== 'water';
+          return isLandTile(x + dx, y + dy);
         }).length;
         if (landNeighbors < 3) return false;
       }
@@ -1563,8 +1645,7 @@ export class WorldGenerator {
       const placed = [];
       const canUse = (x, y) => {
         if (x < 0 || y < 0 || x >= this.MAP_W || y >= this.MAP_H) return false;
-        const tile = tiles ? tiles[y * this.MAP_W + x] : null;
-        return Boolean(tile && tile.type !== 'water');
+        return isLandTile(x, y);
       };
       const placeCity = (x, y) => {
         const s = this._makeSettlement(all.length, x, y, owner, CITY);
@@ -1679,13 +1760,11 @@ export class WorldGenerator {
     const fillMissingRandom = (owner, type, remaining, options = null) => {
       if (remaining <= 0) return 0;
       const zone = zoneByOwner.get(owner);
-      const useUnseeded = Boolean(options?.unseeded);
-      const randIntUnseeded = (min, max) => {
-        const lo = Math.ceil(Math.min(min, max));
-        const hi = Math.floor(Math.max(min, max));
-        return Math.floor(lo + Math.random() * (hi - lo + 1));
+      const pickInt = (_min, _max) => {
+        const min = Number.isFinite(options?.minOverride) ? options.minOverride : _min;
+        const max = Number.isFinite(options?.maxOverride) ? options.maxOverride : _max;
+        return this.randInt(min, max);
       };
-      const pickInt = (min, max) => useUnseeded ? randIntUnseeded(min, max) : this.randInt(min, max);
       let added = 0;
       const emergencyAttempts = Math.max(2000, remaining * 800);
       for (let i = 0; i < emergencyAttempts && added < remaining; i++) {
@@ -1695,8 +1774,7 @@ export class WorldGenerator {
         const y = zone
           ? pickInt(Math.max(0, zone.y0), Math.min(this.MAP_H - 1, zone.y1))
           : pickInt(0, this.MAP_H - 1);
-        const tile = tiles ? tiles[y * this.MAP_W + x] : null;
-        if (!tile || tile.type === 'water') continue;
+        if (!isLandTile(x, y)) continue;
         if (getTerritoryOwner(x, y) !== owner) continue;
         const s = this._makeSettlement(all.length, x, y, owner, type);
         all.push(s);
@@ -1708,12 +1786,11 @@ export class WorldGenerator {
 
     if (RANDOMIZE_ALL_SETTLEMENTS) {
       for (const fc of FACTION_CONFIG) {
-        const forcePureRandom = fc.id === SPANISH || fc.id === VENICE;
-        if (forcePureRandom) {
-          const randomOpts = { unseeded: true };
-          fillMissingRandom(fc.id, CITY, fc.cities, randomOpts);
-          fillMissingRandom(fc.id, FORT, fc.forts, randomOpts);
-          fillMissingRandom(fc.id, VILLAGE, fc.villages, randomOpts);
+        const forceZoneRandom = fc.id === SPANISH || fc.id === VENICE;
+        if (forceZoneRandom) {
+          fillMissingRandom(fc.id, CITY, fc.cities);
+          fillMissingRandom(fc.id, FORT, fc.forts);
+          fillMissingRandom(fc.id, VILLAGE, fc.villages);
           continue;
         }
 
@@ -1731,6 +1808,7 @@ export class WorldGenerator {
       }
 
       all.forEach((s, i) => { s.id = i; });
+      initializeGeneratedCityStates(all);
       return all;
     }
 
@@ -1900,6 +1978,7 @@ export class WorldGenerator {
     }
 
     all.forEach((s, i) => { s.id = i; });
+    initializeGeneratedCityStates(all);
     return all;
   }
 
@@ -1976,6 +2055,56 @@ export class WorldGenerator {
         vilPre:  ['Casale','Borgo','San','Santa','Rio','Campo','Pieve','Cascina','Mezzano','Cà','Val','Monte','Colle','Ponte','Sasso','Ronco','Villa','Riva','Forno','Corte','Selva','Pian','Costa','Dosso','Volta'],
         vilSuf:  ['nuovo','grande','piccolo','alto','basso','lungo','di Sopra','di Sotto','del Lago','antico','vecchio','piano','duro','fosco','largo'],
       },
+    };
+
+    data.russia = {
+      city: ['Moskova','Kazan','Smolensk','Novgorod','Tver','Ryazan','Vladimir','Yaroslavl'],
+      fortPre: ['Bel','Nov','Star','Kras','Vol','Don','Sev','Velik','Kamen','Sokol'],
+      fortSuf: ['grad','gorod','sk','ovo','in','itsa','yarsk','pol'],
+      vilPre: ['Belo','Novo','Staro','Krasno','Volno','Lesno','Zimno','Serebro','Kamen','Tih'],
+      vilSuf: ['vo','ka','skoye','ino','itsa','ovka','grad','polye'],
+    };
+    data.france = {
+      city: ['Paris','Lyon','Bordeaux','Rouen','Dijon','Orleans','Toulouse','Reims'],
+      fortPre: ['Mont','Saint','Fort','Chateau','Roche','Belle','Clair','Pont','Val','Bois'],
+      fortSuf: ['fort','mont','ville','rouge','blanc','neuf','vieux'],
+      vilPre: ['Petit','Grand','Saint','Belle','Claire','Val','Bois','Roche','Font','Mont'],
+      vilSuf: ['ville','court','mont','bois','pont','val','fontaine','bourg'],
+    };
+    data.england = {
+      city: ['London','York','Norwich','Bristol','Canterbury','Oxford','Lincoln','Exeter'],
+      fortPre: ['North','South','West','East','Old','New','High','Stone','Red','White'],
+      fortSuf: ['castle','ford','wick','ton','bury','ham','mouth','shire'],
+      vilPre: ['Ash','Oak','Green','Black','White','Stone','Long','Little','High','Low'],
+      vilSuf: ['ton','ham','ford','wick','bury','field','well','worth'],
+    };
+    data.sweden = {
+      city: ['Stockholm','Uppsala','Kalmar','Abo','Viborg','Goteborg','Linkoping','Visby'],
+      fortPre: ['Norr','Soder','Gamla','Nya','Berg','Skog','Sten','Kron','Vinter','Hoga'],
+      fortSuf: ['borg','holm','stad','vik','sund','nas','dal','fors'],
+      vilPre: ['Norr','Soder','Lilla','Stora','Berg','Skog','Sten','Lind','Frost','Kron'],
+      vilSuf: ['by','vik','dal','sund','holm','fors','nas','torp'],
+    };
+    data.portugal = {
+      city: ['Lisboa','Porto','Coimbra','Braga','Evora','Faro'],
+      fortPre: ['Castelo','Torre','Porto','Monte','Vila','Santa','Sao','Forte'],
+      fortSuf: ['Real','Velho','Novo','Branco','Alto','do Mar'],
+      vilPre: ['Vila','Sao','Santa','Monte','Porto','Fonte','Campo','Ribeira'],
+      vilSuf: ['nova','velha','alta','baixa','do Mar','real','branca','grande'],
+    };
+    data.denmark = {
+      city: ['Kobenhavn','Aarhus','Odense','Ribe','Bergen','Trondheim'],
+      fortPre: ['Nord','Syd','Gamle','Nye','Kron','Havn','Fjord','Borg'],
+      fortSuf: ['borg','havn','holm','vik','sund','gard'],
+      vilPre: ['Nord','Syd','Lille','Store','Gamle','Nye','Fjord','Kron'],
+      vilSuf: ['by','havn','holm','vik','sund','gard'],
+    };
+    data.safavid = {
+      city: ['Isfahan','Tabriz','Shiraz','Qazvin','Hamadan','Kerman','Yerevan','Ganja'],
+      fortPre: ['Qizil','Shah','Kara','Ak','Dar','Sari','Kuh','Narin','Kala','Gul'],
+      fortSuf: ['kala','abad','hisar','dar','rud','shahr','kend','gan'],
+      vilPre: ['Shah','Gul','Kara','Ak','Sari','Dar','Kuh','Bagh','Narin','Qizil'],
+      vilSuf: ['abad','rud','kend','deh','shahr','zar','gan','kala'],
     };
 
     const d = data[faction] || data.ottoman;
@@ -2101,4 +2230,3 @@ export class WorldGenerator {
 }
 
 export default WorldGenerator;
-

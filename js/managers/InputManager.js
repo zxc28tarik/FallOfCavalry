@@ -1,6 +1,14 @@
 import * as CONST from '../constants.js';
 import { toggleCurrentEventsModal } from '../ui/modals.js';
 import { getBuildingDef } from '../data/building-defs.js';
+import { ensureModeManager } from '../core/ModeManager.js';
+// --- TEMPORARY: Phaser battle test (remove when integrated) ---
+// Lazy-imported to avoid Phaser's browser-only globals breaking Node test env
+let _battleBootModule = null;
+async function getBattleBoot() {
+  if (!_battleBootModule) _battleBootModule = await import('../battle/BattleBoot.js');
+  return _battleBootModule;
+}
 
 const MAP_BUILD_DEF_ORDER = Object.freeze(['wall', 'gatehouse', 'keep', 'granary']);
 const MAP_BUILD_DEF_LABEL = Object.freeze({
@@ -314,8 +322,10 @@ export class GameInputManager {
         if (g.state?.mode !== 'map') return;
         e.preventDefault();
         const cam = g.worldManager.getCameraSafe();
+        const minZoom = Math.max(0.01, Number(CONST.WORLD?.MIN_ZOOM ?? CONST.WORLD?.CAMERA_MIN_ZOOM) || 0.42);
+        const maxZoom = Math.max(minZoom, Number(CONST.WORLD?.CAMERA_MAX_ZOOM) || 2.5);
         const factor = e.deltaY < 0 ? 1.1 : 0.9;
-        cam.zoom = Math.max(0.3, Math.min(3.0, cam.zoom * factor));
+        cam.zoom = Math.max(minZoom, Math.min(maxZoom, cam.zoom * factor));
         g.worldManager.clampCameraToWorld();
       }, { passive: false });
     }
@@ -333,6 +343,16 @@ export class GameInputManager {
         e.preventDefault?.();
         if (g.dom?.tuningModal && !g.dom.tuningModal.classList.contains('hidden')) g.tuningManager.hideTuningModal();
         else { g.tuningManager.showTuningModal(); }
+        return;
+      }
+
+      // --- TEMPORARY: F9 = launch/destroy Phaser battle test (dev-mode only, remove when integrated) ---
+      if (g.state?.devMode && e.key === 'F9') {
+        e.preventDefault?.();
+        getBattleBoot().then(({ launchBattle, destroyBattle }) => {
+          if (document.getElementById('phaser-battle-container')) destroyBattle();
+          else launchBattle();
+        });
         return;
       }
 
@@ -362,6 +382,12 @@ export class GameInputManager {
         return;
       }
 
+      if (g.uiManager.isWorldMapVisible?.() && e.key === 'Escape') {
+        e.preventDefault?.();
+        g.uiManager.toggleWorldMapOverlay(false);
+        return;
+      }
+
       if (e.key === '?' || e.key === '/' || e.key === 'F1') {
         e.preventDefault?.();
         g.uiManager.toggleHelpOverlay();
@@ -371,6 +397,12 @@ export class GameInputManager {
       if ((e.key === 'j' || e.key === 'J') && g.mode !== 'menu') {
         e.preventDefault?.();
         g.uiManager.codexUI?.toggle?.();
+        return;
+      }
+
+      if ((e.key === 'm' || e.key === 'M') && g.state?.mode === 'map') {
+        e.preventDefault?.();
+        g.uiManager.toggleWorldMapOverlay?.();
         return;
       }
 
@@ -408,23 +440,23 @@ export class GameInputManager {
       }
 
       if (e.key === 'Escape') {
-        if (g.state?.mode === 'roster') {
+        if (g.state?.mode === 'battle' && g.state?.battle?.phase === 'deploy' && g.state?.battle?.deployStep === 'selection') {
           e.preventDefault?.();
-          if (g.state.roster) g.state.roster.warning = '';
-          g.state.setMode('encounter');
+          if (g.state.battle) g.state.battle.warning = '';
+          ensureModeManager(g.state)?.switchTo('encounter', { enemyId: g.state?.battle?.enemyId, returnTarget: 'map' });
           g.worldManager.updateTransientUIState();
+          return;
+        }
+
+        if (g.state?.mode === 'battle' && g.state?.battle?.phase === 'result') {
+          e.preventDefault?.();
+          g.battleManager.exitBattleResultToMap(false);
           return;
         }
 
         if (g.state?.mode === 'battle') {
           e.preventDefault?.();
           g.gameFlowManager.togglePaused();
-          return;
-        }
-
-        if (g.state?.mode === 'aftermath') {
-          e.preventDefault?.();
-          g.battleManager.exitAftermathToMap(false);
           return;
         }
 
@@ -436,14 +468,7 @@ export class GameInputManager {
 
         if (g.state?.mode === 'city') {
           e.preventDefault?.();
-          if ((g.state.citySubmode || 'menu') !== 'menu') {
-            g.state.citySubmode = 'menu';
-            g.worldManager.updateTransientUIState();
-            return;
-          }
-          g.state.uiPanel = null;
-          g.state.setMode('map');
-          g.worldManager.updateTransientUIState();
+          g.economyManager.exitCityServices();
           return;
         }
 
@@ -520,6 +545,15 @@ export class GameInputManager {
       }
 
       if (g.state?.mode === 'encounter') {
+        const optionIndex = Number.parseInt(e.key, 10) - 1;
+        if (Number.isInteger(optionIndex) && optionIndex >= 0) {
+          const option = g.encounterManager.getEncounterOptions?.()[optionIndex];
+          if (option?.id) {
+            e.preventDefault?.();
+            g.encounterManager.resolveEncounter(option.id);
+            return;
+          }
+        }
         if (e.key === 'c' || e.key === 'C') {
           e.preventDefault?.();
           g.encounterManager.resolveEncounter('continue');
@@ -532,7 +566,7 @@ export class GameInputManager {
         }
       }
 
-      if (g.state?.mode === 'roster') {
+      if (g.state?.mode === 'battle' && g.state?.battle?.phase === 'deploy' && g.state?.battle?.deployStep === 'selection') {
         if (e.key === 'ArrowUp') {
           e.preventDefault?.();
           g.encounterManager.moveRosterCursor(-1);
@@ -576,6 +610,20 @@ export class GameInputManager {
       }
 
       if (g.state?.mode === 'battle') {
+        if (g.state?.battle?.phase === 'result') {
+          if (e.key === 'Enter' || e.key === 't' || e.key === 'T') {
+            e.preventDefault?.();
+            g.battleManager.exitBattleResultToMap(true);
+            return;
+          }
+          if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') {
+            e.preventDefault?.();
+            g.battleManager.exitBattleResultToMap(false);
+            return;
+          }
+          return;
+        }
+
         if (g.state?.battle?.phase === 'deploy' && g.battleManager.battleDeployMode?.active) {
           if (e.key === '1') { e.preventDefault?.(); g.battleManager.battleDeployMode.setFormation(CONST.FORMATION.LINE); g.battleManager.battleDeployUI?.setFormation?.(CONST.FORMATION.LINE); return; }
           if (e.key === '2') { e.preventDefault?.(); g.battleManager.battleDeployMode.setFormation(CONST.FORMATION.COLUMN); g.battleManager.battleDeployUI?.setFormation?.(CONST.FORMATION.COLUMN); return; }
@@ -605,46 +653,21 @@ export class GameInputManager {
         }
       }
 
-      if (g.state?.mode === 'aftermath') {
-        if (e.key === 'Enter' || e.key === 't' || e.key === 'T') {
-          e.preventDefault?.();
-          g.battleManager.exitAftermathToMap(true);
-          return;
-        }
-        if (e.key === 'Escape' || e.key === 'l' || e.key === 'L') {
-          e.preventDefault?.();
-          g.battleManager.exitAftermathToMap(false);
-          return;
-        }
-      }
-
       if (g.state?.mode === 'city') {
-        const submode = g.state.citySubmode || 'menu';
-        if (submode === 'menu') {
-          if (e.key === '1' || e.key === 'r' || e.key === 'R') { g.state.citySubmode = 'recruit'; g.economyManager.cityCursor = 0; g.worldManager.updateTransientUIState(); return; }
-          if (e.key === '2' || e.key === 't' || e.key === 'T') { g.state.citySubmode = 'market'; g.economyManager.cityMarketCursor = 0; g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'h' || e.key === 'H') { g.state.citySubmode = 'healer'; g.economyManager.cityHealerCursor = 0; g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'e' || e.key === 'E') { g.state.uiPanel = null; g.state.setMode('map'); g.worldManager.updateTransientUIState(); return; }
-        }
-
-        if (submode === 'recruit') {
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityCursor = Math.max(0, g.economyManager.cityCursor - 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityCursor = Math.min(Math.max(0, g.economyManager.cityOffers.length - 1), g.economyManager.cityCursor + 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'Enter') { e.preventDefault?.(); g.economyManager.recruitCurrentUnit(Boolean(e.shiftKey)); g.worldManager.updateTransientUIState(); return; }
-        }
-
-        if (submode === 'market') {
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.max(0, g.economyManager.cityMarketCursor - 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityMarketCursor = Math.min(Math.max(0, g.economyManager.itemCatalog.length - 1), g.economyManager.cityMarketCursor + 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'b' || e.key === 'B' || e.key === 'Enter') { e.preventDefault?.(); g.economyManager.tradeCurrentItem(e.shiftKey ? 5 : 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 's' || e.key === 'S' || e.key === 'Backspace') { e.preventDefault?.(); g.economyManager.tradeCurrentItem(e.shiftKey ? -5 : -1); g.worldManager.updateTransientUIState(); return; }
-        }
-
-        if (submode === 'healer') {
-          const wounded = g.battleManager.getWoundedUnits();
-          if (e.key === 'ArrowUp') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.max(0, g.economyManager.cityHealerCursor - 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'ArrowDown') { e.preventDefault?.(); g.economyManager.cityHealerCursor = Math.min(Math.max(0, wounded.length - 1), g.economyManager.cityHealerCursor + 1); g.worldManager.updateTransientUIState(); return; }
-          if (e.key === 'Enter') { e.preventDefault?.(); g.economyManager.healCurrentUnit(); g.worldManager.updateTransientUIState(); return; }
+        const cityUI = g.cityUI || g.cityManager?.cityUI;
+        if (e.key === '1') { e.preventDefault?.(); cityUI?.openService?.('trade'); return; }
+        if (e.key === '2') { e.preventDefault?.(); cityUI?.openService?.('recruit'); return; }
+        if (e.key === '3') { e.preventDefault?.(); cityUI?.openService?.('contracts'); return; }
+        if (e.key === '4') { e.preventDefault?.(); cityUI?.openService?.('diplomacy'); return; }
+        if (e.key === '5') { e.preventDefault?.(); cityUI?.openService?.('healing'); return; }
+        if (e.key === '6') { e.preventDefault?.(); cityUI?.openService?.('tax'); return; }
+        if (e.key === '0') {
+          e.preventDefault?.();
+          if (cityUI) {
+            cityUI.currentView = { type: 'overview', serviceId: null, parcelId: null };
+            cityUI.render?.();
+          }
+          return;
         }
       }
 

@@ -7,12 +7,12 @@ import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
 import { computeWeatherForDay } from '../systems/weather.js';
 import { setWeatherState } from '../rendering/weather-layer.js';
-import MinimapSimple from '../rendering/minimap-simple.js';
 import SettingsUI from '../ui/settings.js';
 import CodexUI from '../ui/codex.js';
 import CampUI from '../ui/camp-ui.js';
 import AccountingUI from '../ui/accounting-ui.js';
 import PoiUI from '../ui/poi-ui.js';
+import WorldMapOverlay from '../ui/world-map-overlay.js';
 import { serializeSettings } from '../systems/settings.js';
 import * as campSystem from '../systems/camp.js';
 import { rollWarEvents } from '../systems/events.js';
@@ -76,8 +76,8 @@ export class UIManager {
     this.settingsUI = null;
     this.codexUI = null;
     this.poiUI = null;
+    this.worldMapOverlay = null;
     this.helpOverlayVisible = false;
-    this.minimapRenderer = null;
     this.listenersBound = false;
     this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
   }
@@ -86,7 +86,7 @@ export class UIManager {
     this.game = game;
   }
 
-  update(dt) {
+  update(_dt) {
     // UI update logic - extended in future phases
   }
 
@@ -115,6 +115,7 @@ export class UIManager {
       selectedFactionArmy: utils.getEl('selectedFactionArmy'),
       mainMenuOverlay: utils.getEl('mainMenuOverlay'),
       settlementModal: utils.getEl('settlementModal'),
+      citySceneModal: utils.getEl('citySceneModal'),
       encounterModal: utils.getEl('encounterModal'),
       poiModal: utils.getEl('poiModal'),
       poiTitle: utils.getEl('poiTitle'),
@@ -133,8 +134,6 @@ export class UIManager {
       toggleHints: utils.getEl('toggleHints'),
       tooltip: utils.getEl('tooltip'),
       debugOverlay: utils.getEl('debugOverlay'),
-      hudMinimapPanel: utils.getEl('hudMinimapPanel'),
-      hudMiniMap: utils.getEl('hudMiniMap'),
       saveTransferText: utils.getEl('saveTransferText'),
       accountingModal: utils.getEl('accountingModal'),
       accountingBody: utils.getEl('accountingBody'),
@@ -147,12 +146,31 @@ export class UIManager {
       buildInfo: utils.getEl('buildInfo'),
       helpBtn: utils.getEl('helpBtn'),
       settingsBtn: utils.getEl('settingsBtn'),
-      codexBtn: utils.getEl('codexBtn'),
+      codexBtn: utils.getEl('codexBtn', { silent: true }),
       helpOverlay: utils.getEl('helpOverlay'),
       helpCloseBtn: utils.getEl('helpCloseBtn'),
+      worldMapToggleBtn: utils.getEl('worldMapToggleBtn'),
+      worldMapOverlay: utils.getEl('worldMapOverlay'),
+      worldMapCanvas: utils.getEl('worldMapCanvas'),
+      worldMapCloseBtn: utils.getEl('worldMapCloseBtn'),
+      worldMapSummary: utils.getEl('worldMapSummary'),
+      worldMapFooter: utils.getEl('worldMapFooter'),
     };
 
-    const optionalStartUi = new Set(['factionGrid', 'btnStart', 'btnContinue', 'btnLoadStart', 'seedInput', 'randomSeedBtn', 'startSaveInfo', 'selectedFactionName', 'selectedFactionDesc', 'selectedFactionDoc', 'selectedFactionArmy']);
+    const optionalStartUi = new Set([
+      'factionGrid',
+      'btnStart',
+      'btnContinue',
+      'btnLoadStart',
+      'seedInput',
+      'randomSeedBtn',
+      'startSaveInfo',
+      'selectedFactionName',
+      'selectedFactionDesc',
+      'selectedFactionDoc',
+      'selectedFactionArmy',
+      'codexBtn',
+    ]);
     const missing = Object.entries(g.dom).filter(([key, el]) => !el && !optionalStartUi.has(key)).map(([key]) => key);
     if (missing.length) {
       g.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
@@ -188,10 +206,6 @@ export class UIManager {
     if (btnCloseTransfer) btnCloseTransfer.addEventListener('click', () => {
       document.getElementById('saveTransferModal')?.classList.add('hidden');
     });
-
-    this.minimapRenderer = new MinimapSimple(
-      document.getElementById('hudMiniMap')
-    );
 
     if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
       document.querySelectorAll('[data-battle-speed]').forEach(btn => {
@@ -252,7 +266,10 @@ export class UIManager {
     });
 
     this.state.on('render:start', () => g.renderManager.renderStart());
-    this.state.on('render:map', () => g.renderManager.renderMap());
+    this.state.on('render:map', () => {
+      g.renderManager.renderMap();
+      this.refreshWorldMapOverlay();
+    });
     this.state.on('render:city', () => g.renderManager.renderCity());
     this.state.on('render:battle', () => g.battleManager.renderBattle());
     this.state.on('render:encounter', () => g.renderManager.renderEncounter());
@@ -326,8 +343,39 @@ export class UIManager {
     if (!this.codexUI) this.codexUI = new CodexUI();
   }
 
-  setupCampUI() {
+  setupWorldMapOverlay() {
+    if (this.worldMapOverlay) return;
     const g = this.game;
+    this.worldMapOverlay = new WorldMapOverlay(this.state);
+    this.worldMapOverlay.bind(g, {
+      overlay: g.dom?.worldMapOverlay,
+      canvas: g.dom?.worldMapCanvas,
+      closeBtn: g.dom?.worldMapCloseBtn,
+      toggleBtn: g.dom?.worldMapToggleBtn,
+      summary: g.dom?.worldMapSummary,
+      footer: g.dom?.worldMapFooter,
+    });
+    this.worldMapOverlay.setLauncherVisible(this.state?.mode === 'map');
+  }
+
+  isWorldMapVisible() {
+    return Boolean(this.worldMapOverlay?.isVisible?.());
+  }
+
+  toggleWorldMapOverlay(force = null) {
+    if (!this.worldMapOverlay || this.state?.mode !== 'map') {
+      this.worldMapOverlay?.toggle?.(false);
+      return false;
+    }
+    return this.worldMapOverlay.toggle(force);
+  }
+
+  refreshWorldMapOverlay(forceBase = false) {
+    if (!this.worldMapOverlay?.isVisible?.()) return false;
+    return this.worldMapOverlay.render(forceBase);
+  }
+
+  setupCampUI() {
     if (this.campUI) return;
     this.campUI = new CampUI({
       state: this.state,
@@ -398,6 +446,8 @@ export class UIManager {
       g.poiManager.activePoi = null;
       if (this.state) this.state.interactHint = '';
     }
+    if (newMode !== 'map') this.toggleWorldMapOverlay(false);
+    this.worldMapOverlay?.setLauncherVisible?.(newMode === 'map');
     if (newMode === 'start') {
       utils.safeClass(g.dom.hud, 'add', 'hidden');
       utils.safeClass(g.dom.startModal, 'remove', 'hidden');
@@ -410,6 +460,7 @@ export class UIManager {
     utils.safeClass(g.dom.hud, 'remove', 'hidden');
     utils.safeClass(g.dom.startModal, 'add', 'hidden');
     utils.safeClass(g.dom.mainMenuOverlay, 'add', 'hidden');
+    if (newMode !== 'city') g.cityUI?.hide?.();
     if (newMode === 'battle') g.battleManager.battleCommandsUI?.show?.();
     else g.battleManager.battleCommandsUI?.hide?.();
     if (newMode !== 'battle') g.battleManager.battleDeployUI?.hide?.();
@@ -480,7 +531,7 @@ export class UIManager {
     const g = this.game;
     const body = g.dom?.helpOverlay?.querySelector?.('.frame-dark');
     if (body) {
-      body.textContent = 'Hotkeys: H Hold, F Focus/Follow, R Retreat, K Skirmish/Camp, X Hold Fire/Cancel, E POI, C City, Esc Pause, J Codex, S Settings, ? Help.';
+      body.textContent = 'Hotkeys: H Hold, F Focus/Follow, R Retreat, K Skirmish/Camp, X Hold Fire/Cancel, E POI, C City, M World Map, Esc Pause, J Codex, S Settings, ? Help.';
     }
     if (!g.dom?.helpCloseBtn || g.dom.helpCloseBtn.dataset.boundHelpClose === '1') return;
     g.dom.helpCloseBtn.dataset.boundHelpClose = '1';
@@ -548,7 +599,9 @@ export class UIManager {
     const g = this.game;
     return {
       ...CONST.WEATHER,
-      ENABLED: Boolean(CONST.WEATHER?.ENABLED) && Boolean(g.settings?.weatherEnabled),
+      ENABLED: Boolean(CONST.WEATHER?.ENABLED)
+        && Boolean(CONST.DIMETRIC?.ENABLE_WEATHER_EFFECTS)
+        && Boolean(g.settings?.weatherEnabled),
     };
   }
 
@@ -561,9 +614,13 @@ export class UIManager {
   }
 
   refreshWeatherState(dayIndex = Number(this.state?.day ?? 1)) {
-    const g = this.game;
     const weatherCfg = this.getWeatherConfig();
-    if (!weatherCfg?.ENABLED) return;
+    if (!weatherCfg?.ENABLED) {
+      this.weatherState = { type: 'CLEAR', timeOfDay: 'DAY' };
+      this.state.weatherState = this.weatherState;
+      setWeatherState(this.weatherState);
+      return;
+    }
     const weather = computeWeatherForDay({
       worldSeed: this.state?.seed ?? 1337,
       dayIndex,

@@ -7,6 +7,7 @@ import * as PoiSystem from '../systems/poi-system.js';
 import { applyPOIOutcomeToRegion } from '../systems/region-state.js';
 import { emitContractEvent } from '../systems/contracts.js';
 import * as CONST from '../constants.js';
+import { ensureModeManager } from '../core/ModeManager.js';
 
 export class PoiManager {
   constructor(gameState) {
@@ -222,7 +223,7 @@ export class PoiManager {
     this.state.encounter = { enemyId, startedAt: Date.now(), desc: 'Pusuya düştün!' };
     if (typeof g.enterEncounter === 'function') g.enterEncounter(enemyId);
     else if (typeof g.startEncounter === 'function') g.startEncounter(enemyId);
-    else if (typeof this.state?.setMode === 'function') this.state.setMode('encounter');
+    else ensureModeManager(this.state)?.switchTo('encounter', { enemyId, returnTarget: 'map' });
   }
 
   // ─── Phase 12C: getNearestInteractablePoi + getPoiSpriteKey ──────────────────

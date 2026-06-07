@@ -1,0 +1,15 @@
+{
+  "sceneId": "ottoman_city_full",
+  "faction": "ottoman",
+  "variant": "full",
+  "status": "template",
+  "baseImage": "",
+  "overlayRoot": "assets/city-scenes/ottoman/overlays/",
+  "slotSource": "js/data/city-scene-defs.js",
+  "notes": [
+    "Fill this template when real Ottoman art arrives.",
+    "Use one overlay per slot/building pair when needed.",
+    "Slot ids are defined in js/data/city-scene-defs.js."
+  ],
+  "slots": []
+}
