@@ -5,6 +5,7 @@ export default defineConfig({
       'tests/unit/**/*.test.js',
       'tests/smoke/**/*.test.mjs',
       'js/battle/**/*.test.js',
+      'js/managers/**/*.test.js',
     ],
     exclude: ['node_modules/**', 'dist/**', 'tools/**'],
     environment: 'node',

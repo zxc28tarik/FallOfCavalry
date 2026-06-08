@@ -85,4 +85,8 @@ export const DEBUG = Object.freeze({
   SHOW_HITBOXES: false,
   SHOW_PATHFINDING: false,
   GOD_MODE: false,
+  // Phaser battle yerine eski Canvas BattleManager devrede kalır.
+  // true yapmak için bu satırı değiştir veya devConsole'dan:
+  //   import('/js/constants/ui.js').then(m => console.log(m.DEBUG.USE_PHASER_BATTLE))
+  USE_PHASER_BATTLE: false,
 });

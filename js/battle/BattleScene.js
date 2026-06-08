@@ -185,6 +185,20 @@ export class BattleScene extends Phaser.Scene {
       Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET,
     );
 
+    // ── F10: ModularSoldierVisualTest debug sahnesi aç/kapat ─────────────
+    // SoldierContainer + SoldierContainerPool + ModularFrameResolver pipeline debug.
+    // BattleScene çalışmaya devam eder; debug sahne overlay olarak bindirilir.
+    this.input.keyboard.on('keydown-F10', () => {
+      if (!this.scene.get('ModularSoldierVisualTest')) return;
+      if (this.scene.isActive('ModularSoldierVisualTest')) {
+        this.scene.stop('ModularSoldierVisualTest');
+        console.info('[BattleScene] ModularSoldierVisualTest kapatıldı');
+      } else {
+        this.scene.launch('ModularSoldierVisualTest');
+        console.info('[BattleScene] ModularSoldierVisualTest başlatıldı — ESC/F10 ile kapat');
+      }
+    });
+
     // ── F11: LayerStressTest debug sahnesi aç/kapat ───────────────────────
     // BattleScene çalışmaya devam eder; stress test overlay olarak bindirilir.
     this.input.keyboard.on('keydown-F11', () => {

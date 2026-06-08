@@ -7,6 +7,19 @@ import {
   getEncounterDef,
   normalizeEncounterType,
 } from '../data/encounter-defs.js';
+import { DEBUG } from '../constants/ui.js';
+
+// Lazy import — Phaser'ın browser-only global'larini Node test ortamından korur.
+let _battleBootModule = null;
+async function _getBattleBoot() {
+  if (!_battleBootModule) _battleBootModule = await import('../battle/BattleBoot.js');
+  return _battleBootModule;
+}
+let _battleAdapterModule = null;
+async function _getBattleAdapter() {
+  if (!_battleAdapterModule) _battleAdapterModule = await import('../battle/BattleAdapter.js');
+  return _battleAdapterModule;
+}
 
 export class EncounterManager {
   constructor(gameState) {
@@ -297,7 +310,184 @@ export class EncounterManager {
     g.battleManager.battlePhase = 'deploy';
     ensureModeManager(this.state)?.switchTo('battle', { enemyId, phase: 'deploy', returnTarget: 'map', battleContext: { ...battleContext }, ...battleContext });
     g.worldManager.updateTransientUIState();
+
+    if (DEBUG.USE_PHASER_BATTLE) {
+      this._launchPhaserBattle(enemyId);
+    }
+
     return true;
+  }
+
+  // ── Phaser Battle Bridge ─────────────────────────────────────────────────────
+
+  /**
+   * getEnemyUnits() Canvas sistemi için tasarlandığından birimlerde `count`
+   * alanı bulunmaz (her birim tek bir HP-varlığı olarak modellenir).
+   * Phaser savaşı için her düşman birimi bu kadar SoldierInstance alır.
+   */
+  static DEFAULT_ENEMY_SQUAD_SIZE = 20;
+
+  /**
+   * Seçili roster birimlerinden BattleAdapter formatında ordu verisi üretir.
+   * Oyuncu tarafında yalnızca `selected` birimler kullanılır.
+   * Dönen değer, index → rosterUnit eşleşmesini korumak için
+   * this._phaserSelectedRoster'a da yazılır.
+   *
+   * Düşman birimleri `count` alanına sahip değilse DEFAULT_ENEMY_SQUAD_SIZE
+   * kullanılır (Canvas sisteminden miras; Phaser için normalize gerekir).
+   *
+   * @param {string} enemyId
+   * @returns {{ attackerArmy: object, defenderArmy: object }}
+   */
+  _buildPhaserArmyData(enemyId) {
+    const selected = (this.playerRoster || []).filter((u) => u.selected);
+    this._phaserSelectedRoster = selected;
+
+    const attackerArmy = {
+      side: 'player',
+      units: selected.map((u) => {
+        const isRanged = u.type === 'ranged' || u.class === 'archer';
+        const isCavalry = u.class === 'cavalry';
+        return {
+          unitClass:       u.id || u.class || 'infantry',
+          count:           Math.max(1, u.count ?? 1),
+          bodyType:        isCavalry ? 'mounted' : 'infantry',
+          mountType:       isCavalry ? 'horse' : null,
+          combatRole:      isRanged ? 'ranged' : 'melee',
+          visualProfileId: isRanged ? 'tiny_archer' : (isCavalry ? 'mounted_knight_placeholder' : 'tiny_warrior'),
+          defaultWeapon:   isRanged ? 'bow' : 'sword',
+        };
+      }),
+    };
+
+    const defenderArmy = {
+      side: 'enemy',
+      units: (this.enemyRoster || []).map((u) => {
+        const isRanged = Boolean(u.isRanged);
+        // count yoksa DEFAULT_ENEMY_SQUAD_SIZE ile normalize et.
+        // getEnemyUnits() Canvas-sistemi için ürettiğinden count alanı içermez.
+        const count = Math.max(1, u.count ?? EncounterManager.DEFAULT_ENEMY_SQUAD_SIZE);
+        return {
+          unitClass:       u.id || u.class || 'infantry',
+          count,
+          bodyType:        'infantry',
+          mountType:       null,
+          combatRole:      isRanged ? 'ranged' : 'melee',
+          visualProfileId: isRanged ? 'tiny_archer' : 'tiny_warrior',
+          defaultWeapon:   isRanged ? 'bow' : 'sword',
+        };
+      }),
+    };
+
+    return { attackerArmy, defenderArmy };
+  }
+
+  /**
+   * Phaser savaşını başlatır ve battleComplete dinleyicisini kaydeder.
+   * enterRoster() tarafından DEBUG.USE_PHASER_BATTLE=true iken çağrılır.
+   *
+   * @param {string} enemyId
+   */
+  _launchPhaserBattle(enemyId) {
+    const armyData = this._buildPhaserArmyData(enemyId);
+    console.info('[EncounterManager] Phaser battle başlatılıyor — enemyId:', enemyId);
+
+    // Önceki dinleyici varsa temizle (güvenli yeniden başlatma)
+    if (this._phaserBattleCompleteHandler) {
+      window.removeEventListener('battleComplete', this._phaserBattleCompleteHandler);
+    }
+    this._phaserBattleCompleteHandler = (e) => this._onPhaserBattleComplete(e);
+    window.addEventListener('battleComplete', this._phaserBattleCompleteHandler, { once: true });
+
+    _getBattleBoot().then(({ launchBattle }) => {
+      launchBattle(armyData);
+    }).catch((err) => {
+      console.error('[EncounterManager] Phaser battle başlatılamadı:', err);
+      window.removeEventListener('battleComplete', this._phaserBattleCompleteHandler);
+      this._phaserBattleCompleteHandler = null;
+    });
+  }
+
+  /**
+   * window battleComplete event handler.
+   * Phaser savaşı bitince:
+   *   1. Phaser instance'ı yok edilir.
+   *   2. Survivor sayıları playerParty.roster'a yazılır.
+   *   3. Mevcut BattleManager.resolveBattle() çağrılır — ödül/diplomasi/vb. korunur.
+   *
+   * @param {CustomEvent} e  e.detail = BattleAdapter.extractBattleResult() çıktısı
+   */
+  _onPhaserBattleComplete(e) {
+    this._phaserBattleCompleteHandler = null;
+    const phaserResult = e?.detail;
+    if (!phaserResult) {
+      console.error('[EncounterManager] battleComplete: detail eksik');
+      return;
+    }
+
+    console.info('[EncounterManager] Phaser battle tamamlandı:', phaserResult);
+
+    // 1. Phaser instance'ı kapat
+    _getBattleBoot().then(({ destroyBattle }) => destroyBattle()).catch(() => {});
+
+    // 2. Survivor sayılarını playerParty.roster'a uygula
+    this._applyPhaserCasualties(phaserResult);
+
+    // 3. battle.playerUnits'i boşalt — resolveBattle içindeki applyBattleOutcomes
+    //    bu dizi üzerinden çalışır; biz zaten 2. adımda uyguladık.
+    const battle = this.state?.battle;
+    if (battle) battle.playerUnits = [];
+
+    // 4. Mevcut ödül/diplomasi/faction-war pipeline'ını çalıştır
+    const outcome = phaserResult.playerWon ? 'victory' : 'defeat';
+    const resolved = this.game?.battleManager?.resolveBattle(outcome);
+    if (!resolved) {
+      console.warn('[EncounterManager] resolveBattle() false döndü — state uyumsuzluğu olabilir');
+    }
+  }
+
+  /**
+   * Phaser unitResults verilerini playerParty.roster'a uygular.
+   * Her selected roster birimi için survivor sayısını ve statusü günceller.
+   * count=0 olan birimler (ölü) roster'dan çıkarılır.
+   *
+   * @param {{ unitResults: object[], playerWon: boolean }} phaserResult
+   */
+  _applyPhaserCasualties(phaserResult) {
+    const roster = this.game?.playerParty?.roster;
+    const selected = this._phaserSelectedRoster;
+    if (!Array.isArray(roster) || !Array.isArray(selected)) return;
+
+    // unitResults'ı player tarafıyla filtrele; BattleAdapter groupId sıralaması
+    // _buildPhaserArmyData'daki selected dizisiyle birebir eşleşir.
+    const playerResults = (phaserResult.unitResults || [])
+      .filter((r) => r.groupId?.startsWith('player_'));
+
+    for (let i = 0; i < selected.length; i++) {
+      const selectedUnit = selected[i];
+      const result = playerResults[i];
+      if (!result) continue;
+
+      const rosterUnit = roster.find((u) => u.id === selectedUnit.id);
+      if (!rosterUnit) continue;
+
+      if (result.survivors <= 0) {
+        rosterUnit.status = 'dead';
+        rosterUnit.count = 0;
+      } else {
+        rosterUnit.count = result.survivors;
+        // Hayatta kalma oranı düşükse yaralı say
+        const survivalRatio = result.survivors / Math.max(1, result.initialCount);
+        if (survivalRatio <= 0.35 && rosterUnit.status !== 'dead') {
+          rosterUnit.status = 'wounded';
+          rosterUnit.healProgress = 0;
+        }
+      }
+    }
+
+    // Ölü birimleri temizle
+    this.game.playerParty.roster = roster.filter((u) => (u.count ?? 1) > 0 && u.status !== 'dead');
+    this._phaserSelectedRoster = null;
   }
 
   finishEncounterToMap(enemy, enemyId) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BattleScene, setPendingArmyData } from './BattleScene.js';
 import { LayerStressTest } from './debug/LayerStressTest.js';
+import { ModularSoldierVisualTest } from './debug/ModularSoldierVisualTest.js';
 
 const BATTLE_WIDTH  = 1280;
 const BATTLE_HEIGHT = 720;
@@ -52,9 +53,11 @@ export function launchBattle(armyData = null, parentId = 'phaser-battle-containe
     width: BATTLE_WIDTH,
     height: BATTLE_HEIGHT,
     parent: parentId,
-    // LayerStressTest debug sahnesi BattleScene'den F11 ile başlatılır;
-    // game instance'a kayıtlı olması yeterli — otomatik start etmez.
-    scene: [BattleScene, LayerStressTest],
+    // Debug sahneleri BattleScene'den F-tuşlarıyla başlatılır;
+    // game instance'a kayıtlı olması yeterli — otomatik start etmezler.
+    //   F10 → ModularSoldierVisualTest  (SoldierContainer pipeline debug)
+    //   F11 → LayerStressTest           (render performans testi)
+    scene: [BattleScene, LayerStressTest, ModularSoldierVisualTest],
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
