@@ -97,8 +97,11 @@ const VISUAL_PROFILES = {
 
   mounted_knight_placeholder: {
     id: 'mounted_knight_placeholder',
-    atlasKey: 'medieval_knight_horse',
-    sourcePack: 'Medieval Pixel Knight and Horse',
+    // NOTE: 'medieval_knight_horse' asset henüz mevcut değil.
+    // Gerçek asset eklenene kadar tiny_swords_warrior atlasına yönlendiriliyor.
+    // Atlası değiştirince animasyon key'lerini de güncelle.
+    atlasKey: 'tiny_swords_warrior',
+    sourcePack: 'Tiny Swords (geçici — gerçek: Medieval Pixel Knight and Horse)',
     bodyType: 'mounted',
     mountType: 'horse',
     directionMode: '4dir',
@@ -109,17 +112,17 @@ const VISUAL_PROFILES = {
     selectionRadius: 24,
     formationSpacing: 36,
     animations: {
-      idle:         'mounted_idle',
-      walk:         'mounted_walk',
-      gallop:       'mounted_gallop',
-      melee_attack: 'mounted_attack',
-      sword_attack: 'mounted_attack',
+      idle:         'tiny_warrior_idle',
+      walk:         'tiny_warrior_walk',
+      gallop:       'tiny_warrior_walk',
+      melee_attack: 'tiny_warrior_attack',
+      sword_attack: 'tiny_warrior_attack',
       bow_attack:   null,
-      death:        'mounted_death',
+      death:        'tiny_warrior_death',
     },
     fallbackAnimations: {
       bow_attack:   'idle',
-      spear_attack: 'mounted_attack',
+      spear_attack: 'tiny_warrior_attack',
     },
   },
 

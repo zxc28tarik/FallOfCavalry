@@ -15,6 +15,9 @@
 
 import * as FormationController from '../unit/FormationController.js';
 
+/** Aktif sektörde her taraf için maksimum görsel asker sayısı. */
+export const VISUAL_LIMIT_PER_SIDE = 150;
+
 export class SectorRenderer {
   /**
    * @param {import('../BattleScene.js').BattleScene}              scene
@@ -55,12 +58,28 @@ export class SectorRenderer {
     this.sectorManager.setActiveSector(sectorId);
     this._currentSectorId = sectorId;
 
-    // 4. Tüm grupları görsel olarak kur
-    for (const group of [
-      ...sector.playerUnitGroups,
-      ...sector.enemyUnitGroups,
-    ]) {
-      this._spawnGroupVisuals(group);
+    // 4. Grupları görsel olarak kur — taraf başına VISUAL_LIMIT_PER_SIDE hard cap
+    let playerBudget = VISUAL_LIMIT_PER_SIDE;
+    let enemyBudget  = VISUAL_LIMIT_PER_SIDE;
+
+    // Tek seferlik bilgi logu: limit aşımı tespit edilince
+    const playerAlive = sector.playerUnitGroups
+      .reduce((s, g) => s + g.soldiers.filter(sol => sol.alive).length, 0);
+    const enemyAlive  = sector.enemyUnitGroups
+      .reduce((s, g) => s + g.soldiers.filter(sol => sol.alive).length, 0);
+    if (playerAlive > VISUAL_LIMIT_PER_SIDE || enemyAlive > VISUAL_LIMIT_PER_SIDE) {
+      console.info(
+        `[SectorRenderer] Görsel limit: oyuncu ${Math.min(playerAlive, VISUAL_LIMIT_PER_SIDE)}/${playerAlive}` +
+        `, düşman ${Math.min(enemyAlive, VISUAL_LIMIT_PER_SIDE)}/${enemyAlive}` +
+        ` — limit aşan askerler headless simüle kalır.`,
+      );
+    }
+
+    for (const group of sector.playerUnitGroups) {
+      playerBudget -= this._spawnGroupVisuals(group, playerBudget);
+    }
+    for (const group of sector.enemyUnitGroups) {
+      enemyBudget -= this._spawnGroupVisuals(group, enemyBudget);
     }
   }
 
@@ -108,17 +127,29 @@ export class SectorRenderer {
   /**
    * Tek bir grubun canlı askerlerini pool'dan acquire eder ve
    * formasyon slotlarına yerleştirir.
-   * Ölü askerler için null slot eklenir — UnitGroup bunu kabul eder.
+   *
+   * Budget aşıldığında asker null slot alır — SoldierInstance kaybolmaz,
+   * BattleSimulation/SectorState headless simüle etmeye devam eder.
+   * Ölü askerler her koşulda null slot alır, budgeti tüketmez.
    *
    * @param {import('../unit/UnitGroup.js').UnitGroup} group
+   * @param {number} budget  Bu grup için harcayabileceğimiz maksimum VisualSoldier sayısı.
+   * @returns {number}  Gerçekte acquire edilen VisualSoldier sayısı.
    */
-  _spawnGroupVisuals(group) {
+  _spawnGroupVisuals(group, budget = VISUAL_LIMIT_PER_SIDE) {
     const spacing  = FormationController.getFormationSpacing(group);
     const acquired = [];
+    let spawned    = 0;
 
     group.soldiers.forEach((soldier, i) => {
-      // Ölü asker → null slot; pool.acquire çağrılmaz
+      // Ölü asker → null slot; budget tüketmez
       if (!soldier.alive) {
+        acquired.push(null);
+        return;
+      }
+
+      // Budget tükendi → headless; VisualSoldier acquire edilmez
+      if (spawned >= budget) {
         acquired.push(null);
         return;
       }
@@ -141,9 +172,11 @@ export class SectorRenderer {
       }
 
       acquired.push(vs);
+      spawned++;
     });
 
     group.bindVisuals(acquired);
     FormationController.updateGroupPositions(group, acquired);
+    return spawned;
   }
 }
