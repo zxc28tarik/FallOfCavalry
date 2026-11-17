@@ -3,11 +3,12 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [17 Kasım 2026 — Derin kod, asset ve kullanım denetimi V2](2026-11-17-web-derin-kod-asset-denetimi-v2.md): aktif/ertelenen kaynaklar, 2 yayın yolu, görev bağlantıları, smoke ve harita veri riski
 - [17 Kasım 2026 — Güncel CI lint temizliği ve bağımlılık risk kaydı](2026-11-17-web-current-ci-lint-and-dependencies.md): yedi lint uyarısı + npm audit risk kapısı
 - [17 Kasım 2026 — Kapalı dimetrik overview kodu temizliği](2026-11-17-web-dead-overview-removal.md): sabit kapalı 2D render yolu ve SHA eşleştirmeli test kanıtı
 - [17 Kasım 2026 — Web GitHub otomatik test kapısı](2026-11-17-web-ci-test-gate.md): CI yapılandırması ve PASS kabul şartı
 - [17 Kasım 2026 — ESLint ve kullanılmayan kod temizliği](2026-11-17-web-source-lint-cleanup.md): 6 eski uyarı giderildi; referans test protokolü
-- [17 Kasım 2026 — Eski görseller ve kullanılmayan kod temizliği](2026-11-17-web-unused-code-assets-cleanup.md): ${n} dosyalık kontrollü silme ve korunan aktif bağımlılıklar
+- [17 Kasım 2026 — Eski görseller ve kullanılmayan kod temizliği](2026-11-17-web-unused-code-assets-cleanup.md): 77 dosyalık kontrollü silme ve korunan aktif bağımlılıklar
 - [17 Kasım 2026 — Web branch temizleme envanteri (CSV)](2026-11-17-web-branch-cleanup-candidates.csv): her dalın tam SHA'sı, PR ilişkisi ve korunma/silme kararı
 - [17 Kasım 2026 — Web deposu temizlik denetimi ve değişiklik kaydı](2026-11-17-web-repository-cleanup.md): takip edilen geçici dosyalar, arşiv ve geri alma planı
 - [17 Kasım 2026 — Unity dalları / yanlış repo denetimi](2026-11-17-unity-branch-repo-denetimi.md): web deposundaki çift Impl-0–8 dalları ve ayrı Unity deposunun en ileri S4 çizgisi
