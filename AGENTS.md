@@ -45,3 +45,9 @@ This file applies to the **web game repository** `zxc28tarik/FallOfCavalry` only
 - The user explicitly ordered the old asset-world BINs/manifest, source maps, ground bitmap, all six tree PNGs, legacy reference archive, and HoMM3 palette to be deleted **even if in use**. Do not restore them or regenerate the same art without user approval.
 - Use procedural world generation only as a technical temporary boot path, not as replacement art. All final new environment and city art is original 2D; soldiers remain the final visual phase.
 - Preserve the rest of gameplay and tests where possible. Record any broken old-save compatibility and browser visuals truthfully.
+
+## Current authoritative execution roadmap — 2026-11-18
+- Follow docs/plans/web-rebuild-v2/README.md and its master, task CSV, decisions, QA. The visual V1's 215 tasks and the general web V1's 72 tasks are historic/detail source; neither old source assumes deleted world-map BINs still exist.
+- Update this V2 CSV at the same time as implementation PRs. Do not count its 131 coordinator rows as new independent tasks on top of V1's 215+72.
+- No new official geography, map representation, save migration, Canvas/Phaser default choice, military/port gameplay activation or final art style without explicit user approval.
+- Before any mass 2D art production: genuine Playwright/browser smoke, D00 approved world-data source, G02 style acceptance, G03 dummy PNG integration.
