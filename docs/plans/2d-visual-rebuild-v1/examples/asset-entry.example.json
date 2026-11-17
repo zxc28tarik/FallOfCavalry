@@ -1,0 +1,48 @@
+{
+  "_comment": "ÖNERİ şema, runtime dosyası değil. Gerçek dosya yolu, px ve asset revision pilotta sabitlenir.",
+  "assetId": "city.ottoman.trade_area.bedesten.v1",
+  "revision": 1,
+  "category": "city-overlay",
+  "sourceType": "2d-native",
+  "sourceTool": "kullanıcının 2D üretim aracı (belirtilecek)",
+  "sourceAuthor": "kullanıcı tarafından doğrulanacak",
+  "licenseStatus": "pending_review",
+  "faction": "ottoman",
+  "sceneId": "ottoman_city_full",
+  "areaId": "trade_area",
+  "buildingId": "bedesten",
+  "visibility": {
+    "requiresBuilding": "bedesten"
+  },
+  "file": "assets/visual-v2/scenes/cities/ottoman/overlays/cityscene_ottoman_trade_area_bedesten_overlay.png",
+  "image": {
+    "widthPx": null,
+    "heightPx": null,
+    "colorSpace": "sRGB",
+    "alpha": "straight-RGBA"
+  },
+  "pivot": {
+    "x": 0.5,
+    "y": 0.94
+  },
+  "placement": {
+    "coordinateSystem": "area-relative-normalized",
+    "x": null,
+    "y": null,
+    "scale": null,
+    "zLayer": 40
+  },
+  "shadow": "asset-specific",
+  "styleCardRevision": "PENDING_G02_APPROVAL",
+  "approval": {
+    "art": "pending",
+    "integration": "pending",
+    "regression": "pending"
+  },
+  "evidence": {
+    "screenshot": null,
+    "testRun": null,
+    "commit": null
+  },
+  "notes": "Nulls must be replaced with measured values before runtime integration."
+}

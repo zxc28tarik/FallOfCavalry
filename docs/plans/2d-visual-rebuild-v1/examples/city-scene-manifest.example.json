@@ -1,0 +1,36 @@
+{
+  "_comment": "KONTRAT ÖNERİSİ: mevcut assets/city-scenes/..template.json ile aynı parser değildir. Kullanıma almadan önce G03 entegrasyonu gerekir.",
+  "schemaVersion": "proposal-v1",
+  "sceneId": "ottoman_city_full",
+  "faction": "ottoman",
+  "baseImage": "assets/visual-v2/scenes/cities/ottoman/base/cityscene_ottoman_full_base.png",
+  "stage": {
+    "logicalWidth": null,
+    "logicalHeight": null,
+    "aspectPolicy": "contain-with-hotspots-in-contentRect"
+  },
+  "fixedAreas": [
+    "inner_citadel_core"
+  ],
+  "placements": [
+    {
+      "areaId": "trade_area",
+      "buildingId": "bedesten",
+      "assetId": "city.ottoman.trade_area.bedesten.v1",
+      "placement": {
+        "x": null,
+        "y": null,
+        "scale": null,
+        "zLayer": 40,
+        "pivotX": 0.5,
+        "pivotY": 0.94
+      },
+      "condition": {
+        "buildingPresent": "bedesten"
+      },
+      "interactive": false
+    }
+  ],
+  "hotspots": "js/data/city-scene-defs.js provides authoritative area boxes",
+  "warning": "x/y/scale left null intentionally; do not invent coordinates before pilot."
+}

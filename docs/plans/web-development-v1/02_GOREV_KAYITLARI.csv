@@ -1,0 +1,73 @@
+ID,Faz,İş hattı,Öncelik,Durum,Bağımlılıklar,İş paketi,Kabul koşulu,Karmaşıklık
+G-001,00,Yönetim,P0,AÇIK,,Web/Unity repo sınırı ve main HEAD kaydedilsin,Kapsam raporunda tek repo ve commit SHA doğrulansın,S
+G-002,00,Yönetim,P0,AÇIK,G-001,"Work-package, bug, karar, test şablonlarını üret","Her ID kaynak, ön koşul ve kabul ölçütü taşısın",S
+G-003,00,Yönetim,P2,AÇIK,G-001,Açık PR #28–30 ile merged #31–33 diff eşleştir,"Yinelenen kod ve farklılık matrisi, kapatma önerisi",M
+G-004,00,Yönetim,P2,AÇIK,G-001,Unity temalı dalları provenance tablosuna koy,Web main'e aktarılamayacak dallar ayrılmış olsun,S
+G-005,00,Yönetim,P2,AÇIK,G-002,Tüm modüller için KEEP/REPAIR/INTEGRATE/REPLACE/DEFER,Dosya bazında gerekçe ve test bağlantısı kaydedilsin,M
+T-001,01,Temel,P0,AÇIK,G-001,main'den temiz bağımsız çalışma kopyası ve npm ci,Kurulum adımları ve bağımlılık hataları yazılsın,S
+T-002,01,Temel,P0,AÇIK,T-001,npm run validate ile lint unit ve build raporu,"Exit code, test sayısı, warnings ve log kanıtı",S
+T-003,01,Temel,P0,AÇIK,T-002,Start ve map tarayıcı smoke testi,"Başlangıç ekranı ve dünya haritası hatasız, console/network logu",M
+T-004,01,Temel,P1,AÇIK,T-002,Web odaklı GitHub Actions CI kurulması,"PR ve main için lint, unit, battle test, build kırılınca kırmızı",M
+T-005,01,Temel,P1,AÇIK,T-003,Deterministic fixture ve test seedleri,Aynı seed ile aynı kritik state hash ve tekrarlanabilir log,M
+T-006,01,Temel,P2,AÇIK,T-003,"Kaynak asset 404, yükleme, fallback, uyarı denetimi","Asset fallback bilerek ayrılmış, fatal request yok",M
+T-007,01,Temel,P2,AÇIK,T-002,"Build bundle, debug erişimi, devtools ve üretim konsolu audit",Ana bundle ve üretim warning listesi sayısal rapor,S
+T-008,01,Temel,P2,AÇIK,T-003,Issue risk reprodüksiyonu ve H-ID kanıt güncelleme,Her risk kanıtlı bug/bug-değil/ölçülemedi sınıflı,M
+F-001,02,Akış,P0,AÇIK,T-003,Start new game continue map girişleri,Tüm giriş kapıları doğru sahnede ve state'te biter,M
+F-002,02,Akış,P0,AÇIK,F-001,map city encounter ve overlay geri dönüşleri,"Kaçak mode veya overlay yok, Escape dönüşleri doğru",M
+F-003,02,Akış,P0,AÇIK,F-002,Canvas deploy battle aftermath dönüş smoke,Zafer yenilgi çekilme sonrası campaign state geçerli,L
+F-004,02,Akış,P1,AÇIK,F-001,Asker alım ve harcama günlük sayacı,Para ve roster doğru; negatif alt limit ve pool cooldown,M
+F-005,02,Akış,P1,AÇIK,F-003,Save load golden campaign roundtrip,Altın gün roster şehir ve savaş sonucu yükleme sonrası aynı,L
+F-006,02,Akış,P1,AÇIK,F-003,Durdurma devam ve uzun oturum mod invariant,Pause/day tick yanlış çift yürümüyor,M
+W-001,03,Dünya,P1,AÇIK,"T-005,F-002",1648 owner terrain binary ve 19 faction verisi doğrulama,"Her owner ID manifestte, harita sınırları geçerli",M
+W-002,03,Dünya,P1,AÇIK,W-001,Yerleşim ve rota koordinat/çarpışma denetimi,Party yürünebilir alan ve yol kararında geçersiz koordinat yok,M
+W-003,03,Dünya,P1,AÇIK,W-002,WorldParty spawn/despawn/encounter lifecycle,Aynı party iki kez ödül veya savaş üretmez,L
+W-004,04,Dünya,P1,AÇIK,"W-003,F-005",Savaş/barış ve şehir ele geçirme ile owner consistency,Warstate ve city owner save/load sonrası korunur,L
+W-005,04,Dünya,P2,AÇIK,"T-005,W-002",3M hücre zoom/pan ve bellek profil ölçümü,"Hedef makine/cihaz kaydı, fps, bellek, anlık takılma",M
+W-006,04,Dünya,P2,AÇIK,W-003,AI devriye/kervan/haydut uzun kampanya simülasyonu,"Çökmeyen yüzlerce gün, state invariant ve performans logu",L
+E-001,03,Ekonomi,P1,AÇIK,F-005,34 mal ID alias ve legacy migration denetimi,Eski grain/tools ID ile kayıtta mal kaybı yok,M
+E-002,03,Ekonomi,P1,AÇIK,E-001,Alış satış fiyat stok para işlem tutarlılığı,İşlem iki kez yapılmaz; stok/para negatif veya NaN olmaz,L
+E-003,03,Ekonomi,P1,AÇIK,"E-002,W-003",Kervan gerçek taşıma yük boşaltma risk P&L,"Kaynak bir şehirden çıkar diğerine girer, eşzamanlı çoğalmaz",L
+E-004,03,Ekonomi,P1,AÇIK,"E-002,F-004",Günlük asker maaşı/erzak/kamp muhasebe bağlantısı,"Tek day tick'te bir kez tüketim, kaynak sınırı korunur",L
+E-005,03,Ekonomi,P2,AÇIK,E-002,Şehir üretim tüketim mal stok döngüsü,Girdisiz çıktı üretimi ve çift tüketim yok,L
+E-006,04,Ekonomi,P2,AÇIK,"E-003,E-004,E-005",Kıtlık savaş vergi fiyat ve ledger denge senaryoları,Fiyatlar kontrollü sınırda; beklenen nedenler UI'dan izlenir,L
+C-001,03,Şehir,P1,AÇIK,"F-002,E-001","Alan doluluğu, sabit iç kale, bina/servis state tutarlılığı",Deterministic CityState + save roundtrip,M
+C-002,03,Şehir,P1,AÇIK,"C-001,E-002",Kethüda altyapı rule ve maliyet/yeterlilik modeli,Kurma işleminde maliyet alınır; bakım ve fayda idempotent,L
+C-003,03,Şehir,P2,AÇIK,C-002,Kethüda mevcut panellerle işlevsel UI,Yeni grafik olmadan bütçe/kurulum/sonuç görülebilir,M
+C-004,03,Şehir,P2,AÇIK,C-001,Kadılık-Medrese-Defterhane etki zinciri,Asayiş memur kalitesi rapor seviyesi beklendiği gibi değişir,L
+C-005,03,Şehir,P2,AÇIK,"C-004,W-004",Reisülküttab Bostancılar etkileri,Diplomasi başarı/güvenlik/kayıp etkileri kaynakla test,L
+C-006,04,Şehir,P2,AÇIK,"C-002,C-004,E-005",Nüfus zenginlik sağlık asayiş cross-effects,Pozitif/negatif etki tabloları ve clamp invariantları,L
+C-007,04,Şehir,P2,AÇIK,"C-006,E-005",Üretim binaları açılma koşulları ve stok etkisi,Ön koşul yoksa açılmaz; mal tüketimi/üretimi tutarlı,L
+Q-001,03,Görev,P1,AÇIK,"F-002,W-003",Encounter option/cooldown/effect standardizasyonu,"Tek seçim tek sonuç, pusu ve trade dönüşü doğru",M
+Q-002,03,Görev,P1,AÇIK,"Q-001,T-005",Gerçek dünya eventlerinden quest objective ilerletme,Görev sadece doğru ID ve doğru olayla ilerler,L
+Q-003,03,Görev,P1,AÇIK,"Q-002,E-002",Complete reward world effects ve idempotency,Görev tekrar ödül vermez ve kaynak bilançosu korur,M
+Q-004,03,Görev,P1,AÇIK,"Q-002,F-006",Quest süre aşımı ve day tick bağlantısı,"Süre dolunca bir kez başarısız olur, oyun yeniden açınca doğru",M
+Q-005,03,Görev,P1,AÇIK,"Q-003,Q-004,F-005",Aktif/biten/başarısız quest save schema ve migrate,Save/load roundtrip'te görevler kopyalanmaz ve kaybolmaz,L
+Q-006,04,Görev,P2,AÇIK,Q-005,Quest completion overlay ve journal/doğruluk,UI state ve görev state aynı; ödül seçimi tek kez,M
+Q-007,04,Görev,P2,AÇIK,Q-006,Eski contract board ile çift görev ayrımını denetle,Tek event iki mükafat doğurmuyor; mevcut kontratlar çalışır,M
+D-001,04,Diplomasi AI,P1,AÇIK,"W-004,E-002",Faction relation-war peace trade-price etki zinciri,Her aksiyon gerekçeli state diff ve maliyet üretir,L
+D-002,04,Diplomasi AI,P2,AÇIK,"D-001,C-005",Diplomatik aksiyon ve kurum rule uyuşumu,Diplomasi UI ve Rule sonuçları tutarlı,M
+D-003,04,Diplomasi AI,P2,AÇIK,"W-006,D-001",Faction AI aynı kaynak ve dünyayı kullanır,AI stok/para/erişilemeyen bilgi hilesi yapmaz,L
+D-004,04,Diplomasi AI,P2,AÇIK,"D-003,E-006",Uzun kampanya ekonomi savaş ve AI karar dengesi,Seedli uzun sim sonuç raporu + inflection senaryoları,L
+B-001,05,Savaş,P0,AÇIK,"F-003,T-005",Eski Canvas golden senaryo kütüphanesi,Hasar formasyon moral ammo çekilme sonuç sabitlenir,L
+B-002,05,Savaş,P1,AÇIK,B-001,Canvas/Phaser ortak battle input ve outcome sözleşmesi,Her alan ownership ve result mapping testleri,L
+B-003,05,Savaş,P1,AÇIK,B-002,Phaser flag ve runtime start/end error handling,Toggle açık/kapalı akışlar çalışır; event listener sızıntısı yok,M
+B-004,05,Savaş,P1,AÇIK,B-003,Deploy sektör komuta pasif sektör simülasyon parity,Sektör geçişi canlı asker sayısını değiştirmez,L
+B-005,05,Savaş,P1,AÇIK,B-004,Modüler SoldierContainerPool ana SectorRenderer entegrasyonu,F10 ile battle aynı resolver; pool leak/double release yok,L
+B-006,05,Savaş,P1,AÇIK,"B-004,B-002,E-004",Casualty ammo morale loot ve faction result tek commit,Battle sonucu kampanyaya bir kez yazılır; save roundtrip,L
+B-007,05,Savaş,P1,AÇIK,"B-005,B-006",300 görünür asker ve katman benchmark,FPS/cpu/gc/memory karşılaştırma; donanıma göre sınırlar,L
+B-008,05,Savaş,P0,AÇIK,"B-007,B-006,D-004",Canvas → Phaser üretim geçişi için kullanıcı kapısı,Parity raporu + risk + onay; onay olmadan toggle değişmez,S
+S-001,02,Save,P0,AÇIK,T-003,Current SaveManager alan/sürüm/atomiklik analizi,Authoritative State envanteri ve kayıp alan listesi,M
+S-002,03,Save,P1,AÇIK,"S-001,F-005",Legacy fixture ve bozuk JSON/load recovery,Eski save bozulmaz; malformed input çökertmez,L
+S-003,04,Save,P1,AÇIK,"S-002,Q-005,E-004",Quest ekonomi dünya/savaş persisted state consistency,Tüm kritik state değerleri reload eşit,L
+S-004,05,Save,P1,AÇIK,"S-003,B-006",Mid-battle/save edge-case ve aftermath crash recovery,Kısmi sonuç çift uygulanmaz; safe recovery,L
+S-005,06,Save,P2,AÇIK,S-004,Schema version migrator ve yükleme diagnostik,"V1/V2 fixture uyumu, migration log ve rollback",L
+U-001,02,UI,P2,AÇIK,F-002,Mevcut HUD hotkey modal/control doğruluğu,Çakışan kısayol ve takılı overlay yok,M
+U-002,04,UI,P2,AÇIK,"C-004,Q-006",Sistem etkileri UI sayısal görünümü,UI ve authoritative state her testte aynı,M
+U-003,06,UI,P2,AÇIK,"B-007,S-005","Dev UI, dil, erişilebilirlik, input hata düzeltme",Ekran akışı ve küçük ekran klavye testi,M
+R-001,06,Release,P1,AÇIK,"T-004,S-005",Temiz environment release build/export,Kilitli Node/npm ve dist doğrulaması,M
+R-002,06,Release,P1,AÇIK,"R-001,W-005,B-007",Chrome Edge Firefox ve düşük donanım smoke,Tam senaryo ve bellek ölçümü kaydı,L
+R-003,06,Release,P1,AÇIK,R-001,Telif lisans provenance manifesti,Her dağıtılan assetin lisansı ve kökeni belgeli,L
+R-004,06,Release,P1,AÇIK,"R-002,R-003,D-004",Release candidate regression ve rollback,Kritik bug=0; rollback prova ve final release notu,M
+A-001,ART,Sanat,P3,DONDURULDU,,Yeni İstanbul/diğer şehir base ve overlays,Kullanıcı sanat fazını açmadan başlamaz,L
+A-002,ART,Sanat,P3,DONDURULDU,,Tarihsel asker 4/8 yön atlasları,Kullanıcı sanat fazını açmadan başlamaz,L
+A-003,ART,Sanat,P3,DONDURULDU,,"Harita biyomu, çevre sprite ve polish",Kullanıcı sanat fazını açmadan başlamaz,L
