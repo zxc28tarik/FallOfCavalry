@@ -28,7 +28,6 @@ export class BattleManager {
     return getVisualProfile('tiny_warrior');
   }
 
-  // eslint-disable-next-line no-unused-vars
   update(_time, _delta) {
     // TODO: BattleSimulation update
     // TODO: VisualSoldierPool update

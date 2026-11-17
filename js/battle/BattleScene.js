@@ -277,7 +277,7 @@ export class BattleScene extends Phaser.Scene {
       pg,
       eg,
       this.sectorManager,
-      (winner) => this._onBattleComplete(winner),
+      () => this._onBattleComplete(),
     );
     this.simulation.start();
 
@@ -294,9 +294,8 @@ export class BattleScene extends Phaser.Scene {
    * BattleSimulation._checkVictory tarafından çağrılır.
    * Sonucu konsola yazar ve ana oyuna 'battleComplete' eventi gönderir.
    *
-   * @param {'player'|'enemy'} winner
    */
-  _onBattleComplete(winner) {
+  _onBattleComplete() {
     if (!this.sectorManager) return;
 
     const result = extractBattleResult(this.sectorManager);

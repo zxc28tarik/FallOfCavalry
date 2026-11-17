@@ -66,11 +66,9 @@ function renderDimetricOverviewTerrain(ctx, camera, {
   view,
   overviewStride,
   resolveBiomeAt,
-  drawScreenDiamond,
   worldToScreen,
   terrainNoise,
   terrainStyleProfile,
-  biomeIds,
 } = {}) {
   if (!ctx || !camera || !visible || !view?.config || typeof resolveBiomeAt !== 'function') return 0;
   const stride = Math.max(2, Math.floor(Number(overviewStride) || 1));
@@ -240,7 +238,6 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
     drawDimetricPropBillboard,
     sortByScreenBottomY,
     rectsOverlap,
-    snap,
     ellipse,
     factionData,
     mbPlayerBanner,
