@@ -133,7 +133,6 @@ export class VisualSoldier {
   // ── Gelecekte kullanılacak stub'lar ───────────────────────────────────────
 
   /** Seçili highlight (ileride implemente edilecek). */
-  // eslint-disable-next-line no-unused-vars
   setSelected(_bool) {}
 
   /** Ölüm durumu (ileride implemente edilecek). */
