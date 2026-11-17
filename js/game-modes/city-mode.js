@@ -12,7 +12,7 @@ export class CityMode {
     console.log('[CityMode] Entering city:', this.state.currentCity?.name);
   }
   
-  update(dt) {
+  update() {
     this.handleInput();
   }
   

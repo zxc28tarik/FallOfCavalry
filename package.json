@@ -13,7 +13,7 @@
     "test:unit": "vitest run tests/unit/",
     "test:smoke": "vitest run tests/smoke/",
     "test": "vitest run",
-    "lint": "eslint js/ tests/",
+    "lint": "eslint js/ tests/ --max-warnings=0",
     "lint:fix": "eslint js/ tests/ --fix",
     "format": "prettier --write \"js/**/*.js\" \"tests/**/*.{js,mjs}\"",
     "format:check": "prettier --check \"js/**/*.js\" \"tests/**/*.{js,mjs}\"",

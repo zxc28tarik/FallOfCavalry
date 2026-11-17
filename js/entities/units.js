@@ -3,7 +3,7 @@
  */
 
 import * as CONST from '../constants.js';
-import { distance, clamp } from '../utils.js';
+import { distance } from '../utils.js';
 
 export class Unit {
   constructor(data) {
@@ -117,7 +117,7 @@ export class Unit {
     
     // Behavior based on stance
     if (this.target) {
-      this.engageTarget(dt);
+      this.engageTarget();
     } else if (this.stance === CONST.UNIT.STANCE.ATTACK) {
       // Advance forward
       this.tx = this.x;
@@ -140,7 +140,7 @@ export class Unit {
     }
   }
   
-  engageTarget(dt) {
+  engageTarget() {
     if (!this.target) return;
     
     const dist = distance(this.x, this.y, this.target.x, this.target.y);

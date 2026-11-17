@@ -36,3 +36,7 @@ This file applies to the **web game repository** `zxc28tarik/FallOfCavalry` only
 ## Web CI test discipline
 - On every new web PR and on main, verify the `Web validation` workflow. The workflow runs locked npm dependencies, source hygiene, lint, unit tests, full Vitest suite, and Vite production build.
 - Do not claim PASS unless a successful workflow run for the exact SHA was inspected. Browser/Playwright smoke requires a separate explicit check.
+
+## Lint warning gate
+- `npm run lint` now treats any warning as a failure (`--max-warnings=0`). Do not disable a lint rule merely to hide unused code without a documented reason.
+- The npm dependency vulnerability advisory count from CI must be triaged separately; do not apply breaking `npm audit fix --force` blindly.
