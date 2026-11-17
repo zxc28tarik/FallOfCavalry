@@ -12,6 +12,6 @@
 
 **V2 görevleri, eski 215 görsel ve 72 genel geliştirme işine ilave bir 131 bağımsız iş yükü değildir.** Üst düzey yürütme paketleridir; eski atomik görev ağacı olduğu gibi korunur. Eski planın silinmiş 1648 world-map/BIN/PNG kaynakları varmış varsayımları geçersizdir.
 
-**İlk icra:** K00 → K01, D00 karar kapısı, D01 mini pilot, G02 sanat kartı, G03 manifest/dummy pilot. Sonra G04 dünya zemini. Asker G14 **en son**.
+**İlk icra:** K00 → K01, D00 **tam dünya kapsamı** karar kapısı, D01 **pilot bölgesiz doğrudan tam dünya veri üretimi ve QA**, G02 sanat kartı, G03 manifest/dummy **görsel entegrasyon** testi. Sonra G04 dünya zemini. Asker G14 **en son**.
 
 **Kanıt:** source commit, CI, gerçek browser, screenshot, kullanıcı estetik kararı. Plan dosyasının varlığı işi tamamlamaz.
