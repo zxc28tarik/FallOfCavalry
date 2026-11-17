@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [18 Kasım 2026 — BİRLEŞİK WEB MASTER PLAN V2](web-rebuild-v2/README.md): yeni dünya verisi + özgün 2D, 18 iş hattı/131 icra paketi, eski 215+72 planla çapraz izleme
 - [18 Kasım 2026 — Eski dünya verileri ve görsellerin kullanıcı onaylı silinmesi](2026-11-18-requested-legacy-world-art-deletion.md): aktif olsa bile silme kararı, kapsam ve geçici procedural boot
 - [17 Kasım 2026 — Derin kod, asset ve kullanım denetimi V2](2026-11-17-web-derin-kod-asset-denetimi-v2.md): aktif/ertelenen kaynaklar, 2 yayın yolu, görev bağlantıları, smoke ve harita veri riski
 - [17 Kasım 2026 — Güncel CI lint temizliği ve bağımlılık risk kaydı](2026-11-17-web-current-ci-lint-and-dependencies.md): yedi lint uyarısı + npm audit risk kapısı
