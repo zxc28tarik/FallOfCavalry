@@ -27,3 +27,8 @@ This file applies to the **web game repository** `zxc28tarik/FallOfCavalry` only
 - Keep executable validation scripts in `tools/` or `scripts/` rather than ignored scratch folders.
 - When cleaning, classify each candidate by usage and source provenance, preserve unique user-provided material, and document exact removal/restore steps under `docs/plans/`.
 - Do not delete shared/duplicate Git refs without exact SHA matching, PR/dependency checks, and clear authorization. Unity's canonical repository must remain untouched.
+
+## Retired legacy renderer and external asset handling
+- The retired `CanvasRenderer`/old `MapRenderer`/old `SpriteGenerator` lineage and vendor-derived `assets/settlements`, `assets/stronghold` and `homm3-map-art.json` must not be silently reintroduced.
+- The browser game's current authoritative rendering entrypoint is `js/managers/RenderManager.js` (legacy-world fallback modules remain active). New 2D art should be original and integrated according to `docs/plans/2d-visual-rebuild-v1/`.
+- When removing more modules/assets, first verify active runtime imports, test references, runtime string paths, source provenance and rollbacks; retain historical planning documents.
