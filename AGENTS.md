@@ -40,3 +40,8 @@ This file applies to the **web game repository** `zxc28tarik/FallOfCavalry` only
 ## Lint warning gate
 - `npm run lint` now treats any warning as a failure (`--max-warnings=0`). Do not disable a lint rule merely to hide unused code without a documented reason.
 - The npm dependency vulnerability advisory count from CI must be triaged separately; do not apply breaking `npm audit fix --force` blindly.
+
+## User-approved 2026-11-18 world-art deletion
+- The user explicitly ordered the old asset-world BINs/manifest, source maps, ground bitmap, all six tree PNGs, legacy reference archive, and HoMM3 palette to be deleted **even if in use**. Do not restore them or regenerate the same art without user approval.
+- Use procedural world generation only as a technical temporary boot path, not as replacement art. All final new environment and city art is original 2D; soldiers remain the final visual phase.
+- Preserve the rest of gameplay and tests where possible. Record any broken old-save compatibility and browser visuals truthfully.

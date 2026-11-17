@@ -4,7 +4,7 @@ export const MIN_ZOOM = 0.5;
 export const MAX_CACHE_BYTES = 96 * 1024 * 1024;
 
 export const WORLD = Object.freeze({
-  MAP_SOURCE: 'asset',
+  MAP_SOURCE: 'procedural',
   ALLOW_PROCEDURAL_FALLBACK: false,
 
   // Harita boyutları

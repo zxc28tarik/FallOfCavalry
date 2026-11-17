@@ -4,10 +4,11 @@ import FogOfWar from '../world/fog-of-war.js';
 import { MapData, LegacyMapView, TERRAIN } from '../world/map-data.js';
 import WorldMapAssetLoader from '../world/world-map-asset-loader.js';
 import { assignInitialSettlementOwners } from '../systems/factions.js';
-import worldMapManifest from '../../assets/world-map/world-map-manifest.json';
+// No asset-backed world remains; procedural map generation is the default.
+const worldMapManifest = Object.freeze({ files: {}, tileCount: 0 });
 
 const WORLD_GEN_REVISION = '2026-05-03-typed-mapdata-v1-deterministic-settlements';
-const WORLD_ASSET_REVISION = worldMapManifest.id || 'ohm-1648-europe-asset';
+const WORLD_ASSET_REVISION = 'historical-asset-world-removed';
 
 export class WorldGenManager {
   constructor() { this.world = null; this.game = null; this.assetLoader = null; }
