@@ -1,9 +1,8 @@
 import * as CONST from '../constants.js';
 import { MapData, TERRAIN, FLAGS, HEIGHT_ENCODING, HEIGHT_RANGE } from './map-data.js';
-import ownerUrl from '../../assets/world-map/owner.bin?url';
-import terrainUrl from '../../assets/world-map/terrain.bin?url';
-import colorsUrl from '../../assets/world-map/faction-colors.json?url';
-import manifest from '../../assets/world-map/world-map-manifest.json';
+// The historical asset world was intentionally removed. Callers may still
+// supply a new explicit manifest and URLs when the replacement is developed.
+const manifest = Object.freeze({ id: 'no-world-map-assets', files: {} });
 
 export const ASSET_OWNER_ID_TO_FACTION_ID = Object.freeze({
   1: 'ottoman',
@@ -28,9 +27,9 @@ export const ASSET_OWNER_ID_TO_FACTION_ID = Object.freeze({
 });
 
 export const DEFAULT_WORLD_MAP_ASSET_URLS = Object.freeze({
-  owner: ownerUrl,
-  terrain: terrainUrl,
-  factionColors: colorsUrl,
+  owner: null,
+  terrain: null,
+  factionColors: null,
 });
 
 function nowMs() {
@@ -680,6 +679,9 @@ export class WorldMapAssetLoader {
   }
 
   async load() {
+    if (!this.urls?.owner || !this.urls?.terrain || !this.urls?.factionColors) {
+      throw new Error('Historical world-map assets were deleted; no replacement asset map has been configured.');
+    }
     const start = nowMs();
     const fileMeta = this.manifest.files || {};
     this.onLog?.('[WorldMapAssetLoader] Asset load started', {
