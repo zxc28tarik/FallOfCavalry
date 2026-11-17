@@ -16,7 +16,7 @@ export class EncounterMode {
     console.log('[EncounterMode] Encounter:', encounterData);
   }
   
-  update(dt) {
+  update() {
     this.handleInput();
   }
   

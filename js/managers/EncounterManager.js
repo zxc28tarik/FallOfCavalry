@@ -336,10 +336,9 @@ export class EncounterManager {
    * Düşman birimleri `count` alanına sahip değilse DEFAULT_ENEMY_SQUAD_SIZE
    * kullanılır (Canvas sisteminden miras; Phaser için normalize gerekir).
    *
-   * @param {string} enemyId
    * @returns {{ attackerArmy: object, defenderArmy: object }}
    */
-  _buildPhaserArmyData(enemyId) {
+  _buildPhaserArmyData() {
     const selected = (this.playerRoster || []).filter((u) => u.selected);
     this._phaserSelectedRoster = selected;
 
@@ -389,7 +388,7 @@ export class EncounterManager {
    * @param {string} enemyId
    */
   _launchPhaserBattle(enemyId) {
-    const armyData = this._buildPhaserArmyData(enemyId);
+    const armyData = this._buildPhaserArmyData();
     console.info('[EncounterManager] Phaser battle başlatılıyor — enemyId:', enemyId);
 
     // Önceki dinleyici varsa temizle (güvenli yeniden başlatma)

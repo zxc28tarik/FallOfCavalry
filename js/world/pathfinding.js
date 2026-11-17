@@ -2,7 +2,7 @@
  * FallOfCavalry - A* Pathfinding
  */
 
-import { distance, coordsToIndex } from '../utils.js';
+import { distance } from '../utils.js';
 
 export class Pathfinder {
   constructor(mapData) {
@@ -74,7 +74,7 @@ export class Pathfinder {
         const tentativeG = (gScore.get(currentKey) || Infinity) + 
                           this.getCost(neighbor.x, neighbor.y);
         
-        let inOpenSet = openSet.some(n => 
+        const inOpenSet = openSet.some(n => 
           n.x === neighbor.x && n.y === neighbor.y
         );
         
