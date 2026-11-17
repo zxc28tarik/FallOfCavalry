@@ -36,6 +36,16 @@ Silinmiş dosyalar ana daldaki yeni Git çalışma ağacında bulunmaz, **ancak 
 - Açık web PR #28, #29, #30: eşdeğer özellikler geliştirilmiş görünse de **henüz kapatılmadı**; kullanıcının izni olmadan PR kapatılmadı.
 - `validate:smoke` betiği artık doğru yerde, fakat `playwright` `package.json` bağımlılığı değildir ve betik çalıştırıldığında ayrıca kullanıcı eylemi argümanı ister. Bu ilk geçişte mevcut smoke testin gerçekten başarılı olduğu iddia edilmez.
 
+
+## İşlem sonrası GitHub PR ve branch denetimi — 17 Kasım 2026
+
+- PR [#53](https://github.com/zxc28tarik/FallOfCavalry/pull/53) `main` dalına birleştirildi. Doğrulanan yeni HEAD: `4d4ad3f00fdcab5bcc57429cf077f635940a280a`; içerik ağacı **410 dosya, 38.906.748 bayt**, eski geçici dizinlerden **0 dosya**.
+- PR [#28](https://github.com/zxc28tarik/FallOfCavalry/pull/28), [#29](https://github.com/zxc28tarik/FallOfCavalry/pull/29), [#30](https://github.com/zxc28tarik/FallOfCavalry/pull/30), eşdeğer işlerin [#31](https://github.com/zxc28tarik/FallOfCavalry/pull/31), [#32](https://github.com/zxc28tarik/FallOfCavalry/pull/32), [#33](https://github.com/zxc28tarik/FallOfCavalry/pull/33) içinde birleştirildiği doğrulanarak **kapatıldı**. Açık PR sayısı: **0**.
+- Kalan web branch sayısı: **65**. Bunların **63'ü silinebilir olarak aday/kanıt doğrulandı**: 50 birleşmiş ve başı değişmemiş PR dalı, Unity ile SHA'sı aynı olan 9 eski Impl dalı, 3 kapatılmış mükerrer PR dalı ve 1 `main` atası. `main` ve `claude/add-selected-roster-count-USCr5` dalı korunacak.
+- `claude/add-selected-roster-count-USCr5` dalı, `main`e göre 2 özel commit içeriyor (karşılaştırma: ahead=2, behind=172). **İçerik farkı ayrıca analiz edilmeden silinmemeli.**
+- **ÖNEMLİ:** Bu bağlantıda Git branch/ref silme aracı yok. Bu nedenle **63 dal şu an hâlâ GitHub'dadır; silinmiş gibi gösterilemez.** Silme adaylarının tamamı, tam SHA ve nedenleriyle [CSV envanterinde](2026-11-17-web-branch-cleanup-candidates.csv) kayıtlıdır.
+- Dal temizliği için [Web GitHub Branches](https://github.com/zxc28tarik/FallOfCavalry/branches) sayfası kullanılabilir. İlk önce dokuz `codex/impl-0..8` kopyası ve kapatılmış eski PR dalları silinebilir; mevcut Unity deposunun branch'lerine dokunulmaz.
+
 ## Doğrulama / Kabul
 1. Yeni HEAD ağacında `output/`, `tmp/`, `screenshots/`, `.vite/`, `tools/__pycache__/` bulunmaz.
 2. Üç benzersiz dosyanın taşınan yollarında eski blob SHA'ları aynıdır.
