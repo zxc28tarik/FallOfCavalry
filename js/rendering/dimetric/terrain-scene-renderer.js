@@ -1,7 +1,3 @@
-import {
-  biomeBaseRgb,
-} from './terrain-chunk-cache.js';
-
 function drawPoi(ctx, poi, px, py, fogLevel, camera, game, spriteScale) {
   ctx.strokeStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
   ctx.fillStyle = fogLevel === 1 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.92)';
@@ -44,147 +40,6 @@ function countSetNeighbors(set, mapWidth, x, y) {
   return count;
 }
 
-function clampByte(value) {
-  return Math.max(0, Math.min(255, Math.round(Number(value) || 0)));
-}
-
-function shadeRgb(rgb, delta) {
-  return [
-    clampByte(rgb[0] + delta),
-    clampByte(rgb[1] + delta),
-    clampByte(rgb[2] + delta),
-  ];
-}
-
-function rgbString(rgb, alpha = 1) {
-  if (alpha >= 0.999) return `rgb(${clampByte(rgb[0])},${clampByte(rgb[1])},${clampByte(rgb[2])})`;
-  return `rgba(${clampByte(rgb[0])},${clampByte(rgb[1])},${clampByte(rgb[2])},${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
-}
-
-function renderDimetricOverviewTerrain(ctx, camera, {
-  visible,
-  view,
-  overviewStride,
-  resolveBiomeAt,
-  worldToScreen,
-  terrainNoise,
-  terrainStyleProfile,
-} = {}) {
-  if (!ctx || !camera || !visible || !view?.config || typeof resolveBiomeAt !== 'function') return 0;
-  const stride = Math.max(2, Math.floor(Number(overviewStride) || 1));
-  if (stride <= 1) return 0;
-
-  const halfW = view.config.tileW * camera.zoom * 0.5 * stride;
-  const halfH = view.config.tileH * camera.zoom * 0.5 * stride;
-  const canvasW = Number(ctx?.canvas?.width) || 0;
-  const canvasH = Number(ctx?.canvas?.height) || 0;
-  const centerX = Math.floor((visible.minX + visible.maxX) * 0.5);
-  const centerY = Math.floor((visible.minY + visible.maxY) * 0.5);
-  const groundRgb = biomeBaseRgb(resolveBiomeAt(centerX, centerY), terrainStyleProfile);
-  let painted = 0;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  if (canvasW > 0 && canvasH > 0) {
-    ctx.fillStyle = rgbString(groundRgb, 1);
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  }
-  for (let ty = visible.minY; ty <= visible.maxY; ty += stride) {
-    for (let tx = visible.minX; tx <= visible.maxX; tx += stride) {
-      const centerTileX = tx + ((stride - 1) * 0.5);
-      const centerTileY = ty + ((stride - 1) * 0.5);
-      const sampleX = Math.max(visible.minX, Math.min(visible.maxX, Math.floor(centerTileX)));
-      const sampleY = Math.max(visible.minY, Math.min(visible.maxY, Math.floor(centerTileY)));
-      const biome = resolveBiomeAt(sampleX, sampleY);
-      const baseRgb = biomeBaseRgb(biome, terrainStyleProfile);
-      const center = worldToScreen(centerTileX, centerTileY, camera, view.config, 0);
-      for (let i = 0; i < 5; i += 1) {
-        const n = typeof terrainNoise === 'function' ? terrainNoise(sampleX * 1.19 + i * 0.41, sampleY * 1.07 + i * 0.83, 8123) : 0.5;
-        const n2 = typeof terrainNoise === 'function' ? terrainNoise(sampleX * 0.79 + i * 1.11, sampleY * 1.39 + i * 0.67, 8129) : 0.5;
-        const px = center.x - halfW * 0.48 + n * halfW * 0.96;
-        const py = center.y - halfH * 0.40 + n2 * halfH * 0.80;
-        const dot = n2 > 0.5 ? shadeRgb(baseRgb, -18) : shadeRgb(baseRgb, 12);
-        ctx.fillStyle = rgbString(dot, 0.12);
-        ctx.fillRect(Math.round(px), Math.round(py), n > 0.82 ? 2 : 1, 1);
-      }
-      painted += 1;
-    }
-  }
-  ctx.restore();
-  return painted;
-}
-
-function renderDimetricOverviewForestCanopy(ctx, camera, {
-  forestAnchors,
-  fog,
-  width,
-  visible,
-  view,
-  worldToScreen,
-  terrainNoise,
-  overviewStride,
-  drawDimetricForestGlyph,
-  resolveDimetricNatureVariant,
-} = {}) {
-  if (!ctx || !camera || !visible || !view?.config || typeof worldToScreen !== 'function') return 0;
-  if (typeof drawDimetricForestGlyph !== 'function') return 0;
-  if (!Array.isArray(forestAnchors) || forestAnchors.length === 0) return 0;
-
-  const zoom = Math.max(0.01, Number(camera.zoom) || 1);
-  // Keep this aligned with RenderManager's minimal LOD entry point so there is
-  // no empty forest band while zooming between prop sprites and overview marks.
-  if (zoom >= 0.5) return 0;
-
-  const stride = Math.max(1, Math.floor(Number(overviewStride) || 1));
-  const sampleStep = zoom <= 0.07
-    ? Math.max(2, Math.floor(stride * 0.55))
-    : zoom <= 0.14
-      ? Math.max(1, Math.floor(stride * 0.38))
-      : 1;
-  const baseRadiusY = Math.max(1.3, view.config.tileH * zoom * (zoom <= 0.14 ? 0.62 : 0.34));
-  const maxMarks = zoom <= 0.07 ? 2600 : zoom <= 0.14 ? 3400 : 4200;
-  const cellSize = Math.max(1, Math.floor(stride * (zoom <= 0.14 ? 1.25 : 0.8)));
-  const seenCells = new Set();
-  let drawn = 0;
-
-  ctx.save();
-  for (let i = 0; i < forestAnchors.length && drawn < maxMarks; i += sampleStep) {
-    const forest = forestAnchors[i];
-    const tx = Number(forest?.x);
-    const ty = Number(forest?.y);
-    if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
-    if (tx < visible.minX || tx > visible.maxX || ty < visible.minY || ty > visible.maxY) continue;
-    const fogLevel = fog ? fog[(ty * width) + tx] : 2;
-    if (fogLevel === 0) continue;
-
-    const cellKey = `${Math.floor(tx / cellSize)},${Math.floor(ty / cellSize)}`;
-    if (seenCells.has(cellKey)) continue;
-    seenCells.add(cellKey);
-
-    const noise = typeof terrainNoise === 'function' ? terrainNoise(tx * 0.47, ty * 0.39, 7301) : 0.5;
-    const keep = zoom <= 0.07 ? noise > 0.18 : zoom <= 0.14 ? noise > 0.11 : noise > 0.04;
-    if (!keep) continue;
-
-    const center = worldToScreen(tx, ty, camera, view.config, 0);
-    drawDimetricForestGlyph(
-      ctx,
-      center.x,
-      center.y + (baseRadiusY * 0.28),
-      view.config.tileW * zoom,
-      view.config.tileH * zoom,
-      fogLevel,
-      tx,
-      ty,
-      typeof resolveDimetricNatureVariant === 'function'
-        ? resolveDimetricNatureVariant({ kind: 'forest', tx, ty, fogLevel })
-        : null,
-    );
-    drawn += 1;
-  }
-  ctx.restore();
-  return drawn;
-}
-
 export function renderDimetricTerrainScene(ctx, camera, options = {}) {
   const {
     map,
@@ -209,7 +64,6 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
     decalsEnabled,
     maxDecals,
     timeMs,
-    overviewStride,
     propStyleProfile,
     getCachedWorldFeatureSets,
     resolveBiomeAt,
@@ -253,25 +107,9 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
   const minY = visible.minY;
   const maxX = visible.maxX;
   const maxY = visible.maxY;
-  const useOverviewTerrain = false;
-  const overviewCullBoost = useOverviewTerrain
-    ? Math.min(0.08, Math.max(0, Math.floor(Number(overviewStride) || 1) - 1) * 0.004)
-    : 0;
-  const effectiveMinimalMountainThreshold = Math.min(0.98, minimalMountainThreshold + overviewCullBoost * 0.8);
+  const effectiveMinimalMountainThreshold = Math.min(0.98, minimalMountainThreshold);
 
-  if (useOverviewTerrain) {
-    renderDimetricOverviewTerrain(ctx, camera, {
-      visible,
-      view,
-      overviewStride,
-      resolveBiomeAt,
-      drawScreenDiamond,
-      worldToScreen,
-      terrainNoise,
-      terrainStyleProfile,
-      biomeIds: constants.BIOME,
-    });
-  } else {
+  {
     const configuredBaseBiomeLayer = baseBiomeLayer?.configure?.({
       map,
       mapWidth: width,
@@ -462,20 +300,7 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
   const featureMinY = minY - featureMarginTiles;
   const featureMaxX = maxX + featureMarginTiles;
   const featureMaxY = maxY + featureMarginTiles;
-  const overviewForestCount = useOverviewTerrain && lodLevel === 'minimal'
-    ? renderDimetricOverviewForestCanopy(ctx, camera, {
-      forestAnchors,
-      fog,
-      width,
-      visible,
-      view,
-      worldToScreen,
-      terrainNoise,
-      overviewStride,
-      drawDimetricForestGlyph,
-      resolveDimetricNatureVariant,
-    })
-    : 0;
+  const overviewForestCount = 0;
   const featureQueue = [];
   const largeMountainCells = new Set();
   let visibleForestCount = 0;
@@ -521,7 +346,6 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
   }
 
   for (const forest of forestAnchors) {
-    if (useOverviewTerrain) break;
     const tx = Number(forest?.x);
     const ty = Number(forest?.y);
     if (!Number.isFinite(tx) || !Number.isFinite(ty)) continue;
@@ -1031,7 +855,7 @@ export function renderDimetricTerrainScene(ctx, camera, options = {}) {
   return {
     ambientCount,
     dimetricActorVisualState: actorVisualState,
-    overviewStride: useOverviewTerrain ? Math.max(2, Math.floor(Number(overviewStride) || 2)) : 0,
+    overviewStride: 0,
     overviewForestCount,
     visibleForestCount,
     visibleMountainCount,
