@@ -21,3 +21,9 @@ This file applies to the **web game repository** `zxc28tarik/FallOfCavalry` only
 - Check actual current `main` HEAD before changes. Use small focused branches/PRs when appropriate; do not touch Unity or unrelated repositories.
 - Mark a task DONE only with reproducible code, test/evidence and recorded commit; otherwise distinguish PLANNED, IN PROGRESS and BLOCKED.
 - Update the relevant plan/task table and commit that update with the implementation; keep documentation and implementation synchronized.
+
+## Repository hygiene
+- Never commit scratch artifacts under `output/`, `tmp/`, `screenshots/`, `.vite/`, Python caches or devserver logs.
+- Keep executable validation scripts in `tools/` or `scripts/` rather than ignored scratch folders.
+- When cleaning, classify each candidate by usage and source provenance, preserve unique user-provided material, and document exact removal/restore steps under `docs/plans/`.
+- Do not delete shared/duplicate Git refs without exact SHA matching, PR/dependency checks, and clear authorization. Unity's canonical repository must remain untouched.
