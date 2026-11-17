@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [17 Kasım 2026 — Unity dalları / yanlış repo denetimi](2026-11-17-unity-branch-repo-denetimi.md): web deposundaki çift Impl-0–8 dalları ve ayrı Unity deposunun en ileri S4 çizgisi
 - [17 Kasım 2026 — GitHub mevcut durum / hasar raporu](2026-11-17-web-github-durum-raporu.md)
 - [Web bağımsız geliştirme master planı V1](web-development-v1/README.md): 72 iş paketi; hasar tespiti, entegrasyon ve geliştirme ağacı
 - [2D görsel sistemini sıfırdan kurma master planı V1](2d-visual-rebuild-v1/README.md): 15 faz, 200 iş + 15 kalite kapısı; asker görselleri son faz
