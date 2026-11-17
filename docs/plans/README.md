@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [17 Kasım 2026 — Web GitHub otomatik test kapısı](2026-11-17-web-ci-test-gate.md): CI yapılandırması ve PASS kabul şartı
 - [17 Kasım 2026 — ESLint ve kullanılmayan kod temizliği](2026-11-17-web-source-lint-cleanup.md): 6 eski uyarı giderildi; referans test protokolü
 - [17 Kasım 2026 — Eski görseller ve kullanılmayan kod temizliği](2026-11-17-web-unused-code-assets-cleanup.md): ${n} dosyalık kontrollü silme ve korunan aktif bağımlılıklar
 - [17 Kasım 2026 — Web branch temizleme envanteri (CSV)](2026-11-17-web-branch-cleanup-candidates.csv): her dalın tam SHA'sı, PR ilişkisi ve korunma/silme kararı
