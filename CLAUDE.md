@@ -142,3 +142,10 @@ Defterhane gelismeden sehir sorunlari net gorulemez.
 - Vite large chunk warning (~699KB main bundle)
 - 3 lint warning mevcut ve biliniyor
 - Tailwind CDN warning (production console)
+
+## GitHub dokumantasyon kaydi — zorunlu
+- Web oyunu icin olusturulan veya degistirilen plan, karar defteri, gorev agaci, kalite/hasar denetim raporu ve Markdown dokumanlari ayni calisma sirasinda `docs/plans/` altina GitHub commit'i olarak kaydedilmelidir.
+- `docs/plans/README.md` yeni planlarda guncellenir. Salt sandbox dosyasi GitHub kaydi sayilmaz; commit/PR URL'si kullaniciya bildirilir.
+- Bu kural sadece `FallOfCavalry` WEB reposu icindir; Unity deposuna dokunma.
+- Tum gorsel sanat yeni 2D uretilecek; asker gorselleri en son fazda ve kullanici onayindan sonra.
+- Ayrintilar: `AGENTS.md`.

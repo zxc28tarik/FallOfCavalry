@@ -1,0 +1,4463 @@
+{
+  "version": "v1",
+  "date": "2026-11-17",
+  "head": "f377c72f0c094f274a72239fa477f996a21af114",
+  "scope": "FOC Web ONLY",
+  "phases": [
+    {
+      "code": "G00",
+      "title": "Yönetişim, kapsam ve koruma",
+      "objective": "Tüm görsel değişiklikleri gameplay ve Unity’den ayırmak",
+      "gate": "Dökümantasyon ve geri dönüş sözleşmesi onaylı; oyun koduna dokunulmaz",
+      "count": 10,
+      "gate_id": "G00-GATE",
+      "deps": []
+    },
+    {
+      "code": "G01",
+      "title": "Hasar tespiti ve görsel envanter",
+      "objective": "Aktif kod yollarını ve tüm görsel borçları gerçek kanıtla belirlemek",
+      "gate": "V01 görsel hasar defteri ve tekrar üretilebilir ekran baz çizgisi var",
+      "count": 14,
+      "gate_id": "G01-GATE",
+      "deps": [
+        "G00-GATE"
+      ]
+    },
+    {
+      "code": "G02",
+      "title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "objective": "Resim başlamadan tüm ekranların ortak sanat dilini sabitlemek",
+      "gate": "Dört pilot referans ve görsel kontrol kartı kabul edildi",
+      "count": 13,
+      "gate_id": "G02-GATE",
+      "deps": [
+        "G01-GATE"
+      ]
+    },
+    {
+      "code": "G03",
+      "title": "2D asset üretim ve entegrasyon hattı",
+      "objective": "Görsel dosyası gelince standartlı olarak oyunda görünsün",
+      "gate": "PNG→katalog→konum→görünüm→test otomatik zinciri çalışıyor",
+      "count": 17,
+      "gate_id": "G03-GATE",
+      "deps": [
+        "G02-GATE"
+      ]
+    },
+    {
+      "code": "G04",
+      "title": "Zeminden sıfırdan dünya haritası",
+      "objective": "Eski grass görsellerini değiştirecek kurallı 2D zemin",
+      "gate": "Yeni arazi maskeleri ve döşeme sistemi ile boşluğa düşmeyen harita",
+      "count": 17,
+      "gate_id": "G04-GATE",
+      "deps": [
+        "G03-GATE"
+      ]
+    },
+    {
+      "code": "G05",
+      "title": "Doğal çevre ve topoğrafik görsel set",
+      "objective": "Ağaç, kaya, çalı, orman ve yükseltiyi aynı 2D diliyle kurmak",
+      "gate": "Siluet ve zemine oturuş tutarlı, ölçeğe göre LOD var",
+      "count": 14,
+      "gate_id": "G05-GATE",
+      "deps": [
+        "G04-GATE"
+      ]
+    },
+    {
+      "code": "G06",
+      "title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "objective": "Dünya zemini üzerinde yollar ve su ağını düzenli 2D sistem yapmak",
+      "gate": "Yollar/nehirler yerleşimler ve oyuncu hareketiyle hizalı",
+      "count": 14,
+      "gate_id": "G06-GATE",
+      "deps": [
+        "G05-GATE"
+      ]
+    },
+    {
+      "code": "G07",
+      "title": "Dünya haritası yerleşim ve POI yapıları",
+      "objective": "Şehir-köy-kale ikonlarını 2D olarak yeniden tasarlamak",
+      "gate": "Farklı büyüklük ve devletlerde doğru harita simgesi görünür",
+      "count": 13,
+      "gate_id": "G07-GATE",
+      "deps": [
+        "G06-GATE"
+      ]
+    },
+    {
+      "code": "G08",
+      "title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "objective": "Şehirden küçük yerleşimlerin 2D sahnelerini tekrar kullanılabilir yapmak",
+      "gate": "Köy büyüklüğü ve üretim rolü aynı setten varyant çıkarıyor",
+      "count": 13,
+      "gate_id": "G08-GATE",
+      "deps": [
+        "G07-GATE"
+      ]
+    },
+    {
+      "code": "G09",
+      "title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "objective": "İlk tam şehir ailesini mevcut area+fill+hotspot sözleşmesiyle tamamlamak",
+      "gate": "İstanbul ve normal Osmanlı şehri eksiksiz 2D çalışıyor",
+      "count": 25,
+      "gate_id": "G09-GATE",
+      "deps": [
+        "G08-GATE"
+      ]
+    },
+    {
+      "code": "G10",
+      "title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "objective": "Dünya ve yerleşim sahnesindeki savunma yapıları için ortak 2D set",
+      "gate": "Kale büyüklüklerinde ölçek ve statü tutarlı",
+      "count": 12,
+      "gate_id": "G10-GATE",
+      "deps": [
+        "G09-GATE"
+      ]
+    },
+    {
+      "code": "G11",
+      "title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "objective": "Osmanlı kalitesini tekrarlanabilir yönteme çevirerek genişlemek",
+      "gate": "HRE, Venedik, Polonya, İspanya ve ek dünya siluetleri uyumlu",
+      "count": 12,
+      "gate_id": "G11-GATE",
+      "deps": [
+        "G10-GATE"
+      ]
+    },
+    {
+      "code": "G12",
+      "title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "objective": "Görsel dünyayı tamamlamak fakat askere dokunmamak",
+      "gate": "Savaşın arka planı ve UI tüm sistemle bütün; asker placeholder",
+      "count": 15,
+      "gate_id": "G12-GATE",
+      "deps": [
+        "G11-GATE"
+      ]
+    },
+    {
+      "code": "G13",
+      "title": "Tam görsel kalite, performans ve yayın kabulü",
+      "objective": "Asker öncesi bütün görsel dünyayı güvenli şekilde tamamlamak",
+      "gate": "Release öncesi 2D görsel sistem tek tek ve topluca kabul edilmiş",
+      "count": 15,
+      "gate_id": "G13-GATE",
+      "deps": [
+        "G12-GATE"
+      ]
+    },
+    {
+      "code": "G14",
+      "title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "objective": "Ordu, animasyon, ekipman modülerliği için ayrı onaylanmış üretim",
+      "gate": "Önceki tüm görsel kapılar bitmeden hiç başlanmaz",
+      "count": 11,
+      "gate_id": "G14-GATE",
+      "deps": [
+        "G13-GATE"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "G00-01",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Web-only proje sınırını kesinleştir",
+      "deliverable": "Yalnız FallOfCavalry web depo bağlantısı ve dışlanan Unity kaynak listesi",
+      "acceptance": "Her PR sadece web deposu yoluna dokunur; Unity bağı yoktur",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-02",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Sıfırdan 2D üretim kararını kaydet",
+      "deliverable": "2D doğrudan çizim; 3D/3D render yok; asker son faz",
+      "acceptance": "Karar defterinde aynı kural tek kaynak olarak mevcut",
+      "owner": "ORTAK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-03",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Önceki 72 iş paketinin sanat dondurma kararına ek karar yaz",
+      "deliverable": "Görsel işlerin yeniden açıldığı; asker görsellerinin son aşamaya ertelendiği değişiklik kaydı",
+      "acceptance": "Önceki plan silinmez, yeni tarihli kararla çelişki açıkça çözülür",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-04",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Grafik ile oyun mekaniği sınırını belirle",
+      "deliverable": "Değişmeyecek sahiplik, movement, ekonomi, save, şehir area ID listesi",
+      "acceptance": "Görsel PR sonrası gameplay state eşitliği testi tanımlı",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-05",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Legacy asset geri dönüş planını yaz",
+      "deliverable": "Eski görsel modun feature flag ile korunacağı rollback protokolü",
+      "acceptance": "Yeni render çökerse aynı save ile eski görünüm açılabilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-06",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Asset hak ve kaynak kökeni kuralını koy",
+      "deliverable": "Her 2D asset için üretici, araç, haklar, kaynak sürüm bilgisi",
+      "acceptance": "Kökeni bilinmeyen asset nihai dağıtıma giremez",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-07",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Asker görsel değişikliklerini yasak bölgeye al",
+      "deliverable": "Soldier visual code ve atlaslar için dokunma listesi",
+      "acceptance": "Son fazdan önce askere ait yeni PNG, atlas veya animasyon PR yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-08",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "İş durum sözlüğünü ve kanıt hiyerarşisini kur",
+      "deliverable": "PLANLANDI/URETIMDE/ENTEGRASYONDA/TESTTE/KABUL/BLOKLU ve kanıt türleri",
+      "acceptance": "Test, ekran görüntüsü ve PR adresi olmadan KABUL verilemez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-09",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "İlk tasarım kapısını kullanıcıya sun",
+      "deliverable": "Temel estetik, üretecek kişi, sıranın ve rollerin onayı",
+      "acceptance": "Yetki dışı stil ve kapsam değişikliği yapılmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G00-GATE",
+      "phase": "G00",
+      "phase_title": "Yönetişim, kapsam ve koruma",
+      "title": "Yönetişim, kapsam ve koruma kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G00 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Dökümantasyon ve geri dönüş sözleşmesi onaylı; oyun koduna dokunulmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-01",
+        "G00-02",
+        "G00-03",
+        "G00-04",
+        "G00-05",
+        "G00-06",
+        "G00-07",
+        "G00-08",
+        "G00-09"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-01",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "HEAD, branch ve ZIP sürümlerini eşleştir",
+      "deliverable": "Main SHA, ZIP kaynak tarih/başlık farkları",
+      "acceptance": "Karşılaştırma yanlışlıkla Unity branch’ini kapsamaz",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-02",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Mevcut tüm görsel assetleri indeksle",
+      "deliverable": "Dosya yolu, tip, çözünürlük, alpha, kullanım yeri, köken envanteri",
+      "acceptance": "Her mevcut kaynak USED/LEGACY/PLACEHOLDER/UNKNOWN olarak etiketli",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-03",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Gerçek runtime çizim çağrı zincirini haritala",
+      "deliverable": "RenderManager, dimetric modules, city UI ve battle background çağrı diyagramı",
+      "acceptance": "Pasif map-renderer dosyasına yapılacak iş yazılmaz",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-04",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Sahne galerisi çıkar",
+      "deliverable": "Aynı seed için dünya 0.5/1/2 zoom, şehir, köy, kale, savaş zemin ekranları",
+      "acceptance": "Her sahne kaynak commit/seed/viewport ile eşleştirilmiş",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-05",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Zeminin mevcut darboğazlarını ölç",
+      "deliverable": "Doku tekrar izi, boş bölgeler, ölçek sorunu, sınır kesmeleri analizi",
+      "acceptance": "Kanıtlı hata ve estetik tercih ayrı etiketli",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-06",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Biyom ve tek-çim ayarını belgeye geçir",
+      "deliverable": "WORLD_MAP_FORCE_SINGLE_GRASS_BIOME ve yerleşim üzerindeki etkiler",
+      "acceptance": "Biom çeşitliliği kararı açık; gameplay biome ile görsel biome karıştırılmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-07",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Şehir base/overlay boşluklarını doğrula",
+      "deliverable": "baseImage:null, template manifest, area hotspots haritası",
+      "acceptance": "Hangi görsel bağlantıların boş olduğu somut dosya ve satırla gösterilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-08",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Köy ve kalelerin mevcut render yöntemini ayır",
+      "deliverable": "Map icon / settlement sprite / city interior ayrımı",
+      "acceptance": "Dünya haritasındaki ikon ile şehir içi sahne aynı asset sanılmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-09",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Dünya haritası ve şehir ekranı perspektiflerini analiz et",
+      "deliverable": "Projeksiyon, normalize yüzde alanları, UI ölçekleme teknik notu",
+      "acceptance": "64×32 world tile ile % city hotspot arasında bilinçsiz dönüşüm yapılmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-10",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Sahne/atlas yükleme yolundaki fallback durumunu ölç",
+      "deliverable": "SpriteLoader varsayılan boş manifest ve ilgili uyarılar",
+      "acceptance": "Görsel teslimi sadece klasöre atınca görünür sanılmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-11",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Bellek ve zoom performans başlangıcını ölç",
+      "deliverable": "FPS frame p95, JS heap, canvas cache, decode süresi, soğuk yükleme",
+      "acceptance": "Rakamlar gerçek cihazda ölçülüp cihaz bilgisiyle kaydedilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-12",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Telif ve lisans riski taraması yap",
+      "deliverable": "Mevcut assetler ve özellikle üçüncü taraf sanat köken listesi",
+      "acceptance": "Nihai pakete girecek her asset için yeniden üretim/izin kararı verilir",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-13",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Hasar önceliklendirme toplantısı ve sıfır nokta onayı",
+      "deliverable": "BUG/INTEGRASYON/ART_GAP/OPTIMIZASYON ayrı iş listeleri",
+      "acceptance": "Kullanıcı baz çizgi raporunu onaylar; stil üretimi sonraki fazda açılır",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G00-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G01-GATE",
+      "phase": "G01",
+      "phase_title": "Hasar tespiti ve görsel envanter",
+      "title": "Hasar tespiti ve görsel envanter kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G01 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "V01 görsel hasar defteri ve tekrar üretilebilir ekran baz çizgisi var",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-01",
+        "G01-02",
+        "G01-03",
+        "G01-04",
+        "G01-05",
+        "G01-06",
+        "G01-07",
+        "G01-08",
+        "G01-09",
+        "G01-10",
+        "G01-11",
+        "G01-12",
+        "G01-13"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-01",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Tarihsel dönemin görsel tonunu belirle",
+      "deliverable": "Erken modern Osmanlı/Avrupa için renk ve atmosfer ilkeleri",
+      "acceptance": "Gerçekçilik düzeyi, okunabilirlik, HoMM3 esintisi açık yazılı",
+      "owner": "ORTAK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-02",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Dünya haritası perspektif şablonunu kur",
+      "deliverable": "64×32 projeksiyonda kare, ev, ağaç ve duvar hizalama rehberi",
+      "acceptance": "Üst üste bindirilen 2D nesnelerin ayak noktası grid ile çakışır",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-03",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Şehir ve köy ekranı perspektif rehberini ayrı tanımla",
+      "deliverable": "Ikariam-benzeri alan sahnesi için onaylı bakış, derinlik ve ufuk kuralları",
+      "acceptance": "Dünya haritasının 64×32 geometrisi şehre körü körüne uygulanmaz",
+      "owner": "ORTAK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-04",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Savaş zemini 2D kamera/görsel ayrı standardını tanımla",
+      "deliverable": "Savaş alanı zemin oranı, görüş mesafesi ve okunabilirlik sözleşmesi",
+      "acceptance": "Asker çizimleri değişmeden placeholder askerler okunur",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-05",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Tek ışık ve gölge karakterini kilitle",
+      "deliverable": "Ana ışık yönü, sertlik, yüzey gölgesi, ortak ambient kararları",
+      "acceptance": "Farklı üretimlerde ışık yönleri çelişmez",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-06",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Ana renk paleti ve malzeme tablolarını belirle",
+      "deliverable": "Taş, ahşap, sıva, çatı, toprak, yeşillik, su için palet",
+      "acceptance": "Komşu assetler ton ve saturation bakımından bütün görünür",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-07",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Harita zemini için örnek görsel kartı hazırlat",
+      "deliverable": "Sade düzlük, yol yakını, orman kenarı, kıyı pilot kompozisyonu",
+      "acceptance": "Aynı sanat dili dört durumda da okunur; ayrı üretime değer",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-08",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Doğal çevre için siluet ve derinlik kartı hazırlat",
+      "deliverable": "3 ağaç, 2 kaya, 2 çalı; ölçek ve renk kıyas kartı",
+      "acceptance": "Çim üstünde gövde zemine oturur; renk sapması yoktur",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-09",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Yapı mimarisi referans kartları oluştur",
+      "deliverable": "Osmanlı ev/han/pazar/kale örnekleri, malzeme ve çağ özellikleri",
+      "acceptance": "Birbirini tutan çatılar, pencere oranı ve kule formu",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-10",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Dört zoom/ekran okunabilirlik ölçütünü yaz",
+      "deliverable": "Ana ekran 0.5/1/2/5 zoom senaryoları ve UI örtüşme kuralları",
+      "acceptance": "Testte nesne sınıfı minimum görünür boyda ayırt edilebilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-11",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Büyük ölçekte doku tekrarı ve görsel karmaşa yasağı",
+      "deliverable": "Frekans/kontrast/karmaşa ve repeat seam kontrol listesi",
+      "acceptance": "Aynı PNG 20 kez tekrarlandığında fark edilir döşeme izi yok",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-12",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Stil kilidi ve örnek kabul toplantısı",
+      "deliverable": "Onaylı style-card ID ve revizyon protokolü",
+      "acceptance": "Kullanıcı onayı olmadan stil sistemsel olarak değiştirilmez",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G01-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G02-GATE",
+      "phase": "G02",
+      "phase_title": "Görsel kimlik ve 2D sanat sözleşmesi",
+      "title": "Görsel kimlik ve 2D sanat sözleşmesi kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G02 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Dört pilot referans ve görsel kontrol kartı kabul edildi",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-01",
+        "G02-02",
+        "G02-03",
+        "G02-04",
+        "G02-05",
+        "G02-06",
+        "G02-07",
+        "G02-08",
+        "G02-09",
+        "G02-10",
+        "G02-11",
+        "G02-12"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-01",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "2D asset adlandırma ve klasör kuralını kur",
+      "deliverable": "world/terrain,nature,roads,settlements; cities; ui; vfx dizinleri",
+      "acceptance": "Asset ID ve dosya yolu tekrarsız, küçük harfli, versiyonlu",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-02",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Ham dosya ile yayın varlığını ayır",
+      "deliverable": "sources/original; prepared; runtime klasörleri ve kaynak bağlantısı",
+      "acceptance": "Ham çizim asla doğrudan runtime ile karıştırılmaz",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-03",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Tek metadata sözleşmesi tasarla",
+      "deliverable": "id, scope, faction, dimensions, pivot, anchor, layer, rights, hashes",
+      "acceptance": "Eksik zorunlu alan build veya validator tarafından rapor edilir",
+      "owner": "TEKNIK",
+      "priority": "P0",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-04",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "PNG şeffaflık ve kırpma doğrulayıcısı",
+      "deliverable": "RGBA/alpha, taşma, halo ve crop denetimi",
+      "acceptance": "Şeffaf PNG beyaz/karanlık saçak üretmeden zeminde yerleşir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-05",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Pivot/footprint/hitbox/selection ayrımını kodla",
+      "deliverable": "Dünya taban noktası, çizim offset, tıklama alanı ayrı veri",
+      "acceptance": "Görsel değişimi fiziksel seçim veya konumu bozmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-06",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Dünya ve şehir için ayrı 2D loader köprüleri tasarla",
+      "deliverable": "SpriteLoader registry ve city manifest resolver sözleşmesi",
+      "acceptance": "Bir asset hem manifestte hem runtime rendererda çözümlenir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-07",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Şehir manifest şemasını varsayımsız şekillendir",
+      "deliverable": "base, overlays, parcels, relative transform, visibility, fallback alanları",
+      "acceptance": "Mevcut city-scene-defs ID’leri aynen korunur",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE",
+        "G03-06"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-08",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "2D renderer için feature-flag ve rollback entegrasyonu",
+      "deliverable": "legacy/new toggle; test durumunda fallback",
+      "acceptance": "Yeni asset bozuksa önceki ekran ve save korunur",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE",
+        "G03-06"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-09",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Asset yükleme hatalarını gözlemlenebilir kıl",
+      "deliverable": "404, wrong dimensions, missing alpha, duplicate ID logs",
+      "acceptance": "Hatalar oyun çökmeden manifest ID ile raporlanır",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-10",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Ölçek dönüşümü ve responsive yerleşim yardımcıları",
+      "deliverable": "world 64x32 ve city normalized stage dönüşüm yardımcıları",
+      "acceptance": "En az üç viewportta pivot ve hotspot kaymaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-11",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Çizim katmanlarının sıralama sözleşmesi",
+      "deliverable": "terrain→decal→path→shadow→structure→canopy→label→UI z-order",
+      "acceptance": "Ağaç ve bina çakışmasında arka/ön sıra doğru",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-12",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Atlas paketleme ve image decode planı",
+      "deliverable": "Küçük 2D varlık için atlas ve lazy-load planı",
+      "acceptance": "Boş atlas/404/bozuk atlas oyunu durdurmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-13",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Otomatik asset teslim komutu tasarla",
+      "deliverable": "Validate, prepare, manifest, inspect, snapshot aşamaları",
+      "acceptance": "Bir komut manifest ve hataları üretir; production asset atlamaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE",
+        "G03-03",
+        "G03-04",
+        "G03-07"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-14",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Golden screenshot ve görsel fark testlerini kur",
+      "deliverable": "Seedli screenshot, tolerans, mask, fark raporu",
+      "acceptance": "Gerçek sanat değişimi onaylanmadan golden güncellenmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-15",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Tam 2D pipeline için dummy asset pilotu",
+      "deliverable": "Geçici kare/ağaç/ev PNG ile loader ve z-order uçtan uca",
+      "acceptance": "Dummy değişimiyle save/oyun verisi değişmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE",
+        "G03-08",
+        "G03-13",
+        "G03-14"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-16",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "Kullanıcı üretim teslim protokolünü onayla",
+      "deliverable": "PNG + referans + asset ID + haklar + revizyon sürümü listesi",
+      "acceptance": "Teslim için her defasında ne gerekli kullanıcı tarafından biliniyor",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G02-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G03-GATE",
+      "phase": "G03",
+      "phase_title": "2D asset üretim ve entegrasyon hattı",
+      "title": "2D asset üretim ve entegrasyon hattı kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G03 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "PNG→katalog→konum→görünüm→test otomatik zinciri çalışıyor",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-01",
+        "G03-02",
+        "G03-03",
+        "G03-04",
+        "G03-05",
+        "G03-06",
+        "G03-07",
+        "G03-08",
+        "G03-09",
+        "G03-10",
+        "G03-11",
+        "G03-12",
+        "G03-13",
+        "G03-14",
+        "G03-15",
+        "G03-16"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-01",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Dünya 1648 owner/terrain verisini görselden ayır",
+      "deliverable": "owner.bin, terrain.bin ve kaynak hashleri kilitle",
+      "acceptance": "Yeni sanat çalışması politik sınır/movement değerini değiştirmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-02",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Tek çim görsel zorlamasını karar paketine al",
+      "deliverable": "Mevcut forced-grass ayarı, görsel çokluk alternatifleri",
+      "acceptance": "Biyom oyuna geri konulacak mı kararı varsayımla verilmez",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-03",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Zemin ölçü/pixel yoğunluğu pilotunu seç",
+      "deliverable": "64x32 screen tile için 2D kaynak çözünürlük ve LOD önerisi",
+      "acceptance": "Zoom 0.5/1/2/5’te kabul edilebilir tekrarsız görünüm",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-04",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Yeniden üretilebilir temel çim seti",
+      "deliverable": "Ana yeşil zemin, gölge, micro-detail 2D varyantları",
+      "acceptance": "16×16 tekrar deseninde seam ve görünür tekrar sınırı test edilir",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-05",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Çim yakın/uzak varyantlarını çıkar",
+      "deliverable": "Farklı detay yoğunlukları ve tonları",
+      "acceptance": "Uzak zoomda noise/karmasa kontrol altında kalır",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-06",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Toprak ve işlenmiş arazi çizim aileleri",
+      "deliverable": "Toprak, yol yakını, tarla/ekin dokuları",
+      "acceptance": "Çim-toprak geçişi sert kare sınırı yaratmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-07",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Taşlık ve sert yüzey aileleri",
+      "deliverable": "Taş, kayalık etek, kuru zemin görselleri",
+      "acceptance": "Objelerin ayak gölgesi zemine doğru oturur",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-08",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Kıyı ve su taban görselleri",
+      "deliverable": "Kıyı, nehir yatağı ve su içi stil seti",
+      "acceptance": "Toprak-su maskesi kopuk/ani köşe yaratmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-09",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Terrain transition mask atlası",
+      "deliverable": "Kenar, köşe, iç köşe, birleşme ve fallback maskeleri",
+      "acceptance": "En az 16 komşuluk kombinasyonunda boşluk yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE",
+        "G04-04",
+        "G04-06",
+        "G04-08"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-10",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Farklı zeminleri procedural yerleştirme",
+      "deliverable": "Seedli geometri-üstü visual variation; gameplay’den ayrı",
+      "acceptance": "Aynı seed aynı sanat yerleşimini verir; save boyutu artmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-11",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Tiling seam ve doku tekrar kontrolü",
+      "deliverable": "Döşeme görsel karşılaştırma gridleri",
+      "acceptance": "20×20 zeminde açık dikiş çizgisi gözükmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-12",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Dimetrik terrain cache entegrasyonu",
+      "deliverable": "Chunk cache, biome-base fallback, memory budget entegrasyonu",
+      "acceptance": "Doku gelmediğinde siyah boşluk/kaybolma yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE",
+        "G04-09",
+        "G04-10"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-13",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Yerleşim ve UI altında zemin okunabilirliği",
+      "deliverable": "Yerleşim çevresi sakinleştirme/kontrast maskesi",
+      "acceptance": "Şehir ikonlarının silueti arka plan tarafından yutulmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-14",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Zemin snapshot acceptance paketi",
+      "deliverable": "Harita 4 zoom × 3 bölge × 2 kamera hareketi",
+      "acceptance": "Ekranlar karşılaştırmalı kanıtla kabul edilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-15",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Savaş zeminine istenmeden yansıma regresyonu",
+      "deliverable": "main-ground-texture ortak referanslarının denetimi",
+      "acceptance": "Savaş alanı değişikliği özel onay olmadan etkilenmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-16",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Zemin yayın adayı ve rollback",
+      "deliverable": "Old/new screenshot, FPS, heap, cache grafikleri",
+      "acceptance": "Kullanıcı onayıyla zemine final acceptance verilir",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G03-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G04-GATE",
+      "phase": "G04",
+      "phase_title": "Zeminden sıfırdan dünya haritası",
+      "title": "Zeminden sıfırdan dünya haritası kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G04 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Yeni arazi maskeleri ve döşeme sistemi ile boşluğa düşmeyen harita",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-01",
+        "G04-02",
+        "G04-03",
+        "G04-04",
+        "G04-05",
+        "G04-06",
+        "G04-07",
+        "G04-08",
+        "G04-09",
+        "G04-10",
+        "G04-11",
+        "G04-12",
+        "G04-13",
+        "G04-14",
+        "G04-15",
+        "G04-16"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-01",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Doğal varlık sınıf kataloğu",
+      "deliverable": "Yapraklı, iğne yapraklı, çalı, kayalık, dağ/tepe, kıyı bitkileri",
+      "acceptance": "Her kategori için benzersiz asset ID ve minimum varyant sayısı kararlı",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-02",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Yapraklı ağaç 2D ailesi",
+      "deliverable": "Küçük, orta, büyük ve renk varyantları; şeffaf PNG",
+      "acceptance": "Eğimli zemine oturur, ağaç-kamera oranı tutarlı",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-03",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "İğne yapraklı ağaç 2D ailesi",
+      "deliverable": "İki boy ve en az üç siluet varyantı",
+      "acceptance": "Gövde pivotu değişmez; komşularla oran korunur",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-04",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Çalı, ot ve kır bitkileri",
+      "deliverable": "Düşük kontrastlı 2D çalı/dekor seti",
+      "acceptance": "Aşırı tekrarlarda moiré ve okunabilirlik sorunu yok",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-05",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Kaya ve taş 2D ailesi",
+      "deliverable": "Boy/siluet varyantları ve temas gölgesi",
+      "acceptance": "Köşe perspektifiyle uyumlu; taşlar havada durmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-06",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Yükselti/tepe silueti ve kenarları",
+      "deliverable": "Hills/mountains 2D görsel dili",
+      "acceptance": "Kuzey-güney en-boy oranı düzenli; okunabilirlik artar",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-07",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Doğal oluşum gölge katmanları",
+      "deliverable": "Shadow decals ve optik açı profili",
+      "acceptance": "Aydınlatma yönü tüm doğal setlerde aynı",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE",
+        "G05-02",
+        "G05-04"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-08",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Anchor tabanlı orman dağılımını mevcut koda bağla",
+      "deliverable": "AnchorSpatialIndex; seed ve yoğunluk parametreleri",
+      "acceptance": "Aynı seed altında bitki noktası stabil; movement değişmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE",
+        "G05-02",
+        "G05-03"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-09",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Orman kenarı ve küme kompozisyonu",
+      "deliverable": "Yoğun orman, seyrek orman, açıklık, yol kenarı şablonları",
+      "acceptance": "Ağaç kümeleri doğal dağılıyor, yol/şehir üzerine taşmıyor",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE",
+        "G05-08"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-10",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Depth-sort ve sprite overlap testleri",
+      "deliverable": "Gövde ayak noktası, canopy depth, selection overlay",
+      "acceptance": "Arkada duran nesne doğru kapanır; oyuncu işareti kaybolmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-11",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Yakın/uzak LOD ve yoğunluk kontrolü",
+      "deliverable": "Minimum-orta-yüksek detay için varlık altkümeleri",
+      "acceptance": "LOD değişiminde gözle görünür pop-in sınırlandırılır",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-12",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Doğa ve zemin pilot kompozisyon testi",
+      "deliverable": "Ağaç+taş+çalı+zemin 3 örnek kompozisyon",
+      "acceptance": "Siluet, renk, temas gölgesi tek sanat diliyle kabul edilir",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-13",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Doğa optimizasyon ve final gate",
+      "deliverable": "FPS/heap ve screenshot kıyası",
+      "acceptance": "Dünya gezerken artış/çöküş yok ve görsel onay var",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G04-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G05-GATE",
+      "phase": "G05",
+      "phase_title": "Doğal çevre ve topoğrafik görsel set",
+      "title": "Doğal çevre ve topoğrafik görsel set kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G05 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Siluet ve zemine oturuş tutarlı, ölçeğe göre LOD var",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-01",
+        "G05-02",
+        "G05-03",
+        "G05-04",
+        "G05-05",
+        "G05-06",
+        "G05-07",
+        "G05-08",
+        "G05-09",
+        "G05-10",
+        "G05-11",
+        "G05-12",
+        "G05-13"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-01",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Road ve river veri kaynaklarını koruma sözleşmesi",
+      "deliverable": "Orijinal yol/nehir polylineleri, seed, tile koordinatı eşleştirme",
+      "acceptance": "Rota değiştirmeden yalnız sunum yenilenir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-02",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Ana yol 2D doku/decal seti",
+      "deliverable": "Toprak taş döşeli yol, iz, kenar ve birleşim setleri",
+      "acceptance": "Eğimli dimetrik yolda kesinti ve zebra seam yok",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-03",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Ara yol/patika seti",
+      "deliverable": "Dar ticaret ve köy yolları, geçiş bankları",
+      "acceptance": "Yol genişliği zoomla tutarlı, diğer katman üstüne yanlış çıkmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-04",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Köprü ve geçiş görselleri",
+      "deliverable": "Ahşap/taş geçiş, su üstü gölge ve abutment",
+      "acceptance": "Köprü nehirle doğru z-order ve perspektifte çalışır",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-05",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Nehir kıyı ve dere ağzı",
+      "deliverable": "Su kenarı, sığlık, kavis ve köşe görselleri",
+      "acceptance": "Kıyı kuşağı boş bırakmaz; nehir kara üstünde taşmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-06",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Liman pasifliği ve deniz kapsamını ayır",
+      "deliverable": "Mevcut port_area pasif; harita su gösterimi ayrı karardır",
+      "acceptance": "Liman görseli açılması yeni gameplay limanı etkinleştirmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-07",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Path-layer görüntü katmanını yeniden bağla",
+      "deliverable": "RoadBands/RiverBands 2D asset adaptörleri",
+      "acceptance": "Yol bitimi tile sınırına takılmaz; tıklama hedefi bozulmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE",
+        "G06-02",
+        "G06-04",
+        "G06-05"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-08",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Sınırlar ve devlet renkleri şeffaf overlay",
+      "deliverable": "Faction owner colour, border readability kartı",
+      "acceptance": "Owner ID değişmeden sınır okunur; fonksiyona müdahale yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-09",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Yürüyüş rotası, hedef ve seçme işaretleri",
+      "deliverable": "Selection ring, destination path, route marker 2D atlası",
+      "acceptance": "Koyu/aydınlık zeminde ayırt edilebilir",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-10",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Fog of war görünümü",
+      "deliverable": "Keşif, görünür ve kapalı alan renk/opacity kuralları",
+      "acceptance": "Fog sadece maskedir, bölge sahipliği veya keşif verisini bozmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-11",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Harita işaretleri, POI ikon aileleri",
+      "deliverable": "Kamp, ticaret, tehlike, görev ve etkinlik ikonu setleri",
+      "acceptance": "Her POI işlevi simgeyle tanınıyor, ikon çakışmıyor",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-12",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Yol/su/kıyı pilot haritası",
+      "deliverable": "Köprü, iki yerleşim ve kıyı içeren QA sahnesi",
+      "acceptance": "Zoom/LOD ve label hizalaması kabul edildi",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-13",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Yol-nehir-sınır final gate",
+      "deliverable": "Regresyon ve performans kıyas paketi",
+      "acceptance": "Kayma, boşluk ve tıklama problemi yok",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G05-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G06-GATE",
+      "phase": "G06",
+      "phase_title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri",
+      "title": "Yollar, nehirler, kıyılar, geçişler ve harita işaretleri kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G06 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Yollar/nehirler yerleşimler ve oyuncu hareketiyle hizalı",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-01",
+        "G06-02",
+        "G06-03",
+        "G06-04",
+        "G06-05",
+        "G06-06",
+        "G06-07",
+        "G06-08",
+        "G06-09",
+        "G06-10",
+        "G06-11",
+        "G06-12",
+        "G06-13"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-01",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Settlement tip/tier/role kaynak envanteri",
+      "deliverable": "Town, village, fort, capital ve diğer mevcut tür eşleştirme",
+      "acceptance": "Var olmayan yerleşim türü codebase’e dayatılmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-02",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya haritası köy ikonu ailesi",
+      "deliverable": "Küçük/orta/büyük köy 2D siluetleri",
+      "acceptance": "Zoom 0.5’te okunur ve asla bina sahnesi sanılmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-03",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya haritası kasaba ikonu ailesi",
+      "deliverable": "Kasaba/ticaret kasabası görünüm ailesi",
+      "acceptance": "Siluet köyden ve büyük şehirden açık ayırt edilir",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-04",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya haritası şehir ikonu ailesi",
+      "deliverable": "Kent/büyük şehir/başkent varyantları",
+      "acceptance": "Boy değişimi gameplay nüfus verisini değiştirmez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-05",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya haritası kale ikon seti",
+      "deliverable": "Hisar/kale/stratejik garnizon ikonları",
+      "acceptance": "Kale simgesinin anchor ve yönü her koşulda tutarlı",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-06",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Sahiplik ve fraksiyon teması",
+      "deliverable": "Fraksiyon renk işareti, arma ve ele geçirme durumu",
+      "acceptance": "Sahiplik değişince görünüm güncellenir; save’de korunur",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-07",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Yerleşim boyutları ve derinlik tablosu",
+      "deliverable": "Footprint, pivot, selection, label anchor değerleri",
+      "acceptance": "Harita üzerinde araçlar ve yollarla overlap kontrollü",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-08",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Yerleşim çevresi kompozisyonu",
+      "deliverable": "Yol bağlantısı, küçük evler, tarla, ağaç seyrekliği",
+      "acceptance": "Her şehir rastgele boşluğa bırakılmaz; kıyı/orman taşması yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-09",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Sprite selection ve marker çarpışma önlemleri",
+      "deliverable": "Zoom bazlı label offset, hitbox ve marker z-order",
+      "acceptance": "Yakın yerleşimlerde oyuncu seçimi doğru hedefi bulur",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-10",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Aynı görsellerin çok şehirde tekrar kullanım testi",
+      "deliverable": "10 yerleşim 3 zoom 5 theme matrisi",
+      "acceptance": "Özel isim/şehir kodu gerekiyorsa veriyle gelir, kopya PNG ile değil",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-11",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "İkon paket entegrasyonu ve eksik fallback",
+      "deliverable": "Registry ile yeni dünya ikonlarını gösterme",
+      "acceptance": "Bir ikon eksikse güvenli fallback ile oyun devam eder",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-12",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya yerleşim sistemi onayı",
+      "deliverable": "Örnek farklı devletler ve kıyı/dağ koşulları",
+      "acceptance": "Kullanıcı genel dünya estetiğini onaylar",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G06-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G07-GATE",
+      "phase": "G07",
+      "phase_title": "Dünya haritası yerleşim ve POI yapıları",
+      "title": "Dünya haritası yerleşim ve POI yapıları kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G07 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Farklı büyüklük ve devletlerde doğru harita simgesi görünür",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-01",
+        "G07-02",
+        "G07-03",
+        "G07-04",
+        "G07-05",
+        "G07-06",
+        "G07-07",
+        "G07-08",
+        "G07-09",
+        "G07-10",
+        "G07-11",
+        "G07-12"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-01",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy ve kasaba ekranının mevcut varlığını doğrula",
+      "deliverable": "Mevcut oyun akışı/şehir ekranıyla sınır analizi",
+      "acceptance": "Olmayan bir köy iç sahnesi mevcutmuş gibi gösterilmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-02",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy için sahne veri modeli önerisi",
+      "deliverable": "base, propSets, populationTier, economyType, placementSlots",
+      "acceptance": "City V2 verisinin taşıdığı bilgilerle çelişmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-03",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy temel arazi sahnesi 2D",
+      "deliverable": "Yol ve meydan bırakılmış temiz base PNG",
+      "acceptance": "Yapılar olmadan tek başına kabul edilir; kritik alanlar dolu değil",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-04",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Fakir köy 2D bina seti",
+      "deliverable": "Kerpiç/ahşap küçük ev, depo, eklenti",
+      "acceptance": "Kamera ve gölge birliği; köy tipini okunur kılar",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-05",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Standart köy 2D yapı seti",
+      "deliverable": "Orta halli ev, küçük ahır, fırın/ambar görselleri",
+      "acceptance": "Kapladığı alan tanımlı slotlara uyumlu",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-06",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Zengin/ticaret köyü varyantı",
+      "deliverable": "Daha büyük ev, han, pazaryeri ve cephe varyantı",
+      "acceptance": "Varlık sayısı arttığında görsel yığılma olmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-07",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy üretim meslek dekorları",
+      "deliverable": "Tarım, ormancılık, taş işçiliği, madencilik vb. yalnız mevcut veriyle uygunluk",
+      "acceptance": "Ekonomi rolüyle uyumsuz rastgele görünüm yok",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-08",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy çevresi ve bahçe/parsel düzenleyici",
+      "deliverable": "Yol, su, çit, tarla 2D prop yerleştirme",
+      "acceptance": "Kompozisyon her seedde geçilebilir ve okunabilir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-09",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Kasaba yoğunluk varyantı",
+      "deliverable": "Köyden kademeli kasabaya geçiş 2D paket",
+      "acceptance": "Büyüdükçe evlerin orantısı değişmez ve sahne patlamaz",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-10",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy varlık görünürlük bağlayıcısı",
+      "deliverable": "Ekonomi/büyüklük/owner → görsel set mapping",
+      "acceptance": "Büyüklük değişince gameplay state bozulmadan görsel değişir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-11",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy hotspot ve servis kontrolü",
+      "deliverable": "Görüntü ve varsa kullanılabilir eylem alanları tutarlılığı",
+      "acceptance": "Her hotspot gerçek eylem açar veya kontrollü pasiftir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-12",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy aileleri görsel kalite kapısı",
+      "deliverable": "Fakir/standart/zengin × en az 2 yerleşim kıyası",
+      "acceptance": "Her varyant aynı sanat evreninden gibi görünür",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G07-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G08-GATE",
+      "phase": "G08",
+      "phase_title": "Köy, küçük yerleşim ve kasaba iç sahneleri",
+      "title": "Köy, küçük yerleşim ve kasaba iç sahneleri kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G08 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Köy büyüklüğü ve üretim rolü aynı setten varyant çıkarıyor",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-01",
+        "G08-02",
+        "G08-03",
+        "G08-04",
+        "G08-05",
+        "G08-06",
+        "G08-07",
+        "G08-08",
+        "G08-09",
+        "G08-10",
+        "G08-11",
+        "G08-12"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-01",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "City V2 area ve bina havuzlarını dondur",
+      "deliverable": "inner, trade, caravan, housing, health, production, food, culture ve pasif alan listesi",
+      "acceptance": "Mevcut area ID korunur; askerî/liman aktif edilmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-02",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Şehir sahnesi kadraj ve temel koordinat tasarımı",
+      "deliverable": "Base 2D sahne ölçü oranı ve yüzdelik hotspot hizalama kartı",
+      "acceptance": "Ekran resize sonrası hotspot doğru yere düşer",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-03",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Boş ana şehir sahnesi 2D",
+      "deliverable": "Arazi, sur/topoğrafya ve ana yol; değişken binalardan ayrılmış base",
+      "acceptance": "Base içindeki değişken yapılar overlayleri engellemez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-04",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "İç Kale sabit 2D bütünlük seti",
+      "deliverable": "Sur, saray, kadılık, cami, medrese, defterhane, reisülküttab, bostancılar",
+      "acceptance": "Tek sabit tam dolu alana eksiksiz ve tutarlı oturur",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-05",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Ticaret alanı 2D overlay seti",
+      "deliverable": "Pazar, bedesten, lonca konağı, gümrük",
+      "acceptance": "Tekten dörde dolulukta görünür; gizlenen bina hayalet kalmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-06",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Han/Kervan alanı 2D overlay seti",
+      "deliverable": "Han, tüccar hanı, kervansaray",
+      "acceptance": "Doluluğa göre kademeli açılır; görüntü hiyerarşisi açık",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-07",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Konut alanı 2D yapı/mahalle seti",
+      "deliverable": "Fakir, orta, zengin, üst sınıf konutlar",
+      "acceptance": "Mahalle tek ev hotspot’una indirgenmez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-08",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Sağlık alanı 2D seti",
+      "deliverable": "Darüşşifa, Büyük Hamam, Eczane",
+      "acceptance": "Her bina ilgili area ID ile doğru seçilir",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-09",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Üretim ve zanaat 2D seti",
+      "deliverable": "Tabakhane, demirci, marangoz, dokuma, boya, sabun, kağıt, mum, taş, nalbant",
+      "acceptance": "10 yapının ID karşılığı var; eski/çıkarılmış atölyeler geri gelmez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-10",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Gıda ve ikmal 2D seti",
+      "deliverable": "Fırın, değirmen, ambar, kasaphane, balıkhane",
+      "acceptance": "Kasaphane/balıkhane yanlış üretim alanında gösterilmez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-11",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Meydan ve kültür 2D seti",
+      "deliverable": "At Meydanı, panayır, anıtsal yapı",
+      "acceptance": "Kültür hotspot’u çalışır; mimari stil ayrı değil",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-12",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Pasif askerî ve liman alanı görünüm kuralı",
+      "deliverable": "Yalnız arka plan/boş alan, aktif servis yok",
+      "acceptance": "Görsel bulunması eylemi etkinleştirmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-13",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Altyapı/Kethüda görünmezlik kuralı",
+      "deliverable": "Kuyu/yol/kanal servisleri için dekor-vs-gameplay sınırı",
+      "acceptance": "Kethüda sistemi yanlışlıkla dev büyük bina sahnesi oluşturmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-14",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Alan doluluk 4 varyant kural motoru",
+      "deliverable": "empty/low/half/full → overlay set, sıradüzene uygun mapping",
+      "acceptance": "32+ alan-varyant kombinasyonu mapping ve fallback testi",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE",
+        "G09-01",
+        "G09-05",
+        "G09-07"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-15",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Tek bina overlay yerleşim koordinatları",
+      "deliverable": "Area-relative x/y, z, pivot, footprint, occlusion ve hitbox",
+      "acceptance": "İlgili binanın görseli alanın dışına taşmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-16",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Temel şehir 2D manifest loader entegrasyonu",
+      "deliverable": "baseImage ve overlays için current city-state bridge",
+      "acceptance": "Mevcut şehir veri modeli değişmeden gerçek PNG görünür",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE",
+        "G09-02",
+        "G09-03",
+        "G03-07"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-17",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Görünürlük değişimi ve bina inşa olayı",
+      "deliverable": "Bina kurulunca/gelişince overlay anlık ve reload sonrası değişir",
+      "acceptance": "Save/load öncesi ve sonrası yapı görünümü eşit",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE",
+        "G09-14",
+        "G09-16"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-18",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Hotspot sınırlarını görselle hizala",
+      "deliverable": "Yüzde koordinatlı area box ve overlay transform QA",
+      "acceptance": "5 viewport ve 4 doluluk varyantında yanlış tıklama yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE",
+        "G09-15",
+        "G09-16"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-19",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "İstanbul başlangıç profilini koru",
+      "deliverable": "İç kale tam, demirci+marangoz+tabakhane+sabun; kağıt bonusu görünümü",
+      "acceptance": "İstanbul istisnası sıradan şehre yanlış yansımaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-20",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Normal Osmanlı şehir çeşitliliği",
+      "deliverable": "Büyük/orta/küçük; sahne ve doluluk varyantları",
+      "acceptance": "Aynı PNG tek sahne kopyası hissi en aza iner",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-21",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Şehir UI ve overlay katman kontrast düzeni",
+      "deliverable": "Üst/alt toolbar, area label, servis paneli, modal hizalama",
+      "acceptance": "Sahnedeki dekor hotspotları kapatmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-22",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Eksik asset/bozuk manifest hata denetimi",
+      "deliverable": "City baseImage null ve missing-overlay warning işlemleri",
+      "acceptance": "Önceden hata üreten placeholder uyarıları yeni asset geldikçe azalır",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-23",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "İstanbul + 3 normal şehir kabul testleri",
+      "deliverable": "Small/medium/full + Istanbul, dört doluluk, inşa/save testleri",
+      "acceptance": "Başlangıç, yükseltme ve reload görüntüsü tutarlı",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE",
+        "G09-17",
+        "G09-18",
+        "G09-19"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-24",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Osmanlı şehir ailesi onayı",
+      "deliverable": "2D city family gallery, fark karşılaştırması, açık riskler",
+      "acceptance": "Kullanıcı kabul olmadan diğer faction setine başlanmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G08-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G09-GATE",
+      "phase": "G09",
+      "phase_title": "Osmanlı şehir V2 — sıfırdan 2D sahne",
+      "title": "Osmanlı şehir V2 — sıfırdan 2D sahne kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G09 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "İstanbul ve normal Osmanlı şehri eksiksiz 2D çalışıyor",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-01",
+        "G09-02",
+        "G09-03",
+        "G09-04",
+        "G09-05",
+        "G09-06",
+        "G09-07",
+        "G09-08",
+        "G09-09",
+        "G09-10",
+        "G09-11",
+        "G09-12",
+        "G09-13",
+        "G09-14",
+        "G09-15",
+        "G09-16",
+        "G09-17",
+        "G09-18",
+        "G09-19",
+        "G09-20",
+        "G09-21",
+        "G09-22",
+        "G09-23",
+        "G09-24"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-01",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Fort/stronghold veri rolünü belirle",
+      "deliverable": "Dünya kale ikonu ile iç kale sahnesi farklı kaynakları listesi",
+      "acceptance": "Savunma gameplay işlevi yeni görselle değişmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-02",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Sınır hisarı 2D seti",
+      "deliverable": "Küçük hisar, burç, kapı ve hendek görselleri",
+      "acceptance": "Siluet harita-kasaba ölçeğiyle uyumlu",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-03",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Orta kale 2D seti",
+      "deliverable": "Surlar, kule, avlu ve kapı varyantları",
+      "acceptance": "Toplam kütle ve yüzeyler aynı perspektif",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-04",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Büyük kale 2D seti",
+      "deliverable": "Çok kuleli büyük fort ve kapı kompleksi",
+      "acceptance": "Küçük kale sprite’ı sadece büyütülmüş gibi görünmez",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-05",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Sur/kapı modüler 2D köşe setleri",
+      "deliverable": "Düz, köşe, son, kapı/ara bağlantı PNG ailesi",
+      "acceptance": "90°/dimetrik döşeme bağlantıları açık seam yapmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-06",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Kale çevresi izometrik/gölge detayları",
+      "deliverable": "Köprü, bayrak, taş, yol, boş avlu çevresi",
+      "acceptance": "Önce kalenin ayak izi ve yol girişi doğru",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-07",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Kale hasar ve kuşatma durumu grafik kuralı",
+      "deliverable": "Tam/zarar görmüş/kuşatılmış durum overlaylerinin eşleşmesi",
+      "acceptance": "Gameplay var ise aktif, yoksa yalnız placeholder; yeni kural icat edilmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-08",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Landmark ve özel yapılar 2D listesi",
+      "deliverable": "Mevcut oyunda tanımlı kalıcı stratejik yapılara ait set",
+      "acceptance": "Özel yapılar sıradan köy alanlarına rastgele dağılmaz",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-09",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Bina çakışmaları ve katman çözümü",
+      "deliverable": "Wall AutoTile ve depth order ile asset konumu",
+      "acceptance": "Kale ve ağaç üst üste bindiğinde sıra mantıklı",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-10",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Kale hak ve özgünlük denetimi",
+      "deliverable": "3. taraf Stronghold/HoMM vb. eski kaynaklar ayrı tutulur",
+      "acceptance": "Final set sadece hakları belgeli yeni kaynaklardan oluşur",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-11",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "4 kale ölçeği kalite kapısı",
+      "deliverable": "Dünya zoom ve şehir yakın kadraj eşleştirme",
+      "acceptance": "Kale seti oyunda küçük/orta/büyük biçimde kabul edilir",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G09-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G10-GATE",
+      "phase": "G10",
+      "phase_title": "Kaleler, hisarlar, surlar ve özel yerleşimler",
+      "title": "Kaleler, hisarlar, surlar ve özel yerleşimler kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G10 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Kale büyüklüklerinde ölçek ve statü tutarlı",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-01",
+        "G10-02",
+        "G10-03",
+        "G10-04",
+        "G10-05",
+        "G10-06",
+        "G10-07",
+        "G10-08",
+        "G10-09",
+        "G10-10",
+        "G10-11"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-01",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Faction varyant kapsamını sınıflandır",
+      "deliverable": "5 oynanabilir şehir teması ve 19 owner dünya teması ayrımı",
+      "acceptance": "19 devlete ayrı tam şehir içi sahne üretme zorunluluğu uydurulmaz",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-02",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "HRE yapı dili 2D kartı ve seti",
+      "deliverable": "Taş/ahşap, kule, çatı, meydan alternatifleri",
+      "acceptance": "Osmanlı palette eklenmiş rozet değil, ayrı okunur şehir dili",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-03",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Venedik 2D şehir ve yerleşim seti",
+      "deliverable": "Su/taş cepheleri, dar sokak ve çatı varyantları",
+      "acceptance": "Su görünümü var; pasif liman gameplay’i yanlış etkin değil",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-04",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Polonya 2D şehir ve köy seti",
+      "deliverable": "Taş/ahşap gövde, savunma ve tarımsal tema",
+      "acceptance": "Diğer fraksiyonlardan aynı ölçekle ayrılır",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-05",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "İspanya 2D şehir ve köy seti",
+      "deliverable": "Açık sıva, çatı, meydan ve sınır yapıları",
+      "acceptance": "Ortak dünya gölgesiyle çelişmez",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-06",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "19 devlet için dünya ikon tema ailesi",
+      "deliverable": "World owner theme/color; ikon varyasyon minimum seti",
+      "acceptance": "OwnerID eşleşmeleri doğru; özel şehir sahnesi olmayan devletler fallback alır",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-07",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Bölgesel iklim ve mimari çeşitlilik kararı",
+      "deliverable": "Tarihsel/iklim referansına bağlı temel varyantlar",
+      "acceptance": "Görsel biome ile gameplay biome arasındaki sınır korunur",
+      "owner": "ORTAK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-08",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Bütün theme manifestleri ve fallback",
+      "deliverable": "city-scene-defs faction, assetRoot, overlays mapping",
+      "acceptance": "Eksik theme varsayılan dostu fallback; crash yok",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-09",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Kültürler arası ölçü ve ışık denetimi",
+      "deliverable": "Aynı harita üzerinde dört örnek yerleşim",
+      "acceptance": "Hiçbiri daha büyük/soluk/yabancı sanat tarzı görünmez",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-10",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Bölgesel sanat lisans/izleme kontrolü",
+      "deliverable": "Her yeni paket için hak ve revizyon kaydı",
+      "acceptance": "Şüpheli kaynağın görseli kullanılmaz",
+      "owner": "ORTAK",
+      "priority": "P2",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-11",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Dört yeni şehir ailesi onayı",
+      "deliverable": "Faction referans karşılaştırma gallery",
+      "acceptance": "Aynı standardın tüm tema genişlemesi kabul edilir",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G10-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G11-GATE",
+      "phase": "G11",
+      "phase_title": "Diğer devletler ve bölgesel görsel çeşitlilik",
+      "title": "Diğer devletler ve bölgesel görsel çeşitlilik kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G11 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "HRE, Venedik, Polonya, İspanya ve ek dünya siluetleri uyumlu",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-01",
+        "G11-02",
+        "G11-03",
+        "G11-04",
+        "G11-05",
+        "G11-06",
+        "G11-07",
+        "G11-08",
+        "G11-09",
+        "G11-10",
+        "G11-11"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-01",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş zemin kaynaklarını world zeminden ayır",
+      "deliverable": "Battle screen ile world texture paylaşımlarını profil altında kontrol et",
+      "acceptance": "Savaş zemini güncellemesi map’i istemeden bozmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-02",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş çim/toprak/çamur 2D arkaplan seti",
+      "deliverable": "Taktik arena texture ve yoğunluk maskeleri",
+      "acceptance": "Placeholder askerler zeminde kaybolmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-03",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş çevre engelleri ve dekoru",
+      "deliverable": "Kaya, ağaç, siper, yıkıntı setleri; eski gameplay engel verisiyle mapping",
+      "acceptance": "Görsellik yeni collision kuralı uydurmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-04",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş alanı ışık/kontrast profili",
+      "deliverable": "Savaş kamerasına özgü sadeleştirilmiş sanat kartı",
+      "acceptance": "Yüksek asker yoğunluğunda arka plan kalabalığı azalır",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-05",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Sektör geçişi zemin bütünlüğü",
+      "deliverable": "Phaser sektör görünümü için arka plan swap ve parallax kuralı",
+      "acceptance": "Sektör değişiminde zemin kaymaz veya sıfırlanmaz",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-06",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Start ekranı, menü ve loading görsel seti",
+      "deliverable": "Yeni 2D arka plan ve arayüz bileşenleri",
+      "acceptance": "Start→map akışını engellemez ve yavaşlatmaz",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-07",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "HUD görsel dili ve ikonografi",
+      "deliverable": "Kaynak, gün, para, moral, erzak, görev ve uyarı simgeleri",
+      "acceptance": "Koyu/açık ortamda metin kontrastı korunur",
+      "owner": "GORSEL",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-08",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Modal ve panel çerçeve sistemi",
+      "deliverable": "Şehir/kontrat/diplomasi/kayıt/yardım kartları ve border seti",
+      "acceptance": "İçerik yerleşimi PNG sınırlarıyla çakışmaz",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-09",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Harita label/tooltip stilleri",
+      "deliverable": "Yerleşim adları, eyalet etiketi, hover ve seçili katman",
+      "acceptance": "Etiket okunur, ekran kenarı taşması önlenir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-10",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Hava durumu ve atmosferde görsel karar",
+      "deliverable": "Kapalı olan efektlerin tekrar aktif olup olmayacağı kullanıcı kararı",
+      "acceptance": "DEFAULT kapalıyken görsel ayar performans kaybı üretmez",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-11",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Mevcut VFXlerin 2D yenileme kuralı",
+      "deliverable": "Toz, yağmur, ateş, duman, parçacık sanat seti; asker sprite hariç",
+      "acceptance": "Etkiler sadece yetkili sahnede görünür",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-12",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Menü, şehir ve map responsive UI kontrolü",
+      "deliverable": "En az 3 ekran boyutu, klavye odağı, pointer erişimi",
+      "acceptance": "Hiçbir hotspot/panel görünmez veya erişilemez hâle gelmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-13",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş arayüzü ve görünürlük testi",
+      "deliverable": "300 placeholder sınır senaryosu için zemin+HUD readability",
+      "acceptance": "Savaş ikonu, düşman/oyuncu ayrımı açık kalır",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-14",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş zemini/UI final onayı",
+      "deliverable": "Placeholder askerlerle battle→aftermath→map regresyonu",
+      "acceptance": "Yeni sanat sistemi normal oyun akışını bozmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G11-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G12-GATE",
+      "phase": "G12",
+      "phase_title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ",
+      "title": "Savaş alanı zemini, arayüz ve görsel efektler — ASKER HARİÇ kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G12 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Savaşın arka planı ve UI tüm sistemle bütün; asker placeholder",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-01",
+        "G12-02",
+        "G12-03",
+        "G12-04",
+        "G12-05",
+        "G12-06",
+        "G12-07",
+        "G12-08",
+        "G12-09",
+        "G12-10",
+        "G12-11",
+        "G12-12",
+        "G12-13",
+        "G12-14"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-01",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Tam ekran matrisi oluştur",
+      "deliverable": "World/city/village/fort/battle background/UI ekran listesi",
+      "acceptance": "Her ekran için referans seed, viewpoint, phase, expected asset listesi var",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-02",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Golden kıyas fark raporunu çalıştır",
+      "deliverable": "Eski/yeni fark, kasıtlı değişiklik, kesilen nesne, seam listesi",
+      "acceptance": "Her piksel farkını bug saymayan mask/tolerans kuralları var",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-03",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Kırık asset/missing manifest bul",
+      "deliverable": "Gecikmiş PNG, 404, bozuk JSON, unutulmuş IDs taraması",
+      "acceptance": "Fatal asset error = 0; fallback olanlar açık issue ile listeli",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-04",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Görsel semantik tutarlılığı testi",
+      "deliverable": "owner, tier, building, visibility, quest marker, fog ve save kontrolü",
+      "acceptance": "Görsel sadece doğru oyun durumunda görünüyor",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-05",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Harita uzun panning/zoom testi",
+      "deliverable": "Aynı seed için 60s idle ve uzun pan, farklı zoomlar",
+      "acceptance": "Frame spikes ve GC karşılaştırmalı raporlu; yeni regresyon yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-06",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Düşük/orta/yüksek cihaz profili testi",
+      "deliverable": "Chrome/Edge/Firefox; RAM/cache/decode ölçümü",
+      "acceptance": "Sayısal eşikler gerçek baseline sonrası kilitlenir",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-07",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Kamera ve sprite anchor sapma denetimi",
+      "deliverable": "Sprite pivot farkının zoom/scroll aralığında piksel ölçümü",
+      "acceptance": "Doğru dünya tile pozisyonundan anlamlı kayma yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-08",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Şehir responsive hotspot ve alan doluluk tekrar testi",
+      "deliverable": "3 viewport, 4 fill, 5 faction; mümkün kombinasyon matrisi",
+      "acceptance": "Tıklama hedefi kaymaz, yapı görünürlüğü tutarlı",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-09",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Üretim log ve provenance tamamlık taraması",
+      "deliverable": "Yayın asset registry hash, author, license, revision alanları",
+      "acceptance": "Lisans veya üretim kaynağı boş runtime asset yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-10",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Deterministik üretim ve art cache uyumunu test et",
+      "deliverable": "Seed, asset version, loader cache, save visual state",
+      "acceptance": "Yeni asset versiyonu eski save’i değiştirmez",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-11",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Asset boyutu ve first meaningful frame optimizasyonu",
+      "deliverable": "Atlas, lazy loading, low detail preview ve cache budget",
+      "acceptance": "İlk açılışta siyah harita/uzun placeholder kilitlenmesi yok",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-12",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Sahne eksiklerinde fallback ve rollback prova",
+      "deliverable": "Silinen dosya, bozuk atlas, temassız ağ senaryoları",
+      "acceptance": "Oyun state bozulmadan güvenli legacy / placeholder görünüme döner",
+      "owner": "TEKNIK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-13",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Kullanıcıya tam görsel galeri ve açık nokta listesi",
+      "deliverable": "Alan/faction/zoom karşılaştırma albümü ve riske göre hatalar",
+      "acceptance": "Nihai karar için tüm bağımlı parçalar yan yana görülebilir",
+      "owner": "ORTAK",
+      "priority": "P1",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-14",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Görsel V1 release öncesi karar kapısı",
+      "deliverable": "GO/NO-GO; kritik kusur 0, açık P2 listesi",
+      "acceptance": "Kullanıcı açıkça kabul etmeden VIS-14 asker fazı açılmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G12-GATE",
+        "G13-01",
+        "G13-03",
+        "G13-04",
+        "G13-08"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G13-GATE",
+      "phase": "G13",
+      "phase_title": "Tam görsel kalite, performans ve yayın kabulü",
+      "title": "Tam görsel kalite, performans ve yayın kabulü kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G13 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Release öncesi 2D görsel sistem tek tek ve topluca kabul edilmiş",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "PLANLANDI",
+      "dependencies": [
+        "G13-01",
+        "G13-02",
+        "G13-03",
+        "G13-04",
+        "G13-05",
+        "G13-06",
+        "G13-07",
+        "G13-08",
+        "G13-09",
+        "G13-10",
+        "G13-11",
+        "G13-12",
+        "G13-13",
+        "G13-14"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-01",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker görsel hedefi ve teknik karar oturumu",
+      "deliverable": "Tam atlas/modüler/hibrit seçeneklerini 2D olarak karşılaştır",
+      "acceptance": "Önceki oyun/asker mantığı korunur; karar kullanıcı onaylı",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-02",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker kimlik ve tarihsel ekipman standardı",
+      "deliverable": "Faksiyon, sınıf, kıyafet, silah, miğfer matrisi",
+      "acceptance": "Tarihsel tutarsızlık ve kimlik sapması açık kontrol",
+      "owner": "ORTAK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-03",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker 2D yön ve hareket kare sözleşmesi",
+      "deliverable": "Yürüyüş/saldırı/ölüm ve yön/foot lock kuralları",
+      "acceptance": "Aynı karakterin silueti her animasyonda korunur",
+      "owner": "ORTAK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-04",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "İlk 2D asker pilotu",
+      "deliverable": "Tek asker sınıfı, bir ekipman varyantı, bir animasyon grubu",
+      "acceptance": "Üretim önizlemesinde kol/bacak fazları kesintisiz",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-05",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "2D modüler sprite/atlas kararı ve prototipi",
+      "deliverable": "SoldierContainer ile kontrol edilebilir atlas katmanları",
+      "acceptance": "Debug F10 yerine aktif oyun yolunda tutarlı görünüm",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-06",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker havuzu ve draw-call yükünü ölç",
+      "deliverable": "150+150 asker / 300 görünür hedefi, layer bütçesi",
+      "acceptance": "Sonuçlar gerçek tarayıcı FPS ve bellek loguyla kıyaslı",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-07",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Birlik sınıfları ve ekipman görsellerini sırayla genişlet",
+      "deliverable": "Piyade, okçu, süvari, silah, kalkan ve zırh 2D aileleri",
+      "acceptance": "Her sınıf aynı animasyon/ölçek sözleşmesine uyar",
+      "owner": "GORSEL",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-08",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Çarpışma/savaş semantiği ve animasyon farkları regresyonu",
+      "deliverable": "Ordular, komutlar, sonuç ve save state ile sprite ayrımı",
+      "acceptance": "Görsel değişim savaştaki hasar ve sonucu değiştirmez",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-09",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker sprite telif/performans/fallback kapanışı",
+      "deliverable": "Tüm atlas hak ve ID testi, düşük donanım doğrulama",
+      "acceptance": "Eksik animasyonda güvenli fallback, frame drop sınırları kabul",
+      "owner": "TEKNIK",
+      "priority": "P2",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-10",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "Asker dahil tam görsel sistem final onayı",
+      "deliverable": "En son oyun içi büyük savaş ve uzun kampanya görsel testleri",
+      "acceptance": "Yalnız kullanıcı onayı ile görsel master plan KAPANDI olur",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G13-GATE"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    },
+    {
+      "id": "G14-GATE",
+      "phase": "G14",
+      "phase_title": "ASKER GÖRSELLERİ — KESİN SON FAZ",
+      "title": "ASKER GÖRSELLERİ — KESİN SON FAZ kalite ve kullanıcı geçiş kapısı",
+      "deliverable": "G14 teslim özeti, test raporu, görsel kabul, açık risk ve rollback notu",
+      "acceptance": "Önceki tüm görsel kapılar bitmeden hiç başlanmaz",
+      "owner": "KARAR",
+      "priority": "KARAR",
+      "status": "EN_SON_BLOKLU",
+      "dependencies": [
+        "G14-01",
+        "G14-02",
+        "G14-03",
+        "G14-04",
+        "G14-05",
+        "G14-06",
+        "G14-07",
+        "G14-08",
+        "G14-09",
+        "G14-10"
+      ],
+      "evidence": "",
+      "commit": "",
+      "user_approval": "BEKLIYOR",
+      "notes": "Gate must be approved before dependent phase",
+      "source_ref": "https://github.com/zxc28tarik/FallOfCavalry"
+    }
+  ]
+}
