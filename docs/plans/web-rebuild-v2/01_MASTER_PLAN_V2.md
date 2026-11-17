@@ -27,7 +27,7 @@ Başarı; yalnız güzel bir ekran değil, **Start → World → Travel → City
 **ONAY BEKLER:** Nihai dünya 1648 tarihsel harita mı, alternatif kurgusal/static world mü, hibrit mi? Kullanıcının önceki erken modern Avrupa/Osmanlı dünya hedefi güçlü tasarım bağlamıdır, fakat eski veri silindiğinden temsil/geometri yöntemi otomatik onaylı sayılamaz. Öneri: **tarihsel esinli, onaylı sınırlar ve yerleşimlerle statik ana coğrafya + kontrollü procedural terrain/prop üretimi**. Kesin tarihsel doğruluk iddiası kaynak/provenance olmadan kurulmaz. Save eski world geometri göç kararı; Canvas/Phaser ana motor kararı; askeri/liman gameplay aktivasyonu; üretim atlas biçimi ve release/export kararı da ayrı kapıdır.
 
 ## 3. Yeni teknik mimari: dört otorite + üç görüntü bağlamı
-1. **GeographyWorld:** Onaylı kıyı/su/yer şekilleri, koordinat, yol/nehir graph, region/crossing. Üretilmiş desen değildir; küçük bir pilot bölge üzerinden doğrulanır.
+1. **GeographyWorld:** Onaylı kıyı/su/yer şekilleri, koordinat, yol/nehir graph, region/crossing. Üretilmiş desen değildir; **başlangıçtan itibaren dünya kapsamının tamamı için üretilir ve doğrulanır. Bölgesel dünya veri pilotu yapılmaz.**
 2. **Political/SettlementWorld:** factionId, provinceId, ownerId, settlementId, city tier, route graph, başlangıç/konum, tarihsel certainty. Siyasi sınırlar yalnızca görsel sprite ile tutulmaz.
 3. **Authoritative Runtime MapData:** js/world/map-data.js ile tipli layer ve save/worldRevision sözleşmesi; hareket, AI, şehir ekonomisi, path ve kampanya logic için tek okunacak otorite. Yeni dünyaya adapter ile bağlanır. SaveManager ağır PNG/veri içine base64 gömmez.
 4. **Presentation World V2:** Manifest + özgün 2D tile/atlas/decal/prop; seed + tile + assetRevision determinism; ayrı render/LOD/cache. State'i güncellemez.
@@ -62,11 +62,11 @@ V2 paketleri **eski 215+72 görevin üzerine eklenecek yeni 131 bağımsız iş 
 **Durum dağılımı:** KISMI_KANIT_MEVCUT: 4 · PLANLANDI: 96 · ONAY_BEKLIYOR: 25 · SON_FAZ_BLOKLU: 6. KISMI_KANIT_MEVCUT, kullanıcı kabulü veya faz kapanışı demek değildir.
 
 ## 5. Kritik yol / sıralama
-**Hemen:** K00 → K01 ve D00 → D01. Bu süre içinde G02 sanat kimliği tasarlanabilir; G03 dummy pilot sanatsal üretimi değil teknik bağlantıyı gösterir. Harita veri D01 ve G03 birlikte hazır olunca G04 zemin yapılır. G04 → G05 → G06 → G07 → G08 → G09 → G10 → G11 → G12 → Q00/G13 → G14.
+**Hemen:** K00 → K01 ve D00 → D01 (**tam dünya verisi; pilot yok**). Bu süre içinde G02 sanat kimliği tasarlanabilir; G03 dummy pilot sanatsal üretimi değil teknik bağlantıyı gösterir. Harita veri D01 ve G03 birlikte hazır olunca G04 zemin yapılır. G04 → G05 → G06 → G07 → G08 → G09 → G10 → G11 → G12 → Q00/G13 → G14.
 
 **Paralel:** O00 oyun mekanikleri K01 veri-fixture kanıtını geçince birden fazla küçük PR'da ilerler. Risk ve CI işi Q00 erken başlar; Q00 nihai kapısı G12/O00 bitince kapanır. Aynı fazın bağımsız kod/data/asset işi birbirini beklemeden işlenebilir; büyük faz kapıları öne çekilmez.
 
-**M1 Stabil başlangıç:** eski dünya silindikten sonraki gerçek oyun açılışı, save ve savaş döngüsü raporu. M2 Dünya veri pilotu: onaylı dünya türü/şema, küçük coğrafya ve MapData adaptörü. M3 2D pipeline: kendi PNG/registry/placement/validator browserda. M4 Görsel dünya: yeni zemin/doğa/su/yol/sınırlar + ikonlar. M5 Şehir: köy ve Osmanlı V2, İstanbul dahil. M6 Genişleme: kaleler, 4 medeniyet, battle bg+UI. M7 Art-freeze+RC: QA, performans ve GO/NO-GO. M8 Soldier **yalnız M7 kullanıcı kabulünden sonra**.
+**M1 Stabil başlangıç:** eski dünya silindikten sonraki gerçek oyun açılışı, save ve savaş döngüsü raporu. **M2 Tam dünya veri üretimi:** onaylı dünya türü/şema, kapsamın tamamında coğrafya + siyasi bölgeler + yerleşimler + yollar/nehirler + MapData adaptörü ve toplu kabul. Ara bölge/pilot dünya teslimi yoktur. M3 2D pipeline: kendi PNG/registry/placement/validator browserda. M4 Görsel dünya: yeni zemin/doğa/su/yol/sınırlar + ikonlar. M5 Şehir: köy ve Osmanlı V2, İstanbul dahil. M6 Genişleme: kaleler, 4 medeniyet, battle bg+UI. M7 Art-freeze+RC: QA, performans ve GO/NO-GO. M8 Soldier **yalnız M7 kullanıcı kabulünden sonra**.
 
 ## 6. K00–K01: kaynak ve gerçek oyun başlangıcı
 - Main commit, branch/PR borcu, 215/72 plan eşlemesi; yanlış eski kararların yanına superseded işareti; kanıt ve rollback standardı. GitHub doküman zorunluluğu.
@@ -76,9 +76,9 @@ V2 paketleri **eski 215+72 görevin üzerine eklenecek yeni 131 bağımsız iş 
 - Ölçüm: JS heap, frame p95, cache MB, texture decode, ilk etkileşime kadar, 3 viewport, ekran görüntüleri. Sayısal performans eşikleri mevcut ölçümden sonra netleştirilir.
 
 ## 7. D00–D01: haritayı sıfırdan, veri ve görsel olarak ayrıştır
-**Veri üretim yaklaşımı — karar önerisi:** Statik dünya coğrafyası + 17. yüzyıl fraksiyon/şehir/ana yolları katmanı; canlı politika/save bu veriye dayanır. Raster/vektör üretim yöntemi kanıt olmadan kilitlenmez. İstenirse kullanıcının seçtiği tarihsel/kurgusal/hibrit görünümün bütün oyun üzerindeki etkisi test edilir.
+**Veri üretim yaklaşımı — karar önerisi:** Statik dünya coğrafyası + 17. yüzyıl fraksiyon/şehir/ana yolları katmanı; canlı politika/save bu veriye dayanır. Raster/vektör üretim yöntemi kanıt olmadan kilitlenmez. **Kullanıcı kararı:** bu veri tabanı bölgesel bir pilotla başlamayacak; D00 kapsamı onaylandıktan sonra tam dünya veri kümesi hazırlanacaktır. İç denetim ve testler alt kümeleri örnekleyebilir, ama hiçbir alt küme dünya teslimi olarak kabul edilmez. İstenirse kullanıcının seçtiği tarihsel/kurgusal/hibrit görünümün bütün oyun üzerindeki etkisi test edilir.
 
-Pilot için: bir kara/deniz sınırı, iki devlet, bir şehir, bir köy, bir kale, bir yol, bir nehir, bir geçit, düz/engebeli zemin, kamera ve kayıt. Bu bir **test kapsamı örneği**, nihai dünya kompozisyonunu dayatan karar değildir.
+**Dünya veri üretim kuralı (KULLANICI KARARI, 18.11.2026):** **İlk dünya veri pilotu OLMAYACAK.** Seçilecek dünya kapsamı D00'da netleştirildikten sonra D01 bütün coğrafya, devlet/siyasi alanlar, yerleşimler, yol/nehir/geçit ağları ve MapData bağlantısını **tam dünya ölçeğinde** hazırlar. Bölgesel demo, pilot alan veya 'küçük bölgeyi yap → sonra büyüt' teslim stratejisi kullanılmaz. Teknik uygulama birden fazla PR/commit'e ayrılabilir; bunlar dünya kapsamını daraltan ara pilot ürün sayılmaz. Testler tüm veri üzerinde zorunludur; doğrulamada örnek noktalar seçilebilir ama **kapsam kabulü tam veri setini** değerlendirir.
 
 **Data contract:** worldId, worldRevision, projection, width/height/gridScale, sourceVersion, regions, politicalOwners, settlements stable ID, roadGraph, riverGraph, height/terrain/biome layers, fog, seed, checksum/provenance. Kıyı, owner ve gameplay erişilebilirliği birbirinin yerine kullanılmaz. Oyuncu spawn/world faction/şehir kimliği yeni MapData uyarlamasında stabil tutulur.
 
@@ -139,8 +139,8 @@ Pilot için: bir kara/deniz sınırı, iki devlet, bir şehir, bir köy, bir kal
 
 ## 14. İlk dört uygulama paketi — şimdi yürütülecek iş emri
 **İş A (K00+K01):** 322 dosya / güncel boot source, profesyonel tarayıcı smoke altyapısı, v1 görev farkı ve risk fişi; smoke console/network; yeni seed ile smoke kayıtları; Unity dışarıda. **Kabul:** E2E fatal=0 veya her hata açık etiketli; temel CSS/asset fallback.
-**İş B (D00):** Kullanıcıya *dünya veri/harita türü* için net tasarım ve maliyet karşılaştırması; önerilen statik tarihsel-esinli atlas vs kurgusal vs hibrit. **Kabul:** Karar kaydı ve source provenance.
-**İş C (D01):** Küçük world graph/map pilotu, stable IDs, MapData adapter + save fixture. **Kabul:** deterministic load, renderer, spawn, owner/road/river consistency, değişmez gameplay state.
+**İş B (D00):** Kullanıcıya *dünya veri/harita türü ve tam kapsamı* için net tasarım ve maliyet karşılaştırması; önerilen statik tarihsel-esinli atlas vs kurgusal vs hibrit. **Kabul:** Tek defada hedeflenen tam dünya kapsamının onaylı sınırı, karar kaydı ve source provenance.
+**İş C (D01):** **Doğrudan tam dünya veri seti**: tüm coğrafya, siyasi bölgeler, devletler, yerleşimler, yol/nehir/geçit ağları, stable IDs, MapData adapter, save fixture ve bütün dünya kapsam doğrulaması. **Pilot bölge yoktur. Kabul:** tam kapsam envanteri, deterministic load, renderer, spawn, owner/road/river consistency ve değişmez gameplay state.
 **İş D (G02+G03):** Dört sanat kartı + dummy art pipeline. **Kabul:** Kullanıcı görsel onayı ve ilk PNG'lerin üç görüntü bağlamında testli görünmesi.
 
 Sonraki ana paket **G04 grass/soil/rock first**, ardından G05 doğa. Pilot başarısızsa tüm varlık ailesi seri üretilmez.

@@ -14,6 +14,12 @@
 | QA8 | Lisans, provenance, dependency audit, build/export, release | Onaylı dağıtım ve güvenlik raporu |
 | QA9 | G13 kullanıcı GO; P0/P1 kalan hata=0; G14 kapı koşulu | GO/NO-GO imzalı kayıt |
 
+## 1A. Tam dünya verisi kabulü — pilot bölge yok
+- Dünya veri üretiminin ilk teslimi **seçilen kapsamın tamamını** kapsar; küçük bir coğrafya pilotuyla başlama veya ilerleyen aşamada genişletme kabul edilmez.
+- QA6 envanteri: dünya sınırı, kara/deniz, province/faction owner kapsamı, bütün şehir-köy-kale kayıtları, road/river/crossing referansları, sıfır orphan ID, sıfır eksik zorunlu katman, koordinat geçerliliği, deterministik checksum ve MapData yükleme.
+- Regresyon için örnek koordinatlara bakılabilir, fakat gate PASS **tüm dünya veri seti** taranmadan verilemez.
+- Tam dünyanın üretilmesi için birden fazla teknik commit/PR yapılması mümkündür; ara ürünler pilot dünya veya bitmiş harita olarak etiketlenmez.
+
 ## 2. Asgari tarayıcı senaryoları
 1. İlk açılış: dev ve production ayrı; HTTP404, console/pageerror, splash render, yüklenme ilerlemesi.
 2. Seçili fraksiyon → yeni seed → dünya: map veri alanları geçerli; prosedürel boot tarihsel atlas sanılmaz.

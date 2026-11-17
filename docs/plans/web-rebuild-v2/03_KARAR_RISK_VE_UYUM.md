@@ -9,12 +9,13 @@
 - K-06 Her yeni iş/plan/MD ve takip dosyası web GitHub'da kaynak ve PR ile saklanır.
 - K-07 Şehir V2 büyük alan: tek sabit tam dolu İç Kale; diğer alanlar empty/low/half/full; base + overlay + area hotspot.
 - K-08 İstanbul özel profile; Kethüda altyapı büyük bina gibi çizilmez; askerî/liman alanı etkinliği ayrıca karara bağlı.
+- **K-09 (18.11.2026, KESİN): İlk dünya veri pilotu OLMAYACAK.** D00'da sınırı ve kimliği onaylanan **dünya kapsamının tamamı** D01'de üretilecek. Küçük pilot bölge, yerel demo dünya veya önce bölgeyi yapıp sonra genişletme stratejisi kullanılmaz. İçte test örneklemesi ve aşamalı commit yapılabilir; bu tam kapsamlı teslim kuralını değiştirmez.
 
 ## B. İlerlemeyi durduran karar kapıları (TASARIM ÖNERİSİ / KULLANICI ONAYI BEKLİYOR)
 | Kod | Karar | Olası seçenekler | Öneri (onay değil) | Kapatılmadığında bloklanan |
 |---|---|---|---|---|
 | KR-DATA-01 | Nihai dünya kimliği | 1648 tarihsel esinli; statik kurgusal; hibrit | Orijinal lisanslı tarihsel iskelet + procedural görsel çeşitlilik | D00/D01 final |
-| KR-DATA-02 | Kaynak geodata otoritesi ve belirsizlik | editör tabanlı; harici lisanslı geodata; üretim scripti | Stable ID ve provenance kuralı ile küçük pilot | Dünya genel atlas |
+| KR-DATA-02 | Kaynak geodata otoritesi ve belirsizlik | editör tabanlı; harici lisanslı geodata; üretim scripti | Stable ID + provenance ile baştan tam kapsamlı dünya veri üretimi (pilot yok) | Dünya genel atlas |
 | KR-DATA-03 | Dünya grid ve paketleme | mevcut MapData adapter; yeni tile/chunk | Adapter + benchmark önce; kökten rewrite sonra | D01 tam |
 | KR-SAVE-01 | Eski dünya save'lerinin kaderi | uyumsuzluk ekranı; göç; reset | Açık uyumsuzluk bildirimi + sadece doğrulanabilir göç | Save release |
 | KR-ART-01 | Sanat dili, pilot görünümü | 4 referans kart | G02 kullanıcı onayı | Toplu 2D üretim |
@@ -33,7 +34,7 @@
 | ID | Risk | Şu an kanıt | Aksiyon / kapı |
 |---|---|---|---|
 | R01 | CI yeşil ama browser game black screen/boş dünya | Gerçek Playwright smoke yok | K01 browser E2E + screenshot |
-| R02 | Tarihsel harita ve sınırlar fiziksel olarak silindi | PR #61 | D00 kullanıcı atlas kararı + D01 orijinal yeni veri |
+| R02 | Tarihsel harita ve sınırlar fiziksel olarak silindi | PR #61 | D00 kullanıcı atlas kararı + D01 **pilot bölgesiz tam dünya veri üretimi** |
 | R03 | Eski save farklı dünya topolojisiyle yanlış yüklenebilir | Save göç testi yok | WorldRevision + migration/uyumsuzluk ekranı |
 | R04 | SpriteLoader boş manifest; asset dosyası kendi kendine görünmez | RenderManager'da inline manifestData:{} | G03 gerçek registry+pilot |
 | R05 | Şehir template baseImage:null | city-scene-defs | G09 base/overlay + QA |
