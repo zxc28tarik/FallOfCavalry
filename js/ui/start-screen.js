@@ -1,5 +1,6 @@
 import { FACTIONS } from '../constants.js';
 import * as utils from '../utils.js';
+import { createPlayerCharacter, defaultCharacterDraft } from '../systems/character-creation.js';
 
 const PLAYABLE_FACTIONS = FACTIONS.filter((faction) => faction?.playable !== false);
 
@@ -17,6 +18,7 @@ export default class StartScreen {
     this.loading = false;
     this.statusMessage = '';
     this.progressEl = null;
+    this.characterCultureTouched = false;
   }
 
   bind(dom) {
@@ -41,7 +43,12 @@ export default class StartScreen {
         this.setInfoMessage('Once sancak secmelisin.');
         return;
       }
-      await this.onStart?.({ faction, seed: this.readSeed() });
+      const creation = createPlayerCharacter(this.readCharacterDraft(), faction.id);
+      if (!creation.ok) {
+        this.setInfoMessage(creation.error);
+        return;
+      }
+      await this.onStart?.({ faction, seed: this.readSeed(), character: creation.character, startingModifiers: creation.startingModifiers });
     });
 
     this.dom.btnContinue?.addEventListener('click', async () => {
@@ -56,6 +63,12 @@ export default class StartScreen {
     });
 
     this.dom.seedInput?.addEventListener('input', () => this.refresh());
+    for (const input of [this.dom.characterNameInput, this.dom.characterCultureInput, this.dom.characterOriginInput, this.dom.characterFocusInput, this.dom.characterAgeInput]) {
+      input?.addEventListener('input', () => {
+        if (input === this.dom.characterCultureInput) this.characterCultureTouched = true;
+        this.refresh();
+      });
+    }
     this.dom.randomSeedBtn?.addEventListener('click', () => {
       const seed = this.randomSeed();
       if (this.dom.seedInput) this.dom.seedInput.value = String(seed);
@@ -64,6 +77,9 @@ export default class StartScreen {
 
     if (this.dom.seedInput) {
       this.dom.seedInput.value = String(this.state?.seed ?? 1337);
+    }
+    if (this.dom.characterNameInput && !this.dom.characterNameInput.value) {
+      this.dom.characterNameInput.value = 'Yeni Komutan';
     }
 
     this.refresh();
@@ -103,7 +119,37 @@ export default class StartScreen {
 
   selectFaction(id) {
     this.selectedId = id;
+    if (!this.characterCultureTouched && this.dom.characterCultureInput) {
+      this.dom.characterCultureInput.value = defaultCharacterDraft(id).cultureId;
+    }
     this.refresh();
+  }
+
+  readCharacterDraft() {
+    const defaults = defaultCharacterDraft(this.selectedId);
+    return {
+      name: this.dom.characterNameInput?.value ?? 'Yeni Komutan',
+      cultureId: this.dom.characterCultureInput?.value || defaults.cultureId,
+      originId: this.dom.characterOriginInput?.value || defaults.originId,
+      focusId: this.dom.characterFocusInput?.value || defaults.focusId,
+      ageGroup: this.dom.characterAgeInput?.value || defaults.ageGroup,
+    };
+  }
+
+  refreshCharacterPreview() {
+    const preview = this.dom.characterPreview;
+    if (!preview) return true;
+    const creation = createPlayerCharacter(this.readCharacterDraft(), this.selectedId);
+    if (!creation.ok) {
+      preview.textContent = creation.error;
+      return false;
+    }
+    const { character, startingModifiers } = creation;
+    const bestStats = Object.entries(character.stats).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const labels = { intelligence: 'Zekâ', observation: 'Gözlem', persuasion: 'İkna', leadership: 'Liderlik', command: 'Kumandanlık', trade: 'Ticaret', administration: 'Yönetim', courage: 'Cesaret', experience: 'Tecrübe' };
+    const strengths = bestStats.map(([key, value]) => labels[key] + ' ' + value).join(' | ');
+    preview.textContent = character.name + ' · ' + strengths + ' · Başlangıç etkisi: +' + startingModifiers.gold + ' altın, +' + startingModifiers.morale + ' moral, +' + startingModifiers.renown + ' şöhret';
+    return true;
   }
 
   refresh() {
@@ -119,7 +165,8 @@ export default class StartScreen {
     if (this.dom.selectedFactionDesc) this.dom.selectedFactionDesc.textContent = selected?.desc || '-';
     if (this.dom.selectedFactionDoc) this.dom.selectedFactionDoc.textContent = selected?.doctrine || '-';
     if (this.dom.selectedFactionArmy) this.dom.selectedFactionArmy.textContent = selected?.armyHint || '-';
-    if (this.dom.btnStart) this.dom.btnStart.disabled = this.loading || !selected;
+    const characterValid = this.refreshCharacterPreview();
+    if (this.dom.btnStart) this.dom.btnStart.disabled = this.loading || !selected || !characterValid;
 
     const hasSave = Boolean(this.saveSystem?.hasSave?.());
     if (this.dom.btnContinue) this.dom.btnContinue.disabled = this.loading || !hasSave;
