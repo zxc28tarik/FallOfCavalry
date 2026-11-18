@@ -3,6 +3,7 @@ import {
   CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
 } from '../systems/world-characters.js';
+import { getNamedCharacterState } from '../systems/named-character-state.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -416,6 +417,17 @@ export default class CityServicesUI {
     }
 
     const { person, age, relations } = profile;
+    // GeneratedPerson keeps the existing profile; only permanent named actors
+    // gain the independent by-value mutable state projection.
+    const current = person.kind === 'named'
+      ? getNamedCharacterState(this.state?.worldCharacters, npcId) : null;
+    const visibleStats = current?.stats ?? person.stats;
+    const visibleTraits = current?.traits ?? person.traits;
+    const visibleHistory = current?.history ?? person.history;
+    const loyalty = current?.currentLoyalty ?? person.loyalty;
+    const satisfaction = current?.satisfaction ?? person.satisfaction;
+    const reputation = current?.currentReputation ?? person.reputation;
+    const standing = current?.currentStanding ?? person.standing;
     const roleLabel = NPC_ROLE_LABELS[person.role] || person.role;
     const statusLabel = person.status === 'alive' ? 'Hayatta' : 'Ölü';
     const kindLabel = person.kind === 'named'
@@ -423,7 +435,7 @@ export default class CityServicesUI {
     const statRows = CHARACTER_STAT_KEYS.map((key) => `
       <div class="city-overview-row">
         <span>${escapeHtml(NPC_STAT_LABELS[key] || key)}</span>
-        <strong>${person.stats[key]}/100</strong>
+        <strong>${visibleStats[key]}/100</strong>
       </div>`).join('');
     const relationRows = relations.length ? relations.map((other) => `
       <div class="city-overview-row">
@@ -431,7 +443,7 @@ export default class CityServicesUI {
         <strong>${other.value > 0 ? '+' : ''}${other.value}</strong>
       </div>`).join('')
       : '<div class="text-sm opacity-70">Henüz kayıtlı kişisel ilişki yok.</div>';
-    const historyRows = person.history.length ? [...person.history].reverse().map((event) => {
+    const historyRows = visibleHistory.length ? [...visibleHistory].reverse().map((event) => {
       const typeText = event.type === 'created' ? 'Oluşturuldu'
         : event.type === 'promoted' ? 'Önem kazandı' : event.type === 'moved'
           ? 'Şehir değiştirdi' : 'Olay';
@@ -454,7 +466,7 @@ export default class CityServicesUI {
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Kişilik</div>
-          <div class="text-sm">${person.traits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
+          <div class="text-sm">${visibleTraits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yetenekler</div>
@@ -462,10 +474,10 @@ export default class CityServicesUI {
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Toplumsal durum</div>
-          <div class="city-overview-row"><span>Sadakat</span><strong>${person.loyalty}/100</strong></div>
-          <div class="city-overview-row"><span>Memnuniyet</span><strong>${person.satisfaction}/100</strong></div>
-          <div class="city-overview-row"><span>İtibar</span><strong>${person.reputation}/100</strong></div>
-          <div class="city-overview-row"><span>Konum</span><strong>${person.standing}/100</strong></div>
+          <div class="city-overview-row"><span>Sadakat</span><strong>${loyalty}/100</strong></div>
+          <div class="city-overview-row"><span>Memnuniyet</span><strong>${satisfaction}/100</strong></div>
+          <div class="city-overview-row"><span>İtibar</span><strong>${reputation}/100</strong></div>
+          <div class="city-overview-row"><span>Konum</span><strong>${standing}/100</strong></div>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Bilinen ilişkiler</div>
