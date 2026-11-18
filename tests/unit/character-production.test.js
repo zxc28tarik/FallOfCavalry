@@ -369,6 +369,41 @@ describe('Character System v2: source-based character production (WEB)', () => {
     }
   });
 
+  it('uses source-authored culture, never unapproved owner-derived or caller-supplied culture', () => {
+    const authored = [{
+      id: 'cultural-city', type: 'city', cultureId: 'venice',
+      ownerFactionId: 'ottoman',
+    }];
+    const state = {
+      seed: 1648, day: 2, map: { settlements: authored },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements: authored }),
+    };
+    const flow = new GameFlowManager(state);
+    const sources = flow.listWorldCharacterProductionSources();
+    expect(sources).toHaveLength(1);
+    expect(sources[0].cultureId).toBe('venice');
+    const untrustedInput = {
+      type: 'city', id: 'cultural-city', settlementId: 'cultural-city',
+      cultureId: 'ottoman', originFactionId: 'ottoman',
+    };
+    const produced = flow.previewWorldCharacterCandidates(untrustedInput);
+    expect(produced.source.cultureId).toBe('venice');
+    expect(produced.source.originFactionId).toBeNull();
+    expect(produced.candidates.every((person) => person.cultureId === 'venice')).toBe(true);
+    const changed = structuredClone(produced);
+    changed.source.cultureId = 'ottoman';
+    expect(flow.retainWorldCharacter(changed, changed.candidates[0].id)).toBe(false);
+    expect(flow.retainWorldCharacter(produced, produced.candidates[0].id)).toBeTruthy();
+    const unapproved = [{
+      id: 'no-culture', type: 'village', ownerFactionId: 'ottoman',
+    }];
+    const defaults = new GameFlowManager({
+      seed: 1648, day: 1, map: { settlements: unapproved },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements: unapproved }),
+    }).listWorldCharacterProductionSources();
+    expect(defaults[0].cultureId).toBe('generic');
+  });
+
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
     expect(() => produce(city, { count: 9 })).toThrow(RangeError);
     expect(() => produce(city, { count: 0 })).toThrow(RangeError);
