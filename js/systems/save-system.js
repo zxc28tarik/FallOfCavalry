@@ -4,6 +4,7 @@
  */
 
 import * as CONST from '../constants.js';
+import { normalizeWorldCharacters } from './world-characters.js';
 
 const MAX_NORMALIZED_BUILDINGS = 10000;
 
@@ -194,6 +195,7 @@ export class SaveSystem {
           factionId: typeof game?.playerParty?.factionId === 'string' ? game.playerParty.factionId : null,
         },
         roster: Array.isArray(game.roster) ? game.roster : [],
+        worldCharacters: normalizeWorldCharacters(game.worldCharacters),
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
         enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
         worldAi: game.worldAi && typeof game.worldAi === 'object' && !Array.isArray(game.worldAi) ? game.worldAi : { lastRespawnDay: 0, parties: [] },
