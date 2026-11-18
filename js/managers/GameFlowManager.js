@@ -17,6 +17,7 @@ import { getTrustedCharacterDefinitions } from '../systems/character-definitions
 import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
+import { changeNamedCharacterMetric, getNamedCharacterState } from '../systems/named-character-state.js';
 import {
   getCharacterSocialProfile, linkCharacterToExistingHouse,
   linkCharacterToExistingClique, linkExistingHouseToClique,
@@ -555,6 +556,25 @@ export class GameFlowManager {
     });
     if (done) this.state.characterSocial = social;
     return done;
+  }
+
+  /**
+   * V1.11: immutable authored CharacterDefinition remains separate from this
+   * mutable NamedCharacterState projection of the current campaign actor.
+   */
+  getWorldNamedCharacterState(characterId) {
+    return getNamedCharacterState(this.state?.worldCharacters, characterId);
+  }
+
+  /**
+   * Applies ONE explicitly reasoned event. No automatic leveling or change
+   * to the actor's origin, identity, office, family, religion or status.
+   */
+  changeWorldCharacterMetric(characterId, metric, value, { reason } = {}) {
+    return changeNamedCharacterMetric(this.state?.worldCharacters, characterId, {
+      metric, value, reason,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
   }
 
   applyMasterVolume(value) {
