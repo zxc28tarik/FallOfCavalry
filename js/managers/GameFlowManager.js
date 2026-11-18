@@ -355,22 +355,16 @@ export class GameFlowManager {
   previewWorldCharacterCandidates(source, {
     count = 2,
     firstSlot = 1,
-    registeredSources = [],
-    rolePolicy,
-    namePools,
   } = {}) {
     const settlements = this.state?.map?.settlements || [];
-    const currentSources = this.listWorldCharacterProductionSources();
     return produceCharacterCandidates({
       worldSeed: this.state?.seed,
       source,
       settlements,
-      registeredSources: [...currentSources, ...registeredSources],
+      registeredSources: this.listWorldCharacterProductionSources(),
       count,
       firstSlot,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
-      ...(rolePolicy ? { rolePolicy } : {}),
-      ...(namePools ? { namePools } : {}),
     });
   }
 
@@ -378,18 +372,13 @@ export class GameFlowManager {
    * An explicit story/event/recruitment decision retains one produced person.
    * This is registration as a world NamedCharacter(D), NOT party recruitment.
    */
-  retainWorldCharacter(production, characterId, {
-    registeredSources = [],
-    rolePolicy,
-    namePools,
-  } = {}) {
+  retainWorldCharacter(production, characterId) {
     if (!this.state?.worldCharacters) return false;
     return registerProducedCharacter(this.state.worldCharacters, production, characterId, {
       settlements: this.state?.map?.settlements || [],
-      registeredSources: [...this.listWorldCharacterProductionSources(), ...registeredSources],
+      registeredSources: this.listWorldCharacterProductionSources(),
+      expectedWorldSeed: this.state?.seed,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
-      ...(rolePolicy ? { rolePolicy } : {}),
-      ...(namePools ? { namePools } : {}),
     });
   }
 
