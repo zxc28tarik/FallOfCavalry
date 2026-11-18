@@ -42,7 +42,8 @@ export function discoverCharacterProductionSources(settlements = []) {
     const cityId = validPart(settlement?.id);
     if (!cityId) continue;
     const settlementType = typeof settlement?.type === 'string' ? settlement.type.toLowerCase() : '';
-    const sourceType = SETTLEMENT_SOURCE_TYPES[settlementType];
+    const sourceType = Object.hasOwn(SETTLEMENT_SOURCE_TYPES, settlementType)
+      ? SETTLEMENT_SOURCE_TYPES[settlementType] : null;
     // Culture is NOT a synonym for political owner. Only pass along an
     // explicitly authored, supported culture field; otherwise use 'generic'.
     const cultureId = typeof settlement?.cultureId === 'string'
