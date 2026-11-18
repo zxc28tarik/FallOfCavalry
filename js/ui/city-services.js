@@ -1,5 +1,8 @@
 import * as CONST from '../constants.js';
-import { getSettlementCharacters, NPC_ROLE_LABELS } from '../systems/world-characters.js';
+import {
+  CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
+  getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
+} from '../systems/world-characters.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -117,6 +120,10 @@ export default class CityServicesUI {
         this.onHeal?.(id);
       } else if (action === 'show-overview') {
         this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      } else if (action === 'open-npc') {
+        const isHere = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+          .some((person) => person.id === id);
+        if (isHere) this.currentView = { type: 'npc', npcId: id };
       } else if (action === 'open-service') {
         this.currentView = { type: 'service', serviceId: id, parcelId: btn.dataset.parcelId || null, buildingId: null };
       } else if (action === 'open-area') {
@@ -280,6 +287,11 @@ export default class CityServicesUI {
     const cityState = ensureSettlementCityState(this.currentSettlement);
     const target = this.getPanelBodyEl();
     if (!target || !cityState) return;
+
+    if (this.currentView?.type === 'npc') {
+      this.renderNpcProfile(this.currentView.npcId);
+      return;
+    }
 
     if (this.currentView?.type === 'service' && this.currentView.serviceId) {
       if (!canUseCityService(this.currentSettlement, this.currentView.serviceId)) {
