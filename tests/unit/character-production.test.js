@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GameFlowManager } from '../../js/managers/GameFlowManager.js';
 import {
   produceCharacterCandidates,
   registerProducedCharacter,
@@ -185,6 +186,27 @@ describe('Character System v2: source-based character production (WEB)', () => {
     const restored = restoreWorldCharacterSave(rows, { settlements });
     expect(restored.characters.some((person) => person.id === result.candidates[0].id)).toBe(false);
     expect(restored.characters).toHaveLength(8);
+  });
+
+  it('runs the production pipeline through the actual campaign manager without touching player units', () => {
+    const state = {
+      seed: 1648, day: 7, map: { settlements },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements }),
+    };
+    const manager = new GameFlowManager(state);
+    const before = state.worldCharacters.characters.length;
+    const proposal = manager.previewWorldCharacterCandidates(city, { count: 2 });
+    expect(state.worldCharacters.characters.length).toBe(before);
+    expect(proposal.candidates[0].history[0].day).toBe(7);
+    const chosen = manager.retainWorldCharacter(proposal, proposal.candidates[0].id);
+    expect(chosen.kind).toBe('named');
+    expect(chosen.importance).toBe('D');
+    expect(chosen.id).toBe(proposal.candidates[0].id);
+    expect(state.worldCharacters.characters.length).toBe(before + 1);
+    const saved = createWorldCharacterSave(state.worldCharacters, { seed: 1648, settlements });
+    expect(saved.format).toBe('seeded-delta-v1');
+    expect(saved.additions).toHaveLength(1);
+    expect(saved.overrides).toHaveLength(0);
   });
 
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
