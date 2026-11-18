@@ -13,6 +13,7 @@ import {
   serializeAllSettlementCityStates,
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
+import { normalizePlayerCharacter } from '../systems/character-creation.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -341,6 +342,7 @@ Esc close`,
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
+          character: normalizePlayerCharacter(playerParty?.character),
         },
         roster,
         enemies: enemyParties.map((e) => ({
@@ -436,6 +438,7 @@ Esc close`,
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
     playerParty.factionId = typeof p.factionId === 'string' ? p.factionId : CONST.FACTION.ID.PLAYER;
+    playerParty.character = normalizePlayerCharacter(p.character);
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
 
     const itemCatalog = this.game?.itemCatalog || [];
