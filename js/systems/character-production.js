@@ -222,7 +222,14 @@ export function registerProducedCharacter(roster, production, selectedId, {
     || !isRecord(production) || !Array.isArray(production.candidates)) return false;
   if (roster.characters.length >= MAX_WORLD_CHARACTERS) return false;
   bounded(day, 1, 10000000, 'registration day');
-  const source = readSource(production.source, settlements, registeredSources);
+  let source;
+  try {
+    source = readSource(production.source, settlements, registeredSources);
+  } catch {
+    // An expired or forged source cannot commit a character. Caller can show
+    // unavailability; the campaign roster must remain unchanged.
+    return false;
+  }
   if (production.revision !== CHARACTER_PRODUCTION_REVISION) return false;
   if (!Number.isSafeInteger(production.worldSeed) || production.worldSeed < 0) return false;
   const candidate = production.candidates.find((person) => person?.id === selectedId);
