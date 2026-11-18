@@ -181,17 +181,39 @@ async function main() {
       }) === true;
       const duplicate = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
       const after = g.state.worldCharacters.characters.length;
+      const membershipOk = g.gameFlowManager.addWorldCharacterBranchMembership(chosenId, 'trade_network', {
+        reason: 'Browser accepted trade affiliation',
+      }) === true;
+      const assignmentOk = g.gameFlowManager.startWorldCharacterAssignment(chosenId, {
+        branch: 'city_administration',
+        assignmentRole: 'city_ledger_runner',
+        assignmentLocation: { kind: 'settlement', settlementId: city.id },
+        reason: 'Explicit administrative task',
+      }) === true;
+      const profileBeforeSave = g.gameFlowManager.getWorldCharacterOrganizationProfile(chosenId);
+      const independentMembership = profileBeforeSave?.memberships?.length === 1
+        && profileBeforeSave.memberships[0].branch === 'trade_network'
+        && profileBeforeSave.currentAssignment?.branch === 'city_administration'
+        && profileBeforeSave.identity?.roleProfile === chosen.role;
       const savePayload = g.saveManager.buildSavePayload();
       const saveRecord = savePayload.game?.worldCharacters;
       const saveOk = g.saveManager.quickSave() === true;
       const loadOk = saveOk && g.saveManager.quickLoad() === true;
       const restored = g.state.worldCharacters.characters.find((person) => person.id === chosenId);
+      const organizationAfterSave = g.gameFlowManager.getWorldCharacterOrganizationProfile(chosenId);
+      const organizationRoundtripOk = organizationAfterSave?.memberships?.length === 1
+        && organizationAfterSave.memberships[0].branch === 'trade_network'
+        && organizationAfterSave.currentAssignment?.branch === 'city_administration'
+        && organizationAfterSave.currentAssignment?.assignmentRole === 'city_ledger_runner'
+        && savePayload.game?.characterOrganization?.memberships?.length === 1
+        && savePayload.game?.characterOrganization?.assignments?.length === 1;
       const nextOffer = g.gameFlowManager.previewWorldCharacterCandidates(source, { count: 2 });
       const savedCandidateExcluded = !nextOffer.candidates.some((person) => person.id === chosenId)
         && nextOffer.candidateSlots?.[0] === 2
         && nextOffer.candidateSlots?.[1] === 3;
       return {
         ready: true, savedCandidateExcluded, advancedToC, invalidDirectA,
+        membershipOk, assignmentOk, independentMembership, organizationRoundtripOk,
         restoredClass: restored?.importance ?? null,
         restoredPromotionHistory: restored?.history?.some((entry) =>
           entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
@@ -210,7 +232,9 @@ async function main() {
     report.characterProduction = productionRoundtrip;
     stage('source-character-production-roundtrip', productionRoundtrip);
     if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
-      !productionRoundtrip.savedCandidateExcluded || !productionRoundtrip.invalidDirectA ||
+      !productionRoundtrip.savedCandidateExcluded || !productionRoundtrip.membershipOk ||
+      !productionRoundtrip.assignmentOk || !productionRoundtrip.independentMembership ||
+      !productionRoundtrip.organizationRoundtripOk || !productionRoundtrip.invalidDirectA ||
       !productionRoundtrip.advancedToC || productionRoundtrip.restoredClass !== 'C' ||
       !productionRoundtrip.restoredPromotionHistory ||
       productionRoundtrip.availableSources < 1 || !productionRoundtrip.forgedFacilityBlocked ||
