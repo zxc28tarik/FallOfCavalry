@@ -12,6 +12,7 @@ import { showWinScreen, showLoseScreen } from '../ui/modals.js';
 import { applySettingsPatch, serializeSettings, deserializeSettings } from '../systems/settings.js';
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
 import { ensureModeManager } from '../core/ModeManager.js';
+import { createWorldCharacterRoster } from '../systems/world-characters.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -318,6 +319,13 @@ export class GameFlowManager {
     }
     g.followParty = true;
     if (g.playerParty) g.playerParty.selected = true;
+
+    // World NPCs are generated from actual settlement IDs after world boot.
+    // This is a separate persistent collection, never the player's combat roster.
+    this.state.worldCharacters = createWorldCharacterRoster({
+      seed: this.state.seed,
+      settlements: this.state?.map?.settlements || [],
+    });
 
     g.mode = 'playing';
     g.saveManager.startAutosaveLoop();
