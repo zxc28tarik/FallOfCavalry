@@ -6,6 +6,7 @@
 import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
 import StartScreen from '../ui/start-screen.js';
+import { createPlayerCharacter, normalizePlayerCharacter } from '../systems/character-creation.js';
 import { getRelation, setRelation } from '../systems/factions.js';
 import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
 import { showWinScreen, showLoseScreen } from '../ui/modals.js';
@@ -40,7 +41,7 @@ export class GameFlowManager {
       this.startScreen = new StartScreen({
         state: this.state,
         saveSystem: g.saveManager.saveSystem,
-        onStart: async ({ faction, seed }) => {
+        onStart: async ({ faction, seed, character, startingModifiers }) => {
           this.state.seed = seed;
           this.state.selectedFaction = {
             id: faction.id,
@@ -49,14 +50,24 @@ export class GameFlowManager {
             doctrine: faction.doctrine,
             desc: faction.desc,
           };
+          const fallbackCreation = createPlayerCharacter({ name: 'Yeni Komutan' }, faction.id);
+          const selectedCharacter = normalizePlayerCharacter(character) || fallbackCreation.character;
+          const modifiers = character && startingModifiers
+            ? startingModifiers
+            : fallbackCreation.startingModifiers;
+          const gold = Math.max(0, faction.startingGold + (Number(modifiers.gold) || 0));
+          const renown = Math.max(0, faction.startingRenown + (Number(modifiers.renown) || 0));
           if (this.state.player) {
-            this.state.player.gold = faction.startingGold;
-            this.state.player.renown = faction.startingRenown;
+            this.state.player.gold = gold;
+            this.state.player.renown = renown;
             this.state.player.army = faction.startingArmy;
           }
           if (g.playerParty) {
-            g.playerParty.gold = faction.startingGold;
+            g.playerParty.gold = gold;
+            g.playerParty.renown = renown;
+            g.playerParty.morale = Math.min(100, Math.max(0, 64 + (Number(modifiers.morale) || 0)));
             g.playerParty.factionId = faction.id;
+            g.playerParty.character = selectedCharacter;
           }
 
           try {
@@ -91,6 +102,12 @@ export class GameFlowManager {
       selectedFactionDesc: utils.getEl('selectedFactionDesc'),
       selectedFactionDoc: utils.getEl('selectedFactionDoc'),
       selectedFactionArmy: utils.getEl('selectedFactionArmy'),
+      characterNameInput: utils.getEl('characterNameInput'),
+      characterCultureInput: utils.getEl('characterCultureInput'),
+      characterOriginInput: utils.getEl('characterOriginInput'),
+      characterFocusInput: utils.getEl('characterFocusInput'),
+      characterAgeInput: utils.getEl('characterAgeInput'),
+      characterPreview: utils.getEl('characterPreview'),
       startSaveInfo: utils.getEl('startSaveInfo'),
     });
   }
