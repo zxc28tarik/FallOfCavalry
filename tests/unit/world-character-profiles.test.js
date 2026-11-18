@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import CityServicesUI from '../../js/ui/city-services.js';
+import { changeNamedCharacterMetric } from '../../js/systems/named-character-state.js';
 import {
   createWorldCharacterRoster,
   createWorldCharacterSave,
@@ -7,7 +8,7 @@ import {
   getWorldCharacterAge,
   getWorldCharacterProfile,
   moveWorldCharacter,
-  normalizeWorldCharacters,
+  normalizeWorldCharacters, promoteWorldCharacter,
   restoreWorldCharacterSave,
   setWorldCharacterRelation,
 } from '../../js/systems/world-characters.js';
@@ -92,6 +93,33 @@ describe('Web world NPC profiles / read-only life stage', () => {
     expect(panel.innerHTML).toContain('Gün 1');
     expect(panel.innerHTML).toContain(String(first.age + 1));
     expect(ui.currentView.type).toBe('overview');
+  });
+
+  it('renders the NamedCharacterState adapter with explicit current value and a safe event audit', () => {
+    const { first, roster } = setup();
+    expect(promoteWorldCharacter(roster, first.id, { day: 4 })).toBe(true);
+    const newValue = first.reputation === 99 ? 98 : 99;
+    expect(changeNamedCharacterMetric(roster, first.id, {
+      metric: 'reputation', value: newValue, day: 8,
+      reason: 'Visible audit reason & council',
+    })).toBe(true);
+    const ui = new CityServicesUI({
+      state: { worldCharacters: roster, day: 8 }, party: {},
+    });
+    ui.currentSettlement = settlements[0];
+    const panel = { innerHTML: '' };
+    ui.dom = {
+      cityPanelBody: panel, cityPanelTitle: { textContent: '' },
+      cityPanelMeta: { innerHTML: '' },
+    };
+    ui.renderNpcProfile(first.id);
+    expect(panel.innerHTML).toContain('Önemli karakter (D)');
+    expect(panel.innerHTML).toContain('İtibar</span><strong>' + newValue + '/100');
+    expect(panel.innerHTML).toContain('Özellik değişti');
+    expect(panel.innerHTML).toContain('Visible audit reason &amp; council');
+    expect(panel.innerHTML).not.toContain('Visible audit reason & council');
+    expect(panel.innerHTML).toContain('Gün 8');
+    expect(panel.innerHTML).toContain('Gün 4');
   });
 
   it('city click selects only real resident NPC; unknown character does not open a profile', () => {
