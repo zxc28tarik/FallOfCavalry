@@ -15,3 +15,8 @@
 **İlk icra:** K00 → K01, D00 **tam dünya kapsamı** karar kapısı, D01 **pilot bölgesiz doğrudan tam dünya veri üretimi ve QA**, G02 sanat kartı, G03 manifest/dummy **görsel entegrasyon** testi. Sonra G04 dünya zemini. Asker G14 **en son**.
 
 **Kanıt:** source commit, CI, gerçek browser, screenshot, kullanıcı estetik kararı. Plan dosyasının varlığı işi tamamlamaz.
+
+## İlk uygulama — tam dünya diagnostik envanteri
+- `npm run audit:world` geçici prosedürel dünya **tamamını** tarar; bir dünya veri pilotu değildir.
+- Rapor `output/reports/world-integrity.json` ve GitHub CI artifact olarak üretilir; mevcut 1648 atlasının varlığını iddia etmez.
+- `K01-05` ve `Q00-03` uygulamada; **KABUL** için tarayıcıda doğrulama ve geçerli tüm-dünya veri setinde tekrar denetim gerekir.
