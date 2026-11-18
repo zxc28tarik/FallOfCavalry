@@ -6,6 +6,7 @@
 
 import * as CONST from '../constants.js';
 import ModeManager from './ModeManager.js';
+import { normalizeWorldCharacters } from '../systems/world-characters.js';
 
 /**
  * Ana oyun state'i
@@ -53,6 +54,7 @@ export class GameState {
     
     // AI
     this.aiParties = [];
+    this.worldCharacters = normalizeWorldCharacters(null);
     
     // Seçili faction
     this.selectedFaction = null;
@@ -547,6 +549,7 @@ export class GameState {
       
       // AI
       aiParties: this.aiParties,
+      worldCharacters: normalizeWorldCharacters(this.worldCharacters),
       
       // Faction
       selectedFaction: this.selectedFaction?.id,
@@ -583,6 +586,7 @@ export class GameState {
     
     // AI
     this.aiParties = data.aiParties || [];
+    this.worldCharacters = normalizeWorldCharacters(data.worldCharacters);
     
     // Settings
     if (data.settings) {
