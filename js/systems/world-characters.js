@@ -13,7 +13,7 @@ export const CHARACTER_STAT_KEYS = Object.freeze([
   'trade', 'administration', 'courage', 'experience',
 ]);
 
-const CULTURE_NAMES = Object.freeze({
+export const CULTURE_NAMES = Object.freeze({
   ottoman: ['Mehmed Çelebi', 'Ali Efendi', 'Ayşe Hatun', 'Hasan Ağa', 'Fatma Hatun', 'Hüseyin Efendi'],
   hre: ['Johann Müller', 'Anna Weber', 'Georg Schneider', 'Katharina Fischer', 'Martin Bauer'],
   polish: ['Jan Nowak', 'Anna Kowalska', 'Piotr Wiśniewski', 'Zofia Zielińska', 'Mikołaj Mazur'],
@@ -54,7 +54,7 @@ export const NPC_STAT_LABELS = Object.freeze({
   experience: 'Tecrübe',
 });
 
-const ROLE_PROFILES = Object.freeze({
+export const ROLE_PROFILES = Object.freeze({
   artisan: [42, 49, 36, 35, 22, 42, 38, 49, 34],
   merchant: [49, 55, 59, 47, 26, 73, 48, 35, 42],
   administrator: [59, 56, 52, 55, 30, 48, 70, 40, 46],
@@ -63,7 +63,7 @@ const ROLE_PROFILES = Object.freeze({
   scholar: [76, 61, 46, 38, 26, 35, 57, 35, 49],
 });
 
-const TRAITS = Object.freeze(['cautious', 'ambitious', 'curious', 'reserved', 'pragmatic', 'generous']);
+export const TRAITS = Object.freeze(['cautious', 'ambitious', 'curious', 'reserved', 'pragmatic', 'generous']);
 const IMPORTANCE = new Set(['D', 'C', 'B', 'A']);
 const ROLE_KEYS = Object.keys(ROLE_PROFILES);
 const MAX_NAME_LENGTH = 80;
