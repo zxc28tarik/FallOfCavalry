@@ -86,3 +86,21 @@ Gerçek gameplay kaynağı
 7. Tüm test sonuçları **aynı final SHA** üzerinde raporlanır; hiçbir UI, nüfus veya sanat fazı bu çalışmayla tamamlandı ilan edilmez.
 
 **Çalışma durumu:** Kod ve birim/E2E testleri PR #68'de; CI exact-head raporu tamamlandıktan sonra işaretlenecek. Kullanıcı tarihsel üretim balansını, A/B/C içeriğini ve karakter sprite teknolojisini ayrıca kararlaştırır.
+
+
+## 4. V1.3 üretim kimliği, kaynak otoritesi ve politikaların mühendislik sınırları (18.11.2026)
+
+**Sorun:** İlk sürümde `npc:source-inn~inn-01:1` gibi kimlikler, iki farklı şehirde `inn-01` adlı iki tesisi aynı kişi sanabiliyordu. İkinci sorun: kampanya API'si dışarıdan sahte `registeredSources` ve değişmiş isim/rol politikası kabul edebiliyordu. Üçüncü sorun: farklı dünya seed'inden gelen teklif, aynı kampanya kimliği altında kalıcı kişiye dönüşebiliyordu.
+
+**Çözümler (teknik emniyet, oyuncu balansı kararı değil):**
+
+1. Yerleşim kaynakları eski `npc:source-city~0:1` gibi kimliklerini korur. Yerleşim dışı kayıtlı kaynakların yeni kimliği `npc:source-<type>~<settlementId>~<sourceId>:<slot>` biçimindedir. Aynı `inn-01` iki şehirde iki farklı ID üretir. Eski branch'teki bu tür formatlı deneysel kayıtlardan yayınlanmış main veri yoktur; ileride migration ihtiyacı ayrıca takip edilecektir.
+2. `GameFlowManager` üretim için yalnız `listWorldCharacterProductionSources()` keşfinden gelen **kanonik kaynak kaydını** alır. Çağıran tarafın uydurduğu `registeredSources`, `rolePolicy`, `namePools` oyun facade'ında kabul edilmez. Kaynak sahibi quest/event modülü önce ayrı **yetkili adaptör** ile bağlanmalıdır. Düşük seviye saf üretici, fixture testleri için katalog girdisi alabilir; bu gameplay otoritesi değildir.
+3. Kampanya kalıcılaştırma, `expectedWorldSeed` ile teklifi denetler: başka kampanya seed'iyle oluşturulan aday kalıcılaştırılamaz. Kaynak silinmişse kayıt engellenir. Mevcut kalıcı kişi bina yıkılmasıyla **otomatik silinmez**.
+4. `source.cultureId`, yalnız gerçek `settlement.cultureId` gibi açık, desteklenen bir kültür verisi varsa kaynağa taşınır. **`ownerFactionId` ≠ kültür**; yoksa `generic` seçilir. Çağıranın getirdiği kültür veya ilk devlet kimliği kanonik kaydın yerine geçmez. Din/mezhep/soy **çıkarılmaz**. Gelecekte dünya verisi otoritesi netleşince kültür alanı ayrı onayla beslenebilir.
+5. Aday sonucu artık `sourceContract` taşır: `sourceLocationId`, `sourceCultureId`, `possibleRoleTags`, `possibleImportanceClasses:['D']`, `staysInLocation:true`, `isUnavailableForRecruitment:true`. Bu değerler **yalnız mevcut motorda açık olmayan yetkileri** temsil eder. Gelecekte A/B/C, oyun içi yoldaşlık, asker alımı veya diplomasi erişimi için ilave kabul edilmiş kurallar gerekir.
+6. Kaynak tipi çözücüsünde prototip üzerinden gelen sahte `constructor/toString` anahtarları reddedilir; yalnız açık alias listesi geçerlidir.
+7. 14 kayıt türünün tamamının üretim/rol sözleşmesi; aynı adla iki şehrin kaynak çakışması; seed/culture/owner manipülasyonu; silinmiş tesis ve boşta kalan kaynak reddi; küçük delta save ve gerçek Chromium E2E testlerine eklendi.
+
+**Hâlen engelli / sonraki adım:** Otomatik NPC arama teklifleri, kaynak sıklığı/yenilenme, nadirlik, A/B/C önemli tarihsel kişiler, din/aile/hizip bağlama, gerçek quest/işletme/maden/oba kaynağı adaptörleri kullanıcıca onaylanmış davranış olmadan açılmaz. Bu PR teknik üretim güvenilirliği sağlar, tüm canlı dünya AI simülasyonunu tamamlamaz.
+
