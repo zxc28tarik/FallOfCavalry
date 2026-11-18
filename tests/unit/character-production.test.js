@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameFlowManager } from '../../js/managers/GameFlowManager.js';
+import { discoverCharacterProductionSources } from '../../js/systems/character-production-sources.js';
 import {
   produceCharacterCandidates,
   registerProducedCharacter,
@@ -207,6 +208,72 @@ describe('Character System v2: source-based character production (WEB)', () => {
     expect(saved.format).toBe('seeded-delta-v1');
     expect(saved.additions).toHaveLength(1);
     expect(saved.overrides).toHaveLength(0);
+  });
+
+  it('discovers actual built inns/caravanserais/production sites without inventing sources', () => {
+    const cityWithBuildings = {
+      id: 'istanbul', type: 'city',
+      cityState: { parcels: [
+        { id: 'caravan', state: 'occupied', buildingIds: ['han', 'merchant_han', 'caravanserai'] },
+        { id: 'industry', state: 'occupied', buildingIds: ['tannery', 'blacksmith', 'bakery'] },
+        { id: 'market', state: 'occupied', buildingIds: ['bazaar_market', 'bedesten', 'customs_office'] },
+        { id: 'locked', state: 'locked', buildingIds: ['han'] },
+        { id: 'ghost', state: 'occupied', buildingIds: ['fictional_lighthouse'] },
+      ] },
+    };
+    const snapshot = JSON.stringify(cityWithBuildings);
+    const sources = discoverCharacterProductionSources([cityWithBuildings]);
+    expect(sources).toHaveLength(7);
+    expect(sources.map((entry) => entry.type).sort()).toEqual([
+      'caravanserai', 'city', 'inn', 'inn', 'production', 'production', 'production',
+    ]);
+    expect(sources.every((entry) => entry.settlementId === 'istanbul')).toBe(true);
+    expect(sources.every((entry) => !entry.id.includes('bazaar_market')
+      && !entry.id.includes('bedesten') && !entry.id.includes('customs_office'))).toBe(true);
+    expect(sources.every((entry) => !entry.id.includes('fictional_lighthouse'))).toBe(true);
+    expect(JSON.stringify(cityWithBuildings)).toBe(snapshot);
+    expect(discoverCharacterProductionSources([cityWithBuildings])).toEqual(sources);
+    expect(discoverCharacterProductionSources([])).toEqual([]);
+  });
+
+  it('shows built sources through real GameFlow and invalidates an actor when its source disappears', () => {
+    const built = {
+      id: 'town-built', type: 'town',
+      cityState: { parcels: [{ id: 'caravan', state: 'occupied', buildingIds: ['han'] }] },
+    };
+    const state = {
+      seed: 1648, day: 15, map: { settlements: [built] },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements: [built] }),
+    };
+    const flow = new GameFlowManager(state);
+    const sources = flow.listWorldCharacterProductionSources();
+    expect(sources.map((source) => source.type)).toEqual(['inn', 'town']);
+    const innSource = sources.find((source) => source.type === 'inn');
+    const production = flow.previewWorldCharacterCandidates(innSource);
+    expect(production.candidates).toHaveLength(2);
+    // Building is destroyed/removed between discovery and offer selection.
+    built.cityState.parcels[0].buildingIds = [];
+    expect(flow.retainWorldCharacter(production, production.candidates[0].id)).toBe(false);
+    expect(state.worldCharacters.characters).toHaveLength(2);
+    built.cityState.parcels[0].buildingIds = ['han'];
+    const kept = flow.retainWorldCharacter(production, production.candidates[0].id);
+    expect(kept).toBeTruthy();
+    expect(kept.kind).toBe('named');
+    expect(kept.id).toBe(production.candidates[0].id);
+    expect(createWorldCharacterSave(state.worldCharacters, {
+      seed: 1648, settlements: [built],
+    }).additions).toHaveLength(1);
+  });
+
+  it('supports capital/castle aliases and does not mutate untouched city state', () => {
+    const map = [
+      { id: 'capital-a', type: 'capital' },
+      { id: 'castle-a', type: 'castle' },
+      { id: 'village-a', type: 'village' },
+    ];
+    expect(discoverCharacterProductionSources(map).map((entry) => entry.type))
+      .toEqual(['city', 'fort', 'village']);
+    expect(map.every((entry) => entry.cityState === undefined)).toBe(true);
   });
 
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
