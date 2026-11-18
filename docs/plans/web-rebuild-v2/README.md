@@ -25,3 +25,6 @@
 - [06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md](06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md): Chromium ile Start→World, screenshot ve console/network raporu. Görevler henüz UYGULAMADA.
 
 - [07_SAVE_ROUNDTRIP_IMPLEMENTATION.md](07_SAVE_ROUNDTRIP_IMPLEMENTATION.md): gerçek Chrome ile yeni dünyanın save/load smoke testi; eski kayıt migrasyonu kapsam dışı.
+
+## Paralel O00/K01 alt işi — Karakter Oluşturma
+- [2026-11-18 karakter oluşturma V1](../2026-11-18-web-karakter-olusturma-v1.md): web Start kimliği, 0–100 statlar, başlangıç etkileri, save normalizasyonu; henüz tam NPC/AI ve G14 görsel işlerini kapsamaz. CI/browser kabulü ayrıca gerekli.
