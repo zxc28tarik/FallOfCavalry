@@ -13,7 +13,7 @@ import {
   serializeAllSettlementCityStates,
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
-import { normalizeWorldCharacters } from '../systems/world-characters.js';
+import { normalizeWorldCharacters, packWorldCharacters } from '../systems/world-characters.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -344,7 +344,7 @@ Esc close`,
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
         },
         roster,
-        worldCharacters: normalizeWorldCharacters(this.state?.worldCharacters),
+        worldCharacters: packWorldCharacters(this.state?.worldCharacters),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
