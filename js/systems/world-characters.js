@@ -312,6 +312,7 @@ export function moveWorldCharacter(roster, characterId, targetSettlementId, {
   const person = roster?.characters?.find((entry) => entry?.id === characterId);
   if (!person || person.status !== 'alive' || person.location?.kind !== 'settlement'
     || person.location.settlementId === id) return false;
+  if (person.history?.length && day < person.history[person.history.length - 1].day) return false;
   person.location = { kind: 'settlement', settlementId: id };
   person.history = [...(person.history || []), { day, type: 'moved', settlementId: id }].slice(-16);
   return true;
