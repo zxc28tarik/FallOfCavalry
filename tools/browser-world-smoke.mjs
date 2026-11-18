@@ -132,6 +132,57 @@ async function main() {
       }
     }
     await page.screenshot({ path: imageDir + '/03-after-save-load.png', fullPage: true });
+    // NPC production must be a deterministic, explicit promotion path, NOT
+    // automatic city population, player creation or unit recruitment.
+    const productionRoundtrip = await page.evaluate(() => {
+      const g = window.game;
+      const city = g?.state?.map?.settlements?.find((entry) =>
+        ['village', 'town', 'city', 'fort'].includes(entry?.type));
+      if (!city || !g?.gameFlowManager?.previewWorldCharacterCandidates) {
+        return { ready: false, reason: 'No production source / campaign API' };
+      }
+      const source = {
+        type: city.type, id: city.id, settlementId: city.id,
+        // Culture is an explicit source fact, not automatically copied from owner.
+        cultureId: 'generic',
+      };
+      const before = g.state.worldCharacters.characters.length;
+      const rosterBefore = g.playerParty?.roster?.length || 0;
+      const generated = g.gameFlowManager.previewWorldCharacterCandidates(source, { count: 2 });
+      const previewDidNotRegister = g.state.worldCharacters.characters.length === before;
+      const chosenId = generated.candidates[0].id;
+      const chosen = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
+      const duplicate = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
+      const after = g.state.worldCharacters.characters.length;
+      const savePayload = g.saveManager.buildSavePayload();
+      const saveRecord = savePayload.game?.worldCharacters;
+      const saveOk = g.saveManager.quickSave() === true;
+      const loadOk = saveOk && g.saveManager.quickLoad() === true;
+      const restored = g.state.worldCharacters.characters.find((person) => person.id === chosenId);
+      return {
+        ready: true,
+        sourceType: city.type, before, after, selectedId: chosenId,
+        previewDidNotRegister, registerOk: chosen?.kind === 'named' && chosen?.importance === 'D',
+        duplicateBlocked: duplicate === false,
+        unitRosterUnchanged: (g.playerParty?.roster?.length || 0) === rosterBefore,
+        deltaFormat: saveRecord?.format,
+        additions: saveRecord?.additions?.length ?? 0,
+        sourceProvenance: restored?.history?.[0]?.sourceType ?? null,
+        saveOk, loadOk, restoredKind: restored?.kind ?? null,
+      };
+    });
+    report.characterProduction = productionRoundtrip;
+    stage('source-character-production-roundtrip', productionRoundtrip);
+    if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
+      !productionRoundtrip.registerOk || !productionRoundtrip.duplicateBlocked ||
+      !productionRoundtrip.unitRosterUnchanged || productionRoundtrip.after !== productionRoundtrip.before + 1 ||
+      productionRoundtrip.deltaFormat !== 'seeded-delta-v1' || productionRoundtrip.additions !== 1 ||
+      productionRoundtrip.sourceProvenance !== productionRoundtrip.sourceType ||
+      !productionRoundtrip.saveOk || !productionRoundtrip.loadOk ||
+      productionRoundtrip.restoredKind !== 'named') {
+      throw new Error('Source-based NPC production/retention failed browser save/load');
+    }
+
     // The NPC sheet must work in the actual city UI, not only in unit tests.
     const npcCity = await page.evaluate(() => {
       const g = window.game;
