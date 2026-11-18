@@ -14,6 +14,7 @@ import {
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
+import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
 import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
@@ -288,6 +289,10 @@ Esc close`,
     }));
 
     const settlements = this.state?.map?.settlements || [];
+    const compiledDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements,
+    });
     this.game?.ensureInventoryModel?.();
     const itemCatalog = this.game?.itemCatalog || [];
     const inventory = {
@@ -350,7 +355,8 @@ Esc close`,
         roster,
         worldCharacters: createWorldCharacterSave(this.state?.worldCharacters, {
           seed: this.state?.seed,
-          settlements: this.state?.map?.settlements || [],
+          settlements,
+          authoredCharacters: compiledDefinitions.accepted ? compiledDefinitions.characters : [],
         }),
         characterOrganization: normalizeCharacterOrganizationState(this.state?.characterOrganization, {
           roster: this.state?.worldCharacters,
@@ -449,8 +455,14 @@ Esc close`,
 
     // Preserve real generated NPCs; legacy saves intentionally have an empty NPC roster.
     // Never fabricate or copy a player character into this collection during load.
+    const compiledDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    this.state.characterDefinitionDiagnostics = compiledDefinitions.diagnostics;
     this.state.worldCharacters = restoreWorldCharacterSave(game.worldCharacters, {
       settlements: this.state?.map?.settlements || [],
+      authoredCharacters: compiledDefinitions.accepted ? compiledDefinitions.characters : [],
     });
     this.state.characterOrganization = normalizeCharacterOrganizationState(game.characterOrganization, {
       roster: this.state.worldCharacters,

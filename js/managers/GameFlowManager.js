@@ -13,6 +13,7 @@ import { applySettingsPatch, serializeSettings, deserializeSettings } from '../s
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
+import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
 import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
@@ -335,9 +336,16 @@ export class GameFlowManager {
 
     // World NPCs are generated from actual settlement IDs after world boot.
     // This is a separate persistent collection, never the player's combat roster.
+    const authoredDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    // Bad or partially reviewed catalogs never inject a single actor.
+    this.state.characterDefinitionDiagnostics = authoredDefinitions.diagnostics;
     this.state.worldCharacters = createWorldCharacterRoster({
       seed: this.state.seed,
       settlements: this.state?.map?.settlements || [],
+      authoredCharacters: authoredDefinitions.accepted ? authoredDefinitions.characters : [],
     });
 
     g.mode = 'playing';
@@ -359,6 +367,20 @@ export class GameFlowManager {
    * Read-only list of real settlement and constructed-facility character
    * sources. Does not create new cityState/buildings or permanent people.
    */
+  /**
+   * Read-only immutable-identity metadata. A generated NPC (even Named D)
+   * never becomes a historical person by matching the same display name.
+   */
+  getWorldCharacterDefinition(characterId) {
+    const authored = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    if (!authored.accepted || !this.state?.worldCharacters?.characters?.some(
+      (person) => person.id === characterId && person.kind === 'named')) return null;
+    return authored.definitions.find((item) => item.characterId === characterId) || null;
+  }
+
   listWorldCharacterProductionSources() {
     return discoverCharacterProductionSources(this.state?.map?.settlements || []);
   }
