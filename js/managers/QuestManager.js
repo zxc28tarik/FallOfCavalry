@@ -6,6 +6,9 @@ export class QuestManager {
     this.activeQuests = [];
     this.completedQuests = [];
     this.failedQuests = [];
+    // Optional observer of VERIFIED quest completion; no reward policy here.
+    this.onQuestCompleted = null;
+    this.lastCompletionObserverError = null;
   }
 
   addQuest(questInstance) {
@@ -64,6 +67,23 @@ export class QuestManager {
     this.completedQuests.push(quest);
     this.activeQuests = this.activeQuests.filter((item) => item.id !== questId);
     this._createChainQuestIfNeeded(quest);
+    // Called once AFTER the quest has left activeQuests and entered completedQuests.
+    // A failing character observer must never undo an actual quest completion or
+    // turn existing player gold/reputation rewards into a second NPC reward.
+    if (typeof this.onQuestCompleted === 'function') {
+      const receipt = Object.freeze({
+        questId: quest.id,
+        templateId: quest.templateId,
+        pathId: selectedPathId,
+        assignedCharacterId: quest.assignedCharacterId ?? null,
+      });
+      try {
+        this.onQuestCompleted(receipt);
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
   }
 
   failQuest(questId, reason) {
