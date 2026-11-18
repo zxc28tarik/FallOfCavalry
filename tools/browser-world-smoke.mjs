@@ -73,6 +73,7 @@ async function main() {
         started: Boolean(g?.started), mode: g?.state?.mode ?? null,
         width: map?.width ?? 0, height: map?.height ?? 0, terrainLength: map?.terrain?.length ?? 0,
         settlements: map?.settlements?.length ?? 0, roads: map?.roads?.length ?? 0,
+        worldNpcCount: g?.state?.worldCharacters?.characters?.length ?? 0,
         rivers: map?.rivers?.length ?? 0, crossings: map?.crossings?.length ?? 0,
         canvasWidth: canvas?.width ?? 0, canvasHeight: canvas?.height ?? 0,
         startModalHidden: document.getElementById('startModal')?.classList.contains('hidden') ?? false,
@@ -84,6 +85,7 @@ async function main() {
     await page.screenshot({ path: imageDir + '/02-runtime-world.png', fullPage: true });
     if (report.map.width * report.map.height !== report.map.terrainLength) throw new Error('World layer dimensions mismatch');
     if (!report.map.settlements) throw new Error('World has no settlements');
+    if (report.map.worldNpcCount !== report.map.settlements * 2) throw new Error('World NPCs not generated for every settlement');
     if (!report.map.canvasWidth || !report.map.canvasHeight) throw new Error('Canvas has zero dimensions');
     if (report.map.bootErrorVisible) throw new Error('Boot error banner visible');
     // CI runs in a disposable browser context: saving is safe and does not touch user files.
@@ -100,6 +102,9 @@ async function main() {
           worldWidth: m?.width ?? 0,
           worldHeight: m?.height ?? 0,
           settlements: m?.settlements?.length ?? 0,
+          worldNpcCount: g.state?.worldCharacters?.characters?.length ?? 0,
+          firstWorldNpcId: g.state?.worldCharacters?.characters?.[0]?.id ?? null,
+          firstWorldNpcName: g.state?.worldCharacters?.characters?.[0]?.name ?? null,
           mode: g.state?.mode ?? null,
         };
       };
@@ -114,7 +119,8 @@ async function main() {
     if (!roundtrip.saveOk || !roundtrip.slotExists || !roundtrip.loadOk) {
       throw new Error('Quick save/load failed in disposable browser context');
     }
-    for (const key of ['day', 'gold', 'factionId', 'worldWidth', 'worldHeight', 'settlements']) {
+    for (const key of ['day', 'gold', 'factionId', 'worldWidth', 'worldHeight', 'settlements',
+      'worldNpcCount', 'firstWorldNpcId', 'firstWorldNpcName']) {
       if (roundtrip.before[key] !== roundtrip.after[key]) {
         throw new Error('Save round-trip mismatch at ' + key);
       }
