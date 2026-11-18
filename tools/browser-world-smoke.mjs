@@ -179,6 +179,16 @@ async function main() {
       const advancedToC = g.gameFlowManager.advanceWorldCharacterImportance(chosenId, 'C', {
         reason: 'Verified test campaign event',
       }) === true;
+      const nextReputation = chosen.reputation === 60 ? 61 : 60;
+      const stateEventOk = g.gameFlowManager.changeWorldCharacterMetric(chosenId, 'reputation',
+        nextReputation, { reason: 'Explicit browser campaign event' }) === true;
+      const mutableStateBeforeSave = g.gameFlowManager.getWorldNamedCharacterState(chosenId);
+      const independentCharacterState = mutableStateBeforeSave?.currentReputation === nextReputation
+        && mutableStateBeforeSave?.characterId === chosenId
+        && mutableStateBeforeSave?.history?.at(-1)?.type === 'state-changed'
+        && mutableStateBeforeSave?.history?.at(-1)?.metric === 'reputation'
+        && mutableStateBeforeSave?.history?.at(-1)?.from !== nextReputation
+        && mutableStateBeforeSave?.history?.at(-1)?.to === nextReputation;
       const duplicate = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
       const after = g.state.worldCharacters.characters.length;
       const membershipOk = g.gameFlowManager.addWorldCharacterBranchMembership(chosenId, 'trade_network', {
@@ -218,6 +228,11 @@ async function main() {
         (person) => !person.id.startsWith('npc:authored-'),
       ) && g.gameFlowManager.getWorldCharacterDefinition(chosenId) === null
         && savePayload.game?.characterDefinitionAuthority === undefined;
+      const mutableStateAfterSave = g.gameFlowManager.getWorldNamedCharacterState(chosenId);
+      const stateRoundtripOk = mutableStateAfterSave?.currentReputation === nextReputation
+        && mutableStateAfterSave?.history?.some((entry) =>
+          entry.type === 'state-changed' && entry.metric === 'reputation'
+          && entry.to === nextReputation && entry.reason === 'Explicit browser campaign event');
       const socialProfileAfterSave = g.gameFlowManager.getWorldCharacterSocialProfile(chosenId);
       const noInventedSocialTiesAfterLoad = socialProfileAfterSave?.houseMemberships?.length === 0
         && socialProfileAfterSave?.cliqueMemberships?.length === 0
@@ -243,6 +258,7 @@ async function main() {
         membershipOk, assignmentOk, independentMembership, organizationRoundtripOk,
         noInventedSocialTies, noInventedSocialTiesAfterLoad,
         noInventedAuthored, noInventedAuthoredAfterLoad,
+        stateEventOk, independentCharacterState, stateRoundtripOk,
         restoredClass: restored?.importance ?? null,
         restoredPromotionHistory: restored?.history?.some((entry) =>
           entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
@@ -266,6 +282,8 @@ async function main() {
       !productionRoundtrip.noInventedSocialTiesAfterLoad ||
       !productionRoundtrip.noInventedAuthored ||
       !productionRoundtrip.noInventedAuthoredAfterLoad ||
+      !productionRoundtrip.stateEventOk || !productionRoundtrip.independentCharacterState ||
+      !productionRoundtrip.stateRoundtripOk ||
       !productionRoundtrip.independentMembership ||
       !productionRoundtrip.organizationRoundtripOk || !productionRoundtrip.invalidDirectA ||
       !productionRoundtrip.advancedToC || productionRoundtrip.restoredClass !== 'C' ||
