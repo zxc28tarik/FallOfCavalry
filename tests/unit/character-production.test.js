@@ -3,6 +3,7 @@ import { GameFlowManager } from '../../js/managers/GameFlowManager.js';
 import { discoverCharacterProductionSources } from '../../js/systems/character-production-sources.js';
 import {
   produceCharacterCandidates,
+  produceUnregisteredCharacterCandidates,
   registerProducedCharacter,
 } from '../../js/systems/character-production.js';
 import {
@@ -223,14 +224,15 @@ describe('Character System v2: source-based character production (WEB)', () => {
     };
     const snapshot = JSON.stringify(cityWithBuildings);
     const sources = discoverCharacterProductionSources([cityWithBuildings]);
-    expect(sources).toHaveLength(7);
+    expect(sources).toHaveLength(6);
     expect(sources.map((entry) => entry.type).sort()).toEqual([
-      'caravanserai', 'city', 'inn', 'inn', 'production', 'production', 'production',
+      'caravanserai', 'city', 'inn', 'inn', 'production', 'production',
     ]);
     expect(sources.every((entry) => entry.settlementId === 'istanbul')).toBe(true);
     expect(sources.every((entry) => !entry.id.includes('bazaar_market')
       && !entry.id.includes('bedesten') && !entry.id.includes('customs_office'))).toBe(true);
     expect(sources.every((entry) => !entry.id.includes('fictional_lighthouse'))).toBe(true);
+    expect(sources.every((entry) => !entry.id.includes('bakery'))).toBe(true);
     expect(JSON.stringify(cityWithBuildings)).toBe(snapshot);
     expect(discoverCharacterProductionSources([cityWithBuildings])).toEqual(sources);
     expect(discoverCharacterProductionSources([])).toEqual([]);
@@ -402,6 +404,78 @@ describe('Character System v2: source-based character production (WEB)', () => {
       worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements: unapproved }),
     }).listWorldCharacterProductionSources();
     expect(defaults[0].cultureId).toBe('generic');
+  });
+
+  it('offers only unregistered people, without changing source state or inventing refresh timing', () => {
+    const roster = createWorldCharacterRoster({ seed: 1648, settlements });
+    const snapshot = JSON.stringify(roster);
+    const initial = produceUnregisteredCharacterCandidates({
+      roster, worldSeed: 1648, source: city, settlements, count: 3, day: 7,
+    });
+    expect(initial.candidateSlots).toEqual([1, 2, 3]);
+    expect(initial.nextSlot).toBe(4);
+    expect(initial.candidates.map((person) => person.id)).toEqual([
+      'npc:source-city~0:1', 'npc:source-city~0:2', 'npc:source-city~0:3',
+    ]);
+    expect(initial.rosterFull).toBe(false);
+    expect(JSON.stringify(roster)).toBe(snapshot);
+
+    // Register the second candidate first: the availability scan must not
+    // assume a consecutive set of retained IDs or a global cursor.
+    expect(registerProducedCharacter(roster, initial, initial.candidates[1].id, {
+      settlements, day: 7,
+    })).toBeTruthy();
+    const later = produceUnregisteredCharacterCandidates({
+      roster, worldSeed: 1648, source: city, settlements, count: 3, day: 7,
+    });
+    expect(later.candidateSlots).toEqual([1, 3, 4]);
+    expect(later.candidates.map((person) => person.id)).not.toContain(initial.candidates[1].id);
+    expect(later.candidates[0]).toEqual(initial.candidates[0]);
+    expect(later.candidates[1]).toEqual(initial.candidates[2]);
+    // Reopening a preview does NOT consume declined/unselected people:
+    // policy forbids persisting unimportant GeneratedPerson instances.
+    expect(produceUnregisteredCharacterCandidates({
+      roster, worldSeed: 1648, source: city, settlements, count: 3, day: 7,
+    }).candidates).toEqual(later.candidates);
+  });
+
+  it('retained identity availability survives seeded-delta quick-save reload', () => {
+    const roster = createWorldCharacterRoster({ seed: 1648, settlements });
+    const state = { seed: 1648, day: 4, map: { settlements }, worldCharacters: roster };
+    const manager = new GameFlowManager(state);
+    const initial = manager.previewWorldCharacterCandidates(city, { count: 2 });
+    expect(initial.candidateSlots).toEqual([1, 2]);
+    expect(manager.retainWorldCharacter(initial, initial.candidates[0].id)).toBeTruthy();
+    const next = manager.previewWorldCharacterCandidates(city, { count: 2 });
+    expect(next.candidateSlots).toEqual([2, 3]);
+
+    const wire = normalizeWorldCharacterSave(createWorldCharacterSave(roster, {
+      seed: 1648, settlements,
+    }));
+    const restored = restoreWorldCharacterSave(JSON.parse(JSON.stringify(wire)), { settlements });
+    const afterReload = new GameFlowManager({
+      seed: 1648, day: 4, map: { settlements }, worldCharacters: restored,
+    }).previewWorldCharacterCandidates(city, { count: 2 });
+    expect(afterReload.candidateSlots).toEqual([2, 3]);
+    expect(afterReload.candidates).toEqual(next.candidates);
+    expect(JSON.stringify(wire)).not.toContain('npc:source-city~0:2');
+  });
+
+  it('caps preview batch sizes and handles a full persistent roster without writes', () => {
+    const roster = createWorldCharacterRoster({ seed: 1648, settlements });
+    expect(() => produceUnregisteredCharacterCandidates({
+      roster, worldSeed: 1648, source: city, settlements, count: 9,
+    })).toThrow(RangeError);
+    const full = { characters: Array.from({ length: 4096 }, (_, index) =>
+      ({ id: 'filled:' + index })) };
+    const result = produceUnregisteredCharacterCandidates({
+      roster: full, worldSeed: 1648, source: city, settlements,
+    });
+    expect(result).toMatchObject({ candidates: [], candidateSlots: [], rosterFull: true });
+    expect(full.characters).toHaveLength(4096);
+    expect(() => produceUnregisteredCharacterCandidates({
+      roster: {}, worldSeed: 1648, source: city, settlements,
+    })).toThrow(TypeError);
   });
 
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
