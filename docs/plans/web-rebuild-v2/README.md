@@ -20,3 +20,6 @@
 - `npm run audit:world` geçici prosedürel dünya **tamamını** tarar; bir dünya veri pilotu değildir.
 - Rapor `output/reports/world-integrity.json` ve GitHub CI artifact olarak üretilir; mevcut 1648 atlasının varlığını iddia etmez.
 - `K01-05` ve `Q00-03` uygulamada; **KABUL** için tarayıcıda doğrulama ve geçerli tüm-dünya veri setinde tekrar denetim gerekir.
+
+## Gerçek tarayıcı başlangıç denetimi
+- [06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md](06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md): Chromium ile Start→World, screenshot ve console/network raporu. Görevler henüz UYGULAMADA.

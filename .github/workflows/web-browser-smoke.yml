@@ -1,0 +1,67 @@
+name: Web Chromium browser smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-world:
+    name: Start screen and entire existing world
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install existing dependencies
+        run: npm ci
+
+      - name: Install pinned CI-only Playwright
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+
+      - name: Use Chrome preinstalled in GitHub runner
+        run: command -v google-chrome || command -v google-chrome-stable
+
+      - name: Build production game
+        run: npm run build
+
+      - name: Start production server
+        shell: bash
+        run: |
+          mkdir -p output/browser-smoke
+          ./node_modules/.bin/vite preview --host 127.0.0.1 --port 4173 --strictPort > output/browser-smoke/server.log 2>&1 &
+          echo $! > output/browser-smoke/preview.pid
+          for i in $(seq 1 45); do
+            if curl --silent --fail http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat output/browser-smoke/server.log
+          exit 1
+
+      - name: Play browser from menu into entire world
+        run: npm run test:browser:world
+
+      - name: Upload browser report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chromium-world-browser-report
+          path: output/browser-smoke/
+          retention-days: 14
+          if-no-files-found: warn
