@@ -6,6 +6,7 @@
  * A market/depot is NOT a direct person-recruitment source by approved design.
  */
 import { CITY_BUILDING_CATEGORY, getCityBuildingDef } from '../data/city-building-catalog.js';
+import { CULTURE_NAMES } from './world-characters.js';
 
 const SETTLEMENT_SOURCE_TYPES = Object.freeze({
   village: 'village', town: 'town', city: 'city', capital: 'city',
@@ -42,10 +43,15 @@ export function discoverCharacterProductionSources(settlements = []) {
     if (!cityId) continue;
     const settlementType = typeof settlement?.type === 'string' ? settlement.type.toLowerCase() : '';
     const sourceType = SETTLEMENT_SOURCE_TYPES[settlementType];
+    // Culture is NOT a synonym for political owner. Only pass along an
+    // explicitly authored, supported culture field; otherwise use 'generic'.
+    const cultureId = typeof settlement?.cultureId === 'string'
+      && Object.hasOwn(CULTURE_NAMES, settlement.cultureId)
+      ? settlement.cultureId : 'generic';
     if (sourceType) {
       const key = sourceType + '|' + cityId;
       if (!registered.has(key)) {
-        registered.set(key, { type: sourceType, id: cityId, settlementId: cityId });
+        registered.set(key, { type: sourceType, id: cityId, settlementId: cityId, cultureId });
       }
     }
 
@@ -64,7 +70,7 @@ export function discoverCharacterProductionSources(settlements = []) {
         if (id.length > MAX_SOURCE_ID_LENGTH) continue;
         const key = type + '|' + id;
         if (!registered.has(key)) {
-          registered.set(key, { type, id, settlementId: cityId });
+          registered.set(key, { type, id, settlementId: cityId, cultureId });
         }
       }
     }
