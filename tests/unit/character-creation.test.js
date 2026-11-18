@@ -6,7 +6,7 @@ import {
   normalizePlayerCharacter,
   validateCharacterDraft,
 } from '../../js/systems/character-creation.js';
-import { StartScreen } from '../../js/ui/start-screen.js';
+import StartScreen from '../../js/ui/start-screen.js';
 import { SaveManager } from '../../js/managers/SaveManager.js';
 import SaveSystem from '../../js/systems/save-system.js';
 
