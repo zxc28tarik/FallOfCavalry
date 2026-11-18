@@ -16,6 +16,7 @@ import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
 import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
 import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
+import { normalizeCharacterQuestBindings } from '../systems/character-quest-assignments.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -362,6 +363,10 @@ Esc close`,
           roster: this.state?.worldCharacters,
           settlements: this.state?.map?.settlements || [],
         }),
+        characterQuestBindings: normalizeCharacterQuestBindings(this.state?.characterQuestBindings, {
+          roster: this.state?.worldCharacters,
+          settlements,
+        }),
         characterSocial: restoreAuthorizedCharacterSocialState(
           this.state?.characterSocial, this.state?.characterSocialPending, {
             roster: this.state?.worldCharacters,
@@ -468,6 +473,15 @@ Esc close`,
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
+    // QuestManager currently does not serialize live quest instances. Never
+    // silently restore an apparently 'active' NPC quest with no live owner.
+    this.state.characterQuestBindings = normalizeCharacterQuestBindings(
+      game.characterQuestBindings, {
+        roster: this.state.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+        forLoad: true,
+      },
+    );
     const socialOptions = {
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],

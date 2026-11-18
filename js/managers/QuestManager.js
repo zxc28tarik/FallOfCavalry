@@ -8,6 +8,7 @@ export class QuestManager {
     this.failedQuests = [];
     // Optional observer of VERIFIED quest completion; no reward policy here.
     this.onQuestCompleted = null;
+    this.onQuestFailed = null;
     this.lastCompletionObserverError = null;
   }
 
@@ -94,6 +95,19 @@ export class QuestManager {
     for (const effect of (quest.failureEffects ?? [])) this.worldEffectManager?.applyEffect?.(effect);
     this.failedQuests.push(quest);
     this.activeQuests = this.activeQuests.filter((item) => item.id !== questId);
+    if (typeof this.onQuestFailed === 'function') {
+      const receipt = Object.freeze({
+        questId: quest.id, templateId: quest.templateId,
+        assignedCharacterId: quest.assignedCharacterId ?? null,
+        reason: typeof reason === 'string' ? reason : 'unspecified',
+      });
+      try {
+        this.onQuestFailed(receipt);
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
   }
 
   expireQuests(currentDay) {

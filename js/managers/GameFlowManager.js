@@ -20,6 +20,11 @@ import { advanceNamedCharacterImportance } from '../systems/character-importance
 import { changeNamedCharacterMetric, getNamedCharacterState } from '../systems/named-character-state.js';
 import { applyApprovedQuestCharacterOutcome } from '../systems/character-quest-events.js';
 import {
+  bindNamedCharacterToQuest, emptyCharacterQuestBindings,
+  normalizeCharacterQuestBindings, recordNamedCharacterQuestResult,
+  getNamedCharacterQuestRecords,
+} from '../systems/character-quest-assignments.js';
+import {
   getCharacterSocialProfile, linkCharacterToExistingHouse,
   linkCharacterToExistingClique, linkExistingHouseToClique,
 } from '../systems/character-social.js';
@@ -349,6 +354,7 @@ export class GameFlowManager {
       settlements: this.state?.map?.settlements || [],
       authoredCharacters: authoredDefinitions.accepted ? authoredDefinitions.characters : [],
     });
+    this.state.characterQuestBindings = emptyCharacterQuestBindings();
 
     g.mode = 'playing';
     g.saveManager.startAutosaveLoop();
@@ -583,13 +589,67 @@ export class GameFlowManager {
    * amounts must still be present in trusted reviewed quest content; currently
    * that policy catalog is empty, so NO automatic experience/reputation bonus.
    */
+  /**
+   * Explicitly place an existing NamedCharacter on a REAL active quest.
+   * The current organizational duty must already exist; no extra membership,
+   * fabricated quest, title, status, or numerical reward is granted.
+   */
+  assignWorldCharacterToQuest(questId, characterId, { reason } = {}) {
+    const bindings = normalizeCharacterQuestBindings(
+      this.state?.characterQuestBindings, {
+        roster: this.state?.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+      },
+    );
+    const done = bindNamedCharacterToQuest({
+      questManager: this.game?.questManager,
+      bindings,
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      settlements: this.state?.map?.settlements || [],
+      questId, characterId,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterQuestBindings = bindings;
+    return done;
+  }
+
+  getWorldCharacterQuestRecords(characterId) {
+    return getNamedCharacterQuestRecords(this.state?.characterQuestBindings, characterId, {
+      roster: this.state?.worldCharacters,
+    });
+  }
+
   applyVerifiedQuestCharacterOutcome(receipt) {
-    return applyApprovedQuestCharacterOutcome({
+    const bindings = this.state?.characterQuestBindings;
+    const active = Array.isArray(bindings?.entries) && bindings.entries.some((item) =>
+      item.status === 'active'
+      && item.questId === receipt?.questId
+      && item.templateId === receipt?.templateId
+      && item.characterId === receipt?.assignedCharacterId);
+    // Old/unbound quest completion stays a valid quest but has no character
+    // link. A forged quest.assignedCharacterId cannot grant player-NPC stats.
+    if (!active) return { status: 'unbound_quest', applied: false };
+    const day = Math.max(1, Math.floor(Number(this.state?.day) || 1));
+    const reward = applyApprovedQuestCharacterOutcome({
       receipt,
       questManager: this.game?.questManager,
       roster: this.state?.worldCharacters,
       characterOrganization: this.state?.characterOrganization,
+      day,
+    });
+    recordNamedCharacterQuestResult(bindings, receipt, {
+      questManager: this.game?.questManager, day, outcome: 'completed',
+    });
+    return reward;
+  }
+
+  recordVerifiedQuestCharacterFailure(receipt) {
+    return recordNamedCharacterQuestResult(this.state?.characterQuestBindings, receipt, {
+      questManager: this.game?.questManager,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      outcome: 'failed',
     });
   }
 

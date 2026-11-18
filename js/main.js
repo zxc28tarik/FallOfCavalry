@@ -163,6 +163,8 @@ class FallOfCavalry {
     // by a separate, currently EMPTY reviewed policy catalog.
     this.questManager.onQuestCompleted = (receipt) =>
       this.gameFlowManager.applyVerifiedQuestCharacterOutcome(receipt);
+    this.questManager.onQuestFailed = (receipt) =>
+      this.gameFlowManager.recordVerifiedQuestCharacterFailure(receipt);
     this.audioSystem = this.audioSystem || new AudioSystem();
 
     this.uiManager.setupCanvas();

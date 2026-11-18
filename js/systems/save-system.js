@@ -6,6 +6,7 @@
 import * as CONST from '../constants.js';
 import { normalizeWorldCharacterSave } from './world-characters.js';
 import { normalizeCharacterOrganizationState } from './character-organization.js';
+import { normalizeCharacterQuestBindings } from './character-quest-assignments.js';
 import { normalizeCharacterSocialState } from './character-social.js';
 
 const MAX_NORMALIZED_BUILDINGS = 10000;
@@ -199,6 +200,7 @@ export class SaveSystem {
         roster: Array.isArray(game.roster) ? game.roster : [],
         worldCharacters: normalizeWorldCharacterSave(game.worldCharacters),
         characterOrganization: normalizeCharacterOrganizationState(game.characterOrganization),
+        characterQuestBindings: normalizeCharacterQuestBindings(game.characterQuestBindings),
         characterSocial: normalizeCharacterSocialState(game.characterSocial),
         characterSocialPending: normalizeCharacterSocialState(game.characterSocialPending),
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
