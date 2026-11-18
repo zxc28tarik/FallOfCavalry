@@ -171,9 +171,18 @@ function normalizeHistory(value) {
     .filter((item) => asObject(item) && isBoundedInt(item.day, 1, 10000000)
       && ['created', 'promoted', 'moved'].includes(item.type)
       && (item.type !== 'moved' || normalizeSettlementId(item.settlementId)))
-    .map((item) => item.type === 'moved'
-      ? { day: item.day, type: item.type, settlementId: normalizeSettlementId(item.settlementId) }
-      : { day: item.day, type: item.type });
+    .map((item) => {
+      if (item.type === 'moved') {
+        return { day: item.day, type: item.type, settlementId: normalizeSettlementId(item.settlementId) };
+      }
+      if (item.type === 'created'
+        && typeof item.sourceType === 'string' && item.sourceType.length <= 40
+        && typeof item.sourceId === 'string' && item.sourceId.length > 0 && item.sourceId.length <= 80
+        && !/[<>\r\n\t]/.test(item.sourceType + item.sourceId)) {
+        return { day: item.day, type: item.type, sourceType: item.sourceType, sourceId: item.sourceId };
+      }
+      return { day: item.day, type: item.type };
+    });
 }
 
 function normalizePerson(value) {
@@ -235,7 +244,10 @@ export function normalizeWorldCharacters(value) {
         loyalty: row[10], satisfaction: row[11], reputation: row[12], standing: row[13],
         status: row[14], location: { kind: 'settlement', settlementId: row[15] },
         history: Array.isArray(row[16]) ? row[16].map((entry) => ({
-          day: entry?.[0], type: entry?.[1], ...(entry?.[1] === 'moved' ? { settlementId: entry?.[2] } : {}),
+          day: entry?.[0], type: entry?.[1],
+          ...(entry?.[1] === 'moved' ? { settlementId: entry?.[2] } : {}),
+          ...(entry?.[1] === 'created' && entry.length === 4
+            ? { sourceType: entry?.[2], sourceId: entry?.[3] } : {}),
         })) : [],
       };
     })
@@ -365,7 +377,9 @@ export function packWorldCharacters(value) {
       person.status, person.location.settlementId,
       person.history.map((event) => event.type === 'moved'
         ? [event.day, event.type, event.settlementId]
-        : [event.day, event.type]),
+        : event.type === 'created' && event.sourceType && event.sourceId
+          ? [event.day, event.type, event.sourceType, event.sourceId]
+          : [event.day, event.type]),
     ]),
     relations: normalized.relations.map((relation) => [
       relation.firstId, relation.secondId, relation.value,
