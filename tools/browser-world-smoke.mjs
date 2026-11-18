@@ -214,7 +214,11 @@ async function main() {
       const noInventedSocialTiesAfterLoad = socialProfileAfterSave?.houseMemberships?.length === 0
         && socialProfileAfterSave?.cliqueMemberships?.length === 0
         && savePayload.game?.characterSocial?.houses?.length === 0
-        && savePayload.game?.characterSocial?.cliques?.length === 0;
+        && savePayload.game?.characterSocial?.cliques?.length === 0
+        && savePayload.game?.characterSocialPending?.houses?.length === 0
+        && savePayload.game?.characterSocialPending?.cliques?.length === 0
+        && g.state.characterSocialPending?.houses?.length === 0
+        && g.state.characterSocialPending?.cliques?.length === 0;
       const organizationAfterSave = g.gameFlowManager.getWorldCharacterOrganizationProfile(chosenId);
       const organizationRoundtripOk = organizationAfterSave?.memberships?.length === 1
         && organizationAfterSave.memberships[0].branch === 'trade_network'
