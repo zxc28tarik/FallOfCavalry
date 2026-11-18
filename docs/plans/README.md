@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [18 Kasım 2026 — WEB Character System v2 V1.13 gerçek görev–önemli karakter ataması](2026-11-18-web-character-quest-assignment-v1.md): aktif NamedCharacter/organizasyon görevi bağlantısı, sonuç/failure kaydı, güvenli suspended save, QA ve UI/quest restore açık işleri
 - [18 Kasım 2026 — WEB Character System v2 V1.12 şehir NPC durumu + görev tamamlanma köprüsü](2026-11-18-web-character-quest-event-bridge-v1.md): ilk UI NamedCharacterState tüketicisi, gerçek quest receipt kapısı, güvenilir boş ödül kataloğu, 10 yeni test ve QA
 - [18 Kasım 2026 — WEB Character System v2 V1.11 NamedCharacterState/CharacterDefinition sözleşme ayrımı](2026-11-18-web-named-character-state-separation-v1.md): gerekçeli stat değişimi, değişmez kişi kimliği, eski packed/delta save uyumu, QA ve açık fiziksel refaktör
 - [18 Kasım 2026 — WEB Character System v2 V1.10 CharacterDefinition/kalıcı önemli kişi çekirdeği](2026-11-18-web-character-definition-authority-v1.md): authored A/B/C karakter kimliği, güvenilir kaynak, seeded delta save, sahte kimlik engeli ve QA
