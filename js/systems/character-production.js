@@ -119,7 +119,13 @@ function drawWeightedRole(weights, random) {
 
 function candidateId(source, slot) {
   const escapeComponent = (id) => encodeURIComponent(id).replace(/~/g, '%7E');
-  const result = 'npc:source-' + escapeComponent(source.type) + '~' + escapeComponent(source.id) + ':' + slot;
+  // A city/town/fort/village source is identified by its own settlement ID.
+  // Facility/event identifiers may be local to their owning settlement; include
+  // that authority in the NPC key or e.g. "inn-1" in two towns collides.
+  const sourceKey = Object.hasOwn(SETTLEMENT_SOURCE_TYPES, source.type)
+    ? escapeComponent(source.id)
+    : escapeComponent(source.settlementId) + '~' + escapeComponent(source.id);
+  const result = 'npc:source-' + escapeComponent(source.type) + '~' + sourceKey + ':' + slot;
   if (result.length > 400) throw new RangeError('Encoded character ID exceeds the campaign identity limit.');
   return result;
 }
@@ -217,6 +223,7 @@ export function registerProducedCharacter(roster, production, selectedId, {
   day = 1,
   rolePolicy = CHARACTER_SOURCE_ROLES,
   namePools = CULTURE_NAMES,
+  expectedWorldSeed,
 } = {}) {
   if (!isRecord(roster) || !Array.isArray(roster.characters)
     || !isRecord(production) || !Array.isArray(production.candidates)) return false;
@@ -232,6 +239,7 @@ export function registerProducedCharacter(roster, production, selectedId, {
   }
   if (production.revision !== CHARACTER_PRODUCTION_REVISION) return false;
   if (!Number.isSafeInteger(production.worldSeed) || production.worldSeed < 0) return false;
+  if (expectedWorldSeed !== undefined && expectedWorldSeed !== production.worldSeed) return false;
   const candidate = production.candidates.find((person) => person?.id === selectedId);
   if (!candidate || candidate.kind !== 'generated' || candidate.importance != null
     || candidate.status !== 'alive' || roster.characters.some((person) => person.id === selectedId)) return false;
