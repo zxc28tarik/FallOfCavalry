@@ -194,18 +194,41 @@ function normalizePerson(value) {
 
 export function normalizeWorldCharacters(value) {
   const input = asObject(value);
-  if (!input || !Array.isArray(input.characters)) {
+  if (!input) {
+    return { version: WORLD_CHARACTER_VERSION, characters: [], relations: [] };
+  }
+  // Packed saves keep the same facts as the runtime model, but omit thousands
+  // of repeated JSON property names (critical for browser localStorage quotas).
+  const source = input.format === 'packed-v1' && Array.isArray(input.people)
+    ? input.people.map((row) => {
+      if (!Array.isArray(row) || row.length !== 17) return null;
+      return {
+        id: row[0], kind: row[1], name: row[2], importance: row[3],
+        cultureId: row[4], originFactionId: row[5], role: row[6], age: row[7],
+        traits: row[8],
+        stats: Object.fromEntries(CHARACTER_STAT_KEYS.map((key, index) => [key, row[9]?.[index]])),
+        loyalty: row[10], satisfaction: row[11], reputation: row[12], standing: row[13],
+        status: row[14], location: { kind: 'settlement', settlementId: row[15] },
+        history: Array.isArray(row[16]) ? row[16].map((entry) => ({
+          day: entry?.[0], type: entry?.[1],
+        })) : [],
+      };
+    })
+    : input.characters;
+  if (!Array.isArray(source)) {
     return { version: WORLD_CHARACTER_VERSION, characters: [], relations: [] };
   }
   const byId = new Map();
-  for (const raw of input.characters.slice(0, MAX_WORLD_CHARACTERS)) {
+  for (const raw of source.slice(0, MAX_WORLD_CHARACTERS)) {
     const person = normalizePerson(raw);
     if (person && !byId.has(person.id)) byId.set(person.id, person);
   }
   const characters = [...byId.values()].sort((a, b) => a.id.localeCompare(b.id, 'en'));
   const relations = [];
   const seen = new Set();
-  for (const raw of Array.isArray(input.relations) ? input.relations.slice(0, MAX_WORLD_CHARACTERS * 4) : []) {
+  for (const entry of Array.isArray(input.relations) ? input.relations.slice(0, MAX_WORLD_CHARACTERS * 4) : []) {
+    const raw = Array.isArray(entry) && entry.length === 3
+      ? { firstId: entry[0], secondId: entry[1], value: entry[2] } : entry;
     if (!asObject(raw) || !byId.has(raw.firstId) || !byId.has(raw.secondId)
       || raw.firstId === raw.secondId || !isBoundedInt(raw.value, -100, 100)) continue;
     const [firstId, secondId] = [raw.firstId, raw.secondId].sort();
@@ -245,4 +268,28 @@ export function setWorldCharacterRelation(roster, firstId, secondId, value) {
   else roster.relations.push({ firstId: first, secondId: second, value });
   roster.relations.sort((a, b) => a.firstId.localeCompare(b.firstId, 'en') || a.secondId.localeCompare(b.secondId, 'en'));
   return true;
+}
+
+/**
+ * Save-only lossless compact representation. Runtime continues to use the
+ * descriptive property-based model; existing full-form saves remain supported.
+ */
+export function packWorldCharacters(value) {
+  const normalized = normalizeWorldCharacters(value);
+  return {
+    version: WORLD_CHARACTER_VERSION,
+    format: 'packed-v1',
+    people: normalized.characters.map((person) => [
+      person.id, person.kind, person.name, person.importance,
+      person.cultureId, person.originFactionId, person.role, person.age,
+      person.traits,
+      CHARACTER_STAT_KEYS.map((key) => person.stats[key]),
+      person.loyalty, person.satisfaction, person.reputation, person.standing,
+      person.status, person.location.settlementId,
+      person.history.map((event) => [event.day, event.type]),
+    ]),
+    relations: normalized.relations.map((relation) => [
+      relation.firstId, relation.secondId, relation.value,
+    ]),
+  };
 }
