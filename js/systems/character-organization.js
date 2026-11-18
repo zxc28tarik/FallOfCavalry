@@ -24,8 +24,11 @@ const settlementId = (value) => (typeof value === 'string' || Number.isSafeInteg
   && String(value).trim().length > 0 && String(value).length <= 120
   && !/[<>\r\n\t]/.test(String(value)) ? String(value).trim() : null;
 const named = (roster, id) => Array.isArray(roster?.characters) && validId(id)
-  ? roster.characters.find((person) => person.id === id
-    && person.kind === 'named' && person.status === 'alive') : null;
+  ? roster.characters.find((person) => person.id === id && person.kind === 'named') : null;
+const livingNamed = (roster, id) => {
+  const person = named(roster, id);
+  return person?.status === 'alive' ? person : null;
+};
 
 function locationOf(input, settlements) {
   const id = record(input) && input.kind === 'settlement'
@@ -35,9 +38,9 @@ function locationOf(input, settlements) {
   return { kind: 'settlement', settlementId: id };
 }
 
-function actorRef(id, roster) {
+function actorRef(id, roster, requireAlive = false) {
   if (id == null) return null;
-  if (!validId(id) || (roster && !named(roster, id))) return false;
+  if (!validId(id) || (roster && !(requireAlive ? livingNamed(roster, id) : named(roster, id)))) return false;
   return id;
 }
 
@@ -104,7 +107,7 @@ export function normalizeCharacterOrganizationState(input, { roster, settlements
 export function addCharacterBranchMembership(state, characterId, branch, {
   roster, day = 1, reason,
 } = {}) {
-  if (!record(state) || !Array.isArray(state.memberships) || !named(roster, characterId)
+  if (!record(state) || !Array.isArray(state.memberships) || !livingNamed(roster, characterId)
     || !branchOk(branch) || !validDay(day) || !validReason(reason)
     || state.memberships.length >= MAX_MEMBERSHIPS
     || state.memberships.some((x) => x.characterId === characterId && x.branch === branch)) return false;
@@ -120,9 +123,9 @@ export function startCharacterAssignment(state, characterId, {
   day = 1, reason, employerCharacterId = null, assignedByCharacterId = null,
 } = {}) {
   const loc = locationOf(assignmentLocation, settlements);
-  const employer = actorRef(employerCharacterId, roster);
-  const assigner = actorRef(assignedByCharacterId, roster);
-  if (!record(state) || !Array.isArray(state.assignments) || !named(roster, characterId)
+  const employer = actorRef(employerCharacterId, roster, true);
+  const assigner = actorRef(assignedByCharacterId, roster, true);
+  if (!record(state) || !Array.isArray(state.assignments) || !livingNamed(roster, characterId)
     || !branchOk(branch) || !ROLE_PATTERN.test(assignmentRole)
     || !loc || !validDay(day) || !validReason(reason)
     || employer === false || assigner === false
@@ -141,7 +144,7 @@ export function startCharacterAssignment(state, characterId, {
 export function completeCharacterAssignment(state, characterId, {
   roster, day = 1, reason,
 } = {}) {
-  if (!record(state) || !Array.isArray(state.assignments) || !named(roster, characterId)
+  if (!record(state) || !Array.isArray(state.assignments) || !livingNamed(roster, characterId)
     || !validDay(day) || !validReason(reason)) return false;
   const current = state.assignments.find((x) =>
     x.characterId === characterId && x.assignmentStatus === 'active');
