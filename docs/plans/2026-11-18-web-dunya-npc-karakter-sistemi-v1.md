@@ -50,6 +50,6 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 - [x] Oyuncu/asker veri katmanını değiştirmeme.
 - [x] Gerçek yerleşimlerden deterministik NPC üretim ve kayıt adaptörü.
 - [x] Şehir özetinde isimlerin görülmesi (kod entegrasyonu).
-- [x] İlk V1 için [Web validation](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44218937419) ve 518 birim/930 genel test geçti (1 skipped) — **V1.1 güncel head ayrıca kontrol edilecek**.
-- [x] İlk V1 için [Chromium](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44218937956) yeni oyun → dünya → save/load PASS; **V1.1 profil seçimi/screenshot kabulü ayrıca kontrol edilecek**.
+- [x] V1.1 için [Web validation](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44221429214) başarılı: **524/524 birim**, **936 genel PASS + 1 skipped**, lint/static/Vite build ve tam prosedürel dünya denetimi (0 hata, 1 uyarı). Kaynak kanıt SHA: `65e50ca457757bc5eefde84f62d75d7820ff7cc2`.
+- [x] V1.1 için [Chromium](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44221429343) başarılı: 881 yerleşimde 1.762 NPC, gerçek şehir panelinde 2 NPC listesi, `npc:0:1` tıklanarak seçilen karakter profilinde 9 stat/kişilik/geçmiş, geri dönüş ve save/load. 0 console error; `04-npc-character-sheet.png` CI artifact olarak mevcut.
 - [ ] Kullanıcı tarihsel içerik / sistem mekanikleri kabulü.
