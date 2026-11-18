@@ -11,6 +11,7 @@
  * a synthetic quest receipt may silently reactivate them.
  */
 import { getNamedCharacterState } from './named-character-state.js';
+import { QUEST_DEFS } from '../data/quest-defs.js';
 import { normalizeCharacterOrganizationState } from './character-organization.js';
 
 export const CHARACTER_QUEST_BINDING_VERSION = 1;
@@ -101,7 +102,10 @@ export function bindNamedCharacterToQuest({
   const quest = questManager.activeQuests.find((x) =>
     x?.id === questId && x.status === 'active'
     && typeof x.templateId === 'string' && QUEST_ID.test(x.templateId));
-  if (!quest || quest.assignedCharacterId != null) return false;
+  // The quest must be an actual known gameplay template, not merely an
+  // arbitrary object inserted by an untrusted caller into activeQuests.
+  if (!quest || quest.assignedCharacterId != null ||
+    !QUEST_DEFS.some((definition) => definition.id === quest.templateId)) return false;
   const duty = liveDuty(characterOrganization, roster, settlements, characterId, day);
   if (!duty) return false;
   const dutyCity = duty.assignmentLocation?.settlementId;

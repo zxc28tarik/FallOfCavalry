@@ -219,11 +219,17 @@ async function main() {
         (person) => !person.id.startsWith('npc:authored-'),
       ) && g.gameFlowManager.getWorldCharacterDefinition(chosenId) === null
         && g.state.characterDefinitionDiagnostics?.length === 0;
+      const noInventedQuestBindings = g.gameFlowManager.getWorldCharacterQuestRecords(chosenId)?.length === 0
+        && g.state.characterQuestBindings?.entries?.length === 0;
       const savePayload = g.saveManager.buildSavePayload();
+      const noQuestBindingSaveLeak = savePayload.game?.characterQuestBindings?.entries?.length === 0;
       const saveRecord = savePayload.game?.worldCharacters;
       const saveOk = g.saveManager.quickSave() === true;
       const loadOk = saveOk && g.saveManager.quickLoad() === true;
       const restored = g.state.worldCharacters.characters.find((person) => person.id === chosenId);
+      const noInventedQuestBindingsAfterLoad =
+        g.gameFlowManager.getWorldCharacterQuestRecords(chosenId)?.length === 0
+        && g.state.characterQuestBindings?.entries?.length === 0;
       const noInventedAuthoredAfterLoad = g.state.worldCharacters.characters.every(
         (person) => !person.id.startsWith('npc:authored-'),
       ) && g.gameFlowManager.getWorldCharacterDefinition(chosenId) === null
@@ -259,6 +265,7 @@ async function main() {
         noInventedSocialTies, noInventedSocialTiesAfterLoad,
         noInventedAuthored, noInventedAuthoredAfterLoad,
         stateEventOk, independentCharacterState, stateRoundtripOk,
+        noInventedQuestBindings, noQuestBindingSaveLeak, noInventedQuestBindingsAfterLoad,
         restoredClass: restored?.importance ?? null,
         restoredPromotionHistory: restored?.history?.some((entry) =>
           entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
@@ -284,6 +291,9 @@ async function main() {
       !productionRoundtrip.noInventedAuthoredAfterLoad ||
       !productionRoundtrip.stateEventOk || !productionRoundtrip.independentCharacterState ||
       !productionRoundtrip.stateRoundtripOk ||
+      !productionRoundtrip.noInventedQuestBindings ||
+      !productionRoundtrip.noQuestBindingSaveLeak ||
+      !productionRoundtrip.noInventedQuestBindingsAfterLoad ||
       !productionRoundtrip.independentMembership ||
       !productionRoundtrip.organizationRoundtripOk || !productionRoundtrip.invalidDirectA ||
       !productionRoundtrip.advancedToC || productionRoundtrip.restoredClass !== 'C' ||

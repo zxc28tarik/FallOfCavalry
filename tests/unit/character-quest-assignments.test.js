@@ -124,6 +124,10 @@ describe('Character System v2 V1.13: real NamedCharacter <-> actual quest bindin
     h.person.status = 'dead';
     expect(bind(h)).toBe(false);
     expect(h.state.characterQuestBindings.entries).toEqual([]);
+    const forged = fixture();
+    forged.quest.templateId = 'fictional_quest_template';
+    expect(bind(forged)).toBe(false);
+    expect(forged.quest.assignedCharacterId).toBeUndefined();
   });
 
   it('tracks a real completed path only once while keeping player reward vs NPC stat separate', () => {
