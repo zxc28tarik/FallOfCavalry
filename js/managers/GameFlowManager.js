@@ -14,6 +14,7 @@ import { findFactionStartTile } from '../world/world-map-asset-loader.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
 import { produceCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
+import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -343,6 +344,14 @@ export class GameFlowManager {
    *
    * Preview does not mutate state or add recruits/companions.
    */
+  /**
+   * Read-only list of real settlement and constructed-facility character
+   * sources. Does not create new cityState/buildings or permanent people.
+   */
+  listWorldCharacterProductionSources() {
+    return discoverCharacterProductionSources(this.state?.map?.settlements || []);
+  }
+
   previewWorldCharacterCandidates(source, {
     count = 2,
     firstSlot = 1,
@@ -351,11 +360,12 @@ export class GameFlowManager {
     namePools,
   } = {}) {
     const settlements = this.state?.map?.settlements || [];
+    const currentSources = this.listWorldCharacterProductionSources();
     return produceCharacterCandidates({
       worldSeed: this.state?.seed,
       source,
       settlements,
-      registeredSources,
+      registeredSources: [...currentSources, ...registeredSources],
       count,
       firstSlot,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
@@ -376,7 +386,7 @@ export class GameFlowManager {
     if (!this.state?.worldCharacters) return false;
     return registerProducedCharacter(this.state.worldCharacters, production, characterId, {
       settlements: this.state?.map?.settlements || [],
-      registeredSources,
+      registeredSources: [...this.listWorldCharacterProductionSources(), ...registeredSources],
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
       ...(rolePolicy ? { rolePolicy } : {}),
       ...(namePools ? { namePools } : {}),
