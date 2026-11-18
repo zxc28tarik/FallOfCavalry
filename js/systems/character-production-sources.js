@@ -28,11 +28,12 @@ function encode(value) {
 function buildingSourceType(buildingId) {
   if (DIRECT_INN_IDS.has(buildingId)) return 'inn';
   if (buildingId === 'caravanserai') return 'caravanserai';
-  // Built production sites may yield artisans. Market, bazaar, bedesten,
-  // customs and guild halls are intentionally NOT auto recruit locations.
+  // Only actual industry workshops count as 'production' sources.
+  // The approved city plan separates FOOD / supply (bakery, butcher etc.)
+  // from the production-crafts area; do not silently merge them.
+  // Market, bazaar, bedesten, customs and guild halls are not auto sources.
   const category = getCityBuildingDef(buildingId)?.category;
-  return category === CITY_BUILDING_CATEGORY.INDUSTRY
-    || category === CITY_BUILDING_CATEGORY.FOOD ? 'production' : null;
+  return category === CITY_BUILDING_CATEGORY.INDUSTRY ? 'production' : null;
 }
 
 export function discoverCharacterProductionSources(settlements = []) {
