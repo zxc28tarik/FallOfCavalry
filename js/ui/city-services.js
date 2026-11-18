@@ -405,6 +405,80 @@ export default class CityServicesUI {
     );
   }
 
+  renderNpcProfile(npcId) {
+    const profile = getWorldCharacterProfile(this.state?.worldCharacters, npcId, {
+      day: this.state?.day,
+    });
+    if (!profile || profile.person.location?.settlementId !== String(this.currentSettlement?.id)) {
+      this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      this.renderOverview();
+      return;
+    }
+
+    const { person, age, relations } = profile;
+    const roleLabel = NPC_ROLE_LABELS[person.role] || person.role;
+    const statusLabel = person.status === 'alive' ? 'Hayatta' : 'Ölü';
+    const kindLabel = person.kind === 'named'
+      ? `Önemli karakter (${person.importance})` : 'Sıradan dünya karakteri';
+    const statRows = CHARACTER_STAT_KEYS.map((key) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(NPC_STAT_LABELS[key] || key)}</span>
+        <strong>${person.stats[key]}/100</strong>
+      </div>`).join('');
+    const relationRows = relations.length ? relations.map((other) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(other.name)}</span>
+        <strong>${other.value > 0 ? '+' : ''}${other.value}</strong>
+      </div>`).join('')
+      : '<div class="text-sm opacity-70">Henüz kayıtlı kişisel ilişki yok.</div>';
+    const historyRows = person.history.length ? [...person.history].reverse().map((event) => {
+      const typeText = event.type === 'created' ? 'Oluşturuldu'
+        : event.type === 'promoted' ? 'Önem kazandı' : event.type === 'moved'
+          ? 'Şehir değiştirdi' : 'Olay';
+      const target = event.type === 'moved' ? ` — ${escapeHtml(event.settlementId)}` : '';
+      return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${event.day}</strong></div>`;
+    }).join('') : '<div class="text-sm opacity-70">Kayıt yok.</div>';
+
+    this.setPanelChrome(
+      'Karakter: ' + person.name,
+      `<div class="city-panel-meta-line">${escapeHtml(kindLabel)} · ${escapeHtml(statusLabel)}</div>`,
+      `
+        <button type="button" class="action-btn btn-dark text-xs mb-3" data-action="show-overview">Şehre dön</button>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kimlik</div>
+          <div class="city-overview-row"><span>Adı</span><strong>${escapeHtml(person.name)}</strong></div>
+          <div class="city-overview-row"><span>Yaş</span><strong>${age}</strong></div>
+          <div class="city-overview-row"><span>Rol profili</span><strong>${escapeHtml(roleLabel)}</strong></div>
+          <div class="city-overview-row"><span>Karakter türü</span><strong>${escapeHtml(kindLabel)}</strong></div>
+          <div class="text-xs opacity-70 mt-2">Rol profili, resmî görev veya askerî rütbe değildir.</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kişilik</div>
+          <div class="text-sm">${person.traits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Yetenekler</div>
+          ${statRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Toplumsal durum</div>
+          <div class="city-overview-row"><span>Sadakat</span><strong>${person.loyalty}/100</strong></div>
+          <div class="city-overview-row"><span>Memnuniyet</span><strong>${person.satisfaction}/100</strong></div>
+          <div class="city-overview-row"><span>İtibar</span><strong>${person.reputation}/100</strong></div>
+          <div class="city-overview-row"><span>Konum</span><strong>${person.standing}/100</strong></div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Bilinen ilişkiler</div>
+          ${relationRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Geçmiş</div>
+          ${historyRows}
+        </div>
+      `,
+    );
+  }
+
   renderAreaMenu(parcelId) {
     const cityState = ensureSettlementCityState(this.currentSettlement);
     const parcel = cityState.parcels.find((entry) => entry.id === parcelId);
