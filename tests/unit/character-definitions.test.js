@@ -55,7 +55,7 @@ function game() {
   };
 }
 
-describe('Character System v2 V2.0: authored CharacterDefinition separate from seeded GeneratedPerson', () => {
+describe('Character System v2 V1.10: authored CharacterDefinition separate from seeded GeneratedPerson', () => {
   it('starts with EMPTY authored catalog; does not turn culture names into historical identities', () => {
     const empty = getTrustedCharacterDefinitions({ settlements });
     expect(empty.accepted).toBe(true);

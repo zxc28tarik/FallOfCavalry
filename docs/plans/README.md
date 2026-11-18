@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [18 Kasım 2026 — WEB Character System v2 V1.10 CharacterDefinition/kalıcı önemli kişi çekirdeği](2026-11-18-web-character-definition-authority-v1.md): authored A/B/C karakter kimliği, güvenilir kaynak, seeded delta save, sahte kimlik engeli ve QA
 - [18 Kasım 2026 — WEB Character System v2 V1.9 tarihsel kaynak/kişi kimliği ön doğrulaması](2026-11-18-web-character-social-source-identity-v1.md): kaynak atfı, birebir NamedCharacter ID/ad kontrolü, atomik katalog kapısı, QA ve eksik içerik sınırı
 - [18 Kasım 2026 — WEB Character System v2 V1.8 sosyal kaynak otoritesi](2026-11-18-web-character-social-authority-v1.md): doğrulanmış katalog, eski kayıtları etkinleştirmeme, karantina, güvenli geri yükleme ve test sınırları
 - [18 Kasım 2026 — WEB Character System v2 aile/hizip bağlayıcı V1.7](2026-11-18-web-character-social-house-clique-v1.md): gerçek HouseState/CliqueState kaynak kapıları, ayrı üyelik bağları, geçerli ID/save testi, yapay aile üretmeme kuralı
