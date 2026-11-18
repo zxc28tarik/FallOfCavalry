@@ -25,7 +25,7 @@ const stage = (name, details = {}) => {
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(imageDir, { recursive: true });
-  const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader'] });
+  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-gl=angle', '--use-angle=swiftshader'] });
   try {
     const page = await browser.newPage({ viewport: { width: 1366, height: 768 }, deviceScaleFactor: 1 });
     const expectedOrigin = new URL(url).origin;

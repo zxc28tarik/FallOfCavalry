@@ -35,8 +35,8 @@ jobs:
       - name: Install pinned CI-only Playwright
         run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
 
-      - name: Install Chromium
-        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Use Chrome preinstalled in GitHub runner
+        run: command -v google-chrome || command -v google-chrome-stable
 
       - name: Build production game
         run: npm run build
