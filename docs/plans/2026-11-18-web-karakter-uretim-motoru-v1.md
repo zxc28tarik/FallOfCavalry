@@ -104,3 +104,11 @@ Gerçek gameplay kaynağı
 
 **Hâlen engelli / sonraki adım:** Otomatik NPC arama teklifleri, kaynak sıklığı/yenilenme, nadirlik, A/B/C önemli tarihsel kişiler, din/aile/hizip bağlama, gerçek quest/işletme/maden/oba kaynağı adaptörleri kullanıcıca onaylanmış davranış olmadan açılmaz. Bu PR teknik üretim güvenilirliği sağlar, tüm canlı dünya AI simülasyonunu tamamlamaz.
 
+
+### V1.3 doğrulama kanıtı — 18.11.2026
+
+- [Web validation #44227315955](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44227315955) **PASS**: **543/543 unit**; tam Vitest **955/956** (1 skipped); Vite production build ve source hygiene PASS; dünyanın 881 yerleşim / 304 yol / 3 nehir / 4 geçit kontrolünde 0 error, 1 açık uyarı.
+- [Chromium browser #44227315983](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44227315983) **PASS**: 1.762 dünya NPC'si; 4.732 mevcut yerleşim/inşa edilmiş yapı üretim kaynağı; sahte han kaynağı RED, yanlış campaign seed RED, duplicate RED; geçici aday yaratırken world state değişmiyor; seçilen kişi Named(D) + `additions:1` kaydıyla korunuyor; quick save/load sonrası kişi aynı, player soldier roster değişmiyor, JS console errors=0; şehir NPC profil ekranı açılıyor.
+- İşleyen kodun test edilen HEAD'i: `0a8f08a4f6f6f6c75224cfc17a9124aa07f57e36`. Sonraki dokümantasyon commitleri yeniden CI alır; **PR draft, main'e merge yok**.
+- Bu QA **üretim altyapısı alt-dilimi** için geçerlidir: toplu tarihsel dünya verisi, oyuncuya katılım dengesi, görsel asker üretimi ve bütün olay/quest source adaptörleri bitmedi.
+
