@@ -19,6 +19,9 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 - **Gerçek tarayıcı keşfi ve düzeltme:** 881 yerleşim × 2 NPC = 1762 kayıt, tam JSON'da ve kayıpsız `packed-v1` dizilerinde tarayıcı hızlı kaydını başarısız bıraktı. İlk Chromium raporunda toplam **5.449.454 JSON karakteri**, bunun **299.333**'ü sıkıştırılmış NPC verisi idi. Yeni asıl kampanya kaydı `seeded-delta-v1` ile dünya tohumu + değişen kişi kayıtları + açık ilişki çiftlerini saklar. Değişmeyen kişiler mevcut yerleşim ID'leri ve sabit V1 jeneratöründen yeniden kurulur. Runtime modeli ve `packed-v1` tam aktarım biçimi korunur; `SaveSystem` metadata'yı normalize eder ve `SaveManager` dünya boot sonrası karakterleri geri kurar. Birim testi 1762 kişinin tek değişiklikle küçük kayda dönüştüğünü kanıtlar; son kabul gerçek Chromium smoke PASS'e bağlıdır.
 - Eski v1 kayıtları alan içermediğinde `characters:[]` ve `relations:[]` ile açılır; mevcut NPC yokken kayda uydurma kişi eklenmez. Kayıt ana `schemaVersion: 1` korunur, çünkü isteğe bağlı alan ekidir.
 - `CityServicesUI` mevcut şehir özetinde o şehre bağlı isim/rol/yaş listesi gösterir. Karakter metni HTML injection'a karşı kaçıştan geçirilir.
+- **İkinci dilim, V1.1:** Şehir özetindeki NPC satırı artık seçilebilir; ayrı karakter bilgi paneli adını, yaşını, 9 özelliğini, kişiliğini, itibar/sadakat/memnuniyet/konumunu, gerçekten var olan seyrek ilişkilerini ve geçmiş kaydını gösterir. Şehre dönme kontrolü vardır. Karakter adları/ID'leri HTML'e güvenli kaçışla yazılır. Gerçek Chromium testi şehir listesinden profile tıklama, profil içeriği, geri dönüş ve screenshot ile genişletildi.
+- `getWorldCharacterAge(person, day)` yalnız **görüntü için türetilmiş** yaş hesaplar: oyun gün 1'den itibaren 365 gün başına bir yıl (geçici kural). 1.762 kişiye yıllık kayıt güncellemesi yapılmaz, bu işlem otomatik yaşlılıktan ölüm/doğum/evlilik sistemi değildir.
+- `getWorldCharacterProfile` hiç ilişki üretmeden açık ilişki kenarlarını okur. `moveWorldCharacter`, yalnız oyun dünyasında gerçekten bulunan yerleşimler arası açık komutla kişinin konumunu değiştirir ve `moved` geçmiş kaydını mevcut kayıt algoritmasıyla korur. Yapay zekâ kendi kendine taşınma başlatmaz.
 - Sadece açık `setWorldCharacterRelation` ile seyrek ilişkiler; rastgele bütün karakterleri birbirine bağlamaz.
 - `promoteWorldCharacter` aynı nesne/ID/özellik/konumu koruyarak kimlik ve önem sınıfı değiştirir.
 - Unit ve Chromium browser smoke: determinism, seed değişikliği, farklı settlement sıralaması, sınır/çarpışma, promotion, ilişki, eski-save ve gerçek save/load.
@@ -33,7 +36,7 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 
 ## Sınırlar, riskler, sonraki işler
 
-1. Kayıtların oyun tarihine göre yaşlanması, doğum/ölüm, din/kültür bağlılığı, meslek/atama ve miras **henüz yok**.
+1. **Yaş göstergesi türetilir**, ama tam yaşam döngüsü (kişisel doğum günü, doğum/ölüm, ölüm politikası, din/kültür bağları, meslek ataması ve miras) **henüz yok**. Türetim için 365 gün/yıl teknik varsayımdır, kullanıcıca onaylanmış tarih sistemi değildir.
 2. `role` yalnız başlangıç profilidir; şehir kadılığı, tüccar iktisadi aktörü, ordunun komutanı veya diplomatik elçi olarak atanmamış kişi bunların yetkilerini taşımaz.
 3. Şehir el değiştirince `originFactionId` yaratılıştaki menşei etiketidir, otomatik siyasi bağlılık veya zorla din değişimi olmaz.
 4. `worldCharacters` v1 bağımsız, şimdilik küçük ve düz array veri modelidir; ilerde kişi sayısı büyürse indeksleme, simülasyon yoğunluk bütçesi ve eski kayıt migrasyonu ayrı onaylanmalıdır.
@@ -47,6 +50,6 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 - [x] Oyuncu/asker veri katmanını değiştirmeme.
 - [x] Gerçek yerleşimlerden deterministik NPC üretim ve kayıt adaptörü.
 - [x] Şehir özetinde isimlerin görülmesi (kod entegrasyonu).
-- [ ] Web CI exact-head başarı kanıtı.
-- [ ] Chromium gerçek yeni oyun/şehir/save/load kanıtı.
+- [x] İlk V1 için [Web validation](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44218937419) ve 518 birim/930 genel test geçti (1 skipped) — **V1.1 güncel head ayrıca kontrol edilecek**.
+- [x] İlk V1 için [Chromium](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44218937956) yeni oyun → dünya → save/load PASS; **V1.1 profil seçimi/screenshot kabulü ayrıca kontrol edilecek**.
 - [ ] Kullanıcı tarihsel içerik / sistem mekanikleri kabulü.
