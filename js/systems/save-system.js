@@ -4,6 +4,7 @@
  */
 
 import * as CONST from '../constants.js';
+import { normalizePlayerCharacter } from './character-creation.js';
 
 const MAX_NORMALIZED_BUILDINGS = 10000;
 
@@ -192,6 +193,7 @@ export class SaveSystem {
           starveDays: Number.isFinite(game?.playerParty?.starveDays) ? game.playerParty.starveDays : 0,
           contracts: Array.isArray(game?.playerParty?.contracts) ? game.playerParty.contracts : [],
           factionId: typeof game?.playerParty?.factionId === 'string' ? game.playerParty.factionId : null,
+          character: normalizePlayerCharacter(game?.playerParty?.character),
         },
         roster: Array.isArray(game.roster) ? game.roster : [],
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
