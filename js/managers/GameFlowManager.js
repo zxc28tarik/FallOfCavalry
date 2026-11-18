@@ -41,7 +41,7 @@ export class GameFlowManager {
       this.startScreen = new StartScreen({
         state: this.state,
         saveSystem: g.saveManager.saveSystem,
-        onStart: async ({ faction, seed, character, startingModifiers }) => {
+        onStart: async ({ faction, seed, character }) => {
           this.state.seed = seed;
           this.state.selectedFaction = {
             id: faction.id,
@@ -52,9 +52,7 @@ export class GameFlowManager {
           };
           const fallbackCreation = createPlayerCharacter({ name: 'Yeni Komutan' }, faction.id);
           const selectedCharacter = normalizePlayerCharacter(character) || fallbackCreation.character;
-          const modifiers = character && startingModifiers
-            ? startingModifiers
-            : fallbackCreation.startingModifiers;
+          const modifiers = createPlayerCharacter(selectedCharacter, faction.id).startingModifiers;
           const gold = Math.max(0, faction.startingGold + (Number(modifiers.gold) || 0));
           const renown = Math.max(0, faction.startingRenown + (Number(modifiers.renown) || 0));
           if (this.state.player) {
