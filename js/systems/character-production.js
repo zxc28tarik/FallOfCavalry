@@ -198,6 +198,16 @@ export function produceCharacterCandidates({
     source: resolved,
     firstSlot,
     candidates,
+    // Descriptive source contract. These are the current engine's technical
+    // permissions, not a finalized balance/rarity or future recruitment rule.
+    sourceContract: {
+      sourceLocationId: resolved.settlementId,
+      sourceCultureId: resolved.cultureId,
+      possibleRoleTags: Object.keys(weights),
+      possibleImportanceClasses: ['D'],
+      staysInLocation: true,
+      isUnavailableForRecruitment: true,
+    },
     // Never assume a found person will join the player, accept a job or
     // provide military units. Those require their own approved command rules.
     recruitment: {
