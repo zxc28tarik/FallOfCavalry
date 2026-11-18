@@ -335,6 +335,40 @@ describe('Character System v2: source-based character production (WEB)', () => {
     expect(state.worldCharacters.characters).toHaveLength(8);
   });
 
+  it('defines a safe capability contract for each of the fourteen production source kinds', () => {
+    const settlementSources = [
+      { type: 'city', id: 0, settlementId: 0 },
+      { type: 'village', id: 'village-1', settlementId: 'village-1' },
+      { type: 'town', id: 'town-1', settlementId: 'town-1' },
+      { type: 'fort', id: 'fort-1', settlementId: 'fort-1' },
+    ];
+    const nonSettlementSources = CHARACTER_SOURCE_TYPES.filter((type) =>
+      !['city', 'village', 'town', 'fort'].includes(type)).map((type) => ({
+      type, id: 'test-' + type, settlementId: 'town-1',
+    }));
+    const all = [...settlementSources, ...nonSettlementSources];
+    expect(all).toHaveLength(14);
+    const seen = new Set();
+    for (const source of all) {
+      const data = produce(source, {
+        count: 1,
+        registeredSources: nonSettlementSources,
+      });
+      expect(data.candidates).toHaveLength(1);
+      expect(data.sourceContract).toEqual({
+        sourceLocationId: String(source.settlementId),
+        sourceCultureId: 'generic',
+        possibleRoleTags: Object.keys(CHARACTER_SOURCE_ROLES[source.type]),
+        possibleImportanceClasses: ['D'],
+        staysInLocation: true,
+        isUnavailableForRecruitment: true,
+      });
+      expect(data.sourceContract.possibleRoleTags).toContain(data.candidates[0].role);
+      expect(seen.has(data.candidates[0].id)).toBe(false);
+      seen.add(data.candidates[0].id);
+    }
+  });
+
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
     expect(() => produce(city, { count: 9 })).toThrow(RangeError);
     expect(() => produce(city, { count: 0 })).toThrow(RangeError);
