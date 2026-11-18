@@ -13,7 +13,7 @@ import {
   serializeAllSettlementCityStates,
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
-import { normalizeWorldCharacters, packWorldCharacters } from '../systems/world-characters.js';
+import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -344,7 +344,10 @@ Esc close`,
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
         },
         roster,
-        worldCharacters: packWorldCharacters(this.state?.worldCharacters),
+        worldCharacters: createWorldCharacterSave(this.state?.worldCharacters, {
+          seed: this.state?.seed,
+          settlements: this.state?.map?.settlements || [],
+        }),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -424,7 +427,9 @@ Esc close`,
 
     // Preserve real generated NPCs; legacy saves intentionally have an empty NPC roster.
     // Never fabricate or copy a player character into this collection during load.
-    this.state.worldCharacters = normalizeWorldCharacters(game.worldCharacters);
+    this.state.worldCharacters = restoreWorldCharacterSave(game.worldCharacters, {
+      settlements: this.state?.map?.settlements || [],
+    });
 
     const p = game.playerParty || {};
     playerParty.x = Number.isFinite(p.x) ? p.x : playerParty.x;
