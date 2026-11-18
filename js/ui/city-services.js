@@ -445,10 +445,21 @@ export default class CityServicesUI {
       : '<div class="text-sm opacity-70">Henüz kayıtlı kişisel ilişki yok.</div>';
     const historyRows = visibleHistory.length ? [...visibleHistory].reverse().map((event) => {
       const typeText = event.type === 'created' ? 'Oluşturuldu'
-        : event.type === 'promoted' ? 'Önem kazandı' : event.type === 'moved'
-          ? 'Şehir değiştirdi' : 'Olay';
-      const target = event.type === 'moved' ? ` — ${escapeHtml(event.settlementId)}` : '';
-      return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${event.day}</strong></div>`;
+        : event.type === 'promoted' ? 'Önem kazandı'
+          : event.type === 'moved' ? 'Şehir değiştirdi'
+            : event.type === 'importance' ? 'Önem sınıfı değişti'
+              : event.type === 'state-changed' ? 'Özellik değişti' : 'Olay';
+      const stateMetric = event.type === 'state-changed'
+        ? (event.metric.startsWith('stats.')
+          ? NPC_STAT_LABELS[event.metric.slice(6)] || event.metric.slice(6)
+          : ({ loyalty: 'Sadakat', satisfaction: 'Memnuniyet',
+            reputation: 'İtibar', standing: 'Konum' }[event.metric] || event.metric)) : '';
+      const target = event.type === 'moved' ? ` — ${escapeHtml(event.settlementId)}`
+        : event.type === 'importance' ? ` — ${escapeHtml(event.from)} → ${escapeHtml(event.to)}`
+          : event.type === 'state-changed'
+            ? ` — ${escapeHtml(stateMetric)} ${escapeHtml(event.from)} → ${escapeHtml(event.to)} (${escapeHtml(event.reason)})`
+            : '';
+      return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${escapeHtml(event.day)}</strong></div>`;
     }).join('') : '<div class="text-sm opacity-70">Kayıt yok.</div>';
 
     this.setPanelChrome(
