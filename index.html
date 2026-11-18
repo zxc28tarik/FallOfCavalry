@@ -284,6 +284,55 @@
                             <div id="selectedFactionArmy" class="font-bold">-</div>
                         </div>
 
+                        <section class="character-creator mt-4" aria-label="Karakter oluştur">
+                            <div class="royal-font text-base font-bold">Karakterini Oluştur</div>
+                            <p class="text-xs opacity-75 mt-1">Köken ve uzmanlık, ilk özelliklerini belirler. Görsel asker üretiminden bağımsızdır.</p>
+                            <label class="character-field mt-3" for="characterNameInput">
+                                <span>Ad / Unvan</span>
+                                <input id="characterNameInput" class="select-dark w-full" type="text" maxlength="32" value="Yeni Komutan" autocomplete="off" />
+                            </label>
+                            <div class="character-fields">
+                                <label class="character-field" for="characterCultureInput">
+                                    <span>Kültür</span>
+                                    <select id="characterCultureInput" class="select-dark w-full">
+                                        <option value="ottoman">Osmanlı</option>
+                                        <option value="hre">Orta Avrupa</option>
+                                        <option value="polish">Leh</option>
+                                        <option value="spanish">İber</option>
+                                        <option value="venice">Venedikli</option>
+                                    </select>
+                                </label>
+                                <label class="character-field" for="characterAgeInput">
+                                    <span>Yaş grubu</span>
+                                    <select id="characterAgeInput" class="select-dark w-full">
+                                        <option value="young">Genç</option>
+                                        <option value="mature" selected>Olgun</option>
+                                        <option value="elder">Yaşlı</option>
+                                    </select>
+                                </label>
+                                <label class="character-field" for="characterOriginInput">
+                                    <span>Geçmiş / Köken</span>
+                                    <select id="characterOriginInput" class="select-dark w-full">
+                                        <option value="soldier">Tecrübeli asker</option>
+                                        <option value="merchant">Tüccar ailesi</option>
+                                        <option value="scribe">Kâtip / medrese</option>
+                                        <option value="traveler">Seyyah / haberci</option>
+                                    </select>
+                                </label>
+                                <label class="character-field" for="characterFocusInput">
+                                    <span>Uzmanlık</span>
+                                    <select id="characterFocusInput" class="select-dark w-full">
+                                        <option value="command">Kumandanlık</option>
+                                        <option value="trade">Ticaret</option>
+                                        <option value="diplomacy">İkna</option>
+                                        <option value="administration">Yönetim</option>
+                                        <option value="leadership">Liderlik</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div id="characterPreview" class="character-preview" role="status" aria-live="polite"></div>
+                        </section>
+
                         <div id="startSaveInfo" class="mt-2 text-xs opacity-75">Kayıt bulunamadı.</div>
 
                         <!-- ✅ eksik seed alanları eklendi -->
