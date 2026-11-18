@@ -401,17 +401,25 @@ export function createWorldCharacterSave(roster, { seed, settlements = [], perSe
   }
   const baseline = normalizeWorldCharacters(createWorldCharacterRoster({ seed, settlements, perSettlement }));
   const expected = new Map(baseline.characters.map((character) => [character.id, character]));
-  const compatible = expected.size === current.characters.length
-    && current.characters.every((character) => expected.has(character.id));
+  const presentIds = new Set(current.characters.map((character) => character.id));
+  // Baseline people may change or be promoted, and additional people may be
+  // explicitly registered. A missing baseline actor is a separate destructive
+  // case: preserve it in a full compact save rather than resurrecting it.
+  const compatible = baseline.characters.every((person) => presentIds.has(person.id));
   if (!compatible) return packWorldCharacters(current);
 
-  const changed = current.characters.filter((person) => JSON.stringify(person) !== JSON.stringify(expected.get(person.id)));
+  const changed = current.characters.filter((person) =>
+    expected.has(person.id) && JSON.stringify(person) !== JSON.stringify(expected.get(person.id)));
+  const additions = current.characters.filter((person) => !expected.has(person.id));
   return {
     version: WORLD_CHARACTER_VERSION,
     format: 'seeded-delta-v1',
     seed,
     perSettlement,
     overrides: packWorldCharacters({ characters: changed, relations: [] }).people,
+    ...(additions.length ? {
+      additions: packWorldCharacters({ characters: additions, relations: [] }).people,
+    } : {}),
     relations: current.relations.map((relation) => [
       relation.firstId, relation.secondId, relation.value,
     ]),
@@ -432,6 +440,10 @@ export function normalizeWorldCharacterSave(value) {
   const people = Array.isArray(input.overrides)
     ? input.overrides.slice(0, MAX_WORLD_CHARACTERS) : [];
   const cleaned = packWorldCharacters({ format: 'packed-v1', people, relations: [] });
+  const extraPeople = Array.isArray(input.additions)
+    ? input.additions.slice(0, MAX_WORLD_CHARACTERS) : null;
+  const cleanExtraPeople = extraPeople
+    ? packWorldCharacters({ format: 'packed-v1', people: extraPeople, relations: [] }).people : null;
   const relations = (Array.isArray(input.relations) ? input.relations : [])
     .slice(0, MAX_WORLD_CHARACTERS * 4)
     .filter((entry) => Array.isArray(entry) && entry.length === 3
@@ -444,6 +456,7 @@ export function normalizeWorldCharacterSave(value) {
     seed: input.seed,
     perSettlement: input.perSettlement,
     overrides: cleaned.people,
+    ...(cleanExtraPeople?.length ? { additions: cleanExtraPeople } : {}),
     relations,
   };
 }
@@ -464,8 +477,19 @@ export function restoreWorldCharacterSave(value, { settlements = [] } = {}) {
     relations: [],
   });
   for (const person of changed.characters) {
-    // Never allow a delta to inject a person from a nonexistent settlement.
+    // Only the baseline ID set may be overridden by an existing-person delta.
     if (lookup.has(person.id)) lookup.set(person.id, person);
+  }
+  const additions = normalizeWorldCharacters({
+    format: 'packed-v1',
+    people: input.additions || [],
+    relations: [],
+  });
+  const worldSettlementIds = new Set(settlements.map((entry) => String(entry?.id)));
+  for (const person of additions.characters) {
+    if (lookup.has(person.id) || !person.id.startsWith('npc:source-')
+      || person.kind !== 'named' || !worldSettlementIds.has(person.location.settlementId)) continue;
+    lookup.set(person.id, person);
   }
   return normalizeWorldCharacters({
     characters: [...lookup.values()],
