@@ -132,6 +132,50 @@ async function main() {
       }
     }
     await page.screenshot({ path: imageDir + '/03-after-save-load.png', fullPage: true });
+    // The NPC sheet must work in the actual city UI, not only in unit tests.
+    const npcCity = await page.evaluate(() => {
+      const g = window.game;
+      const first = g?.state?.worldCharacters?.characters?.[0];
+      const settlement = g?.state?.map?.settlements?.find((entry) => String(entry.id) === first?.location?.settlementId);
+      g?.cityUI?.show?.(settlement, { recruitPool: [], market: null, contracts: [] });
+      return {
+        cityId: settlement?.id ?? null,
+        hasCityUI: Boolean(g?.cityUI),
+        visibleRows: document.querySelectorAll('[data-action="open-npc"]').length,
+      };
+    });
+    stage('npc-city-list', npcCity);
+    if (!npcCity.cityId || !npcCity.hasCityUI || npcCity.visibleRows < 1) {
+      throw new Error('World NPCs are not visible in the actual city interface');
+    }
+    await page.locator('[data-action="open-npc"]').first().click();
+    const npcProfile = await page.evaluate(() => {
+      const g = window.game;
+      const body = g?.cityUI?.getPanelBodyEl?.()?.textContent || '';
+      return {
+        view: g?.cityUI?.currentView?.type || null,
+        selectedNpcId: g?.cityUI?.currentView?.npcId || null,
+        hasStats: body.includes('Yetenekler') && body.includes('Komuta'),
+        hasTraits: body.includes('Kişilik'),
+        hasHistory: body.includes('Geçmiş') && body.includes('Oluşturuldu'),
+        hasReturn: Boolean(g?.cityUI?.getPanelBodyEl?.()?.querySelector?.('[data-action="show-overview"]')),
+      };
+    });
+    stage('npc-character-sheet', npcProfile);
+    if (npcProfile.view !== 'npc' || !npcProfile.selectedNpcId ||
+        !npcProfile.hasStats || !npcProfile.hasTraits || !npcProfile.hasHistory || !npcProfile.hasReturn) {
+      throw new Error('NPC character details did not render correctly in the browser');
+    }
+    await page.screenshot({ path: imageDir + '/04-npc-character-sheet.png', fullPage: true });
+    await page.locator('[data-action="show-overview"]').click();
+    const backToCity = await page.evaluate(() => {
+      const g = window.game;
+      const ok = g?.cityUI?.currentView?.type === 'overview';
+      g?.cityUI?.hide?.();
+      return ok;
+    });
+    if (!backToCity) throw new Error('NPC character details did not navigate back to city');
+
 
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
