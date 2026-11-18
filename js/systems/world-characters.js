@@ -141,7 +141,7 @@ function makePerson({ seed, settlement, serial }) {
   };
 }
 
-export function createWorldCharacterRoster({ seed = 1337, settlements = [], perSettlement = 2 } = {}) {
+export function createWorldCharacterRoster({ seed = 1337, settlements = [], perSettlement = 2, authoredCharacters = [] } = {}) {
   if (!Array.isArray(settlements)) throw new TypeError('World settlements must be an array.');
   if (!Number.isSafeInteger(perSettlement) || perSettlement < 0 || perSettlement > 8) {
     throw new RangeError('NPC generation perSettlement must be between 0 and 8.');
@@ -160,6 +160,25 @@ export function createWorldCharacterRoster({ seed = 1337, settlements = [], perS
       characters.push(makePerson({ seed, settlement: cities.get(id), serial }));
     }
   }
+  // Authored NamedCharacters are a separate trusted source. They NEVER come
+  // from seed/name pools or a campaign save. Reject collisions and invalid
+  // author entries rather than silently replacing a generated person.
+  if (!Array.isArray(authoredCharacters) || characters.length + authoredCharacters.length > MAX_WORLD_CHARACTERS) {
+    throw new RangeError('Invalid authored character roster capacity.');
+  }
+  const allIds = new Set(characters.map((person) => person.id));
+  const knownSettlements = new Set(cities.keys());
+  for (const raw of authoredCharacters) {
+    const person = normalizePerson(raw);
+    if (!person || !/^npc:authored-[a-z0-9][a-z0-9_-]{0,59}:[1-9]\d{0,6}$/.test(person.id)
+      || person.kind !== 'named' || person.importance === 'D'
+      || !knownSettlements.has(person.location.settlementId) || allIds.has(person.id)) {
+      throw new RangeError('Authored character must be an explicit unique Named(A/B/C) in the real world.');
+    }
+    allIds.add(person.id);
+    characters.push(person);
+  }
+  characters.sort((a, b) => a.id.localeCompare(b.id, 'en'));
   return { version: WORLD_CHARACTER_VERSION, characters, relations: [] };
 }
 
@@ -412,13 +431,13 @@ export function packWorldCharacters(value) {
  * Only changed records and explicit relation pairs are persisted.
  * v1 algorithm/name pools MUST remain stable until a versioned migration exists.
  */
-export function createWorldCharacterSave(roster, { seed, settlements = [], perSettlement = 2 } = {}) {
+export function createWorldCharacterSave(roster, { seed, settlements = [], perSettlement = 2, authoredCharacters = [] } = {}) {
   const current = normalizeWorldCharacters(roster);
   if (current.characters.length === 0) return current;
   if (!Number.isSafeInteger(seed) || !Array.isArray(settlements)) {
     return packWorldCharacters(current);
   }
-  const baseline = normalizeWorldCharacters(createWorldCharacterRoster({ seed, settlements, perSettlement }));
+  const baseline = normalizeWorldCharacters(createWorldCharacterRoster({ seed, settlements, perSettlement, authoredCharacters }));
   const expected = new Map(baseline.characters.map((character) => [character.id, character]));
   const presentIds = new Set(current.characters.map((character) => character.id));
   // Baseline people may change or be promoted, and additional people may be
@@ -430,6 +449,12 @@ export function createWorldCharacterSave(roster, { seed, settlements = [], perSe
   const changed = current.characters.filter((person) =>
     expected.has(person.id) && JSON.stringify(person) !== JSON.stringify(expected.get(person.id)));
   const additions = current.characters.filter((person) => !expected.has(person.id));
+  // An authored ID is NOT a production-source addition. If its authoritative
+  // definition was removed or never supplied, preserve its facts losslessly
+  // in a full save rather than making a delta that restore would discard.
+  if (additions.some((person) => !person.id.startsWith('npc:source-'))) {
+    return packWorldCharacters(current);
+  }
   return {
     version: WORLD_CHARACTER_VERSION,
     format: 'seeded-delta-v1',
@@ -480,7 +505,7 @@ export function normalizeWorldCharacterSave(value) {
   };
 }
 
-export function restoreWorldCharacterSave(value, { settlements = [] } = {}) {
+export function restoreWorldCharacterSave(value, { settlements = [], authoredCharacters = [] } = {}) {
   const input = normalizeWorldCharacterSave(value);
   if (input.format !== 'seeded-delta-v1') return normalizeWorldCharacters(input);
   if (!Array.isArray(settlements)) return normalizeWorldCharacters(null);
@@ -488,6 +513,7 @@ export function restoreWorldCharacterSave(value, { settlements = [] } = {}) {
     seed: input.seed,
     settlements,
     perSettlement: input.perSettlement,
+    authoredCharacters,
   });
   const lookup = new Map(base.characters.map((person) => [person.id, person]));
   const changed = normalizeWorldCharacters({
@@ -496,8 +522,16 @@ export function restoreWorldCharacterSave(value, { settlements = [] } = {}) {
     relations: [],
   });
   for (const person of changed.characters) {
-    // Only the baseline ID set may be overridden by an existing-person delta.
-    if (lookup.has(person.id)) lookup.set(person.id, person);
+    // Only baseline IDs can be overridden. An authored historical identity
+    // cannot be impersonated with another name/culture/initial age in a save.
+    const canonical = lookup.get(person.id);
+    if (!canonical) continue;
+    if (person.id.startsWith('npc:authored-')
+      && (person.name !== canonical.name
+        || person.cultureId !== canonical.cultureId
+        || person.originFactionId !== canonical.originFactionId
+        || person.age !== canonical.age)) continue;
+    lookup.set(person.id, person);
   }
   const additions = normalizeWorldCharacters({
     format: 'packed-v1',
