@@ -15,6 +15,7 @@ import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
 import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
+import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -391,6 +392,24 @@ export class GameFlowManager {
       registeredSources,
       expectedWorldSeed: this.state?.seed,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+  }
+
+  /**
+   * Explicit Character System v2 importance change for an approved story,
+   * office or event command. No random or day-driven promotions.
+   * This changes neither the actor's role nor their player organization.
+   */
+  advanceWorldCharacterImportance(characterId, toImportance, {
+    reason,
+    reviewTier = 'standard',
+  } = {}) {
+    if (!this.state?.worldCharacters) return false;
+    return advanceNamedCharacterImportance(this.state.worldCharacters, characterId, {
+      toImportance,
+      reason,
+      reviewTier,
+      day: Math.max(1, Math.floor(Number(this.state.day) || 1)),
     });
   }
 

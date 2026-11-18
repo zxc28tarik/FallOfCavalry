@@ -6,6 +6,8 @@
  * Generated NPCs live in a small persistent roster; they do not equal city population.
  */
 
+import { requiredImportanceReviewTier } from './character-importance.js';
+
 export const WORLD_CHARACTER_VERSION = 1;
 export const MAX_WORLD_CHARACTERS = 4096;
 export const CHARACTER_STAT_KEYS = Object.freeze([
@@ -169,11 +171,23 @@ function normalizeHistory(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(-16)
     .filter((item) => asObject(item) && isBoundedInt(item.day, 1, 10000000)
-      && ['created', 'promoted', 'moved'].includes(item.type)
-      && (item.type !== 'moved' || normalizeSettlementId(item.settlementId)))
+      && ['created', 'promoted', 'moved', 'importance'].includes(item.type)
+      && (item.type !== 'moved' || normalizeSettlementId(item.settlementId))
+      && (item.type !== 'importance'
+        || (requiredImportanceReviewTier(item.from, item.to) === item.reviewTier
+          && typeof item.reason === 'string'
+          && item.reason.trim().length >= 3 && item.reason.length <= 120
+          && !/[<>\r\n\t]/.test(item.reason))))
     .map((item) => {
       if (item.type === 'moved') {
         return { day: item.day, type: item.type, settlementId: normalizeSettlementId(item.settlementId) };
+      }
+      if (item.type === 'importance') {
+        return {
+          day: item.day, type: item.type,
+          from: item.from, to: item.to, reviewTier: item.reviewTier,
+          reason: item.reason.trim(),
+        };
       }
       if (item.type === 'created'
         && typeof item.sourceType === 'string' && item.sourceType.length <= 40
@@ -248,6 +262,9 @@ export function normalizeWorldCharacters(value) {
           ...(entry?.[1] === 'moved' ? { settlementId: entry?.[2] } : {}),
           ...(entry?.[1] === 'created' && entry.length === 4
             ? { sourceType: entry?.[2], sourceId: entry?.[3] } : {}),
+          ...(entry?.[1] === 'importance' && entry.length === 6
+            ? { from: entry?.[2], to: entry?.[3], reviewTier: entry?.[4],
+              reason: entry?.[5] } : {}),
         })) : [],
       };
     })
@@ -379,7 +396,9 @@ export function packWorldCharacters(value) {
         ? [event.day, event.type, event.settlementId]
         : event.type === 'created' && event.sourceType && event.sourceId
           ? [event.day, event.type, event.sourceType, event.sourceId]
-          : [event.day, event.type]),
+          : event.type === 'importance'
+            ? [event.day, event.type, event.from, event.to, event.reviewTier, event.reason]
+            : [event.day, event.type]),
     ]),
     relations: normalized.relations.map((relation) => [
       relation.firstId, relation.secondId, relation.value,

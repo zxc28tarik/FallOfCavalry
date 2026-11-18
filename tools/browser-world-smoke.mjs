@@ -172,6 +172,12 @@ async function main() {
         && generated.sourceContract?.isUnavailableForRecruitment === true;
       const chosenId = generated.candidates[0].id;
       const chosen = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
+      const invalidDirectA = g.gameFlowManager.advanceWorldCharacterImportance(chosenId, 'A', {
+        reason: 'Direct jump forbidden',
+      }) === false;
+      const advancedToC = g.gameFlowManager.advanceWorldCharacterImportance(chosenId, 'C', {
+        reason: 'Verified test campaign event',
+      }) === true;
       const duplicate = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
       const after = g.state.worldCharacters.characters.length;
       const savePayload = g.saveManager.buildSavePayload();
@@ -184,7 +190,10 @@ async function main() {
         && nextOffer.candidateSlots?.[0] === 2
         && nextOffer.candidateSlots?.[1] === 3;
       return {
-        ready: true, savedCandidateExcluded,
+        ready: true, savedCandidateExcluded, advancedToC, invalidDirectA,
+        restoredClass: restored?.importance ?? null,
+        restoredPromotionHistory: restored?.history?.some((entry) =>
+          entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
         nextOfferSlots: nextOffer.candidateSlots,
         sourceType: city.type, before, after, selectedId: chosenId,
         previewDidNotRegister, registerOk: chosen?.kind === 'named' && chosen?.importance === 'D',
@@ -200,7 +209,9 @@ async function main() {
     report.characterProduction = productionRoundtrip;
     stage('source-character-production-roundtrip', productionRoundtrip);
     if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
-      !productionRoundtrip.savedCandidateExcluded ||
+      !productionRoundtrip.savedCandidateExcluded || !productionRoundtrip.invalidDirectA ||
+      !productionRoundtrip.advancedToC || productionRoundtrip.restoredClass !== 'C' ||
+      !productionRoundtrip.restoredPromotionHistory ||
       productionRoundtrip.availableSources < 1 || !productionRoundtrip.forgedFacilityBlocked ||
       !productionRoundtrip.wrongCampaignBlocked || !productionRoundtrip.sourceContractSafe ||
       !productionRoundtrip.registerOk || !productionRoundtrip.duplicateBlocked ||
