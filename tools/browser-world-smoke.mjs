@@ -145,7 +145,7 @@ async function main() {
       };
     });
     stage('npc-city-list', npcCity);
-    if (!npcCity.cityId || !npcCity.hasCityUI || npcCity.visibleRows < 1) {
+    if (npcCity.cityId == null || !npcCity.hasCityUI || npcCity.visibleRows < 1) {
       throw new Error('World NPCs are not visible in the actual city interface');
     }
     await page.locator('[data-action="open-npc"]').first().click();
