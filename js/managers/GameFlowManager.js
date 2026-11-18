@@ -357,11 +357,15 @@ export class GameFlowManager {
     firstSlot = 1,
   } = {}) {
     const settlements = this.state?.map?.settlements || [];
+    const registeredSources = this.listWorldCharacterProductionSources();
+    const canonicalSource = registeredSources.find((item) => item.type === source?.type
+      && item.id === String(source?.id) && item.settlementId === String(source?.settlementId));
+    if (!canonicalSource) throw new RangeError('Character production requires a real world source.');
     return produceCharacterCandidates({
       worldSeed: this.state?.seed,
-      source,
+      source: canonicalSource,
       settlements,
-      registeredSources: this.listWorldCharacterProductionSources(),
+      registeredSources,
       count,
       firstSlot,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
@@ -374,9 +378,16 @@ export class GameFlowManager {
    */
   retainWorldCharacter(production, characterId) {
     if (!this.state?.worldCharacters) return false;
+    const registeredSources = this.listWorldCharacterProductionSources();
+    const candidateSource = production?.source;
+    const canonicalSource = registeredSources.find((item) => item.type === candidateSource?.type
+      && item.id === candidateSource?.id
+      && item.settlementId === candidateSource?.settlementId);
+    if (!canonicalSource || canonicalSource.cultureId !== candidateSource.cultureId
+      || (canonicalSource.originFactionId ?? null) !== candidateSource.originFactionId) return false;
     return registerProducedCharacter(this.state.worldCharacters, production, characterId, {
       settlements: this.state?.map?.settlements || [],
-      registeredSources: this.listWorldCharacterProductionSources(),
+      registeredSources,
       expectedWorldSeed: this.state?.seed,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
     });
