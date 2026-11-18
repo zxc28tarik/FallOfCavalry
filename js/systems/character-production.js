@@ -81,10 +81,10 @@ function readSource(source, settlements, registeredSources) {
 // Explicit revision, scope and slot. No global random calls, clock reads or
 // dependency on order of unrelated settlements or sources.
 function randomFor(worldSeed, source, slot) {
-  const salt = [
+  const salt = JSON.stringify([
     'character-production-v' + CHARACTER_PRODUCTION_REVISION,
     worldSeed, source.type, source.id, source.settlementId, source.cultureId, slot,
-  ].join('|');
+  ]);
   let state = 2166136261;
   for (let i = 0; i < salt.length; i += 1) {
     state = Math.imul(state ^ salt.charCodeAt(i), 16777619) >>> 0;
@@ -119,7 +119,9 @@ function drawWeightedRole(weights, random) {
 
 function candidateId(source, slot) {
   const escapeComponent = (id) => encodeURIComponent(id).replace(/~/g, '%7E');
-  return 'npc:source-' + escapeComponent(source.type) + '~' + escapeComponent(source.id) + ':' + slot;
+  const result = 'npc:source-' + escapeComponent(source.type) + '~' + escapeComponent(source.id) + ':' + slot;
+  if (result.length > 400) throw new RangeError('Encoded character ID exceeds the campaign identity limit.');
+  return result;
 }
 
 function makeCandidate(worldSeed, source, slot, day, roleWeights, namePools) {
@@ -213,6 +215,8 @@ export function registerProducedCharacter(roster, production, selectedId, {
   settlements,
   registeredSources = [],
   day = 1,
+  rolePolicy = CHARACTER_SOURCE_ROLES,
+  namePools = CULTURE_NAMES,
 } = {}) {
   if (!isRecord(roster) || !Array.isArray(roster.characters)
     || !isRecord(production) || !Array.isArray(production.candidates)) return false;
@@ -226,7 +230,9 @@ export function registerProducedCharacter(roster, production, selectedId, {
     || candidate.status !== 'alive' || roster.characters.some((person) => person.id === selectedId)) return false;
   const foundSlot = Number(selectedId.slice(selectedId.lastIndexOf(':') + 1));
   if (!Number.isSafeInteger(foundSlot) || foundSlot < 1 || foundSlot > 9999999
-    || selectedId !== candidateId(source, foundSlot)) return false;
+    || selectedId !== candidateId(source, foundSlot)
+    || !Number.isSafeInteger(candidate.history?.[0]?.day)
+    || candidate.history[0].day < 1 || candidate.history[0].day > day) return false;
   // Regenerate the exact candidate. This is a consistency check, not a
   // cryptographic trust boundary: only server-authoritative flows can be secure.
   const expected = produceCharacterCandidates({
@@ -237,6 +243,8 @@ export function registerProducedCharacter(roster, production, selectedId, {
     firstSlot: foundSlot,
     count: 1,
     day: candidate.history?.[0]?.day,
+    rolePolicy,
+    namePools,
   }).candidates[0];
   if (JSON.stringify(candidate) !== JSON.stringify(expected)) return false;
   if (day < candidate.history[0].day) return false;
