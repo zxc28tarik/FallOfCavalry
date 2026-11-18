@@ -23,3 +23,5 @@
 
 ## Gerçek tarayıcı başlangıç denetimi
 - [06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md](06_BROWSER_WORLD_SMOKE_IMPLEMENTATION.md): Chromium ile Start→World, screenshot ve console/network raporu. Görevler henüz UYGULAMADA.
+
+- [07_SAVE_ROUNDTRIP_IMPLEMENTATION.md](07_SAVE_ROUNDTRIP_IMPLEMENTATION.md): gerçek Chrome ile yeni dünyanın save/load smoke testi; eski kayıt migrasyonu kapsam dışı.

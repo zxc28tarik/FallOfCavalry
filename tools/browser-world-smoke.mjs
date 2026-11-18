@@ -86,9 +86,44 @@ async function main() {
     if (!report.map.settlements) throw new Error('World has no settlements');
     if (!report.map.canvasWidth || !report.map.canvasHeight) throw new Error('Canvas has zero dimensions');
     if (report.map.bootErrorVisible) throw new Error('Boot error banner visible');
+    // CI runs in a disposable browser context: saving is safe and does not touch user files.
+    const roundtrip = await page.evaluate(() => {
+      const g = window.game;
+      const capture = () => {
+        const m = g.worldManager?.state?.mapData || g.state?.mapData;
+        return {
+          day: g.state?.day ?? null,
+          gold: g.playerParty?.gold ?? null,
+          x: g.playerParty?.x ?? null,
+          y: g.playerParty?.y ?? null,
+          factionId: g.playerParty?.factionId ?? null,
+          worldWidth: m?.width ?? 0,
+          worldHeight: m?.height ?? 0,
+          settlements: m?.settlements?.length ?? 0,
+          mode: g.state?.mode ?? null,
+        };
+      };
+      const before = capture();
+      const saveOk = g.saveManager?.quickSave?.() === true;
+      const slotExists = g.saveManager?.saveSystem?.hasSlot?.('manual1') === true;
+      const loadOk = saveOk ? g.saveManager?.quickLoad?.() === true : false;
+      return { saveOk, slotExists, loadOk, before, after: capture() };
+    });
+    report.saveRoundtrip = roundtrip;
+    stage('save-roundtrip', { saveOk: roundtrip.saveOk, slotExists: roundtrip.slotExists, loadOk: roundtrip.loadOk });
+    if (!roundtrip.saveOk || !roundtrip.slotExists || !roundtrip.loadOk) {
+      throw new Error('Quick save/load failed in disposable browser context');
+    }
+    for (const key of ['day', 'gold', 'factionId', 'worldWidth', 'worldHeight', 'settlements']) {
+      if (roundtrip.before[key] !== roundtrip.after[key]) {
+        throw new Error('Save round-trip mismatch at ' + key);
+      }
+    }
+    await page.screenshot({ path: imageDir + '/03-after-save-load.png', fullPage: true });
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
-    report.status = 'PASS_BOOT_AND_WORLD';
+    report.status = 'PASS_BOOT_WORLD_SAVELOAD';
     stage('completed', { status: report.status, consoleErrorCount: report.consoleErrors.length });
   } catch (error) {
     report.status = 'FAIL';
