@@ -112,3 +112,16 @@ Gerçek gameplay kaynağı
 - İşleyen kodun test edilen HEAD'i: `0a8f08a4f6f6f6c75224cfc17a9124aa07f57e36`. Sonraki dokümantasyon commitleri yeniden CI alır; **PR draft, main'e merge yok**.
 - Bu QA **üretim altyapısı alt-dilimi** için geçerlidir: toplu tarihsel dünya verisi, oyuncuya katılım dengesi, görsel asker üretimi ve bütün olay/quest source adaptörleri bitmedi.
 
+
+## 5. V1.4 — kalıcılaşmış kişi tekrar teklif edilmez (18.11.2026)
+
+**Hedef:** Üretim kaynağının tekrar ziyaretinde zaten Named(D) olan kişiyi aday gibi sunmamak; yeniden yüklenmiş save'de dahi kararlı teklif kümesi. Önceki V1.3 kaynak doğrulamasının üstünde yalnız teknik bir aday filtresi uygulanır.
+
+- `produceUnregisteredCharacterCandidates` gerçek `worldCharacters.characters[].id` kayıtlarını okur; `sourceType + settlementId + sourceId + slot` kimliğinin **kalıcı olarak kaydedilmiş** olup olmadığını kontrol eder. Kayıtlı ise slotu atlayıp sonraki boş slotu arar. Teklif kartının kaynak kimliği, isim/rol/stat algoritması ve kayıt biçimi değişmez.
+- `candidateSlots`, `nextSlot` ve `rosterFull` salt-okunur teknik çıktı alanlarıdır. Yerleşim ve aktör kayıtlarına yazılmaz; özel aday defteri, bekleme/gün sayacı, otomatik yenilenme, tazelenme süresi veya nadirlik oranı **tanımlanmaz**.
+- `GameFlowManager.previewWorldCharacterCandidates` yeni salt-okunur filtreyi kullanır. `registerProducedCharacter`, `NamedCharacter(D)` ve `seeded-delta-v1 additions` aynı sözleşmede kalır. Dünya kaydına yeni alan eklenmez; yayınlanmış save migration ihtiyacı doğmaz.
+- **Karar sınırı:** Onaylı Character System v2 gereği *seçilmemiş* `GeneratedPerson` kayda girmez. Bu sebeple yalnız gösterilip seçilmeyen adayın gelecekte aynı slotla tekrar görünmesi mümkündür. Kullanıcı yeni bir `rejected/seen` teklif defteri, ücret, yenilenme aralığı, kıtlık veya günlük popülasyon üretimi onaylamadıkça bunları gizlice açmayız. Bu özellik yalnız **zaten kalıcılaşan kişi** tekrar sunulmasını engeller.
+- **Şehir V2 uyumu:** `CITY_BUILDING_CATEGORY.FOOD` alanındaki gıda yapıları (fırın, kasaphane/balıkhane vb.) `production` kaynağına otomatik bağlanmaz. Karar defterinde gıda alanı ile üretim/zanaat alanı ayrıdır. Kaynak adaptörü yalnız gerçekten inşa edilmiş `INDUSTRY` binalarını üretim kaynağı kabul eder. Gıda/ikmalde adam alma mekanizması sonraki açık karar konusudur.
+- Testler: boş yerleşim/adayı teklif etme, aradan seçilen slotu sonraki sorguda atlama, diğer kişilerin değişmeden kalması, kayıt/yükleme sonrası slot kararlılığı, tam dünya kimlik kapasitesi, batch 1..8, gerçek Chromium'da kalıcılaştırılmış kişinin yeni teklifte görünmemesi.
+
+**Kabul:** [PR #68](https://github.com/zxc28tarik/FallOfCavalry/pull/68) altında testler final commit SHA için kontrol edilecek. Bu iş üretim algoritması alt parçasıdır, bütün karakter AI'sinin veya otomatik adam alma oyun döngüsünün tamamlandığı anlamına gelmez.
