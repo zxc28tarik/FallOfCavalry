@@ -14,6 +14,7 @@ import {
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
+import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -348,6 +349,10 @@ Esc close`,
           seed: this.state?.seed,
           settlements: this.state?.map?.settlements || [],
         }),
+        characterOrganization: normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+          roster: this.state?.worldCharacters,
+          settlements: this.state?.map?.settlements || [],
+        }),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -428,6 +433,10 @@ Esc close`,
     // Preserve real generated NPCs; legacy saves intentionally have an empty NPC roster.
     // Never fabricate or copy a player character into this collection during load.
     this.state.worldCharacters = restoreWorldCharacterSave(game.worldCharacters, {
+      settlements: this.state?.map?.settlements || [],
+    });
+    this.state.characterOrganization = normalizeCharacterOrganizationState(game.characterOrganization, {
+      roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
 

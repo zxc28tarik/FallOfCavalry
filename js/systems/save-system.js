@@ -5,6 +5,7 @@
 
 import * as CONST from '../constants.js';
 import { normalizeWorldCharacterSave } from './world-characters.js';
+import { normalizeCharacterOrganizationState } from './character-organization.js';
 
 const MAX_NORMALIZED_BUILDINGS = 10000;
 
@@ -196,6 +197,7 @@ export class SaveSystem {
         },
         roster: Array.isArray(game.roster) ? game.roster : [],
         worldCharacters: normalizeWorldCharacterSave(game.worldCharacters),
+        characterOrganization: normalizeCharacterOrganizationState(game.characterOrganization),
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
         enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
         worldAi: game.worldAi && typeof game.worldAi === 'object' && !Array.isArray(game.worldAi) ? game.worldAi : { lastRespawnDay: 0, parties: [] },

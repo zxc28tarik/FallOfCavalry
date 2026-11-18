@@ -16,6 +16,11 @@ import { createWorldCharacterRoster } from '../systems/world-characters.js';
 import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
+import {
+  addCharacterBranchMembership, completeCharacterAssignment,
+  getCharacterOrganizationProfile, normalizeCharacterOrganizationState,
+  startCharacterAssignment,
+} from '../systems/character-organization.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -411,6 +416,60 @@ export class GameFlowManager {
       reviewTier,
       day: Math.max(1, Math.floor(Number(this.state.day) || 1)),
     });
+  }
+
+  /**
+   * Explicit descriptive Character System v2 membership and assignment.
+   * No automatic office, troops, trade effects, player party recruitment,
+   * political affiliation, family or clique creation.
+   */
+  getWorldCharacterOrganizationProfile(characterId) {
+    return getCharacterOrganizationProfile(this.state?.characterOrganization, characterId, {
+      roster: this.state?.worldCharacters,
+    });
+  }
+
+  addWorldCharacterBranchMembership(characterId, branch, { reason } = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = addCharacterBranchMembership(organization, characterId, branch, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  startWorldCharacterAssignment(characterId, assignment = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = startCharacterAssignment(organization, characterId, {
+      ...assignment,
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  completeWorldCharacterAssignment(characterId, { reason } = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = completeCharacterAssignment(organization, characterId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
   }
 
   applyMasterVolume(value) {
