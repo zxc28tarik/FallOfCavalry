@@ -16,7 +16,7 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 - Haritanın **bütün mevcut yerleşimlerini** kapsayan, yerleşim sırasından bağımsız seedli üretim; geçerli/benzersiz yerleşim ID'lerini kullanır. Büyük kayıtlar için korumalı kapasite sınırı (4096). İki örnek kişi/yerleşim **oyun nüfus sayısı değildir**; yalnız gerçek kişi kayıt altyapısını başlatan teknik varsayılandır.
 - NPC kayıtları oyuncunun `playerParty` birliği, asker, sprite veya dünya AI savaşçı nesnelerine otomatik çevrilmez; görev/aile/klan/din atamaları yok.
 - `GameFlowManager.startNewGame()` başlangıcında üretim, `GameState` runtime ve küçük genel state serializasyonu, `SaveManager.buildSavePayload/applySavePayload` ve `SaveSystem.normalizePayload` üzerinden kalıcılık.
-- **Gerçek tarayıcı keşfi ve düzeltme:** 881 yerleşim × 2 NPC = 1762 kayıt, ilk tam özellikli JSON'la tarayıcı hızlı kaydını başarısız bıraktı. Alan adları tekrarlanan NPC modelini runtime'da koruyup save'de sürümlü `packed-v1` dizi biçimine kaydediyoruz; `normalizeWorldCharacters` eski tam kayıtları ve yeni paketli kayıtları kayıpsız açar. Son kabul gerçek Chromium smoke PASS'e bağlıdır.
+- **Gerçek tarayıcı keşfi ve düzeltme:** 881 yerleşim × 2 NPC = 1762 kayıt, tam JSON'da ve kayıpsız `packed-v1` dizilerinde tarayıcı hızlı kaydını başarısız bıraktı. İlk Chromium raporunda toplam **5.449.454 JSON karakteri**, bunun **299.333**'ü sıkıştırılmış NPC verisi idi. Yeni asıl kampanya kaydı `seeded-delta-v1` ile dünya tohumu + değişen kişi kayıtları + açık ilişki çiftlerini saklar. Değişmeyen kişiler mevcut yerleşim ID'leri ve sabit V1 jeneratöründen yeniden kurulur. Runtime modeli ve `packed-v1` tam aktarım biçimi korunur; `SaveSystem` metadata'yı normalize eder ve `SaveManager` dünya boot sonrası karakterleri geri kurar. Birim testi 1762 kişinin tek değişiklikle küçük kayda dönüştüğünü kanıtlar; son kabul gerçek Chromium smoke PASS'e bağlıdır.
 - Eski v1 kayıtları alan içermediğinde `characters:[]` ve `relations:[]` ile açılır; mevcut NPC yokken kayda uydurma kişi eklenmez. Kayıt ana `schemaVersion: 1` korunur, çünkü isteğe bağlı alan ekidir.
 - `CityServicesUI` mevcut şehir özetinde o şehre bağlı isim/rol/yaş listesi gösterir. Karakter metni HTML injection'a karşı kaçıştan geçirilir.
 - Sadece açık `setWorldCharacterRelation` ile seyrek ilişkiler; rastgele bütün karakterleri birbirine bağlamaz.
@@ -38,7 +38,7 @@ Web oyunu `playerParty.roster`, dünya AI orduları ve savaş `SoldierInstance` 
 3. Şehir el değiştirince `originFactionId` yaratılıştaki menşei etiketidir, otomatik siyasi bağlılık veya zorla din değişimi olmaz.
 4. `worldCharacters` v1 bağımsız, şimdilik küçük ve düz array veri modelidir; ilerde kişi sayısı büyürse indeksleme, simülasyon yoğunluk bütçesi ve eski kayıt migrasyonu ayrı onaylanmalıdır.
 5. Kalıcı kişisel ilişkiler/house/clique/ticaret/ordu, görev ve günlük AI uygulamaları gelecekte yapılacak bağımsız sistem alt işleridir; bu PR bunları bitirdiğini iddia etmez.
-6. Nihai dünyada mevcut yerleşim ID'leri değiştiğinde eski NPC konumlarının taşınma politikası `D00/D01/O00-02` kararıyla belirlenmelidir.
+6. **Kritik uyumluluk:** `seeded-delta-v1` temel kişileri seed + yerleşim ID'si + isim/rol algoritması V1 üzerinden yeniden üretir. İleride değişecek isim havuzları, algoritma veya dünya yerleşim ID'leri için sürümlü migrasyon gerekir. Nihai dünyada taşınma politikası `D00/D01/O00-02` kararıyla belirlenmelidir.
 7. Gerçek tarayıcı görüntüsü ve .NET/Unity değil **Web validation + Chromium** gereklidir.
 
 ## Kabul kriterleri
