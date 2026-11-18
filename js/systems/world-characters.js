@@ -293,3 +293,89 @@ export function packWorldCharacters(value) {
     ]),
   };
 }
+
+/**
+ * Campaign-save format: all unmodified generated NPCs are represented by the
+ * stable world seed + existing settlement IDs, not repeated snapshots.
+ * Only changed records and explicit relation pairs are persisted.
+ * v1 algorithm/name pools MUST remain stable until a versioned migration exists.
+ */
+export function createWorldCharacterSave(roster, { seed, settlements = [], perSettlement = 2 } = {}) {
+  const current = normalizeWorldCharacters(roster);
+  if (current.characters.length === 0) return current;
+  if (!Number.isSafeInteger(seed) || !Array.isArray(settlements)) {
+    return packWorldCharacters(current);
+  }
+  const baseline = normalizeWorldCharacters(createWorldCharacterRoster({ seed, settlements, perSettlement }));
+  const expected = new Map(baseline.characters.map((character) => [character.id, character]));
+  const compatible = expected.size === current.characters.length
+    && current.characters.every((character) => expected.has(character.id));
+  if (!compatible) return packWorldCharacters(current);
+
+  const changed = current.characters.filter((person) => JSON.stringify(person) !== JSON.stringify(expected.get(person.id)));
+  return {
+    version: WORLD_CHARACTER_VERSION,
+    format: 'seeded-delta-v1',
+    seed,
+    perSettlement,
+    overrides: packWorldCharacters({ characters: changed, relations: [] }).people,
+    relations: current.relations.map((relation) => [
+      relation.firstId, relation.secondId, relation.value,
+    ]),
+  };
+}
+
+/**
+ * SaveSystem can validate a delta without knowing the world map. The authoritative
+ * actual-world reconstruction occurs later in SaveManager, after world boot.
+ */
+export function normalizeWorldCharacterSave(value) {
+  const input = asObject(value);
+  if (input?.format !== 'seeded-delta-v1') return normalizeWorldCharacters(value);
+  if (!Number.isSafeInteger(input.seed)
+    || !Number.isInteger(input.perSettlement) || input.perSettlement < 0 || input.perSettlement > 8) {
+    return normalizeWorldCharacters(null);
+  }
+  const people = Array.isArray(input.overrides)
+    ? input.overrides.slice(0, MAX_WORLD_CHARACTERS) : [];
+  const cleaned = packWorldCharacters({ format: 'packed-v1', people, relations: [] });
+  const relations = (Array.isArray(input.relations) ? input.relations : [])
+    .slice(0, MAX_WORLD_CHARACTERS * 4)
+    .filter((entry) => Array.isArray(entry) && entry.length === 3
+      && typeof entry[0] === 'string' && typeof entry[1] === 'string'
+      && entry[0] !== entry[1] && isBoundedInt(entry[2], -100, 100))
+    .map((entry) => [entry[0], entry[1], entry[2]]);
+  return {
+    version: WORLD_CHARACTER_VERSION,
+    format: 'seeded-delta-v1',
+    seed: input.seed,
+    perSettlement: input.perSettlement,
+    overrides: cleaned.people,
+    relations,
+  };
+}
+
+export function restoreWorldCharacterSave(value, { settlements = [] } = {}) {
+  const input = normalizeWorldCharacterSave(value);
+  if (input.format !== 'seeded-delta-v1') return normalizeWorldCharacters(input);
+  if (!Array.isArray(settlements)) return normalizeWorldCharacters(null);
+  const base = createWorldCharacterRoster({
+    seed: input.seed,
+    settlements,
+    perSettlement: input.perSettlement,
+  });
+  const lookup = new Map(base.characters.map((person) => [person.id, person]));
+  const changed = normalizeWorldCharacters({
+    format: 'packed-v1',
+    people: input.overrides,
+    relations: [],
+  });
+  for (const person of changed.characters) {
+    // Never allow a delta to inject a person from a nonexistent settlement.
+    if (lookup.has(person.id)) lookup.set(person.id, person);
+  }
+  return normalizeWorldCharacters({
+    characters: [...lookup.values()],
+    relations: input.relations,
+  });
+}
