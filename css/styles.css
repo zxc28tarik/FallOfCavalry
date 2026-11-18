@@ -1170,3 +1170,38 @@ body{
     grid-template-columns:1fr;
   }
 }
+
+/* Character creation — original UI, no soldier sprite/art dependency. */
+.character-creator {
+  padding: 12px;
+  border: 1px solid rgba(212,175,55,0.34);
+  border-radius: 10px;
+  background: rgba(0,0,0,0.22);
+}
+.character-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.character-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+}
+.character-field span { color: rgba(239,218,164,0.88); }
+.character-field input, .character-field select { min-width: 0; font-size: 12px; padding: 7px; }
+.character-preview {
+  margin-top: 10px;
+  padding: 9px;
+  min-height: 46px;
+  border-left: 2px solid rgba(212,175,55,0.75);
+  background: rgba(212,175,55,0.09);
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 420px) {
+  .character-fields { grid-template-columns: 1fr; }
+}
