@@ -5,7 +5,8 @@
  * Runtime state and old saves can store relationships and legacy snapshots,
  * but cannot define new HouseState or CliqueState through those snapshots.
  */
-import { AUTHORED_CHARACTER_SOCIAL_CATALOG } from '../data/character-social-catalog.js';
+import { AUTHORED_CHARACTER_SOCIAL_SOURCE_MANIFEST } from '../data/character-social-source-manifest.js';
+import { compileCharacterSocialSourceManifest } from './character-social-source-manifest.js';
 import { emptyCharacterSocialState, normalizeCharacterSocialState } from './character-social.js';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -17,13 +18,22 @@ const edges = (data) => ({
 
 /** Validate approved authored data against real NamedCharacters/settlements. */
 export function getAuthoritativeCharacterSocialGroups({
-  catalog = AUTHORED_CHARACTER_SOCIAL_CATALOG, roster, settlements,
+  catalog, roster, settlements,
 } = {}) {
+  // The default source is trusted authored game content. Invalid, unapproved,
+  // or partially unresolved manifest records activate NOTHING (atomic gate).
+  // Existing explicit catalog injection is kept for trusted boot/test fixtures.
+  const compiled = catalog === undefined
+    ? compileCharacterSocialSourceManifest(AUTHORED_CHARACTER_SOCIAL_SOURCE_MANIFEST, {
+      roster, settlements,
+    }) : null;
+  const approved = catalog === undefined
+    ? (compiled.accepted ? compiled.catalog : null) : catalog;
   // Never pass relationships from the source catalog to runtime: authored
   // identity/leadership/group hierarchy only.
   const parsed = normalizeCharacterSocialState({
-    houses: Array.isArray(catalog?.houses) ? catalog.houses : [],
-    cliques: Array.isArray(catalog?.cliques) ? catalog.cliques : [],
+    houses: Array.isArray(approved?.houses) ? approved.houses : [],
+    cliques: Array.isArray(approved?.cliques) ? approved.cliques : [],
   }, { roster, settlements });
   return { houses: parsed.houses, cliques: parsed.cliques };
 }
