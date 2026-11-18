@@ -32,6 +32,28 @@ export const NPC_ROLE_LABELS = Object.freeze({
 });
 
 // Nine *starting* stat baselines, not permanent role buffs or gameplay appointments.
+// Display labels only. Gameplay authority remains with the existing city/army systems.
+export const NPC_TRAIT_LABELS = Object.freeze({
+  cautious: 'Tedbirli',
+  ambitious: 'Hırslı',
+  curious: 'Meraklı',
+  reserved: 'Ketum',
+  pragmatic: 'Pragmatik',
+  generous: 'Cömert',
+});
+
+export const NPC_STAT_LABELS = Object.freeze({
+  intelligence: 'Zekâ',
+  observation: 'Gözlem',
+  persuasion: 'İkna',
+  leadership: 'Liderlik',
+  command: 'Komuta',
+  trade: 'Ticaret',
+  administration: 'İdare',
+  courage: 'Cesaret',
+  experience: 'Tecrübe',
+});
+
 const ROLE_PROFILES = Object.freeze({
   artisan: [42, 49, 36, 35, 22, 42, 38, 49, 34],
   merchant: [49, 55, 59, 47, 26, 73, 48, 35, 42],
@@ -147,8 +169,11 @@ function normalizeHistory(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(-16)
     .filter((item) => asObject(item) && isBoundedInt(item.day, 1, 10000000)
-      && ['created', 'promoted'].includes(item.type))
-    .map((item) => ({ day: item.day, type: item.type }));
+      && ['created', 'promoted', 'moved'].includes(item.type)
+      && (item.type !== 'moved' || normalizeSettlementId(item.settlementId)))
+    .map((item) => item.type === 'moved'
+      ? { day: item.day, type: item.type, settlementId: normalizeSettlementId(item.settlementId) }
+      : { day: item.day, type: item.type });
 }
 
 function normalizePerson(value) {
@@ -210,7 +235,7 @@ export function normalizeWorldCharacters(value) {
         loyalty: row[10], satisfaction: row[11], reputation: row[12], standing: row[13],
         status: row[14], location: { kind: 'settlement', settlementId: row[15] },
         history: Array.isArray(row[16]) ? row[16].map((entry) => ({
-          day: entry?.[0], type: entry?.[1],
+          day: entry?.[0], type: entry?.[1], ...(entry?.[1] === 'moved' ? { settlementId: entry?.[2] } : {}),
         })) : [],
       };
     })
@@ -239,6 +264,57 @@ export function normalizeWorldCharacters(value) {
   }
   relations.sort((a, b) => a.firstId.localeCompare(b.firstId, 'en') || a.secondId.localeCompare(b.secondId, 'en'));
   return { version: WORLD_CHARACTER_VERSION, characters, relations };
+}
+
+/**
+ * Read-only age projection; does NOT change stored base age or generate annual
+ * save deltas for every NPC. 365-day campaign year is a provisional UI rule,
+ * not an approved birth/death simulation.
+ */
+export function getWorldCharacterAge(person, day = 1) {
+  if (!asObject(person) || !isBoundedInt(person.age, 0, 120)) return null;
+  const safeDay = Number.isSafeInteger(day) && day >= 1 ? day : 1;
+  return Math.min(120, person.age + Math.floor((safeDay - 1) / 365));
+}
+
+/**
+ * Read-only character sheet. Relationship edges are explicit: this function
+ * never infers friendship, family, marriage or faction membership.
+ */
+export function getWorldCharacterProfile(roster, characterId, { day = 1 } = {}) {
+  const person = roster?.characters?.find((entry) => entry?.id === characterId);
+  if (!person) return null;
+  const byId = new Map((roster.characters || []).map((entry) => [entry.id, entry]));
+  const relations = (Array.isArray(roster.relations) ? roster.relations : [])
+    .filter((relation) => relation.firstId === person.id || relation.secondId === person.id)
+    .map((relation) => {
+      const otherId = relation.firstId === person.id ? relation.secondId : relation.firstId;
+      const other = byId.get(otherId);
+      return other ? { id: other.id, name: other.name, value: relation.value } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.id.localeCompare(b.id, 'en'));
+  return { person, age: getWorldCharacterAge(person, day), relations };
+}
+
+/**
+ * Explicit world action for a future event/quest/AI command. Never assigns
+ * a new owner/faction or invents a settlement. The passed campaign cities are
+ * the authority for destination existence.
+ */
+export function moveWorldCharacter(roster, characterId, targetSettlementId, {
+  settlements = [],
+  day = 1,
+} = {}) {
+  const id = normalizeSettlementId(targetSettlementId);
+  if (!id || !isBoundedInt(day, 1, 10000000) || !Array.isArray(settlements)
+    || !settlements.some((city) => normalizeSettlementId(city?.id) === id)) return false;
+  const person = roster?.characters?.find((entry) => entry?.id === characterId);
+  if (!person || person.status !== 'alive' || person.location?.kind !== 'settlement'
+    || person.location.settlementId === id) return false;
+  person.location = { kind: 'settlement', settlementId: id };
+  person.history = [...(person.history || []), { day, type: 'moved', settlementId: id }].slice(-16);
+  return true;
 }
 
 export function getSettlementCharacters(roster, settlementId) {
@@ -286,7 +362,9 @@ export function packWorldCharacters(value) {
       CHARACTER_STAT_KEYS.map((key) => person.stats[key]),
       person.loyalty, person.satisfaction, person.reputation, person.standing,
       person.status, person.location.settlementId,
-      person.history.map((event) => [event.day, event.type]),
+      person.history.map((event) => event.type === 'moved'
+        ? [event.day, event.type, event.settlementId]
+        : [event.day, event.type]),
     ]),
     relations: normalized.relations.map((relation) => [
       relation.firstId, relation.secondId, relation.value,
