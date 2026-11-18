@@ -55,16 +55,23 @@ export function defaultCharacterDraft(factionId = 'ottoman') {
   };
 }
 
+function hasForbiddenNameCharacter(rawName) {
+  return Array.from(rawName).some((character) => {
+    const code = character.codePointAt(0);
+    return character === '<' || character === '>' || code < 32 || code === 127;
+  });
+}
+
 export function validateCharacterDraft(draft, factionId = 'ottoman') {
   const source = draft && typeof draft === 'object' && !Array.isArray(draft) ? draft : {};
   const rawName = String(source.name ?? '');
-  if (/[<>\x00-\x1F\x7F]/u.test(rawName)) {
+  if (hasForbiddenNameCharacter(rawName)) {
     return { ok: false, error: 'Karakter adında kontrol işareti veya < > kullanılamaz.' };
   }
   const name = rawName.trim().replace(/\s+/gu, ' ');
   const length = Array.from(name).length;
-  if (length < 2 || length > 32 || /[<>\x00-\x1F\x7F]/u.test(name)) {
-    return { ok: false, error: 'Karakter adı 2–32 karakter olmalı; kontrol işaretleri ve < > kullanılamaz.' };
+  if (length < 2 || length > 32) {
+    return { ok: false, error: 'Karakter adı 2–32 karakter olmalı.' };
   }
   const defaults = defaultCharacterDraft(factionId);
   return {
