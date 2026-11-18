@@ -15,7 +15,9 @@ import {
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
 import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
-import { normalizeCharacterSocialState } from '../systems/character-social.js';
+import {
+  restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
+} from '../systems/character-social-authority.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -354,10 +356,20 @@ Esc close`,
           roster: this.state?.worldCharacters,
           settlements: this.state?.map?.settlements || [],
         }),
-        characterSocial: normalizeCharacterSocialState(this.state?.characterSocial, {
-          roster: this.state?.worldCharacters,
-          settlements: this.state?.map?.settlements || [],
-        }),
+        characterSocial: restoreAuthorizedCharacterSocialState(
+          this.state?.characterSocial, this.state?.characterSocialPending, {
+            roster: this.state?.worldCharacters,
+            settlements: this.state?.map?.settlements || [],
+            catalog: this.state?.characterSocialAuthority,
+          },
+        ),
+        characterSocialPending: retainPendingCharacterSocialSnapshot(
+          this.state?.characterSocial, this.state?.characterSocialPending, {
+            roster: this.state?.worldCharacters,
+            settlements: this.state?.map?.settlements || [],
+            catalog: this.state?.characterSocialAuthority,
+          },
+        ),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -444,10 +456,17 @@ Esc close`,
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
-    this.state.characterSocial = normalizeCharacterSocialState(game.characterSocial, {
+    const socialOptions = {
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
-    });
+      catalog: this.state?.characterSocialAuthority,
+    };
+    this.state.characterSocial = restoreAuthorizedCharacterSocialState(
+      game.characterSocial, game.characterSocialPending, socialOptions,
+    );
+    this.state.characterSocialPending = retainPendingCharacterSocialSnapshot(
+      game.characterSocial, game.characterSocialPending, socialOptions,
+    );
 
     const p = game.playerParty || {};
     playerParty.x = Number.isFinite(p.x) ? p.x : playerParty.x;

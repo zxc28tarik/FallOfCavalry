@@ -200,6 +200,7 @@ export class SaveSystem {
         worldCharacters: normalizeWorldCharacterSave(game.worldCharacters),
         characterOrganization: normalizeCharacterOrganizationState(game.characterOrganization),
         characterSocial: normalizeCharacterSocialState(game.characterSocial),
+        characterSocialPending: normalizeCharacterSocialState(game.characterSocialPending),
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],
         enemyCooldowns: game.enemyCooldowns && typeof game.enemyCooldowns === 'object' ? game.enemyCooldowns : {},
         worldAi: game.worldAi && typeof game.worldAi === 'object' && !Array.isArray(game.worldAi) ? game.worldAi : { lastRespawnDay: 0, parties: [] },

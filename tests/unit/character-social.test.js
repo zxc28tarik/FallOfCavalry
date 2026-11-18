@@ -155,7 +155,8 @@ describe('Character v2: distinct HouseState/CliqueState connections and safe cam
     const { roster, person, social } = fixture();
     const state = { seed: 1648, day: 10, mode: 'map',
       map: { settlements }, worldCharacters: roster,
-      characterSocial: normalizeCharacterSocialState(social, { roster, settlements }) };
+      characterSocial: normalizeCharacterSocialState(social, { roster, settlements }),
+      characterSocialAuthority: social };
     const flow = new GameFlowManager(state);
     expect(flow.linkWorldCharacterToHouse(person.id, 'house:test', {
       reason: 'Approved historical association',
@@ -179,7 +180,7 @@ describe('Character v2: distinct HouseState/CliqueState connections and safe cam
     expect(JSON.stringify(payload.game.characterSocial).length).toBeLessThan(1600);
     const normalized = new SaveSystem().normalizePayload(JSON.parse(JSON.stringify(payload)));
     expect(normalized.ok).toBe(true);
-    const newState = { mode: 'map', map: { settlements } };
+    const newState = { mode: 'map', map: { settlements }, characterSocialAuthority: social };
     const loadManager = new SaveManager(newState);
     loadManager.init(game());
     expect(loadManager.applySavePayload(normalized.data)).toBe(true);

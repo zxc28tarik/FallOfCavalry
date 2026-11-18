@@ -19,8 +19,8 @@ import { advanceNamedCharacterImportance } from '../systems/character-importance
 import {
   getCharacterSocialProfile, linkCharacterToExistingHouse,
   linkCharacterToExistingClique, linkExistingHouseToClique,
-  normalizeCharacterSocialState,
 } from '../systems/character-social.js';
+import { reconcileCharacterSocialState } from '../systems/character-social-authority.js';
 import {
   addCharacterBranchMembership, completeCharacterAssignment,
   getCharacterOrganizationProfile, normalizeCharacterOrganizationState,
@@ -482,16 +482,23 @@ export class GameFlowManager {
    * NO GameFlow API that creates a family or clique out of a character.
    */
   getWorldCharacterSocialProfile(characterId) {
-    return getCharacterSocialProfile(this.state?.characterSocial, characterId, {
+    return getCharacterSocialProfile(reconcileCharacterSocialState(
+      this.state?.characterSocial, {
+        roster: this.state?.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+        catalog: this.state?.characterSocialAuthority,
+      },
+    ), characterId, {
       roster: this.state?.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
   }
 
   linkWorldCharacterToHouse(characterId, houseId, { reason } = {}) {
-    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
       roster: this.state?.worldCharacters,
       settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
     });
     const done = linkCharacterToExistingHouse(social, characterId, houseId, {
       roster: this.state?.worldCharacters,
@@ -502,9 +509,10 @@ export class GameFlowManager {
   }
 
   linkWorldCharacterToClique(characterId, cliqueId, { reason } = {}) {
-    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
       roster: this.state?.worldCharacters,
       settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
     });
     const done = linkCharacterToExistingClique(social, characterId, cliqueId, {
       roster: this.state?.worldCharacters,
@@ -515,9 +523,10 @@ export class GameFlowManager {
   }
 
   linkWorldHouseToClique(houseId, cliqueId, { reason } = {}) {
-    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
       roster: this.state?.worldCharacters,
       settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
     });
     const done = linkExistingHouseToClique(social, houseId, cliqueId, {
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
