@@ -220,6 +220,75 @@ export function produceCharacterCandidates({
 }
 
 /**
+ * Read-only availability filter for the current campaign.
+ *
+ * Slots belonging to ALREADY REGISTERED characters are skipped. This derives
+ * availability from persisted person IDs, so no new save field, cooldown,
+ * rarity, hidden population or time-driven refresh rule is invented.
+ *
+ * Unselected GeneratedPerson candidates are transient by user decision: they
+ * can appear again on a later explicit preview. Decline/rejection tracking
+ * requires a separate approved source-offer policy.
+ */
+export function produceUnregisteredCharacterCandidates({
+  roster,
+  count = 2,
+  firstSlot = 1,
+  ...productionOptions
+} = {}) {
+  if (!isRecord(roster) || !Array.isArray(roster.characters)) {
+    throw new TypeError('Character production needs the campaign person registry.');
+  }
+  bounded(count, 1, MAX_CANDIDATES_PER_REQUEST, 'candidate count');
+  bounded(firstSlot, 1, 9999999, 'first candidate slot');
+
+  // Validates the real source, world seed and policies through the same
+  // contract as standard generation before touching the roster.
+  const initial = produceCharacterCandidates({
+    ...productionOptions,
+    count: 1,
+    firstSlot,
+  });
+  const taken = new Set(
+    roster.characters.map((person) => person?.id).filter((id) => typeof id === 'string'),
+  );
+  if (roster.characters.length >= MAX_WORLD_CHARACTERS) {
+    return {
+      ...initial,
+      firstSlot,
+      candidates: [],
+      candidateSlots: [],
+      nextSlot: firstSlot,
+      rosterFull: true,
+    };
+  }
+
+  const candidates = [];
+  const candidateSlots = [];
+  let slot = firstSlot;
+  while (slot <= 9999999 && candidates.length < count) {
+    if (!taken.has(candidateId(initial.source, slot))) {
+      candidates.push(makeCandidate(
+        initial.worldSeed, initial.source, slot,
+        productionOptions.day ?? 1,
+        (productionOptions.rolePolicy ?? CHARACTER_SOURCE_ROLES)[initial.source.type],
+        productionOptions.namePools ?? CULTURE_NAMES,
+      ));
+      candidateSlots.push(slot);
+    }
+    slot += 1;
+  }
+  return {
+    ...initial,
+    firstSlot,
+    candidates,
+    candidateSlots,
+    nextSlot: slot <= 9999999 ? slot : null,
+    rosterFull: false,
+  };
+}
+
+/**
  * Explicitly preserve ONE chosen GeneratedPerson as NamedCharacter(D). Unchosen
  * candidates remain out of campaign state and save. The action only registers a
  * person; it does not auto-create a House/Clique/Religion/relation or recruit.
