@@ -54,6 +54,12 @@ async function main() {
     stage('menu-loaded', { factions });
     await page.screenshot({ path: imageDir + '/01-start-screen.png', fullPage: true });
 
+    await page.locator('#characterNameInput').fill('Mehmed Çelebi');
+    await page.locator('#characterOriginInput').selectOption('merchant');
+    await page.locator('#characterFocusInput').selectOption('trade');
+    stage('character-form-customized', { name: 'Mehmed Çelebi', origin: 'merchant', focus: 'trade' });
+    await page.screenshot({ path: imageDir + '/01b-character-creation.png', fullPage: true });
+
     await page.locator('#seedInput').fill(String(seed));
     await cards.first().click();
     if (!(await page.locator('#btnStart').isEnabled())) throw new Error('Start button disabled after faction selection');
@@ -97,6 +103,10 @@ async function main() {
           x: g.playerParty?.x ?? null,
           y: g.playerParty?.y ?? null,
           factionId: g.playerParty?.factionId ?? null,
+          characterId: g.playerParty?.character?.id ?? null,
+          characterName: g.playerParty?.character?.name ?? null,
+          characterOrigin: g.playerParty?.character?.originId ?? null,
+          characterTrade: g.playerParty?.character?.stats?.trade ?? null,
           worldWidth: m?.width ?? 0,
           worldHeight: m?.height ?? 0,
           settlements: m?.settlements?.length ?? 0,
@@ -114,7 +124,11 @@ async function main() {
     if (!roundtrip.saveOk || !roundtrip.slotExists || !roundtrip.loadOk) {
       throw new Error('Quick save/load failed in disposable browser context');
     }
-    for (const key of ['day', 'gold', 'factionId', 'worldWidth', 'worldHeight', 'settlements']) {
+    if (roundtrip.before.characterId !== 'player-hero' || roundtrip.before.characterName !== 'Mehmed Çelebi'
+      || roundtrip.before.characterOrigin !== 'merchant' || roundtrip.before.characterTrade !== 62) {
+      throw new Error('Character customization did not reach campaign state');
+    }
+    for (const key of ['day', 'gold', 'factionId', 'characterId', 'characterName', 'characterOrigin', 'characterTrade', 'worldWidth', 'worldHeight', 'settlements']) {
       if (roundtrip.before[key] !== roundtrip.after[key]) {
         throw new Error('Save round-trip mismatch at ' + key);
       }
