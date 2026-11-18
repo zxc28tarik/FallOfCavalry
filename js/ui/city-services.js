@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { getSettlementCharacters, NPC_ROLE_LABELS } from '../systems/world-characters.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -337,6 +338,8 @@ export default class CityServicesUI {
     const availableServices = Object.values(cityState.services || {}).filter((service) => service.available);
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
+    const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+      .filter((person) => person.status === 'alive');
     this.setPanelChrome(
       'Sehir Sahnesi',
       `<div class="city-panel-meta-line">Tema: ${escapeHtml(cityState.sceneTheme || '-')}</div>
@@ -362,6 +365,15 @@ export default class CityServicesUI {
               <strong>${service.available ? 'Acilmis' : `Gerekli: ${escapeHtml(getCityServiceRequirementText(service.id))}`}</strong>
             </div>
           `).join('')}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Sehirdeki Kisiler (NPC)</div>
+          ${residents.length ? residents.map((person) => `
+            <div class="city-overview-row">
+              <span>${escapeHtml(person.name)}</span>
+              <strong>${escapeHtml(NPC_ROLE_LABELS[person.role] || person.role)} · ${person.age}</strong>
+            </div>
+          `).join('') : '<div class="text-sm opacity-80">Bu sehir icin kayitli NPC yok.</div>'}
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Sehir Kethudasi</div>
