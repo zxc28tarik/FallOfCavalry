@@ -34,7 +34,9 @@ Gerçek gameplay kaynağı
 `character-production-catalog.js` kaynak türleri:
 
 - Yerleşim otoritesi: `village, town, city, fort`. `source.id` gerçek `settlement.id` ile aynı olmak ve harita yerleşim tipiyle uyuşmak zorunda.
-- Diğer sahip sistemlerden doğrulanacak: `inn, port, tribe, business, mine, caravanserai, military-training, production, quest, event`. Burada `registeredSources` bir öteki gameplay sisteminin gerçekten mevcut olduğunu doğruladığı kayıtları taşır. Fiktif han/maden/saray otomatik icat edilemez. **Şu anda bu sistemlerin otomatik source registry adaptörleri yapılmadı.**
+- Diğer sahip sistemlerden doğrulanacak: `inn, port, tribe, business, mine, caravanserai, military-training, production, quest, event`. Burada `registeredSources` bir öteki gameplay sisteminin gerçekten mevcut olduğunu doğruladığı kayıtları taşır. Fiktif han/maden/saray otomatik icat edilemez.
+- **Gerçek şehir yapısı adaptörü eklendi:** `js/systems/character-production-sources.js` mevcut `settlement.cityState.parcels[].buildingIds` içinden **inşa edilmiş** `han`, `merchant_han` (inn), `caravanserai` ve katalog kategori `industry/food` üretim tesislerini karakter kaynağı olarak keşfeder. **Pazar, bedesten, gümrük, depo doğrudan adam kaynağı yapılmaz** (FOC karar defteri §9). `CityState` oluşturulmaz/değiştirilmez; bulunmayan/kilitli yapılar listelenmez. `GameFlowManager.listWorldCharacterProductionSources()` bunlara read-only erişim sunar, preview/retain sırasında kaynak hâlâ var mı tekrar kontrol eder.
+- **Henüz bağlanmayan sahip sistemler:** Gerçek işletme, maden, liman, göçebe oba, askerî eğitim, quest/event kaynaklarının kendi kaynak kayıt servisleri. Türleri teknik katalogda var, fakat **yalnız otoriter upstream kaynaktan** eklenince aday üretecekler; mevcut plan askerî/liman mekaniğini otomatik açmaz.
 - Liman kaynak türünün tanımlanması, oyun limanı/deniz mekaniğini açmaz.
 - `cultureId` yalnız açık isim havuzu girdisidir; `originFactionId` ayrı açık girdi. Din, mezhep, devlet sahipliği, kültür veya soy birbirinden otomatik türetilmez.
 
@@ -54,7 +56,7 @@ Gerçek gameplay kaynağı
 - Seçilmeyenler hiç kaydedilmez. Seçilen tek kişi `kind:'named'`, `importance:'D'` olarak **aynı ID, ad, stat, kaynak ve konum** ile eklenir. History `created -> promoted`.
 - Çift kayıt reddedilir; full-roster 4096 kayıt üst sınırı korunur. Bu sınır geçici bir runtime emniyetidir, nihai dünya nüfus hedefi değildir.
 - İlişki/evlilik, aile/House, Clique, religion/sect, asker alımı, ticaret ataması veya savaş stats'ı **otomatik üretilmez**.
-- `GameFlowManager.previewWorldCharacterCandidates` ve `retainWorldCharacter` kampanya bağlamında yetkili map ve seed'i kullanır; UI gerekli değildir. İnsan kaydı oyun olaylarına daha sonra bağlanabilir.
+- `GameFlowManager.listWorldCharacterProductionSources`, `previewWorldCharacterCandidates` ve `retainWorldCharacter` kampanya bağlamında yetkili map/seed ile birlikte gerçekten **mevcut yapıdan keşfedilen** kaynakları kullanır. UI gerekli değildir. İnsan kaydı oyun olaylarına daha sonra bağlanabilir.
 
 ### D. Kayıt ve yükleme
 
