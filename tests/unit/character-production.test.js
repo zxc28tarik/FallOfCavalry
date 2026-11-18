@@ -276,6 +276,65 @@ describe('Character System v2: source-based character production (WEB)', () => {
     expect(map.every((entry) => entry.cityState === undefined)).toBe(true);
   });
 
+  it('namespaces identical facility IDs in different settlements without collisions', () => {
+    const twoCities = [
+      { id: 'town-1', type: 'town' },
+      { id: 'town-2', type: 'town' },
+    ];
+    const facilities = [
+      { type: 'inn', id: 'inn-01', settlementId: 'town-1' },
+      { type: 'inn', id: 'inn-01', settlementId: 'town-2' },
+    ];
+    const a = produceCharacterCandidates({
+      worldSeed: 1648, source: facilities[0], settlements: twoCities,
+      registeredSources: facilities,
+    });
+    const b = produceCharacterCandidates({
+      worldSeed: 1648, source: facilities[1], settlements: twoCities,
+      registeredSources: facilities,
+    });
+    expect(a.candidates[0].id).toBe('npc:source-inn~town-1~inn-01:1');
+    expect(b.candidates[0].id).toBe('npc:source-inn~town-2~inn-01:1');
+    expect(a.candidates[0].id).not.toBe(b.candidates[0].id);
+    const roster = createWorldCharacterRoster({ seed: 1648, settlements: twoCities });
+    for (const offer of [a, b]) {
+      expect(registerProducedCharacter(roster, offer, offer.candidates[0].id, {
+        settlements: twoCities, registeredSources: facilities,
+      })).toBeTruthy();
+    }
+    const saved = createWorldCharacterSave(roster, { seed: 1648, settlements: twoCities });
+    expect(saved.additions).toHaveLength(2);
+    expect(restoreWorldCharacterSave(saved, { settlements: twoCities })).toEqual(normalizeWorldCharacters(roster));
+  });
+
+  it('rejects candidates from a different campaign seed before any roster mutation', () => {
+    const state = {
+      seed: 1648, day: 12, map: { settlements },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements }),
+    };
+    const flow = new GameFlowManager(state);
+    const offSeed = produce(city, { worldSeed: 1649 });
+    const before = JSON.stringify(state.worldCharacters);
+    expect(flow.retainWorldCharacter(offSeed, offSeed.candidates[0].id)).toBe(false);
+    expect(JSON.stringify(state.worldCharacters)).toBe(before);
+    const valid = flow.previewWorldCharacterCandidates(city, { count: 1 });
+    expect(flow.retainWorldCharacter(valid, valid.candidates[0].id)).toBeTruthy();
+  });
+
+  it('campaign facade rejects caller-forged facilities and cannot override its source registry', () => {
+    const state = {
+      seed: 1648, day: 12, map: { settlements },
+      worldCharacters: createWorldCharacterRoster({ seed: 1648, settlements }),
+    };
+    const flow = new GameFlowManager(state);
+    expect(() => flow.previewWorldCharacterCandidates(inn, {
+      registeredSources: [inn],
+    })).toThrow(RangeError);
+    const fabricated = produce(inn, { registeredSources });
+    expect(flow.retainWorldCharacter(fabricated, fabricated.candidates[0].id)).toBe(false);
+    expect(state.worldCharacters.characters).toHaveLength(8);
+  });
+
   it('enforces finite bounded candidate counts, slots, weights and name catalog', () => {
     expect(() => produce(city, { count: 9 })).toThrow(RangeError);
     expect(() => produce(city, { count: 0 })).toThrow(RangeError);
