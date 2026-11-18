@@ -159,6 +159,10 @@ class FallOfCavalry {
     this.devManager.init(this);
     this.gameFlowManager = this.gameFlowManager || new GameFlowManager(this.state);
     this.gameFlowManager.init(this);
+    // Quest completion is the event authority. Character effects are guarded
+    // by a separate, currently EMPTY reviewed policy catalog.
+    this.questManager.onQuestCompleted = (receipt) =>
+      this.gameFlowManager.applyVerifiedQuestCharacterOutcome(receipt);
     this.audioSystem = this.audioSystem || new AudioSystem();
 
     this.uiManager.setupCanvas();

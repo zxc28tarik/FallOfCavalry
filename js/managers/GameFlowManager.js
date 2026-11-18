@@ -18,6 +18,7 @@ import { produceUnregisteredCharacterCandidates, registerProducedCharacter } fro
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
 import { changeNamedCharacterMetric, getNamedCharacterState } from '../systems/named-character-state.js';
+import { applyApprovedQuestCharacterOutcome } from '../systems/character-quest-events.js';
 import {
   getCharacterSocialProfile, linkCharacterToExistingHouse,
   linkCharacterToExistingClique, linkExistingHouseToClique,
@@ -573,6 +574,21 @@ export class GameFlowManager {
   changeWorldCharacterMetric(characterId, metric, value, { reason } = {}) {
     return changeNamedCharacterMetric(this.state?.worldCharacters, characterId, {
       metric, value, reason,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+  }
+
+  /**
+   * The live QuestManager calls this only after a real completion. Effect
+   * amounts must still be present in trusted reviewed quest content; currently
+   * that policy catalog is empty, so NO automatic experience/reputation bonus.
+   */
+  applyVerifiedQuestCharacterOutcome(receipt) {
+    return applyApprovedQuestCharacterOutcome({
+      receipt,
+      questManager: this.game?.questManager,
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
       day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
     });
   }
