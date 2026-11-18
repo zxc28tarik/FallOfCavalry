@@ -13,6 +13,7 @@ import { applySettingsPatch, serializeSettings, deserializeSettings } from '../s
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
+import { produceCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -333,6 +334,53 @@ export class GameFlowManager {
     g.hudManager?.setSettingsVisible?.(false);
     g.hudManager?.setPaused?.(false);
     return true;
+  }
+
+  /**
+   * On-demand world character production. The caller supplies the source that
+   * the city/quest/enterprise system actually knows about; facilities require
+   * their authoritative registeredSources list.
+   *
+   * Preview does not mutate state or add recruits/companions.
+   */
+  previewWorldCharacterCandidates(source, {
+    count = 2,
+    firstSlot = 1,
+    registeredSources = [],
+    rolePolicy,
+    namePools,
+  } = {}) {
+    const settlements = this.state?.map?.settlements || [];
+    return produceCharacterCandidates({
+      worldSeed: this.state?.seed,
+      source,
+      settlements,
+      registeredSources,
+      count,
+      firstSlot,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      ...(rolePolicy ? { rolePolicy } : {}),
+      ...(namePools ? { namePools } : {}),
+    });
+  }
+
+  /**
+   * An explicit story/event/recruitment decision retains one produced person.
+   * This is registration as a world NamedCharacter(D), NOT party recruitment.
+   */
+  retainWorldCharacter(production, characterId, {
+    registeredSources = [],
+    rolePolicy,
+    namePools,
+  } = {}) {
+    if (!this.state?.worldCharacters) return false;
+    return registerProducedCharacter(this.state.worldCharacters, production, characterId, {
+      settlements: this.state?.map?.settlements || [],
+      registeredSources,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      ...(rolePolicy ? { rolePolicy } : {}),
+      ...(namePools ? { namePools } : {}),
+    });
   }
 
   applyMasterVolume(value) {
