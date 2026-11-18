@@ -15,6 +15,8 @@ import {
 
 const validId = (x) => typeof x === 'string'
   && x.length >= 2 && x.length <= 96 && /^[a-zA-Z0-9_.:-]+$/.test(x);
+const validActorId = (x) => typeof x === 'string'
+  && /^npc:[^\s<>]{1,400}:[1-9]\d{0,6}$/.test(x);
 const validReason = (x) => typeof x === 'string' && x.trim().length >= 3
   && x.length <= 70 && !/[<>\r\n\t]/.test(x);
 const validDay = (x) => Number.isSafeInteger(x) && x >= 1 && x <= 10000000;
@@ -51,7 +53,7 @@ export function applyApprovedQuestCharacterOutcome({
   if (!Array.isArray(rules) || rules.length === 0) return none('no_approved_rules');
   if (!validDay(day) || !validId(receipt?.questId)
     || !validId(receipt?.templateId) || !validId(receipt?.pathId)
-    || !validId(receipt?.assignedCharacterId)
+    || !validActorId(receipt?.assignedCharacterId)
     || !Array.isArray(questManager?.completedQuests)) return none('unverified_completion');
 
   const quest = questManager.completedQuests.find((entry) =>
