@@ -150,6 +150,26 @@ async function main() {
       const rosterBefore = g.playerParty?.roster?.length || 0;
       const generated = g.gameFlowManager.previewWorldCharacterCandidates(source, { count: 2 });
       const previewDidNotRegister = g.state.worldCharacters.characters.length === before;
+      const availableSources = g.gameFlowManager.listWorldCharacterProductionSources().length;
+      let forgedFacilityBlocked = false;
+      try {
+        g.gameFlowManager.previewWorldCharacterCandidates({
+          type: 'inn', id: 'phantom-inn', settlementId: city.id,
+        }, {
+          count: 1, registeredSources: [
+            { type: 'inn', id: 'phantom-inn', settlementId: city.id },
+          ],
+        });
+      } catch {
+        forgedFacilityBlocked = true;
+      }
+      const wrongCampaign = { ...generated, worldSeed: g.state.seed + 1 };
+      const wrongCampaignBlocked = g.gameFlowManager.retainWorldCharacter(
+        wrongCampaign, generated.candidates[0].id,
+      ) === false;
+      const sourceContractSafe =
+        generated.sourceContract?.possibleImportanceClasses?.[0] === 'D'
+        && generated.sourceContract?.isUnavailableForRecruitment === true;
       const chosenId = generated.candidates[0].id;
       const chosen = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
       const duplicate = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
@@ -163,6 +183,7 @@ async function main() {
         ready: true,
         sourceType: city.type, before, after, selectedId: chosenId,
         previewDidNotRegister, registerOk: chosen?.kind === 'named' && chosen?.importance === 'D',
+        availableSources, forgedFacilityBlocked, wrongCampaignBlocked, sourceContractSafe,
         duplicateBlocked: duplicate === false,
         unitRosterUnchanged: (g.playerParty?.roster?.length || 0) === rosterBefore,
         deltaFormat: saveRecord?.format,
@@ -174,6 +195,8 @@ async function main() {
     report.characterProduction = productionRoundtrip;
     stage('source-character-production-roundtrip', productionRoundtrip);
     if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
+      productionRoundtrip.availableSources < 1 || !productionRoundtrip.forgedFacilityBlocked ||
+      !productionRoundtrip.wrongCampaignBlocked || !productionRoundtrip.sourceContractSafe ||
       !productionRoundtrip.registerOk || !productionRoundtrip.duplicateBlocked ||
       !productionRoundtrip.unitRosterUnchanged || productionRoundtrip.after !== productionRoundtrip.before + 1 ||
       productionRoundtrip.deltaFormat !== 'seeded-delta-v1' || productionRoundtrip.additions !== 1 ||
