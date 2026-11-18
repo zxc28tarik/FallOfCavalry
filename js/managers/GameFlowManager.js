@@ -17,6 +17,11 @@ import { produceUnregisteredCharacterCandidates, registerProducedCharacter } fro
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
 import {
+  getCharacterSocialProfile, linkCharacterToExistingHouse,
+  linkCharacterToExistingClique, linkExistingHouseToClique,
+  normalizeCharacterSocialState,
+} from '../systems/character-social.js';
+import {
   addCharacterBranchMembership, completeCharacterAssignment,
   getCharacterOrganizationProfile, normalizeCharacterOrganizationState,
   startCharacterAssignment,
@@ -469,6 +474,55 @@ export class GameFlowManager {
       reason,
     });
     if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  /**
+   * House/Clique are independent, authored entities. There is deliberately
+   * NO GameFlow API that creates a family or clique out of a character.
+   */
+  getWorldCharacterSocialProfile(characterId) {
+    return getCharacterSocialProfile(this.state?.characterSocial, characterId, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+  }
+
+  linkWorldCharacterToHouse(characterId, houseId, { reason } = {}) {
+    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = linkCharacterToExistingHouse(social, characterId, houseId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
+    return done;
+  }
+
+  linkWorldCharacterToClique(characterId, cliqueId, { reason } = {}) {
+    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = linkCharacterToExistingClique(social, characterId, cliqueId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
+    return done;
+  }
+
+  linkWorldHouseToClique(houseId, cliqueId, { reason } = {}) {
+    const social = normalizeCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = linkExistingHouseToClique(social, houseId, cliqueId, {
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
     return done;
   }
 

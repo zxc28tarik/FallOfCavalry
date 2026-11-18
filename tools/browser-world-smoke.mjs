@@ -190,6 +190,16 @@ async function main() {
         assignmentLocation: { kind: 'settlement', settlementId: city.id },
         reason: 'Explicit administrative task',
       }) === true;
+      const socialProfileBeforeSave = g.gameFlowManager.getWorldCharacterSocialProfile(chosenId);
+      const noInventedSocialTies = socialProfileBeforeSave?.houseMemberships?.length === 0
+        && socialProfileBeforeSave.cliqueMemberships.length === 0
+        && socialProfileBeforeSave.headedHouses.length === 0
+        && g.gameFlowManager.linkWorldCharacterToHouse(chosenId, 'house:nonexistent', {
+          reason: 'Must not create fictional house',
+        }) === false
+        && g.gameFlowManager.linkWorldCharacterToClique(chosenId, 'clique:nonexistent', {
+          reason: 'Must not create fictional clique',
+        }) === false;
       const profileBeforeSave = g.gameFlowManager.getWorldCharacterOrganizationProfile(chosenId);
       const independentMembership = profileBeforeSave?.memberships?.length === 1
         && profileBeforeSave.memberships[0].branch === 'trade_network'
@@ -200,6 +210,11 @@ async function main() {
       const saveOk = g.saveManager.quickSave() === true;
       const loadOk = saveOk && g.saveManager.quickLoad() === true;
       const restored = g.state.worldCharacters.characters.find((person) => person.id === chosenId);
+      const socialProfileAfterSave = g.gameFlowManager.getWorldCharacterSocialProfile(chosenId);
+      const noInventedSocialTiesAfterLoad = socialProfileAfterSave?.houseMemberships?.length === 0
+        && socialProfileAfterSave?.cliqueMemberships?.length === 0
+        && savePayload.game?.characterSocial?.houses?.length === 0
+        && savePayload.game?.characterSocial?.cliques?.length === 0;
       const organizationAfterSave = g.gameFlowManager.getWorldCharacterOrganizationProfile(chosenId);
       const organizationRoundtripOk = organizationAfterSave?.memberships?.length === 1
         && organizationAfterSave.memberships[0].branch === 'trade_network'
@@ -214,6 +229,7 @@ async function main() {
       return {
         ready: true, savedCandidateExcluded, advancedToC, invalidDirectA,
         membershipOk, assignmentOk, independentMembership, organizationRoundtripOk,
+        noInventedSocialTies, noInventedSocialTiesAfterLoad,
         restoredClass: restored?.importance ?? null,
         restoredPromotionHistory: restored?.history?.some((entry) =>
           entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
@@ -233,7 +249,9 @@ async function main() {
     stage('source-character-production-roundtrip', productionRoundtrip);
     if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
       !productionRoundtrip.savedCandidateExcluded || !productionRoundtrip.membershipOk ||
-      !productionRoundtrip.assignmentOk || !productionRoundtrip.independentMembership ||
+      !productionRoundtrip.assignmentOk || !productionRoundtrip.noInventedSocialTies ||
+      !productionRoundtrip.noInventedSocialTiesAfterLoad ||
+      !productionRoundtrip.independentMembership ||
       !productionRoundtrip.organizationRoundtripOk || !productionRoundtrip.invalidDirectA ||
       !productionRoundtrip.advancedToC || productionRoundtrip.restoredClass !== 'C' ||
       !productionRoundtrip.restoredPromotionHistory ||

@@ -15,6 +15,7 @@ import {
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
 import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
+import { normalizeCharacterSocialState } from '../systems/character-social.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -353,6 +354,10 @@ Esc close`,
           roster: this.state?.worldCharacters,
           settlements: this.state?.map?.settlements || [],
         }),
+        characterSocial: normalizeCharacterSocialState(this.state?.characterSocial, {
+          roster: this.state?.worldCharacters,
+          settlements: this.state?.map?.settlements || [],
+        }),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -436,6 +441,10 @@ Esc close`,
       settlements: this.state?.map?.settlements || [],
     });
     this.state.characterOrganization = normalizeCharacterOrganizationState(game.characterOrganization, {
+      roster: this.state.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    this.state.characterSocial = normalizeCharacterSocialState(game.characterSocial, {
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
