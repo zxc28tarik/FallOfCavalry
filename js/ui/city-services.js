@@ -381,10 +381,12 @@ export default class CityServicesUI {
         <div class="city-overview-section">
           <div class="city-overview-section__title">Sehirdeki Kisiler (NPC)</div>
           ${residents.length ? residents.map((person) => `
-            <div class="city-overview-row">
+            <button type="button" class="city-overview-row w-full text-left"
+                data-action="open-npc" data-id="${escapeHtml(person.id)}"
+                aria-label="${escapeHtml(person.name)} karakterini incele">
               <span>${escapeHtml(person.name)}</span>
-              <strong>${escapeHtml(NPC_ROLE_LABELS[person.role] || person.role)} · ${person.age}</strong>
-            </div>
+              <strong>${escapeHtml(NPC_ROLE_LABELS[person.role] || person.role)} · ${getWorldCharacterAge(person, this.state?.day)}</strong>
+            </button>
           `).join('') : '<div class="text-sm opacity-80">Bu sehir icin kayitli NPC yok.</div>'}
         </div>
         <div class="city-overview-section">
