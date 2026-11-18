@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   CHARACTER_STAT_KEYS,
   createWorldCharacterRoster,
+  createWorldCharacterSave,
   getSettlementCharacters,
   normalizeWorldCharacters,
   packWorldCharacters,
   promoteWorldCharacter,
+  restoreWorldCharacterSave,
   setWorldCharacterRelation,
 } from '../../js/systems/world-characters.js';
 import SaveSystem from '../../js/systems/save-system.js';
@@ -147,6 +149,23 @@ describe('Web campaign world NPCs (not player units or visual soldiers)', () => 
     expect(JSON.stringify(compact).length).toBeLessThan(JSON.stringify(large).length * 0.6);
   });
 
+  it('seeds all 1762 people at load without recording unchanged people in localStorage', () => {
+    const cities = Array.from({ length: 881 }, (_, id) => ({ id: `city-${id}`, ownerFactionId: 'ottoman' }));
+    const people = createWorldCharacterRoster({ seed: 1337, settlements: cities });
+    const first = people.characters[0];
+    const other = people.characters[1];
+    expect(promoteWorldCharacter(people, first.id, { day: 15 })).toBe(true);
+    expect(setWorldCharacterRelation(people, first.id, other.id, 28)).toBe(true);
+    const save = createWorldCharacterSave(people, { seed: 1337, settlements: cities });
+    expect(save.format).toBe('seeded-delta-v1');
+    expect(save.overrides).toHaveLength(1);
+    expect(save.relations).toHaveLength(1);
+    expect(JSON.stringify(save).length).toBeLessThan(500);
+    expect(restoreWorldCharacterSave(JSON.parse(JSON.stringify(save)), { settlements: cities }))
+      .toEqual(normalizeWorldCharacters(people));
+    expect(restoreWorldCharacterSave(undefined, { settlements: cities }).characters).toEqual([]);
+  });
+
   it('survives SaveSystem normalization and SaveManager build/load without creating a player character', () => {
     const npcState = roster();
     promoteWorldCharacter(npcState, npcState.characters[0].id, { day: 7 });
@@ -165,8 +184,9 @@ describe('Web campaign world NPCs (not player units or visual soldiers)', () => 
     const manager = new SaveManager(state);
     manager.init(game);
     const payload = manager.buildSavePayload();
-    expect(payload.game.worldCharacters.format).toBe('packed-v1');
-    expect(normalizeWorldCharacters(payload.game.worldCharacters)).toEqual(normalizeWorldCharacters(npcState));
+    expect(payload.game.worldCharacters.format).toBe('seeded-delta-v1');
+    expect(payload.game.worldCharacters.overrides).toHaveLength(1);
+    expect(restoreWorldCharacterSave(payload.game.worldCharacters, { settlements })).toEqual(normalizeWorldCharacters(npcState));
     const migrated = new SaveSystem().normalizePayload(JSON.parse(JSON.stringify(payload)));
     expect(migrated.ok).toBe(true);
     expect(migrated.data.game.worldCharacters).toEqual(payload.game.worldCharacters);
