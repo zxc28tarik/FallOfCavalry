@@ -172,6 +172,7 @@ async function main() {
         && generated.sourceContract?.isUnavailableForRecruitment === true;
       const chosenId = generated.candidates[0].id;
       const chosen = g.gameFlowManager.retainWorldCharacter(generated, chosenId);
+      const registeredAsD = chosen?.kind === 'named' && chosen?.importance === 'D';
       const invalidDirectA = g.gameFlowManager.advanceWorldCharacterImportance(chosenId, 'A', {
         reason: 'Direct jump forbidden',
       }) === false;
@@ -196,7 +197,7 @@ async function main() {
           entry.type === 'importance' && entry.from === 'D' && entry.to === 'C') ?? false,
         nextOfferSlots: nextOffer.candidateSlots,
         sourceType: city.type, before, after, selectedId: chosenId,
-        previewDidNotRegister, registerOk: chosen?.kind === 'named' && chosen?.importance === 'D',
+        previewDidNotRegister, registerOk: registeredAsD,
         availableSources, forgedFacilityBlocked, wrongCampaignBlocked, sourceContractSafe,
         duplicateBlocked: duplicate === false,
         unitRosterUnchanged: (g.playerParty?.roster?.length || 0) === rosterBefore,
