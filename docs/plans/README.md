@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [18 Kasım 2026 — WEB Karakter Üretim Motoru V1](2026-11-18-web-karakter-uretim-motoru-v1.md): Character System v2 kaynakları → rol şablonu → tekrarlanabilir geçici aday → kalıcı Named(D) → küçük delta save; uygulama planı ve karar sınırları
 - [18 Kasım 2026 — Web dünya NPC / karakter üretimi V1](2026-11-18-web-dunya-npc-karakter-sistemi-v1.md): oyuncu değil, Unity değil; seedli NPC, şehir görünümü, kayıt, karakter yükseltme ve testler
 - [18 Kasım 2026 — BİRLEŞİK WEB MASTER PLAN V2](web-rebuild-v2/README.md): yeni dünya verisi + özgün 2D, 18 iş hattı/131 icra paketi, eski 215+72 planla çapraz izleme
 - [18 Kasım 2026 — Eski dünya verileri ve görsellerin kullanıcı onaylı silinmesi](2026-11-18-requested-legacy-world-art-deletion.md): aktif olsa bile silme kararı, kapsam ve geçici procedural boot
