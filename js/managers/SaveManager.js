@@ -13,6 +13,7 @@ import {
   serializeAllSettlementCityStates,
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
+import { normalizeWorldCharacters } from '../systems/world-characters.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -343,6 +344,7 @@ Esc close`,
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
         },
         roster,
+        worldCharacters: normalizeWorldCharacters(this.state?.worldCharacters),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -419,6 +421,10 @@ Esc close`,
       y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
       zoom: Math.max(minZoom, Math.min(maxZoom, savedZoom)),
     };
+
+    // Preserve real generated NPCs; legacy saves intentionally have an empty NPC roster.
+    // Never fabricate or copy a player character into this collection during load.
+    this.state.worldCharacters = normalizeWorldCharacters(game.worldCharacters);
 
     const p = game.playerParty || {};
     playerParty.x = Number.isFinite(p.x) ? p.x : playerParty.x;
