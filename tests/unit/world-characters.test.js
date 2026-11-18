@@ -4,6 +4,7 @@ import {
   createWorldCharacterRoster,
   getSettlementCharacters,
   normalizeWorldCharacters,
+  packWorldCharacters,
   promoteWorldCharacter,
   setWorldCharacterRelation,
 } from '../../js/systems/world-characters.js';
@@ -130,6 +131,22 @@ describe('Web campaign world NPCs (not player units or visual soldiers)', () => 
     expect(clean.characters[0].stats).not.toBe(a.stats);
   });
 
+  it('packs and unpacks a large NPC roster losslessly with lower localStorage footprint', () => {
+    const large = createWorldCharacterRoster({
+      seed: 1337,
+      settlements: Array.from({ length: 881 }, (_, id) => ({
+        id: `city-${id}`, ownerFactionId: id % 2 ? 'ottoman' : 'venice',
+      })),
+    });
+    const [a, b] = large.characters;
+    expect(setWorldCharacterRelation(large, a.id, b.id, 75)).toBe(true);
+    expect(promoteWorldCharacter(large, a.id, { day: 45 })).toBe(true);
+    const compact = packWorldCharacters(large);
+    expect(compact.people).toHaveLength(1762);
+    expect(normalizeWorldCharacters(JSON.parse(JSON.stringify(compact)))).toEqual(normalizeWorldCharacters(large));
+    expect(JSON.stringify(compact).length).toBeLessThan(JSON.stringify(large).length * 0.6);
+  });
+
   it('survives SaveSystem normalization and SaveManager build/load without creating a player character', () => {
     const npcState = roster();
     promoteWorldCharacter(npcState, npcState.characters[0].id, { day: 7 });
@@ -148,7 +165,8 @@ describe('Web campaign world NPCs (not player units or visual soldiers)', () => 
     const manager = new SaveManager(state);
     manager.init(game);
     const payload = manager.buildSavePayload();
-    expect(payload.game.worldCharacters).toEqual(normalizeWorldCharacters(npcState));
+    expect(payload.game.worldCharacters.format).toBe('packed-v1');
+    expect(normalizeWorldCharacters(payload.game.worldCharacters)).toEqual(normalizeWorldCharacters(npcState));
     const migrated = new SaveSystem().normalizePayload(JSON.parse(JSON.stringify(payload)));
     expect(migrated.ok).toBe(true);
     expect(migrated.data.game.worldCharacters).toEqual(payload.game.worldCharacters);
