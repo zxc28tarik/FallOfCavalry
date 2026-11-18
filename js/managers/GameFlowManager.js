@@ -13,7 +13,7 @@ import { applySettingsPatch, serializeSettings, deserializeSettings } from '../s
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
-import { produceCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
+import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
 import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
 
 export class GameFlowManager {
@@ -361,7 +361,8 @@ export class GameFlowManager {
     const canonicalSource = registeredSources.find((item) => item.type === source?.type
       && item.id === String(source?.id) && item.settlementId === String(source?.settlementId));
     if (!canonicalSource) throw new RangeError('Character production requires a real world source.');
-    return produceCharacterCandidates({
+    return produceUnregisteredCharacterCandidates({
+      roster: this.state?.worldCharacters,
       worldSeed: this.state?.seed,
       source: canonicalSource,
       settlements,
