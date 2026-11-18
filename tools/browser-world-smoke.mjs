@@ -109,13 +109,19 @@ async function main() {
         };
       };
       const before = capture();
+      const payload = g.saveManager?.buildSavePayload?.();
+      const payloadLength = JSON.stringify(payload)?.length ?? null;
+      const npcSaveLength = JSON.stringify(payload?.game?.worldCharacters)?.length ?? null;
       const saveOk = g.saveManager?.quickSave?.() === true;
       const slotExists = g.saveManager?.saveSystem?.hasSlot?.('manual1') === true;
       const loadOk = saveOk ? g.saveManager?.quickLoad?.() === true : false;
-      return { saveOk, slotExists, loadOk, before, after: capture() };
+      return { saveOk, slotExists, loadOk, payloadLength, npcSaveLength, before, after: capture() };
     });
     report.saveRoundtrip = roundtrip;
-    stage('save-roundtrip', { saveOk: roundtrip.saveOk, slotExists: roundtrip.slotExists, loadOk: roundtrip.loadOk });
+    stage('save-roundtrip', {
+      saveOk: roundtrip.saveOk, slotExists: roundtrip.slotExists, loadOk: roundtrip.loadOk,
+      payloadLength: roundtrip.payloadLength, npcSaveLength: roundtrip.npcSaveLength,
+    });
     if (!roundtrip.saveOk || !roundtrip.slotExists || !roundtrip.loadOk) {
       throw new Error('Quick save/load failed in disposable browser context');
     }
