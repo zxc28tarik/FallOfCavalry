@@ -53,3 +53,42 @@ describe('SaveSystem building-state normalization', () => {
   });
 });
 
+
+describe('SaveSystem version 1 gameplay-state preservation', () => {
+  it('retains player faction and all gameplay fields consumed by SaveManager.applySavePayload', () => {
+    const payload = {
+      schemaVersion: 1,
+      game: {
+        playerParty: { factionId: 'ottoman', starveDays: 3, contracts: [{ id: 'contract-1' }] },
+        settings: { masterVolume: 0.3 },
+        worldAi: { lastRespawnDay: 11, parties: [{ id: 'patrol-a', factionId: 'hre' }] },
+        settlementsOwners: [{ settlementId: 7, ownerFactionId: 'polish' }],
+        regionState: { regions: { one: { wealth: 3 } } },
+        clueMarker: { x: 13, y: 4 },
+        events: { events: [{ id: 'event-1' }] },
+        factions: { relations: { ottoman: { hre: -20 } } },
+      },
+    };
+    const result = new SaveSystem().normalizePayload(payload);
+    expect(result.ok).toBe(true);
+    expect(result.data.game.playerParty).toMatchObject({
+      factionId: 'ottoman', starveDays: 3, contracts: [{ id: 'contract-1' }],
+    });
+    for (const key of [
+      'settings', 'worldAi', 'settlementsOwners', 'regionState',
+      'clueMarker', 'events', 'factions',
+    ]) {
+      expect(result.data.game[key]).toEqual(payload.game[key]);
+    }
+  });
+
+  it('supports old saves without the newly preserved optional fields', () => {
+    const result = new SaveSystem().normalizePayload({ schemaVersion: 1, game: { day: 4 } });
+    expect(result.ok).toBe(true);
+    expect(result.data.game.day).toBe(4);
+    expect(result.data.game.playerParty.factionId).toBeNull();
+    expect(result.data.game.playerParty.contracts).toEqual([]);
+    expect(result.data.game.settlementsOwners).toEqual([]);
+    expect(result.data.game.factions).toBeNull();
+  });
+});
