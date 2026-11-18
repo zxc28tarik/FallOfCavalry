@@ -36,7 +36,7 @@ Karar defterindeki eski “JS tarafı yok; Unity'de sıfırdan kurulacak” ibar
 3. Source-produced Named(D) → C işlemi save `additions` ve seeded-delta restore sonrası geri gelir.
 4. Standart başlangıç karakterinin Named(D) → C → B → A değişikliği `overrides` ile korunur.
 5. Gerçek Chromium: D→A engeli, D→C açık emir, quick save/load, geçmiş ve yeni aday üretiminin sürmesi.
-6. CI ve tarayıcı smoke **son HEAD SHA üzerinde** doğrulanmadan bu alt iş DONE değildir. PR draft kalacak, main'e kullanıcı GO'su olmadan birleştirilmeyecek.
+6. **V1.5 teknik alt iş QA-PASS**: kod SHA `1181c47bd91ee747b59e722dfba1f32d9cfba6ad` üzerinde [Web validation #44287036763](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44287036763) **552/552 unit, 964/965 full (1 skipped), lint, build, world audit (0 error, 1 mevcut uyarı)**. [Chromium #44287036725](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44287036725) **PASS**: D olarak kaydetme, D→A engeli, D→C, quick save/load sonrası C ve `history.importance` korunması, yeni aday slotları [2,3], 0 konsol hatası. Doküman commitleri HEAD'i ileri taşıyacağı için bu SHA kodun kesin test kanıtıdır. PR draft kalacak, main'e kullanıcı GO'su olmadan birleştirilmeyecek.
 7. Sonraki mühendislik: `CharacterDefinition/NamedCharacterState/CharacterRoleAssignmentState` biçimlerinin sürümlü ayrışması; rol, organizasyon üyeliği, atama ve neden-sonuç olaylarının kontrol edilen entegrasyonu.
 
 **Bu belge kaynak kararları değiştirmez; eksikleri açık tutan teknik uygulama/kabul kaydıdır.**
