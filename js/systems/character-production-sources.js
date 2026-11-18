@@ -7,7 +7,10 @@
  */
 import { CITY_BUILDING_CATEGORY, getCityBuildingDef } from '../data/city-building-catalog.js';
 
-const SETTLEMENT_SOURCE_TYPES = new Set(['village', 'town', 'city', 'fort']);
+const SETTLEMENT_SOURCE_TYPES = Object.freeze({
+  village: 'village', town: 'town', city: 'city', capital: 'city',
+  fort: 'fort', fortress: 'fort', castle: 'fort', stronghold: 'fort',
+});
 const DIRECT_INN_IDS = new Set(['han', 'merchant_han']);
 const MAX_SOURCE_ID_LENGTH = 80;
 
@@ -38,10 +41,11 @@ export function discoverCharacterProductionSources(settlements = []) {
     const cityId = validPart(settlement?.id);
     if (!cityId) continue;
     const settlementType = typeof settlement?.type === 'string' ? settlement.type.toLowerCase() : '';
-    if (SETTLEMENT_SOURCE_TYPES.has(settlementType)) {
-      const key = settlementType + '|' + cityId;
+    const sourceType = SETTLEMENT_SOURCE_TYPES[settlementType];
+    if (sourceType) {
+      const key = sourceType + '|' + cityId;
       if (!registered.has(key)) {
-        registered.set(key, { type: settlementType, id: cityId, settlementId: cityId });
+        registered.set(key, { type: sourceType, id: cityId, settlementId: cityId });
       }
     }
 
