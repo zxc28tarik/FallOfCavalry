@@ -36,3 +36,5 @@ Eski belgelerdeki “GitHub'a henüz aktarılmadı” türü ifadeler **o belgen
 - Görevlerin `DONE` durumu için commit + doğrulama kanıtı zorunludur.
 - Excel pano ve arşiv ZIP dosyaları daha önce sohbet eki olarak verilmiştir; GitHub'da sürümlenen ana takip kaynakları CSV/JSON'dur. Bunlardan Excel dışa aktarılabilir.
 
+
+- [2026-11-18 Web karakter oluşturma V1](2026-11-18-web-karakter-olusturma-v1.md) — Start ekranı, kalıcı oyuncu kimliği, save/load ve test kapsamı (PR/CI kabulü bekler).
