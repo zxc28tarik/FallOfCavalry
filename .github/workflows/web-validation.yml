@@ -37,3 +37,15 @@ jobs:
 
       - name: Complete Vitest suite (including battle and manager tests)
         run: npm run test
+
+      - name: Census entire current procedural world
+        run: npm run audit:world
+
+      - name: Upload complete-world diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: world-integrity-report
+          path: output/reports/world-integrity.json
+          if-no-files-found: warn
+          retention-days: 14
