@@ -179,8 +179,13 @@ async function main() {
       const saveOk = g.saveManager.quickSave() === true;
       const loadOk = saveOk && g.saveManager.quickLoad() === true;
       const restored = g.state.worldCharacters.characters.find((person) => person.id === chosenId);
+      const nextOffer = g.gameFlowManager.previewWorldCharacterCandidates(source, { count: 2 });
+      const savedCandidateExcluded = !nextOffer.candidates.some((person) => person.id === chosenId)
+        && nextOffer.candidateSlots?.[0] === 2
+        && nextOffer.candidateSlots?.[1] === 3;
       return {
-        ready: true,
+        ready: true, savedCandidateExcluded,
+        nextOfferSlots: nextOffer.candidateSlots,
         sourceType: city.type, before, after, selectedId: chosenId,
         previewDidNotRegister, registerOk: chosen?.kind === 'named' && chosen?.importance === 'D',
         availableSources, forgedFacilityBlocked, wrongCampaignBlocked, sourceContractSafe,
@@ -195,6 +200,7 @@ async function main() {
     report.characterProduction = productionRoundtrip;
     stage('source-character-production-roundtrip', productionRoundtrip);
     if (!productionRoundtrip.ready || !productionRoundtrip.previewDidNotRegister ||
+      !productionRoundtrip.savedCandidateExcluded ||
       productionRoundtrip.availableSources < 1 || !productionRoundtrip.forgedFacilityBlocked ||
       !productionRoundtrip.wrongCampaignBlocked || !productionRoundtrip.sourceContractSafe ||
       !productionRoundtrip.registerOk || !productionRoundtrip.duplicateBlocked ||
