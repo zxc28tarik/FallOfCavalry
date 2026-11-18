@@ -8,6 +8,7 @@ import {
 } from '../../js/systems/character-creation.js';
 import { StartScreen } from '../../js/ui/start-screen.js';
 import { SaveManager } from '../../js/managers/SaveManager.js';
+import SaveSystem from '../../js/systems/save-system.js';
 
 const draft = (changes = {}) => ({
   ...defaultCharacterDraft('ottoman'),
@@ -98,5 +99,10 @@ describe('campaign character creation', () => {
     const data = manager.buildSavePayload();
     expect(data.schemaVersion).toBe(1);
     expect(data.game.playerParty.character).toEqual(character);
+    const migrated = new SaveSystem().normalizePayload(JSON.parse(JSON.stringify(data)));
+    expect(migrated.ok).toBe(true);
+    expect(migrated.data.game.playerParty.character).toEqual(character);
+    const legacy = new SaveSystem().normalizePayload({ schemaVersion: 1, game: { playerParty: { gold: 100 } } });
+    expect(legacy.data.game.playerParty.character).toBeNull();
   });
 });
