@@ -189,14 +189,27 @@ function isBoundedInt(value, min = 0, max = 100) {
 function normalizeHistory(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(-16)
-    .filter((item) => asObject(item) && isBoundedInt(item.day, 1, 10000000)
-      && ['created', 'promoted', 'moved', 'importance'].includes(item.type)
-      && (item.type !== 'moved' || normalizeSettlementId(item.settlementId))
-      && (item.type !== 'importance'
-        || (requiredImportanceReviewTier(item.from, item.to) === item.reviewTier
-          && typeof item.reason === 'string'
+    .filter((item) => {
+      if (!asObject(item) || !isBoundedInt(item.day, 1, 10000000)
+        || !['created', 'promoted', 'moved', 'importance', 'state-changed'].includes(item.type)) return false;
+      if (item.type === 'moved' && !normalizeSettlementId(item.settlementId)) return false;
+      if (item.type === 'importance') {
+        return requiredImportanceReviewTier(item.from, item.to) === item.reviewTier
+          && typeof item.reason === 'string' && item.reason.trim().length >= 3
+          && item.reason.length <= 120 && !/[<>\r\n\t]/.test(item.reason);
+      }
+      if (item.type === 'state-changed') {
+        const metric = item.metric;
+        const allowed = typeof metric === 'string'
+          && (['loyalty', 'satisfaction', 'reputation', 'standing'].includes(metric)
+            || (metric.startsWith('stats.') && CHARACTER_STAT_KEYS.includes(metric.slice(6))));
+        return allowed && isBoundedInt(item.from) && isBoundedInt(item.to)
+          && item.from !== item.to && typeof item.reason === 'string'
           && item.reason.trim().length >= 3 && item.reason.length <= 120
-          && !/[<>\r\n\t]/.test(item.reason))))
+          && !/[<>\r\n\t]/.test(item.reason);
+      }
+      return true;
+    })
     .map((item) => {
       if (item.type === 'moved') {
         return { day: item.day, type: item.type, settlementId: normalizeSettlementId(item.settlementId) };
@@ -206,6 +219,12 @@ function normalizeHistory(value) {
           day: item.day, type: item.type,
           from: item.from, to: item.to, reviewTier: item.reviewTier,
           reason: item.reason.trim(),
+        };
+      }
+      if (item.type === 'state-changed') {
+        return {
+          day: item.day, type: item.type, metric: item.metric,
+          from: item.from, to: item.to, reason: item.reason.trim(),
         };
       }
       if (item.type === 'created'
@@ -284,6 +303,9 @@ export function normalizeWorldCharacters(value) {
           ...(entry?.[1] === 'importance' && entry.length === 6
             ? { from: entry?.[2], to: entry?.[3], reviewTier: entry?.[4],
               reason: entry?.[5] } : {}),
+           ...(entry?.[1] === 'state-changed' && entry.length === 6
+             ? { metric: entry?.[2], from: entry?.[3], to: entry?.[4],
+               reason: entry?.[5] } : {}),
         })) : [],
       };
     })
@@ -417,7 +439,9 @@ export function packWorldCharacters(value) {
           ? [event.day, event.type, event.sourceType, event.sourceId]
           : event.type === 'importance'
             ? [event.day, event.type, event.from, event.to, event.reviewTier, event.reason]
-            : [event.day, event.type]),
+            : event.type === 'state-changed'
+               ? [event.day, event.type, event.metric, event.from, event.to, event.reason]
+               : [event.day, event.type]),
     ]),
     relations: normalized.relations.map((relation) => [
       relation.firstId, relation.secondId, relation.value,
