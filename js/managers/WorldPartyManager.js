@@ -14,6 +14,10 @@ import {
 import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 import { linkedEscortBattleThreat } from '../systems/quest-escort-threat-battle.js';
 import {
+  spawnEscortNpcGuards, runEscortNpcSkirmish,
+  retireEscortNpcGuards, activeEscortGuards,
+} from '../systems/quest-escort-npc-guards.js';
+import {
   createInitialWorldAiState,
   spawnPartyBandit,
   ensureWorldParties as ensureBaseWorldParties,
@@ -234,6 +238,7 @@ export class WorldPartyManager {
         day, Number(cfg?.CARAVAN_SPEED ?? 0.8));
       if (!party) continue;
       parties.push(party);
+      spawnEscortNpcGuards(party, parties);
       spawned += 1;
     }
     return spawned;
@@ -269,7 +274,10 @@ export class WorldPartyManager {
       const failed = this.game?.questManager?.failQuest(
         match.quest.id, 'escort_guard_defeated',
       ) === true;
-      if (failed) match.caravan.alive = false;
+      if (failed) {
+        match.caravan.alive = false;
+        retireEscortNpcGuards(match.caravan, this.world?.worldAi?.parties || []);
+      }
       this.game?.questEscortHud?.hide?.();
       return { relevant: true, retainBandit: true,
         failed, routeId: match.routeId };
@@ -352,14 +360,19 @@ export class WorldPartyManager {
     let display = null;
     for (const party of parties) {
       if (!party?.escortQuestId || party.alive === false) continue;
+      // Source-verified individual guards are companion world parties,
+      // not caravans and not independently claimable quest success.
+      if (party.escortGuardOf) continue;
       if (!isLiveEscortParty(party)) {
         // JSON-restored and manually inserted parties are not an authority.
         party.alive = false;
+        retireEscortNpcGuards(party, parties);
         continue;
       }
       const quest = quests.find(q => q.id === party.escortQuestId);
       if (!quest || quest.status !== 'active') {
         party.alive = false;
+        retireEscortNpcGuards(party, parties);
         continue;
       }
       const threatCount = parties.filter(b => b?.alive !== false
@@ -371,16 +384,29 @@ export class WorldPartyManager {
         quest, worldState, tradeRoutes, playerParty: this.game?.playerParty,
         currentDay: day, dtSec, threat: threatCount > 0,
       });
-      if (state.status !== 'arrived' && state.status !== 'failed'
-        && state.status !== 'invalid' && !display) {
+      // No off-screen auto-raid before the player joins the convoy or
+      // after a genuine destination. This also never simulates a battle result.
+      const guards = runEscortNpcSkirmish({
+        caravan: party, quest, parties, worldState, tradeRoutes,
+        currentDay: day, dtSec,
+      });
+      const status = guards.status === 'raided' ? 'raided' : state.status;
+      const remainingThreats = guards.status === 'defended'
+        ? Math.max(0, threatCount - 1) : threatCount;
+      if (status !== 'arrived' && status !== 'failed'
+        && status !== 'invalid' && status !== 'raided' && !display) {
         display = { party, playerParty: this.game?.playerParty,
-          status: state.status, threatCount, worldState };
+          status: guards.status === 'skirmishing' ? 'under_threat' : status,
+          threatCount: remainingThreats, worldState };
       }
-      if (state.status === 'failed') {
+      if (status === 'failed' || status === 'raided') {
         party.alive = false;
-        this.game?.questManager?.failQuest(quest.id, 'escort_abandoned');
-        outcomes.push({ questId: quest.id, status: 'failed' });
-      } else if (state.status === 'arrived') {
+        retireEscortNpcGuards(party, parties);
+        this.game?.questManager?.failQuest(quest.id,
+          status === 'raided' ? 'escort_cargo_raided' : 'escort_abandoned');
+        outcomes.push({ questId: quest.id, status: 'failed',
+          reason: status === 'raided' ? 'escort_cargo_raided' : 'escort_abandoned' });
+      } else if (status === 'arrived') {
         if (!this.world.state.questEventLedger) {
           this.world.state.questEventLedger = emptyQuestEventLedger();
         }
@@ -398,6 +424,7 @@ export class WorldPartyManager {
             credited: receipt.some(r => r.questId === quest.id) });
         }
         party.alive = false;
+        retireEscortNpcGuards(party, parties);
       }
     }
     this.world.worldAi.parties = parties.filter(p => p.alive !== false);
@@ -413,7 +440,9 @@ export class WorldPartyManager {
     const worldState = this.world.state?.map || {};
     const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
     const commanders = this.world.state?.commanders || [];
-    this.world.enemyParties = parties.map((party) => ({
+    this.world.enemyParties = parties
+      .filter(p => p.kind !== 'escort_guard') // Already rendered via worldAI.
+      .map((party) => ({
       ...party,
       // Strip save-supplied relationship IDs, rebuild them from current world.
       routeId: undefined,

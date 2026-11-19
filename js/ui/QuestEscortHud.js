@@ -96,10 +96,15 @@ export class QuestEscortHud {
       : status === 'waiting_for_player' ? 'Uzaklaştın, kervan seni bekliyor'
       : status === 'confirming_arrival' ? 'Varış doğrulanıyor'
       : 'Kervan ilerliyor';
+    const guards = Number.isFinite(party.escortGuardCount)
+      ? Math.max(0, party.escortGuardCount) : 0;
+    const health = Math.max(0, Math.round(Number(party.escortHull) || 0));
+    const cargo = Math.max(0, Math.round(Number(party.escortCargo) || 0));
+    const security = `\nMuhafız: ${guards} · Kervan: %${health} · Yük: %${cargo}`;
     const follower = this.followId
       ? '\nTakip: gerçek yol noktaları kullanılıyor'
       : this.followIssue ? '\nTakip durdu: yol engelli / geçilemez' : '';
-    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}${follower}`;
+    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}${security}${follower}`;
     this.root.style.display = 'block';
     this.button.disabled = !Number.isFinite(party.x) || !Number.isFinite(party.y);
   }

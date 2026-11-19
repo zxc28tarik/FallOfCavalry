@@ -46,6 +46,11 @@ export function spawnQuestEscortCaravan(quest, worldState, tradeRoutes, day, spe
     escortStarted: false, escortElapsedSeconds: 0,
     escortSeparationSeconds: 0, escortVisitedPoints: 0,
     escortArrived: false, escortFailed: false,
+    // Live per-convoy cargo/condition. These values are deliberately
+    // excluded from save-restore authority along with the source convoy.
+    escortHull: 100, escortHullMax: 100,
+    escortCargo: 100, escortCargoMax: 100,
+    escortGuardCount: 3, escortDefended: 0,
   };
   liveEscorts.add(party);
   return party;
@@ -61,6 +66,11 @@ export function tickQuestEscortCaravan(party, {
 } = {}) {
   if (!isLiveEscortParty(party) || party.escortFailed || party.escortArrived)
     return { status: 'invalid' };
+  if (!Number.isFinite(party.escortHull) || party.escortHull<=0
+    || !Number.isFinite(party.escortCargo) || party.escortCargo<=0) {
+    party.escortFailed = true;
+    return { status: 'failed' };
+  }
   const route = validEscortQuest(quest, worldState, tradeRoutes, currentDay);
   if (!route || quest.id !== party.escortQuestId
     || route.routeId !== party.routeId

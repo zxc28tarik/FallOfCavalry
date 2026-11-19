@@ -199,6 +199,8 @@ export function recordVerifiedCaravanArrivalEvent(ledger, {
     || party?.kind !== 'caravan' || party?.alive === false
     || party?.escortArrived !== true || party?.escortFailed === true
     || party?.escortStarted !== true
+    || !Number.isFinite(party.escortHull) || party.escortHull <= 0
+    || !Number.isFinite(party.escortCargo) || party.escortCargo <= 0
     || party?.escortVisitedPoints < 2 || party?.escortElapsedSeconds < 1
     || !Number.isSafeInteger(resolvedAt) || resolvedAt <= 0
     || quest?.status !== 'active' || quest?.templateId !== 'escort_first_caravan'

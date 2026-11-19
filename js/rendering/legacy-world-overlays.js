@@ -2,6 +2,7 @@ export function kindToFaction(kind) {
   switch ((kind || '').toLowerCase()) {
     case 'patrol': return 'hre';
     case 'caravan': return 'venice';
+    case 'escort_guard': return 'venice';
     case 'scout': return 'polish';
     case 'bandit':
     default: return 'bandit';
@@ -13,6 +14,7 @@ export function aiLabel(party) {
     bandit: 'Bandit',
     patrol: 'Patrol',
     caravan: 'Caravan',
+    escort_guard: 'Kervan Muhafızı',
     scout: 'Scout',
   };
   const strength = Math.round(party.strength || party.size || 0);
