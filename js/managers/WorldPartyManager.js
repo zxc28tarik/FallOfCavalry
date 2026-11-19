@@ -1,7 +1,8 @@
 import * as CONST from '../constants.js';
-import { validatedPartyQuestLinks } from '../systems/quest-world-party-links.js';
+import { validatedPartyQuestLinks, registeredTradeRoute, validBanditRoute } from '../systems/quest-world-party-links.js';
 import {
   createInitialWorldAiState,
+  spawnPartyBandit,
   ensureWorldParties as ensureBaseWorldParties,
   updateWorldParties as updateBaseWorldParties,
 } from '../systems/world-ai.js';
@@ -120,6 +121,8 @@ export class WorldPartyManager {
       banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
     });
 
+    this.ensureActiveQuestRouteThreats({ worldState, tradeRoutes, cfg });
+
     EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
       const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
       while (this.world.worldAi.parties.filter((p) => p?.alive !== false && p?.kind === spec.kind).length < max) {
@@ -129,6 +132,56 @@ export class WorldPartyManager {
 
     this.syncVisiblePartiesToWorld();
     return this.world.worldAi.parties;
+  }
+
+  /**
+   * An accepted security quest should have a reachable threat on its actual
+   * route. This creates at most three ordinary, procedural world bandit
+   * patrols for otherwise empty target routes. No invented named characters,
+   * official roles, quest completions, or reward receipts are produced.
+   */
+  ensureActiveQuestRouteThreats({ worldState, tradeRoutes, cfg }) {
+    const state = this.world?.state;
+    const parties = this.world?.worldAi?.parties;
+    const tasks = this.game?.questManager?.activeQuests;
+    if (!state || !Array.isArray(parties) || !Array.isArray(tasks)
+      || !Array.isArray(tradeRoutes) || !Array.isArray(worldState?.settlements)
+      || worldState.settlements.length < 2 || Number(cfg?.MAX_BANDIT_PARTIES ?? 1) <= 0) return 0;
+
+    const day = Math.max(1, Math.floor(Number(state.day) || 1));
+    const requestedRoutes = [];
+    for (const quest of tasks) {
+      if (quest?.status !== 'active' || quest.templateId !== 'secure_trade_route'
+        || !Number.isSafeInteger(quest.createdAt) || quest.createdAt > day
+        || (Number.isSafeInteger(quest.timeLimitDays)
+          && quest.createdAt + quest.timeLimitDays < day)) continue;
+      const objective = quest.objectives?.find((o) => o?.id === 'resolve_bandit_threat');
+      const path = quest.completionPaths?.find((x) => x?.id === 'defeat_bandits');
+      if (objective?.outcome != null || objective?.type !== 'resolve_threat'
+        || objective?.threatType !== 'bandit'
+        || objective?.targetRouteId !== quest.targetRouteId
+        || path?.requiredOutcome !== 'bandits_defeated') continue;
+      const route = registeredTradeRoute(worldState, tradeRoutes, quest.targetRouteId);
+      if (!route || (String(quest.targetCityId) !== String(route.from.id)
+        && String(quest.targetCityId) !== String(route.to.id))) continue;
+      if (!requestedRoutes.includes(route.routeId)) requestedRoutes.push(route.routeId);
+      if (requestedRoutes.length >= 3) break;
+    }
+
+    let added = 0;
+    for (const routeId of requestedRoutes) {
+      const existing = parties.some((party) => party?.alive !== false
+        && party.routeId === routeId && validBanditRoute(party, worldState, tradeRoutes));
+      if (existing) continue;
+      const matched = tradeRoutes.find((row) => row?.id === routeId);
+      const party = spawnPartyBandit(worldState, state.factions || {}, cfg, {
+        tradeRoutes: matched ? [matched] : [],
+      });
+      if (party.routeId !== routeId) continue;
+      parties.push(party);
+      added += 1;
+    }
+    return added;
   }
 
   syncVisiblePartiesToWorld() {
