@@ -89,22 +89,28 @@ export function tickQuestEscortCaravan(party, {
   party.escortElapsedSeconds += dt;
   const pts = party.path;
   if (!Array.isArray(pts) || pts.length < 2
-    || party.pathIndex < 0 || party.pathIndex >= pts.length) return { status: 'invalid' };
-  const target = pts[party.pathIndex];
-  const dx = target.x - party.x;
-  const dy = target.y - party.y;
-  const dist = Math.hypot(dx, dy);
-  const step = Math.max(0.25, party.speed) * tileSize * dt;
-  if (dist <= step) {
-    party.x = target.x;
-    party.y = target.y;
-    party.pathIndex += 1;
-    party.escortVisitedPoints += 1;
-  } else {
-    party.x += (dx / dist) * step;
-    party.y += (dy / dist) * step;
+    || party.pathIndex < 0 || party.pathIndex > pts.length) return { status: 'invalid' };
+  if (party.pathIndex < pts.length) {
+    const target = pts[party.pathIndex];
+    const dx = target.x - party.x;
+    const dy = target.y - party.y;
+    const dist = Math.hypot(dx, dy);
+    const step = Math.max(0.25, party.speed) * tileSize * dt;
+    if (dist <= step) {
+      party.x = target.x;
+      party.y = target.y;
+      party.pathIndex += 1;
+      party.escortVisitedPoints += 1;
+    } else {
+      party.x += (dx / dist) * step;
+      party.y += (dy / dist) * step;
+    }
   }
   if (party.pathIndex < pts.length) return { status: 'moving' };
+  // A particularly short road may be traversed in fewer than 1 second.
+  // In that case the caravan remains at its real destination, with its
+  // actual escort nearby, until the minimum witnessed time is met.
+  if (party.escortElapsedSeconds < 1) return { status: 'confirming_arrival' };
 
   // A physical destination, at least two visited waypoints and a live
   // same-session proximity witness are mandatory for a successful arrival.
