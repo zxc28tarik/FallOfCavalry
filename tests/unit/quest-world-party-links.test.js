@@ -142,6 +142,59 @@ describe('V1.18: true world party route association and live commander source', 
     expect(world.enemyParties.find(p => p.id === bandit.id).routeId).toBe(routes[0].id);
   });
 
+  it('creates at most one normal bandit patrol for each unguarded active canonical quest route', () => {
+    const world = { state: { map, day: 5, commanders: [] },
+      enemyParties: [], worldAi: createInitialWorldAiState() };
+    const quest = activeRouteQuest();
+    quest.targetRouteId = routes[1].id;
+    quest.targetCityId = 'bursa';
+    quest.objectives[0].targetRouteId = routes[1].id;
+    const game = { economyManager: { ensureTradeRoutes: () => routes },
+      questManager: { activeQuests: [quest] },
+      getWorldAiCfgWithRegionMods: () => cfg };
+    const partyMgr = new WorldPartyManager();
+    partyMgr.init(world, game);
+    partyMgr.ensureWorldParties();
+    const source = world.worldAi.parties.filter(p=>p.kind==='bandit');
+    expect(source).toHaveLength(2);
+    expect(source.map(p=>p.routeId).sort()).toEqual(routes.map(r=>r.id).sort());
+    expect(source.every(p=>validBanditRoute(p, map, routes))).toBe(true);
+    expect(world.enemyParties.some(p=>p.routeId===routes[1].id)).toBe(true);
+    partyMgr.ensureWorldParties();
+    expect(world.worldAi.parties.filter(p=>p.kind==='bandit')).toHaveLength(2);
+    // Already satisfied objectives do not conjure replacement enemies.
+    const questThreat = world.worldAi.parties.find(p=>p.routeId===routes[1].id);
+    world.worldAi.parties = world.worldAi.parties.filter(p=>p.id!==questThreat.id);
+    quest.objectives[0].outcome = 'bandits_defeated';
+    partyMgr.ensureWorldParties();
+    expect(world.worldAi.parties.some(p=>p.routeId===routes[1].id)).toBe(false);
+  });
+
+  it('never spawns mission targets for invalid/expired/available quests or fake route data', () => {
+    const scenario = [
+      { status: 'available' }, { createdAt: 10 },
+      { targetCityId: 'unrelated' }, { targetRouteId: 'route:fake:fake' },
+      { completionPaths: [] },
+    ];
+    for (const patch of scenario) {
+      const world = { state: { map, day: 5, commanders: [] }, enemyParties: [],
+        worldAi: createInitialWorldAiState() };
+      const quest = activeRouteQuest();
+      quest.targetRouteId = routes[1].id;
+      quest.targetCityId = 'bursa';
+      quest.objectives[0].targetRouteId = routes[1].id;
+      Object.assign(quest, patch);
+      const game = { economyManager: { ensureTradeRoutes: () => routes },
+        questManager: { activeQuests: [quest] },
+        getWorldAiCfgWithRegionMods: () => cfg };
+      const manager = new WorldPartyManager();
+      manager.init(world, game);
+      manager.ensureWorldParties();
+      expect(world.worldAi.parties.filter(p=>p.kind==='bandit')).toHaveLength(1);
+      expect(world.worldAi.parties.some(p=>p.routeId===routes[1].id)).toBe(false);
+    }
+  });
+
   it('converts AI-world encounter into correct temporary battle enemy with the exact route link', () => {
     const party = source();
     const world = { state: { mode: 'map', map, commanders: [] },
