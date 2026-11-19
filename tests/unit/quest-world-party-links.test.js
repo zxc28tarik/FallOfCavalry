@@ -226,6 +226,25 @@ describe('V1.18: true world party route association and live commander source', 
     expect(quest.objectives[0].outcome).toBe('bandits_defeated');
   });
 
+  it('saves live WorldManager.worldAi even when the main game has no legacy worldAi alias', () => {
+    const state = { map, mode: 'map', day: 3 };
+    const liveWorldAi = { parties: [source()], lastRespawnDay: 3 };
+    const game = {
+      playerParty: { gold: 0, roster: [] }, itemCatalog: [], settings: {},
+      worldManager: { worldAi: liveWorldAi, enemyParties: [],
+        lastEncounterEndTimeByEnemyId: {}, syncBuildingStateToMap: () => null },
+      ensureInventoryModel: () => {}, ensureRosterState: () => {},
+    };
+    expect(game.worldAi).toBeUndefined();
+    const save = new SaveManager(state);
+    save.init(game);
+    const payload = save.buildSavePayload();
+    expect(payload.game.worldAi.parties).toHaveLength(1);
+    expect(payload.game.worldAi.parties[0]).toMatchObject({
+      id: 'bandit-custom', routeId: routes[0].id,
+    });
+  });
+
   it('retains source route IDs in the save sidecar but revalidates them after loading', () => {
     const state = { map, mode: 'map', day: 3 };
     const worldAi = { parties: [source()], lastRespawnDay: 3 };

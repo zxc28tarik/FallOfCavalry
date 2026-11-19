@@ -319,9 +319,14 @@ Esc close`,
         offers: Array.isArray(s.recruit?.offers) ? s.recruit.offers : [],
       }));
 
-    const enemyParties = this.game?.enemyParties || [];
-    const worldAi = this.game?.worldAi;
-    const lastEncounterEndTimeByEnemyId = this.game?.lastEncounterEndTimeByEnemyId || {};
+    // WorldManager owns these collections. Main game's legacy top-level
+    // aliases may be absent; reading them loses every AI party on save.
+    const enemyParties = this.game?.worldManager?.enemyParties
+      || this.game?.enemyParties || [];
+    const worldAi = this.game?.worldManager?.worldAi || this.game?.worldAi;
+    const lastEncounterEndTimeByEnemyId =
+      this.game?.worldManager?.lastEncounterEndTimeByEnemyId
+      || this.game?.lastEncounterEndTimeByEnemyId || {};
     const buildingStateFromWorld = this.game?.worldManager?.syncBuildingStateToMap?.() || null;
     const buildingStateFromMap = this.state?.map?.buildingState;
     const buildingState = normalizeBuildingState(buildingStateFromWorld || buildingStateFromMap);

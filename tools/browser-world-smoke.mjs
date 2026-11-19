@@ -167,6 +167,9 @@ async function main() {
       manager.ensureWorldParties();
       const restored = g.worldManager.enemyParties.find(p => p.worldPartyKind === 'bandit'
         && p.routeId === target.id);
+      const samePartyId = Boolean(found && restored && found.id === restored.id);
+      const persistedWorldParty = g.saveManager.buildSavePayload().game.worldAi.parties
+        .some(p => p.id === found?.id && p.routeId === target.id);
       const questStillActive = g.questManager.activeQuests.some(q => q.id === quest.id);
       const newIds = g.worldManager.worldAi.parties
         .filter(p => !beforeIds.has(p.id)).map(p => p.id);
@@ -180,6 +183,7 @@ async function main() {
         ready: true, routeCount: routes.length, accepted, saved, loaded,
         linkedBeforeLoad: found?.routeId === target.id,
         linkedAfterLoad: restored?.routeId === target.id,
+        samePartyId, persistedWorldParty,
         questStillActive, cleaned, newParties: newIds.length,
       };
     });
@@ -187,7 +191,8 @@ async function main() {
     stage('canonical-route-threat-save-resume', routeThreat);
     if (!routeThreat.ready || routeThreat.routeCount < 1 || !routeThreat.accepted
       || !routeThreat.saved || !routeThreat.loaded || !routeThreat.linkedBeforeLoad
-      || !routeThreat.linkedAfterLoad || !routeThreat.questStillActive
+      || !routeThreat.linkedAfterLoad || !routeThreat.samePartyId
+      || !routeThreat.persistedWorldParty || !routeThreat.questStillActive
       || !routeThreat.cleaned) {
       throw new Error('Active real-route threat creation or source-linked save/resume failed');
     }
