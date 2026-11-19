@@ -166,3 +166,40 @@ export function getNamedCharacterQuestRecords(bindings, characterId, { roster } 
   const normalized = normalizeCharacterQuestBindings(bindings, { roster });
   return normalized.entries.filter((x) => x.characterId === characterId);
 }
+
+
+/**
+ * Reactivate ONLY a previously active recorded binding whose exact quest was
+ * safely reconstructed from canonical QUEST_DEFS. Suspended legacy bindings
+ * are never promoted on the strength of a save alone.
+ */
+export function reactivateRestoredQuestBindings({
+  bindings, savedBindings, questManager, roster, characterOrganization,
+  settlements = [], day,
+} = {}) {
+  if (!DAY(day) || !Array.isArray(bindings?.entries)
+    || !Array.isArray(savedBindings?.entries)
+    || !Array.isArray(questManager?.activeQuests)) return 0;
+  let restored = 0;
+  for (const original of savedBindings.entries) {
+    if (original?.status !== 'active') continue;
+    const item = bindings.entries.find((entry) =>
+      entry.status === 'suspended' && entry.questId === original.questId
+      && entry.templateId === original.templateId && entry.characterId === original.characterId);
+    const quest = questManager.activeQuests.find((entry) =>
+      entry.id === original.questId && entry.templateId === original.templateId
+      && entry.status === 'active' && entry.assignedCharacterId == null);
+    const actor = getNamedCharacterState(roster, original.characterId);
+    const duty = liveDuty(characterOrganization, roster, settlements, original.characterId, day);
+    if (!item || !quest || !duty || actor?.status !== 'alive'
+      || item.branch !== duty.branch || item.assignmentRole !== duty.assignmentRole
+      || item.settlementId !== duty.assignmentLocation?.settlementId
+      || (quest.targetCityId != null
+        && String(quest.targetCityId) !== item.settlementId)
+      || item.assignedDay > day || duty.assignmentStartDay > item.assignedDay) continue;
+    quest.assignedCharacterId = original.characterId;
+    item.status = 'active';
+    restored += 1;
+  }
+  return restored;
+}
