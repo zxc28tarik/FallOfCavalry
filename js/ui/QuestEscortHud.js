@@ -1,4 +1,5 @@
 import { chooseEscortRoadFollowTarget } from '../systems/quest-escort-road-follow.js';
+import { inspectLiveEscortCargo } from '../systems/quest-escort-cargo.js';
 
 /**
  * V1.23 — minimal live escort HUD; textContent only, no template HTML and
@@ -101,10 +102,16 @@ export class QuestEscortHud {
     const health = Math.max(0, Math.round(Number(party.escortHull) || 0));
     const cargo = Math.max(0, Math.round(Number(party.escortCargo) || 0));
     const security = `\nMuhafız: ${guards} · Kervan: %${health} · Yük: %${cargo}`;
+    const catalog = this.game?.economyManager?.itemCatalog || [];
+    const goods = inspectLiveEscortCargo(party);
+    const cargoDetails = goods.length ? '\nMal: ' + goods.map(row => {
+      const name = catalog.find(item => item.id === row.id)?.name || row.id;
+      return `${name} ×${row.qty}`;
+    }).join(', ') : '';
     const follower = this.followId
       ? '\nTakip: gerçek yol noktaları kullanılıyor'
       : this.followIssue ? '\nTakip durdu: yol engelli / geçilemez' : '';
-    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}${security}${follower}`;
+    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}${security}${cargoDetails}${follower}`;
     this.root.style.display = 'block';
     this.button.disabled = !Number.isFinite(party.x) || !Number.isFinite(party.y);
   }
