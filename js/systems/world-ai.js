@@ -299,7 +299,8 @@ export function updateWorldParties({
   const playerFactionId = playerParty?.factionId || playerParty?.ownerFactionId || null;
 
   aiState.parties.forEach((party) => {
-    if (!party || party.alive === false) return;
+    if (!party || party.alive === false || party.escortQuestId) return;
+    // Quest escorts have a dedicated source-checked world-road lifecycle.
 
     if (!Array.isArray(party.path) || party.path.length === 0 || party.pathIndex >= party.path.length) {
       const linkedBandit = validBanditRoute(party, worldState, tradeRoutes);

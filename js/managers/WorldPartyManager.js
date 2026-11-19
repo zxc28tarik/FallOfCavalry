@@ -1,6 +1,11 @@
 import * as CONST from '../constants.js';
 import { validatedPartyQuestLinks, registeredTradeRoute, validBanditRoute } from '../systems/quest-world-party-links.js';
 import {
+  spawnQuestEscortCaravan, tickQuestEscortCaravan, isLiveEscortParty,
+} from '../systems/quest-caravan-escort.js';
+import { emptyQuestEventLedger, recordVerifiedCaravanArrivalEvent } from '../systems/quest-event-ledger.js';
+import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
+import {
   createInitialWorldAiState,
   spawnPartyBandit,
   ensureWorldParties as ensureBaseWorldParties,
@@ -122,6 +127,7 @@ export class WorldPartyManager {
     });
 
     this.ensureActiveQuestRouteThreats({ worldState, tradeRoutes, cfg });
+    this.ensureActiveQuestCaravans({ worldState, tradeRoutes, cfg });
 
     EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
       const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
@@ -184,6 +190,79 @@ export class WorldPartyManager {
     return added;
   }
 
+  /**
+   * The escort party is genuinely on the player's quest route, starts at
+   * its source city and waits for the player. No ordinary/random caravan is
+   * retroactively relabeled as a successful escorted convoy.
+   */
+  ensureActiveQuestCaravans({ worldState, tradeRoutes, cfg }) {
+    const parties = this.world?.worldAi?.parties;
+    const quests = this.game?.questManager?.activeQuests;
+    if (!Array.isArray(parties) || !Array.isArray(quests)) return 0;
+    const day = Math.max(1, Math.floor(Number(this.world?.state?.day) || 1));
+    let spawned = 0;
+    for (const quest of quests) {
+      if (spawned >= 3) break;
+      if (parties.some(p => p.escortQuestId === quest?.id)) continue;
+      const party = spawnQuestEscortCaravan(quest, worldState, tradeRoutes,
+        day, Number(cfg?.CARAVAN_SPEED ?? 0.8));
+      if (!party) continue;
+      parties.push(party);
+      spawned += 1;
+    }
+    return spawned;
+  }
+
+  processQuestEscortCaravans(dtSec, { worldState, tradeRoutes }) {
+    const parties = this.world?.worldAi?.parties;
+    const quests = this.game?.questManager?.activeQuests;
+    if (!Array.isArray(parties) || !Array.isArray(quests)) return [];
+    const day = Math.max(1, Math.floor(Number(this.world?.state?.day) || 1));
+    const outcomes = [];
+    for (const party of parties) {
+      if (!party?.escortQuestId || party.alive === false) continue;
+      if (!isLiveEscortParty(party)) {
+        // JSON-restored and manually inserted parties are not an authority.
+        party.alive = false;
+        continue;
+      }
+      const quest = quests.find(q => q.id === party.escortQuestId);
+      if (!quest || quest.status !== 'active') {
+        party.alive = false;
+        continue;
+      }
+      const state = tickQuestEscortCaravan(party, {
+        quest, worldState, tradeRoutes, playerParty: this.game?.playerParty,
+        currentDay: day, dtSec,
+      });
+      if (state.status === 'failed') {
+        party.alive = false;
+        this.game?.questManager?.failQuest(quest.id, 'escort_abandoned');
+        outcomes.push({ questId: quest.id, status: 'failed' });
+      } else if (state.status === 'arrived') {
+        if (!this.world.state.questEventLedger) {
+          this.world.state.questEventLedger = emptyQuestEventLedger();
+        }
+        const ledger = this.world.state.questEventLedger;
+        const stamped = recordVerifiedCaravanArrivalEvent(ledger, {
+          party, quest, worldState, tradeRoutes, currentDay: day,
+          resolvedAt: Date.now(),
+        });
+        if (stamped) {
+          const receipt = creditQuestObjectivesForVerifiedEvent({
+            ledger, questManager: this.game?.questManager,
+            eventId: ledger.observed.at(-1)?.eventId,
+          });
+          outcomes.push({ questId: quest.id, status: 'arrived',
+            credited: receipt.some(r => r.questId === quest.id) });
+        }
+        party.alive = false;
+      }
+    }
+    this.world.worldAi.parties = parties.filter(p => p.alive !== false);
+    return outcomes;
+  }
+
   syncVisiblePartiesToWorld() {
     const parties = Array.isArray(this.world?.worldAi?.parties)
       ? this.world.worldAi.parties.filter((p) => p?.alive !== false)
@@ -220,6 +299,10 @@ export class WorldPartyManager {
       cfg: this.getWorldAiCfg(),
       tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
       dtSec,
+    });
+    this.processQuestEscortCaravans(dtSec, {
+      worldState: this.world.state?.map || {},
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
     });
     this.syncVisiblePartiesToWorld();
     return encounters;
