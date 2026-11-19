@@ -923,6 +923,75 @@ async function main() {
       throw new Error('Verified escort payout double-credited or failed save archive');
     }
 
+    // V1.22: unsupported OLD escort routes are not silently reissued,
+    // completed or penalized. The player explicitly retires them using
+    // a real browser DOM button; route damage and gold must not change.
+    const oldEscort = await page.evaluate(() => {
+      const g = window.game;
+      const route = g.economyManager.ensureTradeRoutes()
+        .find(row => row.roadBacked === false);
+      if (!route) return { ready: false, reason: 'legacy_route_absent' };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: route.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'escort_template_missing' };
+      quest.status = 'active';
+      if (!g.questManager.addQuest(quest)) return { ready: false, reason: 'quest_not_accepted' };
+      const gold = g.playerParty.gold;
+      const damage = Number(route.damage ?? 0);
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const panel = document.getElementById('questRecoveryPanel');
+      const action = [...(panel?.querySelectorAll('.quest-retire-legacy') || [])]
+        .find(b => b.dataset.questId === quest.id);
+      const loadedQuest = g.questManager.activeQuests.find(q => q.id === quest.id);
+      return {
+        ready: true, questId: quest.id, routeId: route.id,
+        gold, damage, saved, loaded,
+        routeNotChanged: loadedQuest?.targetRouteId === route.id,
+        noCredit: loadedQuest?.objectives?.[0]?.outcome === undefined,
+        optInButton: Boolean(action),
+      };
+    });
+    report.oldEscort = oldEscort;
+    stage('unsupported-legacy-escort-retirement-offer', oldEscort);
+    if (!oldEscort.ready || !oldEscort.saved || !oldEscort.loaded
+      || !oldEscort.routeNotChanged || !oldEscort.noCredit
+      || !oldEscort.optInButton) {
+      throw new Error('Unsupported legacy escort did not offer honest player retirement');
+    }
+    await page.locator('#questRecoveryPanel button.quest-retire-legacy')
+      .filter({ hasText: 'Eski görevi cezasız bırak' }).first().click();
+    const retired = await page.evaluate(({ questId, routeId, gold, damage }) => {
+      const g = window.game;
+      const route = g.economyManager.ensureTradeRoutes().find(r => r.id === routeId);
+      const status = g.questManager.failedQuests.find(q => q.id === questId);
+      const checks = {
+        inactive: !g.questManager.activeQuests.some(q => q.id === questId),
+        failedArchive: status?.failReason === 'legacy_route_retired'
+          && status?.status === 'failed',
+        notRewarded: !g.questManager.completedQuests.some(q => q.id === questId),
+        moneyUnchanged: g.playerParty.gold === gold,
+        routeNotDamaged: Number(route?.damage ?? 0) === damage,
+      };
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const afterLoad = g.questManager.failedQuests.find(q => q.id === questId);
+      return { ...checks, saved, loaded,
+        archiveSurvives: afterLoad?.archived === true
+          && afterLoad?.failReason === 'legacy_route_retired',
+        noRewardAfterLoad: g.playerParty.gold === gold,
+      };
+    }, oldEscort);
+    report.oldEscortRetired = retired;
+    stage('unsupported-legacy-escort-no-penalty-retirement', retired);
+    if (!retired.inactive || !retired.failedArchive || !retired.notRewarded
+      || !retired.moneyUnchanged || !retired.routeNotDamaged
+      || !retired.saved || !retired.loaded
+      || !retired.archiveSurvives || !retired.noRewardAfterLoad) {
+      throw new Error('Unsupported legacy quest opt-in retirement applied hidden penalties');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
