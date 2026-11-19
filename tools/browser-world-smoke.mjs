@@ -980,6 +980,122 @@ async function main() {
       throw new Error('Verified escort payout double-credited or failed save archive');
     }
 
+    // V1.25: follow a LONGER genuine generated road at the normal convoy
+    // speed, using the real player movement simulation for EVERY tick.
+    // Only the test setup positions the player at the source town.
+    const naturalLongEscort = await page.evaluate(() => {
+      const g = window.game;
+      const map = g.state.map;
+      const tileSize = Number(map.tileSize || 32);
+      const routes = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
+      const busy = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
+      const roads = map.roads || [];
+      const passable = p => g.worldManager.getMovementContextAt(
+        (p.x + 0.5) * tileSize, (p.y + 0.5) * tileSize,
+      )?.blocked !== true;
+      const candidates = routes.map(route => {
+        const road = roads.find(x => String(x.from) === String(route.fromCityId)
+          && String(x.to) === String(route.toCityId));
+        const pts = road?.path || [];
+        const length = pts.slice(1).reduce((n,p,i) =>
+          n + Math.hypot(p.x - pts[i].x,p.y - pts[i].y),0);
+        return {route,road,pts,length};
+      }).filter(x => x.pts.length >= 9 && x.length >= 8 && x.length <= 28
+        && !busy.has(x.route.id)
+        && !g.worldManager.worldAi.parties.some(p => p.kind === 'bandit'
+          && p.routeId === x.route.id && p.alive !== false)
+        && x.pts.every(passable))
+        .sort((a,b) => a.length-b.length);
+      const target = candidates[0];
+      if (!target) return {ready:false,reason:'no_walkable_long_generated_road',
+        candidates:routes.length};
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan',{
+        targetRouteId:target.route.id,issuerFactionId:'ottoman',
+      });
+      if (!quest) return {ready:false,reason:'no_long_escort_quest'};
+      quest.status='active';
+      if (!g.questManager.addQuest(quest)) return {ready:false,reason:'quest_not_added'};
+      const pm = g.worldManager.simManager.worldPartyManager;
+      pm.ensureWorldParties();
+      const caravan = g.worldManager.worldAi.parties.find(p =>
+        p.escortQuestId === quest.id && p.routeId === target.route.id);
+      if (!caravan) return {ready:false,reason:'no_live_long_caravan'};
+      // Initialization only: player joins the actual source settlement.
+      g.playerParty.x=caravan.x;
+      g.playerParty.y=caravan.y;
+      g.playerParty.hasDestination=false;
+      g.playerParty.destX=null;
+      g.playerParty.destY=null;
+      g.playerParty.moveState='idle';
+      const speed = caravan.speed;
+      const startX=g.playerParty.x, startY=g.playerParty.y;
+      pm.processQuestEscortCaravans(0.05,{worldState:map,tradeRoutes:routes});
+      const followButton = document.getElementById('questEscortFollow');
+      followButton?.click();
+      const optedIn = g.questEscortHud?.followId === caravan.id;
+      let maxPlayerStep=0, totalPlayerMove=0, maxSeparation=0;
+      let realBlocked=false, ticks=0;
+      const dt=0.15;
+      for (; ticks<620 && quest.objectives[0].outcome==null
+          && quest.status==='active'; ticks++) {
+        const x=g.playerParty.x,y=g.playerParty.y;
+        g.worldManager.simManager.updatePlayerParty(dt);
+        const move=Math.hypot(g.playerParty.x-x,g.playerParty.y-y);
+        maxPlayerStep=Math.max(maxPlayerStep,move);
+        totalPlayerMove+=move;
+        if (g.playerParty.moveState==='blocked') realBlocked=true;
+        pm.processQuestEscortCaravans(dt,{worldState:map,tradeRoutes:routes});
+        maxSeparation=Math.max(maxSeparation,Math.hypot(
+          g.playerParty.x-caravan.x,g.playerParty.y-caravan.y));
+      }
+      const distanceFromStart=Math.hypot(g.playerParty.x-startX,
+        g.playerParty.y-startY);
+      const confirmed = g.state.questEventLedger?.observed?.some(e =>
+        e.source==='caravan_arrival' && e.questId===quest.id
+          && e.routeId===target.route.id);
+      const root=document.getElementById('questCompletionOverlay');
+      const ready=[...(root?.querySelectorAll('.quest-path')||[])].some(b =>
+        !b.disabled && b.textContent.includes('Kervan güvenli ulaştı'));
+      return {ready:true,routeId:target.route.id,lengthTiles:target.length,
+        points:target.pts.length,travelSpeed:speed,ticks,optedIn,
+        distanceFromStart,totalPlayerMove,maxPlayerStep,maxSeparation,
+        realBlocked,completion:quest.objectives[0].outcome,
+        caravanArrived:caravan.escortArrived===true,credited:Boolean(confirmed),
+        completionVisible:ready,followStillEnabled:g.questEscortHud?.followId===caravan.id,
+        questId:quest.id,goldBeforeChoice:g.playerParty.gold};
+    });
+    report.naturalLongEscort = naturalLongEscort;
+    stage('native-movement-long-road-convoy-follow',naturalLongEscort);
+    if (!naturalLongEscort.ready || !naturalLongEscort.optedIn
+      || naturalLongEscort.lengthTiles < 8 || naturalLongEscort.points < 9
+      || naturalLongEscort.distanceFromStart < 100
+      || naturalLongEscort.totalPlayerMove < 100
+      || naturalLongEscort.maxPlayerStep > 90
+      || naturalLongEscort.realBlocked || naturalLongEscort.maxSeparation > 180
+      || !naturalLongEscort.caravanArrived
+      || naturalLongEscort.completion !== 'caravan_arrived'
+      || !naturalLongEscort.credited || !naturalLongEscort.completionVisible) {
+      throw new Error('Native-speed long-road follow did not escort actual convoy to destination');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({hasText:'Kervan güvenli ulaştı'}).click();
+    const longEscortReward = await page.evaluate(({id,gold})=>{
+      const g=window.game;
+      const done=g.questManager.completedQuests.filter(q=>q.id===id);
+      const once=g.playerParty.gold - gold === 250;
+      const replay=g.questManager.completeQuest(id,'caravan_delivered') !== true;
+      const saved=g.saveManager.quickSave()===true;
+      const loaded=saved && g.saveManager.quickLoad()===true;
+      return {once,replay,saved,loaded,archived:g.questManager.completedQuests
+        .filter(q=>q.id===id && q.archived).length===1};
+    },{id:naturalLongEscort.questId,gold:naturalLongEscort.goldBeforeChoice});
+    report.longEscortReward=longEscortReward;
+    stage('native-long-road-delivery-250g-once',longEscortReward);
+    if(!longEscortReward.once || !longEscortReward.replay || !longEscortReward.saved
+      || !longEscortReward.loaded || !longEscortReward.archived){
+      throw new Error('Long-road delivery reward did not remain unique');
+    }
+
     // V1.24 — genuine tactical victory over a factory-created bandit
     // threatening a real quest caravan. Do not call resolveBattle('victory')
     // or assign HP/outcomes; advance the full tactical engine.
