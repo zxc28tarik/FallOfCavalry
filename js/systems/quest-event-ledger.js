@@ -135,6 +135,7 @@ export function recordVerifiedMessengerCaptureEvent(ledger, {
     || !['messenger'].includes(enemyParty.worldPartyKind || enemyParty.kind)
     || choice?.id !== 'seize' || choice?.outcome !== 'resource'
     || resolution?.optionId !== 'seize' || resolution?.success !== true
+    || resolution?.captured !== true
     || !Number.isSafeInteger(resolvedAt) || resolvedAt <= 0) return false;
   const row = normalizeRow({
     eventId: `encounter:${enemyParty.id}:${resolvedAt}`,

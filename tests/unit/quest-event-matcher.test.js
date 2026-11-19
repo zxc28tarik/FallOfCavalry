@@ -140,11 +140,12 @@ describe('WEB V1.17: source-resolved quest progress', () => {
       enemyParty: { id: 'messenger-1', factionId: 'neutral',
         encounterType: 'messenger', kind: 'messenger' },
       choice: { id: 'seize', outcome: 'resource' },
-      resolution: { optionId: 'seize', success: true },
+      resolution: { optionId: 'seize', success: true, captured: true },
       currentDay: 4, resolvedAt: 1795082400000,
     };
     for (const invalid of [
-      { resolution: { optionId: 'seize', success: false } },
+      { resolution: { optionId: 'seize', success: false, captured: false } },
+      { resolution: { optionId: 'seize', success: true, captured: false } },
       { choice: { id: 'follow', outcome: 'quest_placeholder' } },
       { choice: { id: 'read', outcome: 'info' } },
       { choice: { id: 'stop', outcome: 'info' } },
@@ -190,6 +191,8 @@ describe('WEB V1.17: source-resolved quest progress', () => {
     }]);
     expect(overlays).toHaveLength(1);
     expect(rewards).toEqual([]);
+    // Seizure is capture evidence, not the old generic +12 gold loot action.
+    expect(game.worldManager.applyEffect).not.toHaveBeenCalled();
   });
 
   it('failed real messenger choice never unlocks task', () => {

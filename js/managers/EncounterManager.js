@@ -283,12 +283,18 @@ export class EncounterManager {
       party.roster.push({ id: `${type}-recruit-${Date.now()}`, name: 'Local Recruits', class: 'infantry', count: 3, hp: 82, maxHp: 82, atk: 9, def: 4, speed: 68, morale: 50 });
       result.push('+3 recruits');
     } else if (option.outcome === 'resource') {
+      // Messenger seizure is a capture attempt, not a generic loot action:
+      // only a successful seize can establish messenger_caught evidence.
+      if (type === ENCOUNTER_TYPE.MESSENGER && option.id === 'seize') {
+        result.push(success ? 'Messenger detained, message seized' : 'Messenger escaped with message');
+      } else {
       const goldDelta = option.id === 'bribe' ? 0 : (success ? 12 : 0);
       if (goldDelta !== 0) applyEffect({ type: 'change_player_gold', amount: goldDelta });
       if (goldDelta > 0) result.push(`+${goldDelta} gold`);
       if (option.id === 'surrender') {
         applyEffect({ type: 'decrease_army_morale', amount: 12 });
         result.push('morale dropped');
+      }
       }
     } else if (option.outcome === 'reputation') {
       applyEffect({ type: 'change_player_reputation', amount: success ? 3 : 1 });
@@ -301,7 +307,10 @@ export class EncounterManager {
       encounter.lastResult = result.join(', ') || `${option.label} resolved`;
       encounter.resultLog = [...(encounter.resultLog || []), encounter.lastResult];
     }
-    return { optionId: option.id, success };
+    return {
+      optionId: option.id, success,
+      captured: type === ENCOUNTER_TYPE.MESSENGER && option.id === 'seize' && success,
+    };
   }
 
   enterRoster(enemyId, battleContext = {}) {
