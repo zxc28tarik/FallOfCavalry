@@ -49,7 +49,10 @@ export class QuestGenerator {
     instance.templateId = templateId;
     instance.status = 'available';
     instance.createdAt = this.worldManager?.getCurrentDay?.() ?? 0;
-    instance.issuerFactionId = resolved.issuerFactionId;
+    // Preserve verified target identifiers as explicit quest-instance facts.
+    // Canonical snapshot/chain restoration must never guess targets by
+    // reverse-parsing localized objectives or mutable effect descriptions.
+    Object.assign(instance, resolved);
     return instance;
   }
 
