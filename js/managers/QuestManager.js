@@ -1,3 +1,5 @@
+import { recordCompletedSessionQuest } from '../systems/quest-event-matcher.js';
+
 export class QuestManager {
   constructor(modeManager, worldEffectManager, questGenerator) {
     this.modeManager = modeManager;
@@ -70,6 +72,7 @@ export class QuestManager {
     quest.completedPath = selectedPathId;
     this.completedQuests.push(quest);
     this.activeQuests = this.activeQuests.filter((item) => item.id !== questId);
+    recordCompletedSessionQuest(this, questId);
     this._createChainQuestIfNeeded(quest);
     // Called once AFTER the quest has left activeQuests and entered completedQuests.
     // A failing character observer must never undo an actual quest completion or

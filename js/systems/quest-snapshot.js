@@ -102,10 +102,15 @@ export function captureQuestSnapshot(questManager) {
     assignedCharacterId: quest.assignedCharacterId ?? null,
     // Any objective claim loaded from a save stays pending; runtime outcomes
     // must not be allowed to transitively "verify" older save contents.
-    objectiveClaims: Array.isArray(quest.pendingObjectiveClaims)
-      ? quest.pendingObjectiveClaims : (quest.objectives || [])
+    objectiveClaims: (() => {
+      const activeOutcomes = (quest.objectives || [])
         .filter((o) => o.outcome != null)
-        .map((o) => ({ objectiveId: o.id, outcome: o.outcome })),
+        .map((o) => ({ objectiveId: o.id, outcome: o.outcome }));
+      const savedClaims = Array.isArray(quest.pendingObjectiveClaims)
+        ? quest.pendingObjectiveClaims : [];
+      const liveIds = new Set(activeOutcomes.map(c => c.objectiveId));
+      return [...activeOutcomes, ...savedClaims.filter(c => !liveIds.has(c.objectiveId))];
+    })(),
   }));
   const completed = (questManager?.completedQuests || []).map((q) => ({
     id: q.id, templateId: q.templateId, pathId: q.completedPath,

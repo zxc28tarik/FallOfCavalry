@@ -20,6 +20,7 @@ import { advanceNamedCharacterImportance } from '../systems/character-importance
 import { changeNamedCharacterMetric, getNamedCharacterState } from '../systems/named-character-state.js';
 import { applyApprovedQuestCharacterOutcome } from '../systems/character-quest-events.js';
 import { emptyQuestEventLedger } from '../systems/quest-event-ledger.js';
+import { clearInSessionQuestProofs } from '../systems/quest-event-matcher.js';
 import {
   bindNamedCharacterToQuest, emptyCharacterQuestBindings,
   normalizeCharacterQuestBindings, recordNamedCharacterQuestResult,
@@ -357,6 +358,7 @@ export class GameFlowManager {
     });
     this.state.characterQuestBindings = emptyCharacterQuestBindings();
     this.state.questEventLedger = emptyQuestEventLedger();
+    clearInSessionQuestProofs(g.questManager);
     if (g.questManager) {
       g.questManager.activeQuests = [];
       g.questManager.completedQuests = [];

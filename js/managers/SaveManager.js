@@ -21,6 +21,7 @@ import {
 } from '../systems/character-quest-assignments.js';
 import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
 import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
+import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -701,7 +702,7 @@ Esc close`,
       },
     );
     this.state.questRestoreReport.pendingEventHistory = this.state.questEventLedger.pending.length;
-    this.state.questRestoreReport.creditedEvents = 0; // Saved history is never objective authority.
+    this.state.questRestoreReport.creditedEvents = 0; // A saved event is NOT authority.
     this.state.questRestoreReport.restoredBindings = reactivateRestoredQuestBindings({
       bindings: this.state.characterQuestBindings,
       savedBindings: game.characterQuestBindings,
@@ -720,6 +721,20 @@ Esc close`,
     } else {
       ensureModeManager(this.state)?.switchTo(loadedMode);
     }
+
+    // Only receipts previously witnessed in THIS running JS process may
+    // revalidate a saved claim. They are absent in a fresh browser session.
+    // Any completion UI is regenerated after the safe map/city transition.
+    const sessionVerified = restoreInSessionQuestObjectives({
+      questManager: this.game?.questManager,
+      currentDay: Math.max(0, Math.floor(Number(this.state.day) || 0)),
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+    });
+    this.state.questRestoreReport.sessionVerified = sessionVerified.length;
+    this.state.questRestoreReport.unverifiedClaims =
+      this.game?.questManager?.activeQuests?.reduce(
+        (sum, q) => sum + (q.pendingObjectiveClaims?.length || 0), 0,
+      ) || 0;
 
     this.state.encounter = null;
     this.state.battle = null;
