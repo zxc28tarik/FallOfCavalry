@@ -1343,6 +1343,17 @@ async function main() {
     // and must NOT magically delete the victorious world bandit.
     const guardDefeatCombat = await page.evaluate(() => {
       const g = window.game;
+      // Earlier smoke scenarios leave living bandits in the real world.
+      // Normal background play can start an ambient encounter between QA
+      // stages. Exit it via the GAME'S actual flee option, not by forging
+      // state.mode/encounter, before entering this independent guard fight.
+      const ambientEnemyId = g.state.encounter?.enemyId ?? null;
+      const escapedAmbient = g.state.mode === 'encounter' && ambientEnemyId
+        ? g.encounterManager.resolveEncounter('flee') === true : false;
+      if (g.state.mode !== 'map' || g.state.encounter) {
+        return { ready: false, reason: 'cannot_exit_ambient_encounter',
+          mode: g.state.mode, ambientEnemyId, escapedAmbient };
+      }
       const routeRows = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
       const roads = g.state.map.roads || [];
       const eligible = routeRows.map(route => {
