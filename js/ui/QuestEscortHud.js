@@ -54,7 +54,8 @@ export class QuestEscortHud {
     const progress = Array.isArray(party.path) && party.path.length
       ? Math.min(100, Math.round(100 * party.escortVisitedPoints / party.path.length))
       : 0;
-    const state = threatCount > 0 ? 'Haydut tehdidi: kervan bekliyor'
+    const state = status === 'under_threat' && threatCount > 0
+      ? 'Haydut tehdidi: kervan bekliyor'
       : status === 'awaiting_player' ? 'Kervan başlangıçta seni bekliyor'
       : status === 'waiting_for_player' ? 'Uzaklaştın, kervan seni bekliyor'
       : status === 'confirming_arrival' ? 'Varış doğrulanıyor'

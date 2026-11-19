@@ -1064,6 +1064,31 @@ async function main() {
       || missingCaravanRecon.mode !== 'map') {
       throw new Error('Missing caravan investigation lacks real route-bandit encounter proof');
     }
+    const reconSameSession = await page.evaluate(({ id, gold }) => {
+      const g = window.game;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const q = g.questManager.activeQuests.find(q => q.id === id);
+      const root = document.getElementById('questCompletionOverlay');
+      const ready = [...(root?.querySelectorAll('button.quest-path') || [])].some(b =>
+        !b.disabled && b.textContent.includes('Haydut grubunu tespit ettim'));
+      return {
+        saved, loaded, active: q?.status === 'active',
+        outcome: q?.objectives?.[0]?.outcome,
+        witnessedInSession: g.state.questRestoreReport?.sessionVerified >= 1,
+        savedEventsNotCredited: g.state.questRestoreReport?.creditedEvents === 0,
+        noAutomaticReward: g.playerParty.gold === gold,
+        optionRestored: Boolean(ready && !root?.classList.contains('hidden')),
+      };
+    }, { id: missingCaravanRecon.questId, gold: missingCaravanRecon.goldBeforeChoice });
+    report.reconSameSession = reconSameSession;
+    stage('same-session-missing-caravan-recon-save-resume', reconSameSession);
+    if (!reconSameSession.saved || !reconSameSession.loaded || !reconSameSession.active
+      || reconSameSession.outcome !== 'bandits_located'
+      || !reconSameSession.witnessedInSession || !reconSameSession.savedEventsNotCredited
+      || !reconSameSession.noAutomaticReward || !reconSameSession.optionRestored) {
+      throw new Error('Live missing-caravan observation did not survive same-session save safely');
+    }
     await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
       .filter({ hasText: 'Haydut grubunu tespit ettim' }).click();
     const missingCaravanReward = await page.evaluate(({ id, gold }) => {

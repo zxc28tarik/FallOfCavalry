@@ -734,6 +734,7 @@ Esc close`,
     // If a real in-session receipt can be revalidated below, the normal
     // QuestManager prompt will be generated again from canonical data.
     this.game?.questCompletionOverlay?.hide?.();
+    this.game?.questEscortHud?.hide?.();
     const overlays = this.state?.modeManager?.overlayStack;
     if (Array.isArray(overlays)) {
       this.state.modeManager.overlayStack = overlays

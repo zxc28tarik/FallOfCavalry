@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { QUEST_DEFS } from '../../js/data/quest-defs.js';
 import { QuestManager } from '../../js/managers/QuestManager.js';
 import WorldPartyManager from '../../js/managers/WorldPartyManager.js';
-import { createInitialWorldAiState } from '../../js/systems/world-ai.js';
+import { createInitialWorldAiState, spawnPartyBandit } from '../../js/systems/world-ai.js';
 import {
   spawnQuestEscortCaravan, tickQuestEscortCaravan,
   validEscortQuest, isLiveEscortParty,
@@ -181,6 +181,35 @@ describe('WEB V1.22 — authentic caravan escort and verified arrival', () => {
     expect(qm.activeQuests).toHaveLength(0);
     expect(p.escortArrived).toBe(false);
     expect(world.state.questEventLedger.observed).toHaveLength(0);
+  });
+
+  it('holds a real escort for an actual route bandit then moves again when the threat is gone', () => {
+    const { game, world, manager, playerParty } = make();
+    const onHud = vi.fn();
+    game.questEscortHud = { update: onHud, hide: vi.fn() };
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.escortQuestId);
+    const bandit = spawnPartyBandit(worldMap, {}, { BANDIT_SPEED: 0.01 },
+      { tradeRoutes: routes });
+    expect(bandit.routeId).toBe(routes[0].id);
+    bandit.x = caravan.x + 32;
+    bandit.y = caravan.y;
+    world.worldAi.parties.push(bandit);
+    playerParty.x = caravan.x;
+    playerParty.y = caravan.y;
+    manager.updateWorldParties(0.1);
+    expect(caravan.escortStarted).toBe(true);
+    expect(caravan.escortElapsedSeconds).toBe(0);
+    expect(onHud).toHaveBeenCalledWith(expect.objectContaining({
+      party: caravan, status: 'under_threat', threatCount: 1,
+    }));
+    world.worldAi.parties = world.worldAi.parties.filter(p => p !== bandit);
+    manager.updateWorldParties(0.1);
+    expect(caravan.escortElapsedSeconds).toBeGreaterThan(0);
+    expect(caravan.escortVisitedPoints).toBeGreaterThanOrEqual(1);
+    expect(onHud).toHaveBeenCalledWith(expect.objectContaining({
+      party: caravan, threatCount: 0,
+    }));
   });
 
   it('SaveManager does not persist quest escort as a player-authored authoritative party', () => {
