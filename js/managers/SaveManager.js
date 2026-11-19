@@ -23,6 +23,7 @@ import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-sna
 import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
 import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
 import { outstandingEscortCargoForSave } from '../systems/quest-escort-cargo.js';
+import { snapshotMarketsWithPendingEscorts } from '../systems/market-stock-bridge.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -452,7 +453,8 @@ Esc close`,
           settlementId: st.id,
           ownerFactionId: st.ownerFactionId || null,
         })),
-        markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
+        markets: snapshotMarketsWithPendingEscorts(
+          this.state?.markets, settlements, pendingEscortGoods),
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
         tutorial: {
