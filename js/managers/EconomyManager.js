@@ -136,8 +136,10 @@ export class EconomyManager {
     const routes = registered.some((r) => r.roadBacked)
       ? registered.filter((r) => r.roadBacked) : registered;
     if (!routes.length) return null;
-    if (rule === 'route_connected_to_target_city' && context.targetCityId) {
-      const route = routes.find((entry) => entry?.fromCityId === context.targetCityId || entry?.toCityId === context.targetCityId);
+    if (rule === 'route_connected_to_target_city' && context.targetCityId != null) {
+      const route = routes.find((entry) =>
+        String(entry?.fromCityId) === String(context.targetCityId)
+        || String(entry?.toCityId) === String(context.targetCityId));
       return route?.id || null;
     }
     if (rule === 'route_with_recent_loss') {

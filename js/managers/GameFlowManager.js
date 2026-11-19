@@ -359,6 +359,7 @@ export class GameFlowManager {
     this.state.characterQuestBindings = emptyCharacterQuestBindings();
     this.state.questEventLedger = emptyQuestEventLedger();
     clearInSessionQuestProofs(g.questManager);
+    g.questRecoveryPanel?.hide?.();
     if (g.questManager) {
       g.questManager.activeQuests = [];
       g.questManager.completedQuests = [];

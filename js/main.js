@@ -28,6 +28,7 @@ import { GameFlowManager } from './managers/GameFlowManager.js';
 import { QuestManager } from './managers/QuestManager.js';
 import { QuestGenerator } from './systems/QuestGenerator.js';
 import QuestCompletionOverlay from './ui/QuestCompletionOverlay.js';
+import QuestRecoveryPanel from './ui/QuestRecoveryPanel.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -147,6 +148,7 @@ class FallOfCavalry {
     this.questGenerator = this.questGenerator || new QuestGenerator(this.worldManager, this.cityManager, this.economyManager, this.diplomacyManager);
     this.questManager = this.questManager || new QuestManager(this.modeManager, this.worldManager, this.questGenerator);
     this.questCompletionOverlay = this.questCompletionOverlay || new QuestCompletionOverlay({ modeManager: this.modeManager, questManager: this.questManager });
+    this.questRecoveryPanel = this.questRecoveryPanel || new QuestRecoveryPanel(this);
     this.state.on?.('overlay:pushed', ({ panel, context }) => {
       if (panel === 'questCompletion') this.questCompletionOverlay.show(context);
     });

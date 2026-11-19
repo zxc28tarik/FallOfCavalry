@@ -722,6 +722,15 @@ Esc close`,
       ensureModeManager(this.state)?.switchTo(loadedMode);
     }
 
+    // Clear a stale completion popup from the campaign being replaced.
+    // If a real in-session receipt can be revalidated below, the normal
+    // QuestManager prompt will be generated again from canonical data.
+    this.game?.questCompletionOverlay?.hide?.();
+    const overlays = this.state?.modeManager?.overlayStack;
+    if (Array.isArray(overlays)) {
+      this.state.modeManager.overlayStack = overlays
+        .filter(panel => panel?.name !== 'questCompletion');
+    }
     // Only receipts previously witnessed in THIS running JS process may
     // revalidate a saved claim. They are absent in a fresh browser session.
     // Any completion UI is regenerated after the safe map/city transition.
@@ -742,6 +751,7 @@ Esc close`,
     this.state.lastSaveMeta = { slot, at: Date.now() };
     this.game?.setupSettingsUI?.();
     this.game?.updateTransientUIState?.();
+    this.game?.questRecoveryPanel?.refresh?.({ autoOpen: true });
     return true;
   }
 }
