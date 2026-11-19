@@ -998,7 +998,9 @@ async function main() {
       }).filter(x => x.length > 0 && x.length <= 4)
         .sort((a,b) => a.length - b.length);
       const target = candidates.find(x =>
-        !g.questManager.activeQuests.some(q => q.targetRouteId === x.route.id));
+        !g.questManager.activeQuests.some(q => q.targetRouteId === x.route.id)
+        && !g.worldManager.worldAi.parties.some(p => p.alive !== false
+          && p.kind === 'bandit' && p.routeId === x.route.id));
       if (!target) return { ready: false, reason: 'no_short_road_to_guard' };
       const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
         targetRouteId: target.route.id, issuerFactionId: 'ottoman',
@@ -1012,14 +1014,32 @@ async function main() {
       const convoy = g.worldManager.worldAi.parties.find(p =>
         p.escortQuestId === quest.id && p.routeId === target.route.id);
       if (!convoy) return { ready: false, reason: 'guarded_caravan_not_spawned' };
-      const { spawnPartyBandit } = await import('/js/systems/world-ai.js');
-      const bandit = spawnPartyBandit(g.state.map, g.state.factions || {},
-        { BANDIT_SPEED: 0.01 }, { tradeRoutes: [target.route] });
-      if (bandit.routeId !== target.route.id)
-        return { ready: false, reason: 'factory_bandit_lost_route' };
+      // Production bundle hashes module names, so no runtime import.
+      // Ask the game's real security-quest AI source to create a bandit.
+      // Remove the disposable test security contract afterward, before
+      // combat; only the genuine runtime-born world party is retained.
+      const security = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId: target.route.fromCityId,
+        targetRouteId: target.route.id, issuerFactionId: 'ottoman',
+      });
+      if (!security) return { ready: false, reason: 'security_template_missing' };
+      security.status = 'active';
+      if (!g.questManager.addQuest(security))
+        return { ready: false, reason: 'security_source_not_accepted' };
+      const existingIds = new Set(g.worldManager.worldAi.parties.map(p => p.id));
+      manager.ensureActiveQuestRouteThreats({
+        worldState: g.state.map, tradeRoutes: routes,
+        cfg: manager.getWorldAiCfg(),
+      });
+      const bandit = g.worldManager.worldAi.parties.find(p =>
+        !existingIds.has(p.id) && p.routeId === target.route.id
+        && p.kind === 'bandit' && p.factionId === 'bandits');
+      g.questManager.activeQuests = g.questManager.activeQuests
+        .filter(q => q.id !== security.id);
+      if (!bandit)
+        return { ready: false, reason: 'real_factory_bandit_not_spawned' };
       bandit.x = convoy.x + Number(g.state.map.tileSize || 32);
       bandit.y = convoy.y;
-      g.worldManager.worldAi.parties.push(bandit);
       g.playerParty.x = convoy.x;
       g.playerParty.y = convoy.y;
       const status = manager.processQuestEscortCaravans(0.1, {
