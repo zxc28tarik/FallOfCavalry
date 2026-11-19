@@ -1,6 +1,7 @@
 import {
   planLegacyTradeRouteRecovery, reissueLegacyTradeRouteQuest,
-  describePendingQuestClaims,
+  describePendingQuestClaims, canRetireLegacyRouteQuest,
+  retireUnsupportedLegacyRouteQuest,
 } from '../systems/legacy-trade-route-recovery.js';
 
 /**
@@ -108,8 +109,28 @@ export class QuestRecoveryPanel {
         });
         section.appendChild(btn);
       } else {
-        addText(section, 'Bu görev için aynı şehirden çıkan doğrulanmış bir yol'
-          + ' bulunamadı. Otomatik hedef veya ödül oluşturulmadı.');
+        addText(section, 'Bu görev için henüz desteklenen doğrulanmış bir rota'
+          + ' değişimi yok. Otomatik hedef veya ödül oluşturulmadı.');
+        if (canRetireLegacyRouteQuest({ quest, tradeRoutes: routes, currentDay })) {
+          addText(section, 'İstersen kullanılamayan eski görevi kendi onayınla'
+            + ' arşive kaldırabilirsin. Ödül ve görev başarısızlık cezası uygulanmaz.');
+          const retire = document.createElement('button');
+          retire.type = 'button';
+          retire.className = 'quest-retire-legacy';
+          retire.dataset.questId = quest.id;
+          retire.textContent = 'Eski görevi cezasız bırak';
+          retire.style.cssText = 'padding:7px 10px;cursor:pointer';
+          retire.addEventListener('click', () => {
+            const ok = retireUnsupportedLegacyRouteQuest({
+              questManager: g.questManager, questId: quest.id,
+              tradeRoutes: g.economyManager?.ensureTradeRoutes?.() || [],
+              currentDay: Math.max(0, Math.floor(Number(g.state?.day) || 0)),
+            });
+            if (ok) g.saveManager?.runAutosave?.('legacy-route-retired');
+            this.refresh({ autoOpen: !ok });
+          });
+          section.appendChild(retire);
+        }
       }
       root.appendChild(section);
     }

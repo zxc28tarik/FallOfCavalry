@@ -93,6 +93,32 @@ export class QuestManager {
     return true;
   }
 
+  /**
+   * Explicit player retirement of an obsolete legacy route. This is not a
+   * gameplay failure and never applies the template's failure effects.
+   * Its archive reason remains visible after load.
+   */
+  retireLegacyQuest(questId) {
+    const quest = this._findActive(questId);
+    if (!quest || quest.status !== 'active') return false;
+    quest.status = 'failed';
+    quest.failReason = 'legacy_route_retired';
+    this.failedQuests.push(quest);
+    this.activeQuests = this.activeQuests.filter(item => item.id !== questId);
+    if (typeof this.onQuestFailed === 'function') {
+      try {
+        this.onQuestFailed(Object.freeze({
+          questId: quest.id, templateId: quest.templateId,
+          assignedCharacterId: quest.assignedCharacterId ?? null,
+          reason: 'legacy_route_retired',
+        }));
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
+  }
+
   failQuest(questId, reason) {
     const quest = this._findActive(questId);
     if (!quest) return;

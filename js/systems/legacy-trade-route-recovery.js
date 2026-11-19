@@ -111,3 +111,27 @@ export function describePendingQuestClaims(quests = []) {
       count: q.pendingObjectiveClaims.length,
     }));
 }
+
+
+/** Explicit, penalty-free retirement when a legacy route has no playable path. */
+export function canRetireLegacyRouteQuest({
+  quest, tradeRoutes = [], currentDay,
+} = {}) {
+  if (!isActive(quest, currentDay) || !quest.targetRouteId
+    || !QUEST_DEFS.some(t => t.id === quest.templateId
+      && t.objectives?.some(o => o.targetRouteId === '{{targetRouteId}}'))
+    || quest.objectives?.some(o => o.outcome != null)
+    || !tradeRoutes.some(r => r?.id === quest.targetRouteId
+      && r.roadBacked === false)
+    || !tradeRoutes.some(r => r?.roadBacked === true)) return false;
+  return true;
+}
+
+export function retireUnsupportedLegacyRouteQuest({
+  questManager, questId, tradeRoutes = [], currentDay,
+} = {}) {
+  const quest = questManager?.activeQuests?.find(q => q.id === questId);
+  if (!canRetireLegacyRouteQuest({ quest, tradeRoutes, currentDay })
+    || typeof questManager.retireLegacyQuest !== 'function') return false;
+  return questManager.retireLegacyQuest(questId) === true;
+}
