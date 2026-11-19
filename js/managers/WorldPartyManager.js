@@ -3,7 +3,14 @@ import { validatedPartyQuestLinks, registeredTradeRoute, validBanditRoute } from
 import {
   spawnQuestEscortCaravan, tickQuestEscortCaravan, isLiveEscortParty,
 } from '../systems/quest-caravan-escort.js';
-import { emptyQuestEventLedger, recordVerifiedCaravanArrivalEvent } from '../systems/quest-event-ledger.js';
+import {
+  emptyQuestEventLedger, recordVerifiedCaravanArrivalEvent,
+  recordVerifiedMissingCaravanReconEvent,
+} from '../systems/quest-event-ledger.js';
+import {
+  isRuntimeRouteBandit, observeMissingCaravanBandits,
+  witnessMissingCaravanEncounter,
+} from '../systems/quest-route-recon.js';
 import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 import {
   createInitialWorldAiState,
@@ -156,20 +163,32 @@ export class WorldPartyManager {
 
     const day = Math.max(1, Math.floor(Number(state.day) || 1));
     const requestedRoutes = [];
+    const investigativeRoutes = new Set();
     for (const quest of tasks) {
-      if (quest?.status !== 'active' || quest.templateId !== 'secure_trade_route'
+      if (quest?.status !== 'active'
         || !Number.isSafeInteger(quest.createdAt) || quest.createdAt > day
         || (Number.isSafeInteger(quest.timeLimitDays)
           && quest.createdAt + quest.timeLimitDays < day)) continue;
-      const objective = quest.objectives?.find((o) => o?.id === 'resolve_bandit_threat');
-      const path = quest.completionPaths?.find((x) => x?.id === 'defeat_bandits');
-      if (objective?.outcome != null || objective?.type !== 'resolve_threat'
-        || objective?.threatType !== 'bandit'
-        || objective?.targetRouteId !== quest.targetRouteId
-        || path?.requiredOutcome !== 'bandits_defeated') continue;
       const route = registeredTradeRoute(worldState, tradeRoutes, quest.targetRouteId);
-      if (!route || (String(quest.targetCityId) !== String(route.from.id)
-        && String(quest.targetCityId) !== String(route.to.id))) continue;
+      if (!route?.road) continue;
+      if (quest.templateId === 'secure_trade_route') {
+        const objective = quest.objectives?.find(o => o?.id === 'resolve_bandit_threat');
+        const path = quest.completionPaths?.find(x => x?.id === 'defeat_bandits');
+        if (objective?.outcome != null || objective?.type !== 'resolve_threat'
+          || objective?.threatType !== 'bandit'
+          || objective?.targetRouteId !== quest.targetRouteId
+          || path?.requiredOutcome !== 'bandits_defeated'
+          || (String(quest.targetCityId) !== String(route.from.id)
+          && String(quest.targetCityId) !== String(route.to.id))) continue;
+      } else if (quest.templateId === 'investigate_missing_caravan') {
+        const objective = quest.objectives?.find(o => o?.id === 'find_caravan_fate');
+        const path = quest.completionPaths?.find(x => x?.id === 'bandits_identified');
+        if (objective?.type !== 'investigate'
+          || objective?.outcome != null
+          || objective?.targetRouteId !== quest.targetRouteId
+          || path?.requiredOutcome !== 'bandits_located') continue;
+        investigativeRoutes.add(route.routeId);
+      } else continue;
       if (!requestedRoutes.includes(route.routeId)) requestedRoutes.push(route.routeId);
       if (requestedRoutes.length >= 3) break;
     }
@@ -177,7 +196,9 @@ export class WorldPartyManager {
     let added = 0;
     for (const routeId of requestedRoutes) {
       const existing = parties.some((party) => party?.alive !== false
-        && party.routeId === routeId && validBanditRoute(party, worldState, tradeRoutes));
+        && party.routeId === routeId
+        && (!investigativeRoutes.has(routeId) || isRuntimeRouteBandit(party))
+        && validBanditRoute(party, worldState, tradeRoutes));
       if (existing) continue;
       const matched = tradeRoutes.find((row) => row?.id === routeId);
       const party = spawnPartyBandit(worldState, state.factions || {}, cfg, {
@@ -213,12 +234,75 @@ export class WorldPartyManager {
     return spawned;
   }
 
+  /** A live route-bandit encounter is a first-hand investigation clue.
+   * Only a process-spawned AI bandit on the actual target road can testify. */
+  recordReconEncounter(party, enemyId) {
+    const tasks = this.game?.questManager?.activeQuests || [];
+    const map = this.world?.state?.map || {};
+    const routes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
+    const day = Math.max(1, Math.floor(Number(this.world?.state?.day) || 1));
+    const encounter = this.world?.state?.encounter;
+    let credited = 0;
+    for (const quest of tasks) {
+      if (!witnessMissingCaravanEncounter({
+        quest, party, worldState: map, tradeRoutes: routes,
+        playerParty: this.game?.playerParty, enemyId, encounter,
+        worldEncounterPartyByEnemyId: this.world?.worldEncounterPartyByEnemyId,
+        currentDay: day,
+      })) continue;
+      if (this.recordReconEvidence(party, quest, map, routes, day)) credited++;
+    }
+    return credited;
+  }
+
+  recordReconEvidence(party, quest, worldState, tradeRoutes, day) {
+    if (!this.world.state.questEventLedger) {
+      this.world.state.questEventLedger = emptyQuestEventLedger();
+    }
+    const resolvedAt = Date.now();
+    const ledger = this.world.state.questEventLedger;
+    const recorded = recordVerifiedMissingCaravanReconEvent(ledger, {
+      party, quest, worldState, tradeRoutes,
+      worldParties: this.world.worldAi?.parties || [],
+      playerParty: this.game?.playerParty,
+      currentDay: day, resolvedAt,
+    });
+    if (!recorded) return false;
+    return creditQuestObjectivesForVerifiedEvent({
+      ledger, questManager: this.game?.questManager,
+      eventId: `recon:${party.id}:${resolvedAt}`,
+    }).some(r => r.questId === quest.id);
+  }
+
+  processQuestRouteRecon(dtSec, { worldState, tradeRoutes }) {
+    const quests = this.game?.questManager?.activeQuests;
+    const parties = this.world?.worldAi?.parties;
+    if (!Array.isArray(quests) || !Array.isArray(parties)) return 0;
+    const day = Math.max(1, Math.floor(Number(this.world?.state?.day) || 1));
+    let credited = 0;
+    for (const quest of [...quests]) {
+      if (quest?.templateId !== 'investigate_missing_caravan'
+        || quest?.status !== 'active') continue;
+      for (const party of parties) {
+        if (!observeMissingCaravanBandits({
+          quest, party, worldState, tradeRoutes,
+          playerParty: this.game?.playerParty, currentDay: day, dtSec,
+        })) continue;
+        if (this.recordReconEvidence(party, quest, worldState, tradeRoutes, day)) {
+          credited++; break;
+        }
+      }
+    }
+    return credited;
+  }
+
   processQuestEscortCaravans(dtSec, { worldState, tradeRoutes }) {
     const parties = this.world?.worldAi?.parties;
     const quests = this.game?.questManager?.activeQuests;
     if (!Array.isArray(parties) || !Array.isArray(quests)) return [];
     const day = Math.max(1, Math.floor(Number(this.world?.state?.day) || 1));
     const outcomes = [];
+    let display = null;
     for (const party of parties) {
       if (!party?.escortQuestId || party.alive === false) continue;
       if (!isLiveEscortParty(party)) {
@@ -231,10 +315,20 @@ export class WorldPartyManager {
         party.alive = false;
         continue;
       }
+      const threatCount = parties.filter(b => b?.alive !== false
+        && b.kind === 'bandit' && b.routeId === party.routeId
+        && validBanditRoute(b, worldState, tradeRoutes)
+        && Math.hypot(b.x - party.x, b.y - party.y)
+          <= Math.max(64, Number(worldState?.tileSize || 32) * 2.5)).length;
       const state = tickQuestEscortCaravan(party, {
         quest, worldState, tradeRoutes, playerParty: this.game?.playerParty,
-        currentDay: day, dtSec,
+        currentDay: day, dtSec, threat: threatCount > 0,
       });
+      if (state.status !== 'arrived' && state.status !== 'failed'
+        && state.status !== 'invalid' && !display) {
+        display = { party, playerParty: this.game?.playerParty,
+          status: state.status, threatCount, worldState };
+      }
       if (state.status === 'failed') {
         party.alive = false;
         this.game?.questManager?.failQuest(quest.id, 'escort_abandoned');
@@ -260,6 +354,8 @@ export class WorldPartyManager {
       }
     }
     this.world.worldAi.parties = parties.filter(p => p.alive !== false);
+    if (display) this.game?.questEscortHud?.update?.(display);
+    else this.game?.questEscortHud?.hide?.();
     return outcomes;
   }
 
@@ -300,10 +396,10 @@ export class WorldPartyManager {
       tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
       dtSec,
     });
-    this.processQuestEscortCaravans(dtSec, {
-      worldState: this.world.state?.map || {},
-      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
-    });
+    const worldState = this.world.state?.map || {};
+    const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
+    this.processQuestRouteRecon(dtSec, { worldState, tradeRoutes });
+    this.processQuestEscortCaravans(dtSec, { worldState, tradeRoutes });
     this.syncVisiblePartiesToWorld();
     return encounters;
   }

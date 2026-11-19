@@ -342,10 +342,12 @@ export class WorldSimManager {
     }
 
     this.world.worldEncounterPartyByEnemyId[enemyId] = party.id;
-    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12, worldPartyKind: party.kind, encounterType: party.encounterType, factionId: party.factionId }, {
+    const entered = this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12, worldPartyKind: party.kind, encounterType: party.encounterType, factionId: party.factionId }, {
       encounterType: party.encounterType || party.kind,
       worldPartyId: party.id,
     });
+    if (entered) this.worldPartyManager?.recordReconEncounter(party, enemyId);
+    return entered;
   }
 
   updateTransientUIState() {
