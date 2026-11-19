@@ -4,7 +4,8 @@ import { QuestManager } from '../../js/managers/QuestManager.js';
 import { QUEST_DEFS } from '../../js/data/quest-defs.js';
 import {
   planLegacyTradeRouteRecovery, reissueLegacyTradeRouteQuest,
-  describePendingQuestClaims,
+  describePendingQuestClaims, canRetireLegacyRouteQuest,
+  retireUnsupportedLegacyRouteQuest,
 } from '../../js/systems/legacy-trade-route-recovery.js';
 import { captureQuestSnapshot, restoreQuestSnapshot } from '../../js/systems/quest-snapshot.js';
 
@@ -178,6 +179,54 @@ describe('WEB V1.21 — explicitly authorized legacy road quest recovery', () =>
       ok: false, reason: 'generator_target_mismatch',
     });
     expect(m.activeQuests[0]).toBe(q);
+  });
+
+  it('archives unsupported legacy escort only on explicit user consent without penalty', () => {
+    const q = createQuest('escort_first_caravan');
+    const { m, effects } = makeManager(q);
+    const characterHistory = vi.fn();
+    m.onQuestFailed = characterHistory;
+    expect(canRetireLegacyRouteQuest({ quest: q, tradeRoutes: routes, currentDay: 8 }))
+      .toBe(true);
+    expect(m.activeQuests).toHaveLength(1);
+    expect(retireUnsupportedLegacyRouteQuest({
+      questManager: m, questId: q.id, tradeRoutes: routes, currentDay: 8,
+    })).toBe(true);
+    expect(m.activeQuests).toHaveLength(0);
+    expect(m.completedQuests).toHaveLength(0);
+    expect(m.failedQuests).toMatchObject([{
+      id: q.id, status: 'failed', failReason: 'legacy_route_retired',
+    }]);
+    expect(effects).toEqual([]); // No template failure effects (route damage).
+    expect(characterHistory).toHaveBeenCalledOnce();
+    expect(captureQuestSnapshot(m).failed).toMatchObject([{
+      id: q.id, reason: 'legacy_route_retired',
+    }]);
+    expect(retireUnsupportedLegacyRouteQuest({
+      questManager: m, questId: q.id, tradeRoutes: routes, currentDay: 8,
+    })).toBe(false);
+  });
+
+  it('does not retire playable, completed, wrong or expired target claims', () => {
+    for (const patch of [
+      { targetRouteId: realRoute.id },
+      { status: 'available' },
+      { createdAt: -9 },
+      { templateId: 'nonexistent' },
+      { objectives: [{
+        id: 'deliver_caravan_safely', targetRouteId: legacyRoute.id,
+        outcome: 'caravan_arrived', type: 'escort_party',
+      }] },
+    ]) {
+      const q = createQuest('escort_first_caravan');
+      Object.assign(q, patch);
+      const { m, effects } = makeManager(q);
+      expect(retireUnsupportedLegacyRouteQuest({
+        questManager: m, questId: q.id, tradeRoutes: routes, currentDay: 8,
+      })).toBe(false);
+      expect(m.activeQuests).toHaveLength(1);
+      expect(effects).toEqual([]);
+    }
   });
 
   it('describes pending claim counts for UI, never interpreting them as achievements', () => {
