@@ -18,6 +18,7 @@ import {
   retireEscortNpcGuards,
 } from '../systems/quest-escort-npc-guards.js';
 import { reserveEscortCargo, deliverEscortCargo } from '../systems/quest-escort-cargo.js';
+import { mirrorCityStockChange } from '../systems/market-stock-bridge.js';
 import {
   createInitialWorldAiState,
   spawnPartyBandit,
@@ -243,9 +244,16 @@ export class WorldPartyManager {
       const route = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
       if (route?.road && this.game?.economyManager?.ensureSettlementMarketState) {
         this.game.economyManager.ensureSettlementMarketState(route.from);
-        reserveEscortCargo({ caravan: party, quest, worldState, tradeRoutes,
-          currentDay: day,
-          catalog: this.game.economyManager.itemCatalog || CONST.TRADE_ITEMS });
+        const reserved = reserveEscortCargo({
+          caravan: party, quest, worldState, tradeRoutes, currentDay: day,
+          catalog: this.game.economyManager.itemCatalog || CONST.TRADE_ITEMS,
+        });
+        const market = this.world?.state?.markets?.[String(route.from.id)];
+        for (const row of reserved || []) {
+          const stock = route.from.marketStock.find(item => item.id === row.id);
+          if (stock) mirrorCityStockChange(route.from, market, row.id,
+            stock.qty + row.qty, stock.qty);
+        }
       }
       parties.push(party);
       spawnEscortNpcGuards(party, parties);
@@ -431,8 +439,15 @@ export class WorldPartyManager {
           const route = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
           if (route?.road && this.game?.economyManager?.ensureSettlementMarketState) {
             this.game.economyManager.ensureSettlementMarketState(route.to);
-            deliverEscortCargo({ caravan: party, quest, worldState,
-              tradeRoutes, currentDay: day });
+            const delivered = deliverEscortCargo({
+              caravan: party, quest, worldState, tradeRoutes, currentDay: day,
+            });
+            const market = this.world?.state?.markets?.[String(route.to.id)];
+            for (const row of delivered || []) {
+              const stock = route.to.marketStock.find(item => item.id === row.id);
+              if (stock) mirrorCityStockChange(route.to, market, row.id,
+                stock.qty - row.qty, stock.qty);
+            }
           }
           const receipt = creditQuestObjectivesForVerifiedEvent({
             ledger, questManager: this.game?.questManager,
