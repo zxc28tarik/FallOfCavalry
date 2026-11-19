@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { registerRuntimeRouteBandit } from './quest-route-recon.js';
 import {
   spawnBanditOnRegisteredRoute, nextBanditRouteTarget, validBanditRoute,
   getBanditRoadPatrolWaypoints,
@@ -166,7 +167,7 @@ export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes =
   const target = linked
     ? { x: linked.targetX, y: linked.targetY }
     : pickRoamTarget(worldState, clamped.x, clamped.y);
-  return {
+  return registerRuntimeRouteBandit({
     id: makeId('bandit'),
     ...(linked ? { routeId: linked.routeId, homeCityId: linked.homeCityId } : {}),
     factionId: 'bandits',
@@ -179,7 +180,7 @@ export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes =
     alive: true,
     path: null,
     pathIndex: 0,
-  };
+  });
 }
 
 export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {}) {

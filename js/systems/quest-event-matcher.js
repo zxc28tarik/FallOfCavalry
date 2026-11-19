@@ -59,6 +59,16 @@ const RULES = Object.freeze([
       && quest.objectives?.some((o) => o.id === 'catch_messenger' && o.targetPartyType === 'messenger'),
   }),
   Object.freeze({
+    templateId: 'investigate_missing_caravan',
+    objectiveId: 'find_caravan_fate', objectiveType: 'investigate',
+    pathId: 'bandits_identified', outcome: 'bandits_located',
+    matches: (quest, event) => event.source === 'route_recon'
+      && event.result === 'bandits_located' && event.partyType === 'bandit'
+      && event.questId === quest.id && event.routeId === quest.targetRouteId
+      && quest.objectives?.some(o => o.id === 'find_caravan_fate'
+        && o.type === 'investigate' && o.targetRouteId === event.routeId),
+  }),
+  Object.freeze({
     templateId: 'secure_trade_route',
     objectiveId: 'resolve_bandit_threat', objectiveType: 'resolve_threat',
     pathId: 'defeat_bandits', outcome: 'bandits_defeated',

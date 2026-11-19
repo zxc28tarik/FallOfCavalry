@@ -57,6 +57,7 @@ export function isLiveEscortParty(party) {
 
 export function tickQuestEscortCaravan(party, {
   quest, worldState, tradeRoutes, playerParty, currentDay, dtSec,
+  threat = false,
 } = {}) {
   if (!isLiveEscortParty(party) || party.escortFailed || party.escortArrived)
     return { status: 'invalid' };
@@ -86,6 +87,7 @@ export function tickQuestEscortCaravan(party, {
     return { status: 'waiting_for_player' };
   }
   party.escortSeparationSeconds = 0;
+  if (threat) return { status: 'under_threat' };
   party.escortElapsedSeconds += dt;
   const pts = party.path;
   if (!Array.isArray(pts) || pts.length < 2

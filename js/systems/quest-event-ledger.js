@@ -7,11 +7,12 @@
  * Only a separate, in-session, canonical-source matcher may advance objectives.
  */
 import { isLiveEscortParty } from './quest-caravan-escort.js';
-import { registeredTradeRoute } from './quest-world-party-links.js';
+import { registeredTradeRoute, validBanditRoute } from './quest-world-party-links.js';
+import { hasWitnessedMissingCaravanBandits, isRuntimeRouteBandit } from './quest-route-recon.js';
 
 export const QUEST_EVENT_LEDGER_VERSION = 1;
 const LIMIT = 1024;
-const EVENT_ID = /^(?:battle|encounter|caravan):[a-zA-Z0-9_.:-]{1,128}:[1-9]\d{0,15}$/;
+const EVENT_ID = /^(?:battle|encounter|caravan|recon):[a-zA-Z0-9_.:-]{1,128}:[1-9]\d{0,15}$/;
 const ENTITY_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
 const DAY = (day) => Number.isSafeInteger(day) && day >= 1 && day <= 10000000;
 const record = (item) => item && typeof item === 'object' && !Array.isArray(item);
@@ -21,13 +22,14 @@ export function emptyQuestEventLedger() {
 }
 
 function normalizeRow(row) {
-  if (!record(row) || !['battle_result', 'encounter_choice', 'caravan_arrival'].includes(row.source)
+  if (!record(row) || !['battle_result', 'encounter_choice', 'caravan_arrival', 'route_recon'].includes(row.source)
     || typeof row.eventId !== 'string' || !EVENT_ID.test(row.eventId)
     || typeof row.enemyId !== 'string' || !ENTITY_ID.test(row.enemyId)
     || typeof row.enemyFactionId !== 'string' || !ENTITY_ID.test(row.enemyFactionId)
     || !DAY(row.day)) return null;
   const prefix = row.source === 'battle_result' ? 'battle:'
-    : row.source === 'caravan_arrival' ? 'caravan:' : 'encounter:';
+    : row.source === 'caravan_arrival' ? 'caravan:'
+      : row.source === 'route_recon' ? 'recon:' : 'encounter:';
   if (!row.eventId.startsWith(prefix)) return null;
   // World-party IDs may contain colons. Only the final segment is the time.
   const lastColon = row.eventId.lastIndexOf(':');
@@ -36,6 +38,14 @@ function normalizeRow(row) {
     eventId: row.eventId, source: row.source, enemyId: row.enemyId,
     enemyFactionId: row.enemyFactionId, result: row.result, day: row.day,
   };
+  if (row.source === 'route_recon') {
+    if (row.result !== 'bandits_located' || row.partyType !== 'bandit'
+      || row.enemyFactionId !== 'bandits'
+      || typeof row.questId !== 'string' || !ENTITY_ID.test(row.questId)
+      || typeof row.routeId !== 'string' || !ENTITY_ID.test(row.routeId))
+      return null;
+    return { ...base, partyType: 'bandit', questId: row.questId, routeId: row.routeId };
+  }
   if (row.source === 'caravan_arrival') {
     if (row.result !== 'caravan_arrived' || row.partyType !== 'caravan'
       || typeof row.questId !== 'string' || !ENTITY_ID.test(row.questId)
@@ -214,5 +224,48 @@ export function recordVerifiedCaravanArrivalEvent(ledger, {
     || ledger.observed.length + ledger.pending.length >= LIMIT) return false;
   ledger.observed.push(row);
   ledger.observed.sort((a, b) => a.eventId.localeCompare(b.eventId, 'en'));
+  return true;
+}
+
+
+/** Route reconnaissance can only be logged after 1.5s live observation of
+ * a factory-generated bandit on the exact generated road; saved ledger rows
+ * are inert and a generic encounter cannot claim that route. */
+export function recordVerifiedMissingCaravanReconEvent(ledger, {
+  party, quest, worldState, tradeRoutes = [], worldParties = [],
+  playerParty, currentDay, resolvedAt,
+} = {}) {
+  const target = quest?.objectives?.find(o => o.id === 'find_caravan_fate');
+  const path = quest?.completionPaths?.find(p => p.id === 'bandits_identified');
+  if (!record(ledger) || !Array.isArray(ledger.observed)
+    || !Array.isArray(ledger.pending) || !DAY(currentDay)
+    || !Number.isSafeInteger(resolvedAt) || resolvedAt <= 0
+    || !isRuntimeRouteBandit(party) || !Array.isArray(worldParties)
+    || !worldParties.includes(party) || party.alive === false
+    || !hasWitnessedMissingCaravanBandits(party, quest?.id)
+    || quest?.status !== 'active' || quest.templateId !== 'investigate_missing_caravan'
+    || !Number.isSafeInteger(quest.createdAt) || quest.createdAt > currentDay
+    || (Number.isSafeInteger(quest.timeLimitDays)
+      && quest.createdAt + quest.timeLimitDays < currentDay)
+    || target?.type !== 'investigate' || target?.outcome != null
+    || target?.targetRouteId !== quest.targetRouteId
+    || path?.requiredOutcome !== 'bandits_located'
+    || !Number.isFinite(playerParty?.x) || !Number.isFinite(playerParty?.y)) return false;
+  const link = validBanditRoute(party, worldState, tradeRoutes);
+  if (!link?.road || link.routeId !== quest.targetRouteId
+    || Math.hypot(playerParty.x - party.x, playerParty.y - party.y)
+      > Math.max(64, Number(worldState?.tileSize || 32) * 4)) return false;
+  const row = normalizeRow({
+    eventId: `recon:${party.id}:${resolvedAt}`,
+    source: 'route_recon', enemyId: party.id,
+    enemyFactionId: 'bandits', partyType: 'bandit',
+    result: 'bandits_located', questId: quest.id,
+    routeId: link.routeId, day: currentDay,
+  });
+  if (!row || ledger.observed.some(e => e.eventId === row.eventId)
+    || ledger.pending.some(e => e.eventId === row.eventId)
+    || ledger.observed.length + ledger.pending.length >= LIMIT) return false;
+  ledger.observed.push(row);
+  ledger.observed.sort((a,b) => a.eventId.localeCompare(b.eventId,'en'));
   return true;
 }

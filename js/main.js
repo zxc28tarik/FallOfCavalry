@@ -7,6 +7,7 @@ import GameState from './core/state.js';
 import InputManager from './core/input.js';
 import GameLoop from './core/game-loop.js';
 import HUDManager from './ui/hud.js';
+import QuestEscortHud from './ui/QuestEscortHud.js';
 import AudioSystem from './systems/audio-system.js';
 import { isDevMode } from './systems/dev-gate.js';
 import { initWeatherLayer } from './rendering/weather-layer.js';
@@ -149,6 +150,7 @@ class FallOfCavalry {
     this.questManager = this.questManager || new QuestManager(this.modeManager, this.worldManager, this.questGenerator);
     this.questCompletionOverlay = this.questCompletionOverlay || new QuestCompletionOverlay({ modeManager: this.modeManager, questManager: this.questManager });
     this.questRecoveryPanel = this.questRecoveryPanel || new QuestRecoveryPanel(this);
+    this.questEscortHud = this.questEscortHud || new QuestEscortHud(this);
     this.state.on?.('overlay:pushed', ({ panel, context }) => {
       if (panel === 'questCompletion') this.questCompletionOverlay.show(context);
     });

@@ -360,6 +360,7 @@ export class GameFlowManager {
     this.state.questEventLedger = emptyQuestEventLedger();
     clearInSessionQuestProofs(g.questManager);
     g.questRecoveryPanel?.hide?.();
+    g.questEscortHud?.hide?.();
     if (g.questManager) {
       g.questManager.activeQuests = [];
       g.questManager.completedQuests = [];
