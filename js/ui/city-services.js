@@ -4,6 +4,7 @@ import {
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
 } from '../systems/world-characters.js';
 import { getNamedCharacterState } from '../systems/named-character-state.js';
+import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -46,6 +47,8 @@ export default class CityServicesUI {
     onClose,
     onHeal,
     onConstruct,
+    getQuestManager,
+    onAssignQuest,
   }) {
     this.state = state;
     this.party = party;
@@ -62,6 +65,10 @@ export default class CityServicesUI {
     this.onClose = onClose;
     this.onHeal = onHeal;
     this.onConstruct = onConstruct;
+    this.getQuestManager = getQuestManager;
+    this.onAssignQuest = onAssignQuest;
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
 
     this.dom = {};
     this.bound = false;
@@ -122,9 +129,23 @@ export default class CityServicesUI {
       } else if (action === 'show-overview') {
         this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
       } else if (action === 'open-npc') {
+        this.pendingNpcQuestId = null;
+        this.questAssignmentFeedback = '';
         const isHere = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
           .some((person) => person.id === id);
         if (isHere) this.currentView = { type: 'npc', npcId: id };
+      } else if (action === 'stage-npc-quest' && this.currentView?.type === 'npc') {
+        this.pendingNpcQuestId = id;
+        this.questAssignmentFeedback = '';
+      } else if (action === 'confirm-npc-quest'
+        && this.currentView?.type === 'npc' && this.pendingNpcQuestId === id) {
+        const reasonInput = btn.closest?.('[data-quest-row]')?.querySelector?.('[data-quest-reason]');
+        const reason = typeof reasonInput?.value === 'string' ? reasonInput.value.trim() : '';
+        const outcome = this.onAssignQuest?.(id, this.currentView.npcId, reason);
+        this.questAssignmentFeedback = outcome
+          ? 'Görevlendirme kaydedildi; görev ve karakter geçmişi güncellendi.'
+          : 'Görevlendirme reddedildi. Aktif görev, kişi, yer ve gerekçeyi kontrol et.';
+        if (outcome) this.pendingNpcQuestId = null;
       } else if (action === 'open-service') {
         this.currentView = { type: 'service', serviceId: id, parcelId: btn.dataset.parcelId || null, buildingId: null };
       } else if (action === 'open-area') {
@@ -164,12 +185,16 @@ export default class CityServicesUI {
     this.currentMarket = market || null;
     this.currentContracts = Array.isArray(contracts) ? contracts : [];
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
     this.dom.cityRoot?.classList.remove('hidden');
     this.render();
   }
 
   hide() {
     this.dom.cityRoot?.classList.add('hidden');
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
   }
 
@@ -462,6 +487,45 @@ export default class CityServicesUI {
       return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${escapeHtml(event.day)}</strong></div>`;
     }).join('') : '<div class="text-sm opacity-70">Kayıt yok.</div>';
 
+    const questView = getCharacterQuestAssignmentView({
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      characterQuestBindings: this.state?.characterQuestBindings,
+      questManager: this.getQuestManager?.(),
+      settlements: this.state?.map?.settlements || [],
+      day: this.state?.day, characterId: npcId,
+      settlementId: this.currentSettlement?.id,
+    });
+    const questStatusLabel = {
+      not_named: 'Sıradan kişilere görev ataması yapılamaz.',
+      not_alive: 'Hayatta olmayan kişi görevlendirilemez.',
+      not_in_city: 'Karakter bu şehirde değil.',
+      no_active_duty: 'Önce var olan, aktif bir organizasyon görevi gereklidir. Bu ekran görev veya makam oluşturmaz.',
+      duty_elsewhere: 'Karakterin aktif görevi başka bir şehirde.',
+      ready: 'Gerçek ve aktif organizasyon görevi doğrulandı.',
+    }[questView.status] || 'Görev durumu doğrulanamadı.';
+    const questRows = questView.quests.length ? questView.quests.map((quest) => `
+      <div class="city-overview-section" data-quest-row>
+        <div class="city-overview-row"><span>${escapeHtml(quest.title)}</span><strong>${escapeHtml(quest.templateId)}</strong></div>
+        ${quest.eligible ? (this.pendingNpcQuestId === quest.id ? `
+          <label class="text-xs" for="npcQuestReason">Atama gerekçesi (3–120 karakter)</label>
+          <input id="npcQuestReason" data-quest-reason type="text" maxlength="120"
+            class="w-full text-sm" value="Oyuncu tarafından göreve atandı" />
+          <button type="button" class="action-btn btn-gold text-xs mt-2"
+            data-action="confirm-npc-quest" data-id="${escapeHtml(quest.id)}">Atamayı onayla</button>
+        ` : `
+          <button type="button" class="action-btn btn-dark text-xs mt-2"
+            data-action="stage-npc-quest" data-id="${escapeHtml(quest.id)}">Bu göreve ata</button>
+        `) : `<div class="text-xs opacity-70">${escapeHtml(quest.reason)}</div>`}
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Bu şehirle ilgili atanabilir aktif görev yok.</div>';
+    const questHistory = questView.history.length ? questView.history.map((record) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(record.templateId)} · ${escapeHtml(record.status)}</span>
+        <strong>Gün ${escapeHtml(record.endedDay ?? record.assignedDay)}</strong>
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Kayıtlı görev geçmişi yok.</div>';
+
     this.setPanelChrome(
       'Karakter: ' + person.name,
       `<div class="city-panel-meta-line">${escapeHtml(kindLabel)} · ${escapeHtml(statusLabel)}</div>`,
@@ -489,6 +553,20 @@ export default class CityServicesUI {
           <div class="city-overview-row"><span>Memnuniyet</span><strong>${satisfaction}/100</strong></div>
           <div class="city-overview-row"><span>İtibar</span><strong>${reputation}/100</strong></div>
           <div class="city-overview-row"><span>Konum</span><strong>${standing}/100</strong></div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Önemli kişi / görev ataması</div>
+          <div class="text-xs opacity-80">${escapeHtml(questStatusLabel)}</div>
+          ${questView.duty ? `<div class="city-overview-row">
+            <span>Aktif organizasyon görevi</span>
+            <strong>${escapeHtml(questView.duty.branch)} / ${escapeHtml(questView.duty.assignmentRole)}</strong>
+          </div>` : ''}
+          ${this.questAssignmentFeedback ? `<div role="status" class="text-xs mt-2">${escapeHtml(this.questAssignmentFeedback)}</div>` : ''}
+          ${questRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Görev geçmişi</div>
+          ${questHistory}
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Bilinen ilişkiler</div>
