@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [19 Kasım 2026 — WEB Character System v2 V1.17 gerçek görev hedefi/olay eşleştirme](2026-11-19-web-quest-target-provenance-v1.md): haberci yakalama, kaynaklı rota ve komutan zaferi, save pending kapısı, yeni 8 test ve CI
 - [19 Kasım 2026 — WEB Character System v2 V1.16 güvenli görev olay günlüğü](2026-11-19-web-quest-event-ledger-v1.md): gerçek savaş sonuçlarının sınırlı kaydı, save'de inert pending arşiv, güvenlik testleri ve açık hedef/provenance eşleştirme sınırı
 - [19 Kasım 2026 — WEB Character System v2 V1.15 şehir NPC gerçek görev atama UI](2026-11-19-web-character-quest-assignment-ui-v1.md): mevcut görev ve aktif organizasyon görevi kontrolü, iki aşamalı kullanıcı onayı, neden/geçmiş görünümü, 5 yeni test ve Chromium QA
 - [19 Kasım 2026 — WEB Character System v2 V1.14 kanonik görev snapshot / restore](2026-11-19-web-character-quest-save-restore-v1.md): resmî şablondan yeniden kurma, doğrulanmış görev+Named atama geri yükleme, inert objective claims, QA ve sonraki UI/ledger sınırları
