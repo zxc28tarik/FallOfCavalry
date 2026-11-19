@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { canonicalRoadLinks } from '../systems/world-trade-road-topology.js';
 import * as capacitySystem from '../systems/capacity.js';
 import * as tradeSystem from '../systems/trade.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -71,25 +72,43 @@ export class EconomyManager {
   }
 
   ensureTradeRoutes() {
-    // World AI can query routes before the procedural settlements are ready.
-    // An early empty collection is not a finalized world route registry;
-    // rebuild it once two real settlements are available. Never overwrite
-    // non-empty route data, including modified quality/damage.
-    const settlements = (this.state?.map?.settlements || [])
-      .filter((settlement) => settlement?.id != null);
-    if (!Array.isArray(this.state.tradeRoutes)
-      || (this.state.tradeRoutes.length === 0 && settlements.length > 1)) {
-      this.state.tradeRoutes = [];
-      for (let i = 0; i < settlements.length - 1; i += 1) {
-        this.state.tradeRoutes.push({
-          id: `route:${settlements[i].id}:${settlements[i + 1].id}`,
-          fromCityId: settlements[i].id,
-          toCityId: settlements[i + 1].id,
-          quality: 1,
-          damage: 0,
-        });
-      }
-    }
+    const world = this.state?.map || {};
+    const settlementsRef = world.settlements;
+    const roadsRef = world.roads;
+    // Lists are immutable in a generated world; only regenerate on a new
+    // map or on the pre-boot empty map -> loaded roads transition.
+    if (Array.isArray(this.state.tradeRoutes)
+      && this._tradeRoutesSettlementsRef === settlementsRef
+      && this._tradeRoutesRoadsRef === roadsRef) return this.state.tradeRoutes;
+    const settlements = (settlementsRef || []).filter((s) => s?.id != null);
+    const sameMap = this._tradeRoutesSettlementsRef === settlementsRef;
+    const previous = sameMap && Array.isArray(this.state.tradeRoutes)
+      ? this.state.tradeRoutes : [];
+
+    // Keep legacy IDs available for historic saves. They are *not* new
+    // authoritative roads unless a generated road really matches.
+    const legacy = previous.length ? previous : settlements.slice(0, -1).map((s, i) => ({
+      id: `route:${s.id}:${settlements[i + 1].id}`,
+      fromCityId: s.id, toCityId: settlements[i + 1].id,
+      quality: 1, damage: 0,
+    }));
+    const byId = new Map(legacy.map((r) => [r.id, r]));
+    const links = canonicalRoadLinks(world);
+    const roadRows = links.map((link) => ({
+      ...(byId.get(link.id) || {}),
+      id: link.id,
+      fromCityId: link.fromCityId,
+      toCityId: link.toCityId,
+      quality: byId.get(link.id)?.quality ?? 1,
+      damage: byId.get(link.id)?.damage ?? 0,
+      roadBacked: true,
+    }));
+    const roadIds = new Set(roadRows.map((r) => r.id));
+    const compatibility = legacy.filter((r) => !roadIds.has(r.id))
+      .map((r) => ({ ...r, roadBacked: false }));
+    this.state.tradeRoutes = [...roadRows, ...compatibility];
+    this._tradeRoutesSettlementsRef = settlementsRef;
+    this._tradeRoutesRoadsRef = roadsRef;
     return this.state.tradeRoutes;
   }
 
@@ -111,7 +130,11 @@ export class EconomyManager {
   }
 
   pickQuestTargetRoute(rule, context = {}) {
-    const routes = this.ensureTradeRoutes();
+    const registered = this.ensureTradeRoutes();
+    // On maps with a real road graph, never issue a new task against a
+    // legacy row merely adjacent in the settlement array.
+    const routes = registered.some((r) => r.roadBacked)
+      ? registered.filter((r) => r.roadBacked) : registered;
     if (!routes.length) return null;
     if (rule === 'route_connected_to_target_city' && context.targetCityId) {
       const route = routes.find((entry) => entry?.fromCityId === context.targetCityId || entry?.toCityId === context.targetCityId);

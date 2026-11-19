@@ -3,6 +3,10 @@
  * Route links refer to actual EconomyManager routes with two real settlements.
  * Saved party metadata is always re-checked against the live world registry.
  */
+import {
+  canonicalRoadForRoute, roadWorldWaypoints, patrolWaypointsOnRoad,
+} from './world-trade-road-topology.js';
+
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
 const rec = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const id = (value) => typeof value === 'string' && ID.test(value);
@@ -22,7 +26,10 @@ export function registeredTradeRoute(worldState, tradeRoutes, routeId) {
   if (!loc(from) || !loc(to)) return null;
   const len = Math.hypot(to.x - from.x, to.y - from.y);
   if (!Number.isFinite(len) || len < 0.1) return null;
-  return { routeId, from, to };
+  const hasRoadNetwork = Array.isArray(worldState?.roads) && worldState.roads.length > 0;
+  const roadLink = hasRoadNetwork ? canonicalRoadForRoute(worldState, row) : null;
+  if (hasRoadNetwork && !roadLink) return null;
+  return { routeId, from, to, road: roadLink?.road || null };
 }
 
 function distanceToSegment(x, y, a, b) {
@@ -46,9 +53,14 @@ export function validBanditRoute(party, worldState, tradeRoutes) {
   const toB = Math.hypot(Number(party.targetX) - link.to.x,
     Number(party.targetY) - link.to.y);
   if (!Number.isFinite(toA) || Math.min(toA, toB) > 1) return null;
+  const road = roadWorldWaypoints(worldState, link.road);
   const tile = Number(worldState?.tileSize || 32);
   const margin = Math.max(64, (Number.isFinite(tile) ? tile : 32) * 4);
-  return distanceToSegment(party.x, party.y, link.from, link.to) <= margin ? link : null;
+  const onRoad = road.length > 1
+    ? road.slice(1).some((point, i) =>
+      distanceToSegment(party.x, party.y, road[i], point) <= margin)
+    : distanceToSegment(party.x, party.y, link.from, link.to) <= margin;
+  return onRoad ? link : null;
 }
 
 /**
@@ -66,11 +78,14 @@ export function spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex
   });
   const pool = priority.length ? priority : valid;
   const link = pool[Math.abs(Math.floor(routeIndex)) % pool.length];
-  const t = 0.5;
+  const roadPoints = roadWorldWaypoints(worldState, link.road);
+  const middle = roadPoints.length
+    ? roadPoints[Math.floor(roadPoints.length / 2)]
+    : { x: (link.from.x + link.to.x) / 2, y: (link.from.y + link.to.y) / 2 };
   return {
     routeId: link.routeId,
-    x: link.from.x + (link.to.x - link.from.x) * t,
-    y: link.from.y + (link.to.y - link.from.y) * t,
+    x: middle.x,
+    y: middle.y,
     targetX: link.to.x,
     targetY: link.to.y,
     homeCityId: String(link.from.id),
@@ -78,6 +93,11 @@ export function spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex
 }
 
 /** Return the opposite endpoint. Route-bound bandits stay on their own road. */
+export function getBanditRoadPatrolWaypoints(party, worldState, tradeRoutes) {
+  const link = validBanditRoute(party, worldState, tradeRoutes);
+  return link?.road ? patrolWaypointsOnRoad(worldState, link, party) : [];
+}
+
 export function nextBanditRouteTarget(party, worldState, tradeRoutes) {
   const link = validBanditRoute(party, worldState, tradeRoutes);
   if (!link) return null;

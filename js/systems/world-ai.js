@@ -1,5 +1,8 @@
 import * as CONST from '../constants.js';
-import { spawnBanditOnRegisteredRoute, nextBanditRouteTarget, validBanditRoute } from './quest-world-party-links.js';
+import {
+  spawnBanditOnRegisteredRoute, nextBanditRouteTarget, validBanditRoute,
+  getBanditRoadPatrolWaypoints,
+} from './quest-world-party-links.js';
 
 const DEFAULT_FACTION_IDS = ['ottoman', 'hre', 'polish', 'spanish', 'venice'];
 
@@ -300,7 +303,10 @@ export function updateWorldParties({
 
     if (!Array.isArray(party.path) || party.path.length === 0 || party.pathIndex >= party.path.length) {
       const linkedBandit = validBanditRoute(party, worldState, tradeRoutes);
-      const path = linkedBandit ? [{ x: Number(party.targetX), y: Number(party.targetY) }]
+      const roadPath = linkedBandit
+        ? getBanditRoadPatrolWaypoints(party, worldState, tradeRoutes) : [];
+      const path = linkedBandit
+        ? (roadPath.length ? roadPath : [{ x: Number(party.targetX), y: Number(party.targetY) }])
         : findRoadPath(worldState, party.x, party.y, party.targetX, party.targetY);
       party.path = path.length ? path : [{ x: Number(party.targetX ?? party.x), y: Number(party.targetY ?? party.y) }];
       party.pathIndex = 0;
