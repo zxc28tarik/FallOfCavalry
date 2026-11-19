@@ -172,6 +172,7 @@ describe('WEB V1.17: source-resolved quest progress', () => {
       playerParty: { x: 0, y: 0, gold: 200, renown: 0, morale: 80, roster: [] },
       worldManager: {
         enemyParties: [enemyParty], lastEncounterEndTimeByEnemyId: {},
+        clampToWorld: (x, y) => ({ x, y }),
         cleanupTemporaryEnemy: vi.fn(), updateTransientUIState: vi.fn(),
         applyEffect: vi.fn(), findNearestCityId: () => 'edirne',
       },
@@ -204,6 +205,7 @@ describe('WEB V1.17: source-resolved quest progress', () => {
         enemyParties: [{ id: 'messenger-1', factionId: 'neutral',
           encounterType: 'messenger', kind: 'messenger', x: 0, y: 0 }],
         lastEncounterEndTimeByEnemyId: {}, cleanupTemporaryEnemy: vi.fn(),
+        clampToWorld: (x, y) => ({ x, y }),
         updateTransientUIState: vi.fn(), applyEffect: vi.fn(),
         findNearestCityId: () => 'edirne',
       },
