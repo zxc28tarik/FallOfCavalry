@@ -519,12 +519,16 @@ async function main() {
       // never shipped as a spawn recipe, reward, or a named NPC.
       g.playerParty.x = 260;
       g.playerParty.y = 320;
-      g.playerParty.roster = [{
-        id: 'qa-infantry-v120', name: 'QA Battle Infantry', class: 'infantry',
-        hp: 3500, maxHp: 3500, atk: 3500, def: 500,
-        speed: 700, meleeRange: 80, isRanged: false,
+      // Several fast disposable melee troops prevent a single soldier from
+      // endlessly chasing ranged skirmishers across the battlefield.
+      // Still no direct HP edit or forced victory; the real engine must
+      // perform actual attacks, damage and result resolution.
+      g.playerParty.roster = Array.from({ length: 6 }, (_, i) => ({
+        id: `qa-infantry-v121-${i}`, name: `QA Infantry ${i + 1}`,
+        class: 'infantry', hp: 4500, maxHp: 4500, atk: 3500, def: 500,
+        speed: 1100, meleeRange: 240, isRanged: false,
         status: 'healthy', healProgress: 0,
-      }];
+      }));
       const encountered = sim.processWorldAiEncounters([{
         partyId: source.id, factionId: source.factionId,
         x: source.x, y: source.y,
