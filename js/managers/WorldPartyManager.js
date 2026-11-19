@@ -170,7 +170,10 @@ export class WorldPartyManager {
         || (Number.isSafeInteger(quest.timeLimitDays)
           && quest.createdAt + quest.timeLimitDays < day)) continue;
       const route = registeredTradeRoute(worldState, tradeRoutes, quest.targetRouteId);
-      if (!route?.road) continue;
+      // Legacy synthetic test worlds have registered routes but no road
+      // layer. Preserve prior security-quest behavior there; investigation
+      // clues strictly require an actual generated-road source.
+      if (!route || (quest.templateId === 'investigate_missing_caravan' && !route.road)) continue;
       if (quest.templateId === 'secure_trade_route') {
         const objective = quest.objectives?.find(o => o?.id === 'resolve_bandit_threat');
         const path = quest.completionPaths?.find(x => x?.id === 'defeat_bandits');
