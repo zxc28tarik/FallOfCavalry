@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [19 Kasım 2026 — WEB Character System v2 V1.20 canlı savaş→görev tamamlama](2026-11-19-web-real-battle-quest-completion-v1.md): gerçek savaş tikleri, Enter→quest overlay DOM tıklaması, 300 altın tek ödeme, Save/Load replay koruması ve hedef şehir ID=0 düzeltmesi
 - [19 Kasım 2026 — WEB Character System v2 V1.19 kanonik dünya yolu–ticaret görevi eşleştirmesi](2026-11-19-web-real-road-quest-topology-v1.md): 304 gerçek yol, eski uyumluluk satırları, tile→world devriye geometrisi, 7 test ve gerçek Chromium QA
 - [19 Kasım 2026 — WEB Character System v2 V1.18 gerçek dünya AI ticaret yolu tehditleri](2026-11-19-web-world-ai-quest-route-threats-v1.md): kaynaklı parti/rota doğrulaması, sınırlı resmî görev haydudu, save/restore, gerçek Chromium ve 11 yeni birim testi
 - [19 Kasım 2026 — WEB Character System v2 V1.17 gerçek görev hedefi/olay eşleştirme](2026-11-19-web-quest-target-provenance-v1.md): haberci yakalama, kaynaklı rota ve komutan zaferi, save pending kapısı, yeni 8 test ve CI
