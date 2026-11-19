@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [19 Kasım 2026 — WEB Character System v2 V1.28 doğrulanmış çift pazar stok köprüsü](2026-11-19-web-market-stock-bridge-v1.md): mevcut şehir ve gelişmiş market stoklarının güvenli eşleşmesi, eskiden farklı miktarların korunması, id=0, Save escrow; 7 yeni test ve QA PASS
 - [19 Kasım 2026 — WEB Character System v2 V1.27 gerçek şehir stoklu kervan yükü ve canlı haydut ganimeti](2026-11-19-web-escort-source-cargo-economy-v1.md): kaynak marketStock rezervasyonu, baskında gerçek mal aktarımı, varışta teslim, save snapshot iadesi; kanıt/test ve açık çift stok modeli sınırları
 - [19 Kasım 2026 — WEB Character System v2 V1.26 bağımsız kervan muhafızları ve dünya haritası yağması](2026-11-19-web-autonomous-escort-guards-cargo-v1.md): canlı 3 muhafız, konvoy HP/yük, haydut NPC savaş zaferi ve tek başarısızlık cezası, 5 yeni test
 - [19 Kasım 2026 — WEB Character System v2 V1.25 gerçek yol noktalarıyla 30+ kare refakat](2026-11-19-web-real-road-escort-follow-v1.md): normal hız ve gerçek player simülasyonunda 30,83 tile, güvenli waypoint, 6 yeni test ve eksik global yol ağı sınırları
