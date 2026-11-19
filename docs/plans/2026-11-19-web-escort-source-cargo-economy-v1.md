@@ -1,6 +1,6 @@
 # Fall of Cavalry WEB — Character System v2 V1.27: Kaynak Şehir Stoklu Kervan Yükü / Canlı Haydut Ganimeti
 
-**Tarih:** 19 Kasım 2026 · **Repo:** `zxc28tarik/FallOfCavalry` (WEB) · **PR:** [#68](https://github.com/zxc28tarik/FallOfCavalry/pull/68) — DRAFT / UNMERGED. **Üst O00-06:** UYGULAMADA. **V1.27:** gerçek stok bağlantısının ilk uygulanabilir dilimi; tüm ticaret-ekonomi sistemi tamamlandı anlamına gelmez.
+**Tarih:** 19 Kasım 2026 · **Repo:** `zxc28tarik/FallOfCavalry` (WEB) · **PR:** [#68](https://github.com/zxc28tarik/FallOfCavalry/pull/68) — DRAFT / UNMERGED. **Üst O00-06:** UYGULAMADA. **V1.27:** gerçek stok bağlantısının ilk uygulanabilir dilimi **QA PASS**; tüm ticaret-ekonomi sistemi tamamlandı anlamına gelmez.
 
 ## Neden?
 V1.26'nın `escortCargo=100` sayacı yalnız yüzdelik durumdu; eşyanın kaynağını, türünü, düşen stok miktarını veya haydudun elde ettiği somut malları temsil etmiyordu. V1.27, mevcut `EconomyManager.ensureSettlementMarketState` ve `settlement.marketStock` veri modeline **yeni sahte mal türleri üretmeden** bağlanan ilk adımı uygular.
@@ -29,7 +29,11 @@ V1.26'nın `escortCargo=100` sayacı yalnız yüzdelik durumdu; eşyanın kayna�
 - Modül: [`js/systems/quest-escort-cargo.js`](../../js/systems/quest-escort-cargo.js)
 - İlişkili: `js/managers/WorldPartyManager.js`, `js/systems/quest-escort-npc-guards.js`, `js/managers/SaveManager.js`, `js/ui/QuestEscortHud.js`
 - Yeni test: `tests/unit/quest-escort-cargo.test.js` (**6 vaka**) ve `tests/unit/quest-caravan-escort.test.js` (source-market/save entegrasyonu: **1 vaka**).
-- Nihai CI ve Chromium SHA/raporları son code HEAD üzerinde kontrol edilmelidir; bu belge kod değişikliklerinden sonra açılmıştır. CI geçmediyse V1.27 QA-PASS değildir.
+- **Doğrulanan kaynak commit:** `47cc048d6173b1e4926c574cfd1e9f6c3dd54b59`.
+- [Web validation #44549644813](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44549644813) **PASS:** 726/726 unit, 1.138/1.138 full + 1 skipped; lint, build ve dünya denetimi PASS. Dünya: 881 yerleşim, 304 yol, 3 nehir, 4 geçiş, 0 hata / 1 eski uyarı.
+- [Gerçek Chromium #44549644782](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44549644782) **PASS:** World start, görev/kervan, gerçek muhafız savunması, gerçek yağma başarısızlığı, 250 altın ödülü tek sefer, Save/Load; konsol hatası 0. Bunlar mevcut browser akışlarının regresyon doğrulamasıdır. Ayrı tam user-driven typed market transfer tarayıcı testi **henüz yapılmadı**.
+- **7 yeni test:** 6 cargo unit + 1 genişletilmiş manager/save testi. Manager testi gerçek yol varışında hedef `marketStock` miktarının kaynak stok kadar arttığını ve transit save snapshot'ında yalnız gerçek ürünlerin iade edildiğini ayrıca doğrular.
+- **Açık sınırlama:** Genel O00-06 ve tam çift-pazar konsolidasyonu sürüyor; bu QA sonucu tüm ekonominin bittiği anlamına gelmez.
 
 ## Sonraki V1.27+ / V1.28
 
