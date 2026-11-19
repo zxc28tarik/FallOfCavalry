@@ -9,6 +9,7 @@
 import { isLiveEscortParty, validEscortQuest } from './quest-caravan-escort.js';
 import { isRuntimeRouteBandit } from './quest-route-recon.js';
 import { validBanditRoute } from './quest-world-party-links.js';
+import { recordEscortCargoRaid } from './quest-escort-cargo.js';
 
 const runtimeGuards = new WeakSet();
 const skirmishRecords = new WeakMap();
@@ -145,6 +146,11 @@ export function runEscortNpcSkirmish({
       caravan.escortHull=clamp(caravan.escortHull-22,0,caravan.escortHullMax);
     }
   }
+  // Real typed goods move to the live source bandit's session-only loot.
+  // The existing scalar HUD/HP model remains unchanged for old quests.
+  if(raids>0) recordEscortCargoRaid({
+    caravan, bandit, remainingPercent:caravan.escortCargo,
+  });
   const remaining=activeEscortGuards(caravan,parties).length;
   caravan.escortGuardCount=remaining;
   if(caravan.escortCargo<=0 || caravan.escortHull<=0){
