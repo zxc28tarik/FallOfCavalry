@@ -354,6 +354,60 @@ async function main() {
     if (!backToCity) throw new Error('NPC character details did not navigate back to city');
 
 
+    // V1.14: verified real quest + an existing named officer survives a full
+    // browser quickSave/quickLoad; prior objective "victory" is never credited
+    // on load without real gameplay confirmation.
+    const questResume = await page.evaluate(() => {
+      const g = window.game;
+      const duty = g?.state?.characterOrganization?.assignments?.find((entry) =>
+        entry.assignmentStatus === 'active');
+      const route = g?.economyManager?.ensureTradeRoutes?.()?.[0];
+      if (!duty || !route) return { ready: false };
+      const quest = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId: duty.assignmentLocation.settlementId,
+        targetRouteId: route.id,
+        issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, generatorFailed: true };
+      quest.status = 'active';
+      const added = g.questManager.addQuest(quest);
+      const bound = g.gameFlowManager.assignWorldCharacterToQuest(
+        quest.id, duty.characterId, { reason: 'Browser explicit mission assignment' },
+      );
+      quest.objectives[0].outcome = 'bandits_defeated';
+      const gold = g.playerParty.gold;
+      const snap = g.saveManager.buildSavePayload().game.questSnapshot;
+      const safeSnapshot = snap?.active?.some((entry) => entry.id === quest.id)
+        && !JSON.stringify(snap).includes('"rewards"')
+        && !JSON.stringify(snap).includes('"worldEffects"');
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const restored = g.questManager.activeQuests.find((entry) => entry.id === quest.id);
+      const ledger = g.state.characterQuestBindings?.entries?.find((entry) =>
+        entry.questId === quest.id);
+      return {
+        ready: true, added, bound, saved, loaded, safeSnapshot,
+        activeRestored: restored?.status === 'active'
+          && restored.templateId === 'secure_trade_route',
+        actorRestored: restored?.assignedCharacterId === duty.characterId
+          && ledger?.status === 'active',
+        claimsAreInert: restored?.objectives?.[0]?.outcome === undefined
+          && restored?.pendingObjectiveClaims?.[0]?.outcome === 'bandits_defeated',
+        noRewardReplay: g.playerParty.gold === gold,
+        restoreCount: g.state.questRestoreReport?.restored ?? null,
+        restoredBindings: g.state.questRestoreReport?.restoredBindings ?? null,
+      };
+    });
+    report.questResume = questResume;
+    stage('canonical-quest-save-resume', questResume);
+    if (!questResume.ready || !questResume.added || !questResume.bound
+      || !questResume.saved || !questResume.loaded || !questResume.safeSnapshot
+      || !questResume.activeRestored || !questResume.actorRestored
+      || !questResume.claimsAreInert || !questResume.noRewardReplay
+      || questResume.restoreCount < 1 || questResume.restoredBindings < 1) {
+      throw new Error('Canonical quest + NamedCharacter save/resume regression');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
