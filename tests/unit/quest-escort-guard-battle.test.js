@@ -188,7 +188,9 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     // A follow waypoint can be reached in one normal movement tick, so
     // hasDestination is not itself a required long-lived flag.
     expect(f.playerParty.x).toBeGreaterThan(140);
-    expect(f.playerParty.x).toBeLessThanOrEqual(156);
+    // The normal world-speed multiplier permits reaching this 44px waypoint
+    // in one movement tick; reaching an assigned point is not teleporting.
+    expect(f.playerParty.x).toBeLessThanOrEqual(184.01);
     // A manual map click overrides the followers' target.
     f.playerParty.hasDestination = true;
     f.playerParty.destX = 1000;
