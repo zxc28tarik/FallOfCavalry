@@ -12,7 +12,7 @@ const settlements = [
 
 function fixture({ duty = true } = {}) {
   const roster = createWorldCharacterRoster({ seed: 1648, settlements });
-  const actor = roster.characters[0];
+  const actor = roster.characters.find((person) => person.location?.settlementId === 'edirne');
   promoteWorldCharacter(roster, actor.id, { day: 3 });
   const organization = emptyCharacterOrganizationState();
   if (duty) {
