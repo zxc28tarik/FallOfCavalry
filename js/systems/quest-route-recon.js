@@ -50,3 +50,37 @@ export function observeMissingCaravanBandits({
 export function hasWitnessedMissingCaravanBandits(party, questId) {
   return Boolean(isRuntimeRouteBandit(party) && witnessed.get(party)?.has(questId));
 }
+
+/**
+ * An actual worldAI bandit encounter counts as a direct observation.
+ * The encounter must already exist in the current runtime and refer to this
+ * exact source party; an imported encounter row is not consulted.
+ */
+export function witnessMissingCaravanEncounter({
+  quest, party, worldState, tradeRoutes, playerParty, enemyId,
+  encounter, worldEncounterPartyByEnemyId, currentDay,
+} = {}) {
+  const obj = quest?.objectives?.find(o => o.id === 'find_caravan_fate');
+  const path = quest?.completionPaths?.find(p => p.id === 'bandits_identified');
+  const link = isRuntimeRouteBandit(party)
+    && validBanditRoute(party, worldState, tradeRoutes);
+  if (quest?.templateId !== 'investigate_missing_caravan'
+    || quest.status !== 'active' || obj?.outcome != null
+    || obj?.type !== 'investigate' || path?.requiredOutcome !== 'bandits_located'
+    || !Number.isSafeInteger(quest.createdAt)
+    || quest.createdAt > currentDay
+    || (Number.isSafeInteger(quest.timeLimitDays)
+      && quest.createdAt + quest.timeLimitDays < currentDay)
+    || !link?.road || !same(link.routeId, quest.targetRouteId)
+    || !same(obj.targetRouteId, quest.targetRouteId)
+    || !party?.id || enemyId !== `wai-${party.id}`
+    || encounter?.enemyId !== enemyId
+    || worldEncounterPartyByEnemyId?.[enemyId] !== party.id
+    || !Number.isFinite(playerParty?.x) || !Number.isFinite(playerParty?.y)
+    || Math.hypot(playerParty.x - party.x, playerParty.y - party.y)
+      > Math.max(96, Number(worldState?.tileSize || 32) * 6)) return false;
+  let book = witnessed.get(party);
+  if (!book) { book = new Set(); witnessed.set(party, book); }
+  book.add(quest.id);
+  return true;
+}
