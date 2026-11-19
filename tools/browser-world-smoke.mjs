@@ -1000,7 +1000,7 @@ async function main() {
         const length = pts.slice(1).reduce((n,p,i) =>
           n + Math.hypot(p.x - pts[i].x,p.y - pts[i].y),0);
         return {route,road,pts,length};
-      }).filter(x => x.pts.length >= 9 && x.length >= 8 && x.length <= 28
+      }).filter(x => x.pts.length >= 19 && x.length >= 18 && x.length <= 45
         && !busy.has(x.route.id)
         && !g.worldManager.worldAi.parties.some(p => p.kind === 'bandit'
           && p.routeId === x.route.id && p.alive !== false)
@@ -1067,7 +1067,7 @@ async function main() {
     report.naturalLongEscort = naturalLongEscort;
     stage('native-movement-long-road-convoy-follow',naturalLongEscort);
     if (!naturalLongEscort.ready || !naturalLongEscort.optedIn
-      || naturalLongEscort.lengthTiles < 8 || naturalLongEscort.points < 9
+      || naturalLongEscort.lengthTiles < 18 || naturalLongEscort.points < 19
       || naturalLongEscort.distanceFromStart < 100
       || naturalLongEscort.totalPlayerMove < 100
       || naturalLongEscort.maxPlayerStep > 90
