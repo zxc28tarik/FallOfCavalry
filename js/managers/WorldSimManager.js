@@ -444,6 +444,8 @@ export class WorldSimManager {
       return;
     }
 
+    this.game?.questEscortHud?.refreshFollowTarget?.();
+
     if (!party.hasDestination) {
       party.vx = 0;
       party.vy = 0;

@@ -3,7 +3,15 @@
  * no automatic world teleport. Player chooses a waypoint by clicking.
  */
 export class QuestEscortHud {
-  constructor(game) { this.game = game; this.root = null; this.button = null; this.status = null; }
+  constructor(game) {
+    this.game = game;
+    this.root = null;
+    this.button = null;
+    this.status = null;
+    this.followButton = null;
+    this.followId = null;
+    this.assignedTarget = null;
+  }
   ensureRoot() {
     if (typeof document === 'undefined') return null;
     if (this.root?.isConnected) return this.root;
@@ -32,13 +40,32 @@ export class QuestEscortHud {
       if (!party || party.alive === false || this.game?.state?.mode !== 'map'
         || !Number.isFinite(party.x) || !Number.isFinite(party.y)
         || !player) return;
+      this.stopFollowing();
       player.destX = party.x; player.destY = party.y;
       player.hasDestination = true;
       player.selected = true;
     });
-    root.append(title, info, button);
+    const followButton = document.createElement('button');
+    followButton.type = 'button';
+    followButton.id = 'questEscortFollow';
+    followButton.textContent = 'Kervanı takip et';
+    followButton.style.cssText = 'padding:6px 10px;margin-left:6px;cursor:pointer';
+    followButton.addEventListener('click', () => {
+      const party = this._party;
+      if (this.followId) {
+        this.stopFollowing();
+      } else if (party?.alive !== false && party?.id
+        && this.game?.state?.mode === 'map') {
+        this.followId = party.id;
+        this.assignedTarget = null;
+        this.refreshFollowTarget();
+      }
+      this.syncFollowButton();
+    });
+    root.append(title, info, button, followButton);
     document.body.appendChild(root);
     this.root = root; this.button = button; this.status = info;
+    this.followButton = followButton;
     return root;
   }
   update({ party, playerParty, status, threatCount = 0, worldState } = {}) {
@@ -47,7 +74,9 @@ export class QuestEscortHud {
     if (!party || party.alive === false || this.game?.state?.mode !== 'map') {
       this.hide(); return;
     }
+    if (this.followId && this.followId !== party.id) this.stopFollowing();
     this._party = party;
+    this.syncFollowButton();
     const dist = Math.hypot((playerParty?.x ?? party.x) - party.x,
       (playerParty?.y ?? party.y) - party.y);
     const tile = Math.max(1, Number(worldState?.tileSize || 32));
@@ -64,7 +93,77 @@ export class QuestEscortHud {
     this.root.style.display = 'block';
     this.button.disabled = !Number.isFinite(party.x) || !Number.isFinite(party.y);
   }
+  syncFollowButton() {
+    if (this.followButton) {
+      this.followButton.textContent = this.followId
+        ? 'Takibi durdur' : 'Kervanı takip et';
+      this.followButton.setAttribute('aria-pressed', this.followId ? 'true' : 'false');
+    }
+  }
+
+  stopFollowing() {
+    const player = this.game?.playerParty;
+    // Only cancel a destination that we ourselves last assigned. A manual
+    // map click/new destination must never be erased by this control.
+    if (player?.hasDestination && this.assignedTarget
+      && Math.hypot(player.destX - this.assignedTarget.x,
+        player.destY - this.assignedTarget.y) < 2) {
+      player.hasDestination = false;
+    }
+    this.followId = null;
+    this.assignedTarget = null;
+    this.syncFollowButton();
+  }
+
+  /**
+   * Called before the genuine player motion/terrain/collision tick.
+   * Never adjusts player.x/y, speed or world collision; a manual destination
+   * change cancels following and is left exactly as the player selected it.
+   */
+  refreshFollowTarget() {
+    if (!this.followId) return false;
+    const party = this._party;
+    const player = this.game?.playerParty;
+    const map = this.game?.state?.map;
+    if (this.game?.state?.mode !== 'map' || !party || party.alive === false
+      || party.id !== this.followId || !player
+      || !Number.isFinite(party.x) || !Number.isFinite(party.y)
+      || this.game?.state?.camp?.active) {
+      this.stopFollowing();
+      return false;
+    }
+    if (this.assignedTarget && player.hasDestination
+      && Math.hypot(player.destX - this.assignedTarget.x,
+        player.destY - this.assignedTarget.y) >= 2) {
+      // Manual click-to-move takes priority.
+      this.followId = null;
+      this.assignedTarget = null;
+      this.syncFollowButton();
+      return false;
+    }
+    const tile = Math.max(1, Number(map?.tileSize || 32));
+    const distance = Math.hypot(player.x - party.x, player.y - party.y);
+    if (distance <= Math.max(18, tile * 1.35)) {
+      if (this.assignedTarget && player.hasDestination) {
+        player.hasDestination = false;
+      }
+      this.assignedTarget = null;
+      return true;
+    }
+    if (player.moveState === 'blocked') {
+      this.stopFollowing();
+      return false;
+    }
+    player.destX = party.x;
+    player.destY = party.y;
+    player.hasDestination = true;
+    player.selected = true;
+    this.assignedTarget = { x: party.x, y: party.y };
+    return true;
+  }
+
   hide() {
+    this.stopFollowing();
     this._party = null;
     if (this.root) this.root.style.display = 'none';
   }
