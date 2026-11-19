@@ -44,6 +44,18 @@ describe('WEB V1.16: verified observations vs inert saved quest history', () => 
     expect(recordVerifiedBattleQuestEvent(ledger, { battle: battle(), currentDay: -1 })).toBe(false);
   });
 
+  it('retains canonical colon-separated enemy IDs without losing source identity', () => {
+    const complex = battle();
+    complex.enemyId = 'world:party:42';
+    complex.battleResult.enemyId = 'world:party:42';
+    const ledger = emptyQuestEventLedger();
+    expect(recordVerifiedBattleQuestEvent(ledger, { battle: complex, currentDay: 7 })).toBe(true);
+    const loaded = restoreQuestEventLedger(captureQuestEventLedger(ledger));
+    expect(loaded.pending[0].enemyId).toBe('world:party:42');
+    expect(loaded.pending[0].eventId).toBe('battle:world:party:42:1795082400000');
+    expect(loaded.observed).toEqual([]);
+  });
+
   it('retains well-formed saved events ONLY as pending history, never live proof', () => {
     const ledger = emptyQuestEventLedger();
     expect(recordVerifiedBattleQuestEvent(ledger, { battle: battle(), currentDay: 7 })).toBe(true);

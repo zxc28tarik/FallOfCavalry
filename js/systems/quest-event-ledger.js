@@ -23,8 +23,10 @@ function normalizeRow(row) {
     || typeof row.enemyId !== 'string' || !ENTITY_ID.test(row.enemyId)
     || typeof row.enemyFactionId !== 'string' || !ENTITY_ID.test(row.enemyFactionId)
     || !['victory', 'defeat'].includes(row.result) || !DAY(row.day)) return null;
-  const parts = row.eventId.split(':');
-  if (parts.length !== 3 || parts[1] !== row.enemyId) return null;
+  // World party IDs may themselves contain colons. Only the final segment
+  // is the resolution timestamp; do not split source entity IDs blindly.
+  const lastColon = row.eventId.lastIndexOf(':');
+  if (row.eventId.slice(7, lastColon) !== row.enemyId) return null;
   return {
     eventId: row.eventId, source: 'battle_result',
     enemyId: row.enemyId, enemyFactionId: row.enemyFactionId,
