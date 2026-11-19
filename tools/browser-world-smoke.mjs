@@ -1155,6 +1155,132 @@ async function main() {
       throw new Error('Guarded escort completion did not preserve canonical single payout');
     }
 
+    // V1.24 — loss branch: a defenseless QA soldier is defeated by the
+    // game's actual battle simulation. A real guard loss fails the original
+    // escort objective, applies its canonical route-damage effect ONCE,
+    // and must NOT magically delete the victorious world bandit.
+    const guardDefeatCombat = await page.evaluate(() => {
+      const g = window.game;
+      const routeRows = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
+      const roads = g.state.map.roads || [];
+      const eligible = routeRows.map(route => {
+        const road = roads.find(r => String(r.from) === String(route.fromCityId)
+          && String(r.to) === String(route.toCityId));
+        const points = road?.path || [];
+        const length = points.slice(1).reduce((n,p,i) =>
+          n + Math.hypot(p.x-points[i].x,p.y-points[i].y),0);
+        return { route, length };
+      }).filter(x => x.length > 0 && x.length <= 4)
+        .sort((a,b) => a.length-b.length);
+      const chosen = eligible.find(x =>
+        !g.questManager.activeQuests.some(q => q.targetRouteId === x.route.id)
+        && !g.worldManager.worldAi.parties.some(p => p.alive !== false
+          && p.kind === 'bandit' && p.routeId === x.route.id));
+      if (!chosen) return { ready: false, reason: 'no_loss_route' };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: chosen.route.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'loss_quest_generator' };
+      quest.status = 'active';
+      if (!g.questManager.addQuest(quest))
+        return { ready: false, reason: 'loss_quest_add' };
+      const manager = g.worldManager.simManager.worldPartyManager;
+      manager.ensureWorldParties();
+      const convoy = g.worldManager.worldAi.parties.find(p =>
+        p.escortQuestId === quest.id && p.routeId === chosen.route.id);
+      if (!convoy) return { ready: false, reason: 'loss_convoy_missing' };
+      const security = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetRouteId: chosen.route.id,
+        targetCityId: chosen.route.fromCityId,
+        issuerFactionId: 'ottoman',
+      });
+      if (!security) return { ready: false, reason: 'loss_source_quest_missing' };
+      security.status = 'active';
+      if (!g.questManager.addQuest(security))
+        return { ready: false, reason: 'loss_source_quest_not_added' };
+      const before = new Set(g.worldManager.worldAi.parties.map(p => p.id));
+      manager.ensureActiveQuestRouteThreats({
+        worldState: g.state.map, tradeRoutes: routeRows, cfg: manager.getWorldAiCfg(),
+      });
+      const bandit = g.worldManager.worldAi.parties.find(p =>
+        !before.has(p.id) && p.kind === 'bandit' && p.routeId === chosen.route.id);
+      g.questManager.activeQuests = g.questManager.activeQuests
+        .filter(q => q.id !== security.id);
+      if (!bandit) return { ready: false, reason: 'loss_source_bandit_missing' };
+      bandit.x = convoy.x + Number(g.state.map.tileSize || 32);
+      bandit.y = convoy.y;
+      g.playerParty.x = convoy.x; g.playerParty.y = convoy.y;
+      manager.processQuestEscortCaravans(0.1, {
+        worldState: g.state.map, tradeRoutes: routeRows,
+      });
+      const threatened = convoy.escortStarted === true
+        && convoy.escortElapsedSeconds === 0;
+      const damageBefore = Number(chosen.route.damage || 0);
+      manager.syncVisiblePartiesToWorld();
+      const encounter = g.worldManager.simManager.processWorldAiEncounters([{
+        partyId: bandit.id, factionId: bandit.factionId,
+        x: bandit.x, y: bandit.y,
+      }]);
+      if (!encounter) return { ready: false, reason: 'loss_encounter_not_entered' };
+      g.playerParty.roster = [{
+        id: 'qa-weak-guard-v124', name: 'Weak QA Guard',
+        class: 'infantry', hp: 1, maxHp: 1,
+        atk: 1, def: 0, speed: 1, meleeRange: 1,
+        isRanged: false, status: 'healthy', healProgress: 0,
+      }];
+      const fight = g.encounterManager.resolveEncounter('fight') === true;
+      const selected = fight && g.battleManager.confirmRosterSelection() === true;
+      const deployed = selected && g.battleManager.confirmBattleDeployment() === true;
+      let ticks = 0;
+      for (; ticks < 500 && g.state.battle?.phase === 'active'; ticks++) {
+        g.battleManager.updateBattleSimulation(0.12);
+      }
+      return { ready: true, threatened, fight, selected, deployed, ticks,
+        questId: quest.id, routeId: chosen.route.id, banditId: bandit.id,
+        damageBefore, result: g.state.battle?.battleResult?.result,
+        resultPanel: g.state.battle?.phase === 'result' };
+    });
+    report.guardDefeatCombat = guardDefeatCombat;
+    stage('real-engine-escort-guard-defeat', guardDefeatCombat);
+    if (!guardDefeatCombat.ready || !guardDefeatCombat.threatened
+      || !guardDefeatCombat.fight || !guardDefeatCombat.selected
+      || !guardDefeatCombat.deployed || guardDefeatCombat.result !== 'defeat'
+      || !guardDefeatCombat.resultPanel) {
+      throw new Error('Real escort guard defeat could not be verified using actual tactics');
+    }
+    await page.keyboard.press('Enter');
+    const guardDefeatAftermath = await page.evaluate(({ id, routeId, banditId, damageBefore }) => {
+      const g = window.game;
+      const quest = g.questManager.failedQuests.filter(q => q.id === id);
+      const route = g.economyManager.ensureTradeRoutes().find(r => r.id === routeId);
+      const banditAlive = g.worldManager.worldAi.parties.some(p =>
+        p.id === banditId && p.alive !== false);
+      const noReward = !g.questManager.completedQuests.some(q => q.id === id);
+      const archiveOnce = quest.length === 1
+        && quest[0].failReason === 'escort_guard_defeated';
+      const exactPenalty = Number(route?.damage ?? 0) - damageBefore === 2;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const afterLoad = g.questManager.failedQuests.filter(q => q.id === id);
+      const samePenaltyAfterLoad = Number(g.economyManager.ensureTradeRoutes()
+        .find(r => r.id === routeId)?.damage ?? 0) - damageBefore === 2;
+      return { mode: g.state.mode, banditAlive, noReward, archiveOnce,
+        exactPenalty, saved, loaded, samePenaltyAfterLoad,
+        archiveAfterLoad: afterLoad.length === 1 && afterLoad[0].archived === true
+          && afterLoad[0].failReason === 'escort_guard_defeated' };
+    }, { id: guardDefeatCombat.questId, routeId: guardDefeatCombat.routeId,
+      banditId: guardDefeatCombat.banditId,
+      damageBefore: guardDefeatCombat.damageBefore });
+    report.guardDefeatAftermath = guardDefeatAftermath;
+    stage('escort-guard-defeat-keeps-bandit-single-route-penalty', guardDefeatAftermath);
+    if (guardDefeatAftermath.mode !== 'map' || !guardDefeatAftermath.banditAlive
+      || !guardDefeatAftermath.noReward || !guardDefeatAftermath.archiveOnce
+      || !guardDefeatAftermath.exactPenalty || !guardDefeatAftermath.saved
+      || !guardDefeatAftermath.loaded || !guardDefeatAftermath.samePenaltyAfterLoad
+      || !guardDefeatAftermath.archiveAfterLoad) {
+      throw new Error('Defeated guard incorrectly cleared bandits or replayed route penalties');
+    }
+
     // V1.22: unsupported OLD escort routes are not silently reissued,
     // completed or penalized. The player explicitly retires them using
     // a real browser DOM button; route damage and gold must not change.
