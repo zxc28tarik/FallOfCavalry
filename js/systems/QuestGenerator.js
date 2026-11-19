@@ -93,25 +93,25 @@ export class QuestGenerator {
       issuerFactionId: context.issuerFactionId ?? null,
     };
 
-    if (!resolved.targetCityId && template.targetRules?.targetCity) {
+    if (resolved.targetCityId == null && template.targetRules?.targetCity) {
       resolved.targetCityId = this.cityManager?.pickQuestTargetCity?.(template.targetRules.targetCity, { ...context, ...resolved }) ?? null;
     }
-    if (!resolved.targetRouteId && template.targetRules?.targetRoute) {
+    if (resolved.targetRouteId == null && template.targetRules?.targetRoute) {
       resolved.targetRouteId = this.economyManager?.pickQuestTargetRoute?.(template.targetRules.targetRoute, { ...context, ...resolved }) ?? null;
     }
-    if (!resolved.targetRegionId && template.targetRules?.targetRegion) {
+    if (resolved.targetRegionId == null && template.targetRules?.targetRegion) {
       resolved.targetRegionId = this.worldManager?.pickQuestTargetRegion?.(template.targetRules.targetRegion, { ...context, ...resolved }) ?? null;
     }
-    if (!resolved.targetFortId && template.targetRules?.targetFort) {
+    if (resolved.targetFortId == null && template.targetRules?.targetFort) {
       resolved.targetFortId = this.worldManager?.pickQuestTargetFort?.(template.targetRules.targetFort, { ...context, ...resolved }) ?? null;
     }
-    if (!resolved.targetCommanderId && template.targetRules?.targetCommander) {
+    if (resolved.targetCommanderId == null && template.targetRules?.targetCommander) {
       resolved.targetCommanderId = this.worldManager?.pickQuestTargetCommander?.(template.targetRules.targetCommander, { ...context, ...resolved }) ?? null;
     }
-    if (!resolved.nearestCityId && resolved.targetFortId) {
+    if (resolved.nearestCityId == null && resolved.targetFortId != null) {
       resolved.nearestCityId = this.cityManager?.findNearestCityToLocation?.(resolved.targetFortId) ?? null;
     }
-    if (!resolved.issuerFactionId) {
+    if (resolved.issuerFactionId == null) {
       resolved.issuerFactionId = this.factionManager?.pickQuestIssuerFaction?.({ ...context, ...resolved }) ?? null;
     }
     if (!this._hasRequiredResolvedTargets(template, resolved)) return null;
@@ -123,7 +123,7 @@ export class QuestGenerator {
     const placeholders = serialized.match(/\{\{[a-zA-Z0-9_]+\}\}/g) ?? [];
     for (const placeholder of placeholders) {
       const key = placeholder.replace('{{', '').replace('}}', '');
-      if (!resolved[key]) return false;
+      if (resolved[key] == null || resolved[key] === '') return false;
     }
     return true;
   }
@@ -131,7 +131,7 @@ export class QuestGenerator {
   _fillPlaceholders(template, resolved) {
     let filled = JSON.stringify(template);
     for (const [key, value] of Object.entries(resolved)) {
-      if (!value) continue;
+      if (value == null || value === '') continue;
       filled = filled.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), String(value));
     }
     return JSON.parse(filled);

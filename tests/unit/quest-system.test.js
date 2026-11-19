@@ -37,6 +37,20 @@ describe('QuestGenerator', () => {
     expect(JSON.stringify(quest)).not.toContain('unknown');
   });
 
+  it('keeps the real settlement ID 0 instead of silently substituting an unrelated city', () => {
+    const generator = makeGenerator();
+    const spy = vi.spyOn(generator.cityManager, 'pickQuestTargetCity');
+    const quest = generator.generateFromTemplate('secure_trade_route', {
+      targetCityId: 0, targetRouteId: 'route:0:14', issuerFactionId: 'ottoman',
+    });
+    expect(quest).toBeTruthy();
+    expect(quest.targetCityId).toBe(0);
+    expect(quest.targetRouteId).toBe('route:0:14');
+    expect(quest.objectives[0].targetRouteId).toBe('route:0:14');
+    expect(quest.completionPaths[0].worldEffects[0].cityId).toBe('0');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('returns null instead of generating fake unknown ids', () => {
     const generator = new QuestGenerator(
       { getCurrentDay: () => 1 },
