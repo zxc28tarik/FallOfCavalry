@@ -140,8 +140,14 @@ async function main() {
       const g = window.game;
       const manager = g?.worldManager?.simManager?.worldPartyManager;
       const routes = g?.economyManager?.ensureTradeRoutes?.() || [];
+      // Establish ordinary world AI first so test cleanup removes ONLY
+      // quest-created threats, never the world's baseline parties.
+      manager?.ensureWorldParties?.();
+      const occupied = new Set((g?.worldManager?.worldAi?.parties || [])
+        .filter((p) => p.kind === 'bandit' && p.alive !== false)
+        .map((p) => p.routeId).filter(Boolean));
       const target = routes.find((r, i) => i > 0 && r?.fromCityId
-        && r?.toCityId && r?.id);
+        && r?.toCityId && r?.id && !occupied.has(r.id));
       if (!manager || !target || !g?.questGenerator || !g?.questManager) {
         return { ready: false, routeCount: routes.length };
       }
