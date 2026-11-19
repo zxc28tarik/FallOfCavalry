@@ -610,6 +610,37 @@ async function main() {
       throw new Error('Real victory did not open canonical quest completion choice');
     }
 
+    // V1.21: the first save is made AFTER a real battle source was witnessed
+    // but BEFORE the player clicked the reward button. Same-process memory
+    // proof may restore the unlocked objective, but the save alone cannot.
+    const sessionContinue = await page.evaluate(({ id, goldBeforeChoice }) => {
+      const g = window.game;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const quest = g.questManager.activeQuests.find(q => q.id === id);
+      const root = document.getElementById('questCompletionOverlay');
+      const button = [...(root?.querySelectorAll('button') || [])].find(b =>
+        b.textContent.includes('Haydutları savaşta yendim') && !b.disabled);
+      const summary = {
+        saved, loaded, active: quest?.status === 'active',
+        objective: quest?.objectives?.[0]?.outcome ?? null,
+        liveSessionVerified: g.state.questRestoreReport?.sessionVerified ?? 0,
+        savedHistoryCredited: g.state.questRestoreReport?.creditedEvents ?? -1,
+        noEarlyReward: g.playerParty.gold === goldBeforeChoice,
+        pathOffered: Boolean(button && root && !root.classList.contains('hidden')),
+      };
+      g.questRecoveryPanel?.hide?.(); // Keep auxiliary review off the gameplay button.
+      return summary;
+    }, { id: questBattle.questId, goldBeforeChoice: questOffer.goldBeforeChoice });
+    report.sessionContinue = sessionContinue;
+    stage('same-session-verified-quest-progress-save-resume', sessionContinue);
+    if (!sessionContinue.saved || !sessionContinue.loaded || !sessionContinue.active
+      || sessionContinue.objective !== 'bandits_defeated'
+      || sessionContinue.liveSessionVerified !== 1 || sessionContinue.savedHistoryCredited !== 0
+      || !sessionContinue.noEarlyReward || !sessionContinue.pathOffered) {
+      throw new Error('Same-process witnessed quest objective failed to revalidate safely');
+    }
+
     // Actual DOM click; do not call completeQuest() to perform completion.
     await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
       .filter({ hasText: 'Haydutları savaşta yendim' }).click();
@@ -681,6 +712,95 @@ async function main() {
       || !rejectedStale.completedExactlyOnce || !rejectedStale.overlayRemainsOpen
       || !rejectedStale.staleButtonDisabled) {
       throw new Error('Stale quest completion UI misleadingly dismissed or paid twice');
+    }
+
+    // V1.21: a legacy list-order trade-route quest is kept unchanged on load
+    // and displayed as UNVERIFIED. A human-style DOM click opts in to a
+    // replacement route connected to the same original settlement.
+    const oldRouteReview = await page.evaluate(() => {
+      const g = window.game;
+      const registered = g.economyManager.ensureTradeRoutes();
+      const roadRoutes = registered.filter(r => r.roadBacked === true);
+      const legacyRoutes = registered.filter(r => r.roadBacked === false);
+      const old = legacyRoutes.find(r => roadRoutes.some(road =>
+        String(road.fromCityId) === String(r.fromCityId)
+        || String(road.toCityId) === String(r.fromCityId)));
+      if (!old) return { ready: false, reason: 'no_eligible_legacy_route' };
+      const quest = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId: old.fromCityId, targetRouteId: old.id,
+        issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'cannot_generate_legacy_quest' };
+      quest.status = 'active';
+      if (!g.questManager.addQuest(quest)) return { ready: false, reason: 'cannot_add_legacy_quest' };
+      // Saved outcomes are merely user-editable claims, not gameplay evidence.
+      quest.objectives[0].outcome = 'bandits_defeated';
+      const goldBefore = g.playerParty.gold;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const current = g.questManager.activeQuests.find(q => q.id === quest.id);
+      const panel = document.getElementById('questRecoveryPanel');
+      const button = [...(panel?.querySelectorAll('.quest-reissue-route') || [])]
+        .find(b => b.dataset.questId === quest.id);
+      return {
+        ready: true, questId: quest.id, oldRoute: old.id,
+        goldBefore, saved, loaded,
+        legacyUnchanged: current?.targetRouteId === old.id,
+        claimStillPending: current?.objectives?.[0]?.outcome === undefined
+          && current?.pendingObjectiveClaims?.[0]?.outcome === 'bandits_defeated',
+        noReward: g.playerParty.gold === goldBefore,
+        proposalVisible: Boolean(button && panel.style.display === 'block'),
+        offeredRoute: button?.textContent ?? null,
+      };
+    });
+    report.oldRouteReview = oldRouteReview;
+    stage('legacy-route-claim-recovery-review', oldRouteReview);
+    if (!oldRouteReview.ready || !oldRouteReview.saved || !oldRouteReview.loaded
+      || !oldRouteReview.legacyUnchanged || !oldRouteReview.claimStillPending
+      || !oldRouteReview.noReward || !oldRouteReview.proposalVisible) {
+      throw new Error('Legacy route failed fail-closed review before explicit consent');
+    }
+
+    await page.locator('#questRecoveryPanel button.quest-reissue-route')
+      .filter({ hasText: 'Yeni yol hedefini onayla' }).first().click();
+    const oldRouteReissued = await page.evaluate(({ questId, oldRoute, goldBefore }) => {
+      const g = window.game;
+      const quest = g.questManager.activeQuests.find(q => q.id === questId);
+      const old = g.economyManager.ensureTradeRoutes()
+        .find(r => r.id === oldRoute);
+      const candidate = g.economyManager.ensureTradeRoutes()
+        .find(r => r.id === quest?.targetRouteId);
+      const progressNotFabricated = quest?.objectives?.[0]?.outcome == null
+        && quest?.pendingObjectiveClaims?.[0]?.outcome === 'bandits_defeated';
+      const noReward = g.playerParty.gold === goldBefore;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const restored = g.questManager.activeQuests.find(q => q.id === questId);
+      return {
+        sameQuestId: quest?.id === questId,
+        currentDay: g.state.day, resetDay: quest?.createdAt,
+        oldStillLegacy: old?.roadBacked === false,
+        realRoute: candidate?.roadBacked === true,
+        routeChanged: quest?.targetRouteId !== oldRoute,
+        progressNotFabricated, noReward, saved, loaded,
+        reissuedSurvivedLoad: restored?.targetRouteId === quest?.targetRouteId
+          && restored?.objectives?.[0]?.outcome === undefined,
+        noRewardAfterLoad: g.playerParty.gold === goldBefore,
+      };
+    }, {
+      questId: oldRouteReview.questId,
+      oldRoute: oldRouteReview.oldRoute,
+      goldBefore: oldRouteReview.goldBefore,
+    });
+    report.oldRouteReissued = oldRouteReissued;
+    stage('legacy-route-explicit-consent-no-reward', oldRouteReissued);
+    if (!oldRouteReissued.sameQuestId || !oldRouteReissued.oldStillLegacy
+      || !oldRouteReissued.realRoute || !oldRouteReissued.routeChanged
+      || oldRouteReissued.resetDay !== oldRouteReissued.currentDay
+      || !oldRouteReissued.progressNotFabricated || !oldRouteReissued.noReward
+      || !oldRouteReissued.saved || !oldRouteReissued.loaded
+      || !oldRouteReissued.reissuedSurvivedLoad || !oldRouteReissued.noRewardAfterLoad) {
+      throw new Error('Explicit legacy route replacement lost identity or manufactured a reward');
     }
 
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
