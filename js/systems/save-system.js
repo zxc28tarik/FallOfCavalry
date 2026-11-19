@@ -8,6 +8,7 @@ import { normalizeWorldCharacterSave } from './world-characters.js';
 import { normalizeCharacterOrganizationState } from './character-organization.js';
 import { normalizeCharacterQuestBindings } from './character-quest-assignments.js';
 import { normalizeQuestSnapshot } from './quest-snapshot.js';
+import { restoreQuestEventLedger } from './quest-event-ledger.js';
 import { normalizeCharacterSocialState } from './character-social.js';
 
 const MAX_NORMALIZED_BUILDINGS = 10000;
@@ -203,6 +204,7 @@ export class SaveSystem {
         characterOrganization: normalizeCharacterOrganizationState(game.characterOrganization),
         characterQuestBindings: normalizeCharacterQuestBindings(game.characterQuestBindings),
         questSnapshot: normalizeQuestSnapshot(game.questSnapshot),
+        questEventLedger: restoreQuestEventLedger(game.questEventLedger),
         characterSocial: normalizeCharacterSocialState(game.characterSocial),
         characterSocialPending: normalizeCharacterSocialState(game.characterSocialPending),
         enemies: Array.isArray(game.enemies) ? game.enemies.filter((e) => !e?.temporary) : [],

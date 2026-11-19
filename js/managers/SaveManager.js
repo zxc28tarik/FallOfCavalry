@@ -20,6 +20,7 @@ import {
   normalizeCharacterQuestBindings, reactivateRestoredQuestBindings,
 } from '../systems/character-quest-assignments.js';
 import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
+import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -371,6 +372,7 @@ Esc close`,
           settlements,
         }),
         questSnapshot: captureQuestSnapshot(this.game?.questManager),
+        questEventLedger: captureQuestEventLedger(this.state?.questEventLedger),
         characterSocial: restoreAuthorizedCharacterSocialState(
           this.state?.characterSocial, this.state?.characterSocialPending, {
             roster: this.state?.worldCharacters,
@@ -479,6 +481,7 @@ Esc close`,
     });
     // Live quest bindings remain SUSPENDED until V1.14 reconstructs an exact
     // active quest from current trusted templates and actual world targets.
+    this.state.questEventLedger = restoreQuestEventLedger(game.questEventLedger);
     this.state.characterQuestBindings = normalizeCharacterQuestBindings(
       game.characterQuestBindings, {
         roster: this.state.worldCharacters,
@@ -688,6 +691,8 @@ Esc close`,
           ? this.state.regionState.regions.map((r) => r?.id).filter(Boolean) : [],
       },
     );
+    this.state.questRestoreReport.pendingEventHistory = this.state.questEventLedger.pending.length;
+    this.state.questRestoreReport.creditedEvents = 0; // Saved history is never objective authority.
     this.state.questRestoreReport.restoredBindings = reactivateRestoredQuestBindings({
       bindings: this.state.characterQuestBindings,
       savedBindings: game.characterQuestBindings,

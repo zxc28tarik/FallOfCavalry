@@ -13,6 +13,7 @@ import { createBattleRng, computeEnemyPower, generateBattleLoot as generateRewar
 import { applyBattleOutcomes } from '../systems/casualties.js';
 import { removeWorldParty } from '../systems/world-ai.js';
 import { emitContractEvent } from '../systems/contracts.js';
+import { emptyQuestEventLedger, recordVerifiedBattleQuestEvent } from '../systems/quest-event-ledger.js';
 import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
@@ -749,6 +750,12 @@ export class BattleManager {
       timestamp: Date.now(),
     };
     battle.battleResult = this.battleResult;
+    // Record the actual battle outcome once; never infer a quest target or
+    // grant objective credit simply because a battle ended.
+    this.state.questEventLedger ||= emptyQuestEventLedger();
+    recordVerifiedBattleQuestEvent(this.state.questEventLedger, {
+      battle, currentDay: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+    });
     this.state.uiPanel = this.game?.buildBattleResultPanelData?.();
     this.battleCommandsUI?.hide?.();
     this.battleDeployUI?.hide?.();
