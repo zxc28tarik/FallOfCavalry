@@ -38,6 +38,14 @@ export function validBanditRoute(party, worldState, tradeRoutes) {
     || !Number.isFinite(party?.y)) return null;
   const link = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
   if (!link) return null;
+  // A route-bound patrol's destination is always one of the registered
+  // endpoints; imported save metadata cannot send it elsewhere and keep
+  // claiming to be the route's defender/attacker.
+  const toA = Math.hypot(Number(party.targetX) - link.from.x,
+    Number(party.targetY) - link.from.y);
+  const toB = Math.hypot(Number(party.targetX) - link.to.x,
+    Number(party.targetY) - link.to.y);
+  if (!Number.isFinite(toA) || Math.min(toA, toB) > 1) return null;
   const tile = Number(worldState?.tileSize || 32);
   const margin = Math.max(64, (Number.isFinite(tile) ? tile : 32) * 4);
   return distanceToSegment(party.x, party.y, link.from, link.to) <= margin ? link : null;
