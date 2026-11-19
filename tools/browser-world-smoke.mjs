@@ -980,6 +980,161 @@ async function main() {
       throw new Error('Verified escort payout double-credited or failed save archive');
     }
 
+    // V1.24 — genuine tactical victory over a factory-created bandit
+    // threatening a real quest caravan. Do not call resolveBattle('victory')
+    // or assign HP/outcomes; advance the full tactical engine.
+    const guardedCombat = await page.evaluate(async () => {
+      const g = window.game;
+      const routes = g.economyManager.ensureTradeRoutes()
+        .filter(r => r.roadBacked === true);
+      const roads = g.state.map.roads || [];
+      const candidates = routes.map(route => {
+        const road = roads.find(r => String(r.from) === String(route.fromCityId)
+          && String(r.to) === String(route.toCityId));
+        const pts = road?.path || [];
+        const length = pts.slice(1).reduce((n, p, i) =>
+          n + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
+        return { route, length };
+      }).filter(x => x.length > 0 && x.length <= 4)
+        .sort((a,b) => a.length - b.length);
+      const target = candidates.find(x =>
+        !g.questManager.activeQuests.some(q => q.targetRouteId === x.route.id));
+      if (!target) return { ready: false, reason: 'no_short_road_to_guard' };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: target.route.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'no_guard_quest' };
+      quest.status = 'active';
+      if (!g.questManager.addQuest(quest))
+        return { ready: false, reason: 'guard_quest_not_accepted' };
+      const manager = g.worldManager.simManager.worldPartyManager;
+      manager.ensureWorldParties();
+      const convoy = g.worldManager.worldAi.parties.find(p =>
+        p.escortQuestId === quest.id && p.routeId === target.route.id);
+      if (!convoy) return { ready: false, reason: 'guarded_caravan_not_spawned' };
+      const { spawnPartyBandit } = await import('/js/systems/world-ai.js');
+      const bandit = spawnPartyBandit(g.state.map, g.state.factions || {},
+        { BANDIT_SPEED: 0.01 }, { tradeRoutes: [target.route] });
+      if (bandit.routeId !== target.route.id)
+        return { ready: false, reason: 'factory_bandit_lost_route' };
+      bandit.x = convoy.x + Number(g.state.map.tileSize || 32);
+      bandit.y = convoy.y;
+      g.worldManager.worldAi.parties.push(bandit);
+      g.playerParty.x = convoy.x;
+      g.playerParty.y = convoy.y;
+      const status = manager.processQuestEscortCaravans(0.1, {
+        worldState: g.state.map, tradeRoutes: routes,
+      });
+      const pausesAtThreat = convoy.escortStarted === true
+        && convoy.escortElapsedSeconds === 0
+        && convoy.escortVisitedPoints === 0;
+      manager.syncVisiblePartiesToWorld();
+      const encountered = g.worldManager.simManager.processWorldAiEncounters([{
+        partyId: bandit.id, factionId: bandit.factionId,
+        x: bandit.x, y: bandit.y,
+      }]);
+      const sourceEnemyId = g.state.encounter?.enemyId;
+      const expectedEnemyId = `wai-${bandit.id}`;
+      if (!encountered || sourceEnemyId !== expectedEnemyId)
+        return { ready: false, reason: 'guard_enemy_source_not_encountered' };
+      g.playerParty.roster = Array.from({ length: 6 }, (_, i) => ({
+        id: `qa-guard-v124-${i}`, name: `QA Guard ${i+1}`,
+        class: 'infantry', hp: 4500, maxHp: 4500,
+        atk: 3500, def: 500, speed: 1100, meleeRange: 240,
+        isRanged: false, status: 'healthy', healProgress: 0,
+      }));
+      const fight = g.encounterManager.resolveEncounter('fight') === true;
+      const selected = fight && g.battleManager.confirmRosterSelection() === true;
+      const deployed = selected && g.battleManager.confirmBattleDeployment() === true;
+      const initialHp = (g.state.battle?.enemyUnits || [])
+        .reduce((sum,e)=>sum + e.hp,0);
+      let ticks = 0;
+      for (; ticks < 350 && g.state.battle?.phase === 'active'; ticks++) {
+        g.battleManager.updateBattleSimulation(0.12);
+      }
+      const currentHp = (g.state.battle?.enemyUnits || [])
+        .reduce((sum,e)=>sum + Math.max(0,e.hp),0);
+      return {
+        ready: true, questId: quest.id, routeId: target.route.id,
+        convoyId: convoy.id, banditId: bandit.id, expectedEnemyId,
+        pausesAtThreat, fight, selected, deployed, ticks,
+        enemyHpBefore: initialHp, enemyHpAfter: currentHp,
+        genuineDamage: initialHp > currentHp,
+        result: g.state.battle?.battleResult?.result,
+        panelResult: g.state.battle?.phase === 'result',
+      };
+    });
+    report.guardedCombat = guardedCombat;
+    stage('real-engine-guarded-caravan-bandit-battle', guardedCombat);
+    if (!guardedCombat.ready || !guardedCombat.pausesAtThreat
+      || !guardedCombat.fight || !guardedCombat.selected || !guardedCombat.deployed
+      || guardedCombat.enemyHpBefore <= 0 || !guardedCombat.genuineDamage
+      || guardedCombat.result !== 'victory' || !guardedCombat.panelResult) {
+      throw new Error('Guard battle did not run genuine tactical victory over nearby road bandit');
+    }
+    await page.keyboard.press('Enter');
+    const defendedCaravan = await page.evaluate(({ questId, convoyId, banditId }) => {
+      const g = window.game;
+      const party = g.worldManager.worldAi.parties.find(p => p.id === convoyId);
+      const quest = g.questManager.activeQuests.find(q => q.id === questId);
+      const banditRemoved = !g.worldManager.worldAi.parties.some(p => p.id === banditId);
+      const defendedOnce = party?.escortDefended === 1;
+      const noAutomaticEscortReward = quest?.objectives?.[0]?.outcome == null
+        && !g.questManager.completedQuests.some(q => q.id === questId);
+      const pm = g.worldManager.simManager.worldPartyManager;
+      const before = Number(party?.escortElapsedSeconds ?? 0);
+      g.playerParty.x = party?.x ?? g.playerParty.x;
+      g.playerParty.y = party?.y ?? g.playerParty.y;
+      pm.updateWorldParties(0.1);
+      const resumed = Number(party?.escortElapsedSeconds ?? 0) > before;
+      const goldBeforeDelivery = g.playerParty.gold;
+      let ticks = 0;
+      for (; ticks < 250 && quest?.objectives?.[0]?.outcome == null; ticks++) {
+        g.playerParty.x = party.x;
+        g.playerParty.y = party.y;
+        pm.updateWorldParties(0.15);
+      }
+      const overlay = document.getElementById('questCompletionOverlay');
+      const button = [...(overlay?.querySelectorAll('button.quest-path') || [])]
+        .find(b => !b.disabled && b.textContent.includes('Kervan güvenli ulaştı'));
+      return {
+        activeBeforeChoice: Boolean(quest),
+        banditRemoved, defendedOnce, noAutomaticEscortReward, resumed,
+        routeArrival: quest?.objectives?.[0]?.outcome === 'caravan_arrived',
+        offerVisible: Boolean(button && overlay?.style.display !== 'none'
+          && !overlay.classList.contains('hidden')),
+        ticks, goldBeforeDelivery,
+      };
+    }, guardedCombat);
+    report.defendedCaravan = defendedCaravan;
+    stage('guard-victory-clears-threat-and-escort-resumes', defendedCaravan);
+    if (!defendedCaravan.activeBeforeChoice || !defendedCaravan.banditRemoved
+      || !defendedCaravan.defendedOnce || !defendedCaravan.noAutomaticEscortReward
+      || !defendedCaravan.resumed || !defendedCaravan.routeArrival
+      || !defendedCaravan.offerVisible) {
+      throw new Error('Real guard victory failed to clear the same-route caravan threat');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Kervan güvenli ulaştı' }).click();
+    const guardedPayout = await page.evaluate(({ id, gold }) => {
+      const g = window.game;
+      const completed = g.questManager.completedQuests.find(q => q.id === id);
+      const exact = g.playerParty.gold - gold === 250;
+      const replayDenied = g.questManager.completeQuest(id, 'caravan_delivered') !== true;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      return { path: completed?.completedPath, exact, replayDenied,
+        saved, loaded, archiveOnce: g.questManager.completedQuests
+          .filter(q => q.id === id && q.archived).length === 1 };
+    }, { id: guardedCombat.questId, gold: defendedCaravan.goldBeforeDelivery });
+    report.guardedPayout = guardedPayout;
+    stage('guarded-escort-delivery-one-time-reward', guardedPayout);
+    if (guardedPayout.path !== 'caravan_delivered' || !guardedPayout.exact
+      || !guardedPayout.replayDenied || !guardedPayout.saved
+      || !guardedPayout.loaded || !guardedPayout.archiveOnce) {
+      throw new Error('Guarded escort completion did not preserve canonical single payout');
+    }
+
     // V1.22: unsupported OLD escort routes are not silently reissued,
     // completed or penalized. The player explicitly retires them using
     // a real browser DOM button; route damage and gold must not change.
