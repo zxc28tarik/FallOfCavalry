@@ -137,7 +137,7 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     expect(linkedEscortBattleThreat({
       ...src(), tradeRoutes: [{ ...routes[0], id: 'route:other' }],
     })).toBeNull();
-    expect(f.caravan.escortDefended).toBeUndefined();
+    expect(f.caravan.escortDefended).toBe(0);
     expect(f.effects).toEqual([]);
   });
 
