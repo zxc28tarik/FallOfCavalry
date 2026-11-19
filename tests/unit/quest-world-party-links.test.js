@@ -7,13 +7,13 @@ import {
   spawnPartyBandit, createInitialWorldAiState, ensureWorldParties, updateWorldParties,
 } from '../../js/systems/world-ai.js';
 import WorldPartyManager from '../../js/managers/WorldPartyManager.js';
-import WorldSimManager from '../../js/managers/WorldSimManager.js';
+import { WorldSimManager } from '../../js/managers/WorldSimManager.js';
 import { QuestManager } from '../../js/managers/QuestManager.js';
 import { creditQuestObjectivesForVerifiedEvent } from '../../js/systems/quest-event-matcher.js';
 import { emptyQuestEventLedger, recordVerifiedBattleQuestEvent } from '../../js/systems/quest-event-ledger.js';
 import { QUEST_DEFS } from '../../js/data/quest-defs.js';
 import SaveSystem from '../../js/systems/save-system.js';
-import SaveManager from '../../js/managers/SaveManager.js';
+import { SaveManager } from '../../js/managers/SaveManager.js';
 
 const map = {
   width: 50, height: 50, tileSize: 32,
