@@ -484,6 +484,166 @@ async function main() {
       throw new Error('Canonical quest + NamedCharacter save/resume regression');
     }
 
+    // V1.20: REAL battle engine loop from actual WorldAI route-bound enemy.
+    // Test supplies a super-strong disposable infantry unit for deterministic
+    // victory; it does NOT call resolveBattle(), forge ledger evidence, or
+    // set objective outcomes. The engine must resolve combat on its own.
+    const questBattle = await page.evaluate(() => {
+      const g = window.game;
+      const manager = g?.worldManager?.simManager?.worldPartyManager;
+      const sim = g?.worldManager?.simManager;
+      const roadRoutes = (g?.economyManager?.ensureTradeRoutes?.() || [])
+        .filter((row) => row?.roadBacked);
+      if (g?.state?.mode !== 'map' || !manager || !sim || !roadRoutes.length) {
+        return { ready: false, reason: 'not_in_map_or_without_road_routes' };
+      }
+      manager.ensureWorldParties();
+      const activeRouteIds = new Set((g.questManager.activeQuests || [])
+        .map(q => q.targetRouteId).filter(Boolean));
+      const route = roadRoutes.find((r) => !activeRouteIds.has(r.id));
+      if (!route) return { ready: false, reason: 'no_free_canonical_route' };
+      const quest = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId: route.fromCityId, targetRouteId: route.id,
+        issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'canonical_quest_not_generated' };
+      quest.status = 'active';
+      const added = g.questManager.addQuest(quest);
+      if (!added) return { ready: false, reason: 'canonical_quest_not_accepted' };
+      manager.ensureWorldParties();
+      const source = g.worldManager.worldAi.parties.find(p =>
+        p.kind === 'bandit' && p.alive !== false && p.routeId === route.id);
+      if (!source) return { ready: false, reason: 'target_world_bandit_missing' };
+
+      // Isolated test formation/position for deterministic combat; these are
+      // never shipped as a spawn recipe, reward, or a named NPC.
+      g.playerParty.x = 260;
+      g.playerParty.y = 320;
+      g.playerParty.roster = [{
+        id: 'qa-infantry-v120', name: 'QA Battle Infantry', class: 'infantry',
+        hp: 3500, maxHp: 3500, atk: 3500, def: 500,
+        speed: 700, meleeRange: 80, isRanged: false,
+        status: 'healthy', healProgress: 0,
+      }];
+      const encountered = sim.processWorldAiEncounters([{
+        partyId: source.id, factionId: source.factionId,
+        x: source.x, y: source.y,
+      }]);
+      const enemyId = g.state.encounter?.enemyId;
+      const sourceMatched = Boolean(encountered && enemyId === `wai-${source.id}`
+        && g.worldManager.enemyParties.some(p =>
+          p.id === enemyId && p.routeId === route.id));
+      if (!sourceMatched) return { ready: false, reason: 'encounter_lost_route_provenance' };
+      const fight = g.encounterManager.resolveEncounter('fight') === true;
+      if (!fight) return { ready: false, reason: 'fight_option_rejected' };
+      const selected = g.battleManager.confirmRosterSelection() === true;
+      if (!selected) return { ready: false, reason: 'real_roster_selection_rejected' };
+      const deployed = g.battleManager.confirmBattleDeployment() === true;
+      if (!deployed) return { ready: false, reason: 'real_deployment_rejected' };
+
+      const battle = g.state.battle;
+      const units = battle?.enemyUnits?.length || 0;
+      const originalEnemyHp = (battle.enemyUnits || [])
+        .reduce((sum, e) => sum + e.hp, 0);
+      let ticks = 0;
+      for (; ticks < 350 && g.state.battle?.phase === 'active'; ticks += 1) {
+        g.battleManager.updateBattleSimulation(0.12);
+      }
+      const result = g.state.battle?.battleResult?.result;
+      const enemyHp = (g.state.battle?.enemyUnits || [])
+        .reduce((sum, e) => sum + Math.max(0, e.hp), 0);
+      const event = g.state.questEventLedger?.observed?.find(e =>
+        e.enemyId === enemyId && e.source === 'battle_result' && e.result === 'victory');
+      return {
+        ready: true, added, encountered, fight, selected, deployed,
+        questId: quest.id, routeId: route.id, enemyId,
+        enemyUnits: units, ticks, originalEnemyHp, finalEnemyHp: enemyHp,
+        genuineCombatDamage: enemyHp < originalEnemyHp,
+        result, resultPanel: g.state.battle?.phase === 'result',
+        ledgerSource: event?.source ?? null,
+        ledgerRoute: event?.routeId ?? null,
+        completedEarly: g.questManager.completedQuests.some(q => q.id === quest.id),
+        objectiveBeforeExit: quest.objectives?.[0]?.outcome ?? null,
+      };
+    });
+    report.questBattle = questBattle;
+    stage('real-engine-quest-battle', questBattle);
+    if (!questBattle.ready || !questBattle.added || !questBattle.encountered
+      || !questBattle.fight || !questBattle.selected || !questBattle.deployed
+      || questBattle.enemyUnits < 1 || !questBattle.genuineCombatDamage
+      || questBattle.result !== 'victory' || !questBattle.resultPanel
+      || questBattle.ledgerSource !== 'battle_result'
+      || questBattle.ledgerRoute !== questBattle.routeId
+      || questBattle.completedEarly || questBattle.objectiveBeforeExit !== null) {
+      throw new Error('Real battle engine failed to produce verifiable route quest victory');
+    }
+
+    // The game's real Enter-key handler exits the battle result. That is the
+    // moment the live event becomes quest objective proof and opens the overlay.
+    await page.keyboard.press('Enter');
+    const questOffer = await page.evaluate((id) => {
+      const g = window.game;
+      const quest = g.questManager.activeQuests.find(q => q.id === id);
+      const overlay = document.getElementById('questCompletionOverlay');
+      const buttons = [...(overlay?.querySelectorAll('button.quest-path') || [])];
+      return {
+        mode: g.state.mode,
+        objective: quest?.objectives?.find(o => o.id === 'resolve_bandit_threat')?.outcome,
+        pathAvailable: Boolean(buttons.find(b =>
+          b.textContent.includes('Haydutları savaşta yendim') && !b.disabled)),
+        overlayVisible: Boolean(overlay && !overlay.classList.contains('hidden')),
+        goldBeforeChoice: g.playerParty.gold,
+        countCompletedBeforeChoice: g.questManager.completedQuests
+          .filter(q => q.id === id).length,
+        pendingCount: g.state.questEventLedger?.pending?.length || 0,
+      };
+    }, questBattle.questId);
+    report.questOffer = questOffer;
+    stage('quest-completion-offer-after-enter', questOffer);
+    if (questOffer.mode !== 'map' || questOffer.objective !== 'bandits_defeated'
+      || !questOffer.pathAvailable || !questOffer.overlayVisible
+      || questOffer.countCompletedBeforeChoice !== 0) {
+      throw new Error('Real victory did not open canonical quest completion choice');
+    }
+
+    // Actual DOM click; do not call completeQuest() to perform completion.
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Haydutları savaşta yendim' }).click();
+    const questCompleted = await page.evaluate(({ id, goldBeforeChoice }) => {
+      const g = window.game;
+      const completed = g.questManager.completedQuests.filter(q => q.id === id);
+      const active = g.questManager.activeQuests.some(q => q.id === id);
+      const overlay = document.getElementById('questCompletionOverlay');
+      const afterClickGold = g.playerParty.gold;
+      const secondCompletionRejected = g.questManager.completeQuest(id, 'defeat_bandits') !== true;
+      const noDoubleReward = g.playerParty.gold === afterClickGold;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const loadedCompleted = g.questManager.completedQuests.filter(q => q.id === id);
+      return {
+        completedCount: completed.length,
+        completedPath: completed[0]?.completedPath,
+        active, overlayHidden: overlay?.classList.contains('hidden') === true,
+        exactGoldReward: afterClickGold - goldBeforeChoice === 300,
+        secondCompletionRejected, noDoubleReward,
+        saved, loaded, completedArchive: loadedCompleted.length === 1
+          && loadedCompleted[0].archived === true,
+        goldAfterLoadUnchanged: g.playerParty.gold === afterClickGold,
+        questNotReactivated: !g.questManager.activeQuests.some(q => q.id === id),
+      };
+    }, { id: questBattle.questId, goldBeforeChoice: questOffer.goldBeforeChoice });
+    report.questCompleted = questCompleted;
+    stage('quest-completion-button-and-save', questCompleted);
+    if (questCompleted.completedCount !== 1
+      || questCompleted.completedPath !== 'defeat_bandits'
+      || questCompleted.active || !questCompleted.overlayHidden
+      || !questCompleted.exactGoldReward || !questCompleted.secondCompletionRejected
+      || !questCompleted.noDoubleReward || !questCompleted.saved
+      || !questCompleted.loaded || !questCompleted.completedArchive
+      || !questCompleted.goldAfterLoadUnchanged || !questCompleted.questNotReactivated) {
+      throw new Error('Canonical quest button failed or replayed completion/reward on save');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
