@@ -1403,7 +1403,15 @@ async function main() {
         partyId: bandit.id, factionId: bandit.factionId,
         x: bandit.x, y: bandit.y,
       }]);
-      if (!encounter) return { ready: false, reason: 'loss_encounter_not_entered' };
+      if (!encounter) return {
+        ready: false, reason: 'loss_encounter_not_entered',
+        mode: g.state.mode,
+        existingEncounter: g.state.encounter?.enemyId ?? null,
+        mappedPartyId: g.worldManager.worldEncounterPartyByEnemyId?.[`wai-${bandit.id}`] ?? null,
+        sourcePresent: g.worldManager.worldAi.parties.some(p => p.id === bandit.id),
+        enemyProjection: g.worldManager.enemyParties.some(p => p.id === `wai-${bandit.id}`),
+        activeOverlay: (g.state.modeManager?.overlayStack || []).map(p => p.name),
+      };
       g.playerParty.roster = [{
         id: 'qa-weak-guard-v124', name: 'Weak QA Guard',
         class: 'infantry', hp: 1, maxHp: 1,
