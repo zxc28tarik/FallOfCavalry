@@ -30,6 +30,6 @@ Kodun ilk alt paket commit'i `03a2e22a05c6b09d4fb5ede8ba163f32c8f5f85c` için:
 - [Chromium #44502248057](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44502248057): PASS.
 - World audit: 881 yerleşim, 304 yol, 3 nehir, 4 geçit, **0 hata / mevcut 1 uyarı**.
 
-**Not:** Bu belgeyle beraber iki noktalı gerçek dünya ID'lerini güvenle okuma ve ek regresyon testi eklendi. Son dokümantasyon/kod HEAD'i için CI yeniden çalıştırılır; yukarıdaki sayılar ilk kod paketinin kanıtıdır.
+**Son kod/dokümantasyon SHA:** `c9c84bc602348c4100014006be0788b1870d1c92`. [Web validation #44502846020](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44502846020) **PASS** — 644/644 unit, 1.056 genel test PASS, 1 skipped, lint/build ve dünya denetimi PASS (0 error, 1 mevcut warning). [Gerçek Chromium #44502846044](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44502846044) **PASS**. İki noktalı dünya party ID regresyonu son test paketine dahildir. Sonuçlar dokümantasyon-only takip commitinden önceki kod HEAD'i içindir.
 
 **Karar:** V1.16 olay kayıt altyapısı uygulanmış; `QuestEventLedger` kaydının tek başına görev ilerlemesini restore etmesine izin **verilmiyor**. O00-06 geniş kapsamda UYGULAMADA. PR #68 taslak; main'e birleştirme kullanıcı onayına bağlı.
