@@ -14,6 +14,10 @@ import {
 import { creditQuestObjectivesForVerifiedEvent } from '../../js/systems/quest-event-matcher.js';
 import { SaveManager } from '../../js/managers/SaveManager.js';
 import SaveSystem from '../../js/systems/save-system.js';
+import {
+  spawnEscortNpcGuards, isRuntimeEscortGuard,
+  activeEscortGuards, runEscortNpcSkirmish,
+} from '../../js/systems/quest-escort-npc-guards.js';
 
 const worldMap = {
   width: 30, height: 20, tileSize: 32,
@@ -139,7 +143,9 @@ describe('WEB V1.22 — authentic caravan escort and verified arrival', () => {
     const original = world.worldAi.parties.find(p => p.escortQuestId);
     expect(original).toBeTruthy();
     manager.ensureWorldParties();
-    expect(world.worldAi.parties.filter(p => p.escortQuestId)).toHaveLength(1);
+    expect(world.worldAi.parties.filter(p => p.kind === 'caravan'
+      && p.escortQuestId)).toHaveLength(1);
+    expect(world.worldAi.parties.filter(p => p.kind === 'escort_guard')).toHaveLength(3);
     let end = false;
     for (let i = 0; i < 750; i += 1) {
       playerParty.x = original.x;
@@ -223,6 +229,137 @@ describe('WEB V1.22 — authentic caravan escort and verified arrival', () => {
     expect(payload.game.worldAi.parties.some(x => x.id === p.id)).toBe(false);
     const normalized = new SaveSystem().normalizePayload(payload).data;
     expect(normalized.game.worldAi.parties.some(x => x.id === p.id)).toBe(false);
+    expect(qm.activeQuests[0].objectives[0].outcome).toBeUndefined();
+    expect(state.questEventLedger.observed).toEqual([]);
+  });
+});
+
+describe('WEB V1.26 — independent escort NPC guards and cargo raids', () => {
+  it('spawns three authentic visible world escort guards tethered to one quest caravan', () => {
+    const { manager, world, playerParty } = make();
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.kind === 'caravan' && p.escortQuestId);
+    const guards = world.worldAi.parties.filter(p => p.kind === 'escort_guard');
+    expect(guards).toHaveLength(3);
+    expect(guards.every(g => isRuntimeEscortGuard(g))).toBe(true);
+    expect(guards.every(g => g.escortGuardOf === caravan.id
+      && g.escortQuestId === caravan.escortQuestId && g.hp === 30)).toBe(true);
+    manager.ensureWorldParties();
+    expect(world.worldAi.parties.filter(p => p.kind === 'escort_guard')).toHaveLength(3);
+    manager.updateWorldParties(0.1);
+    expect(activeEscortGuards(caravan, world.worldAi.parties)).toHaveLength(3);
+    expect(guards.some(g => Math.hypot(g.x - caravan.x, g.y - caravan.y) > 2)).toBe(true);
+    expect(playerParty.gold).toBe(100);
+  });
+
+  it('source-generated bandit fights guards automatically, takes damage, and leaves no quest credit', () => {
+    const { manager, world, qm, applied, playerParty } = make();
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.kind === 'caravan' && p.escortQuestId);
+    const guards = activeEscortGuards(caravan, world.worldAi.parties);
+    const bandit = spawnPartyBandit(worldMap, {}, { BANDIT_SPEED: 0.01 },
+      { tradeRoutes: routes });
+    bandit.x = caravan.x + 24; bandit.y = caravan.y;
+    world.worldAi.parties.push(bandit);
+    manager.updateWorldParties(0.2);
+    expect(caravan.escortStarted).toBe(true);
+    for (let i = 0; i < 50 && bandit.alive !== false; i++) manager.updateWorldParties(0.2);
+    expect(bandit.alive).toBe(false);
+    expect(caravan.escortDefended).toBe(1);
+    expect(caravan.escortCargo).toBeLessThan(100);
+    expect(guards.some(g => g.hp < 30)).toBe(true);
+    expect(qm.activeQuests).toHaveLength(1);
+    expect(qm.activeQuests[0].objectives[0].outcome).toBeUndefined();
+    expect(qm.completedQuests).toHaveLength(0);
+    expect(applied).toEqual([]);
+    expect(playerParty.gold).toBe(100);
+    manager.updateWorldParties(0.2);
+    expect(caravan.escortElapsedSeconds).toBeGreaterThan(0);
+    expect(caravan.escortDefended).toBe(1);
+  });
+
+  it('genuine raid can destroy weakened convoy and apply exactly one canonical route penalty', () => {
+    const { manager, world, qm, applied, playerParty } = make();
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.kind === 'caravan' && p.escortQuestId);
+    for (const guard of activeEscortGuards(caravan, world.worldAi.parties)) {
+      guard.hp = 0; guard.alive = false; // deliberately weakened QA convoy
+    }
+    caravan.escortCargo = 24;
+    caravan.escortHull = 24;
+    const bandit = spawnPartyBandit(worldMap, {}, { BANDIT_SPEED: 0.01 },
+      { tradeRoutes: routes });
+    bandit.x = caravan.x + 24; bandit.y = caravan.y;
+    world.worldAi.parties.push(bandit);
+    for (let i = 0; i < 30 && qm.activeQuests.length; i++) {
+      manager.updateWorldParties(0.2);
+    }
+    expect(qm.activeQuests).toHaveLength(0);
+    expect(qm.failedQuests).toMatchObject([{
+      failReason: 'escort_cargo_raided', status: 'failed',
+    }]);
+    expect(caravan.escortFailed).toBe(true);
+    expect(caravan.escortCargo).toBe(0);
+    expect(caravan.escortHull).toBe(0);
+    expect(bandit.alive).toBe(true);
+    expect(qm.completedQuests).toHaveLength(0);
+    expect(applied).toEqual([{
+      type: 'damage_trade_route', routeId: routes[0].id, amount: 2,
+    }]);
+    manager.updateWorldParties(0.2);
+    expect(qm.failedQuests).toHaveLength(1);
+    expect(applied).toHaveLength(1);
+    expect(playerParty.gold).toBe(100);
+    expect(world.state.questEventLedger.observed).toEqual([]);
+  });
+
+  it('rejects cloned bandit/guard source, mismatched road, and no-before-player raid', () => {
+    const q = quest('quest_npc_guard_clone');
+    const caravan = spawnQuestEscortCaravan(q, worldMap, routes, 4);
+    const parties = [caravan];
+    const guards = spawnEscortNpcGuards(caravan, parties);
+    const bandit = spawnPartyBandit(worldMap, {}, { BANDIT_SPEED: 0.01 },
+      { tradeRoutes: routes });
+    bandit.x = caravan.x + 20; bandit.y = caravan.y;
+    const fake = { ...bandit };
+    parties.push(fake);
+    expect(runEscortNpcSkirmish({
+      caravan, quest:q, parties, worldState:worldMap, tradeRoutes:routes,
+      currentDay:4, dtSec:0.8,
+    })).toMatchObject({status:'clear',threats:0});
+    parties.pop();
+    parties.push(bandit);
+    expect(runEscortNpcSkirmish({
+      caravan, quest:q, parties, worldState:worldMap, tradeRoutes:routes,
+      currentDay:4, dtSec:0.8,
+    }).status).toBe('waiting');
+    expect(caravan.escortCargo).toBe(100);
+    expect(guards.every(g => g.hp === 30)).toBe(true);
+    const swapped = { ...guards[0] };
+    expect(isRuntimeEscortGuard(swapped)).toBe(false);
+    const mismatched = { ...bandit, routeId: 'route:unknown' };
+    parties[parties.indexOf(bandit)] = mismatched;
+    caravan.escortStarted = true;
+    expect(runEscortNpcSkirmish({
+      caravan, quest:q, parties, worldState:worldMap, tradeRoutes:routes,
+      currentDay:4, dtSec:1,
+    }).status).toBe('clear');
+    expect(caravan.escortCargo).toBe(100);
+  });
+
+  it('restored save cannot create authoritative guard, health or loot proof', () => {
+    const { manager, world, qm, state, game } = make();
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.kind === 'caravan' && p.escortQuestId);
+    const guard = activeEscortGuards(caravan, world.worldAi.parties)[0];
+    const cloned = { ...guard, hp: 999, attack: 999 };
+    expect(isRuntimeEscortGuard(cloned)).toBe(false);
+    expect(spawnEscortNpcGuards({ ...caravan }, [caravan, cloned])).toEqual([]);
+    const save = new SaveManager(state);
+    save.init(game);
+    const payload = save.buildSavePayload();
+    expect(payload.game.worldAi.parties.filter(p => p.escortQuestId
+      || String(p.id).startsWith('quest-escort-'))).toHaveLength(0);
     expect(qm.activeQuests[0].objectives[0].outcome).toBeUndefined();
     expect(state.questEventLedger.observed).toEqual([]);
   });
