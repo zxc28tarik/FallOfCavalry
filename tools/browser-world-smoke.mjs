@@ -1453,6 +1453,196 @@ async function main() {
       throw new Error('Missing caravan reward archive or save replay validation failed');
     }
 
+    // V1.26 — real WorldAI-only skirmish: independent visible guards
+    // defend a genuine escort against a factory-spawned route bandit.
+    // This does NOT invoke tactical BattleManager or set battle result/HP.
+    const npcGuardSkirmish = await page.evaluate(() => {
+      const g = window.game;
+      const pm = g.worldManager.simManager.worldPartyManager;
+      const routes = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
+      const occupied = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
+      const entry = routes.find(r => !occupied.has(r.id)
+        && !g.worldManager.worldAi.parties.some(p => p.alive !== false
+          && p.kind === 'bandit' && p.routeId === r.id));
+      if (!entry) return { ready:false,reason:'no_escort_guard_route' };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId:entry.id, issuerFactionId:'ottoman',
+      });
+      if(!quest)return {ready:false,reason:'no_escort_guard_template'};
+      quest.status='active';
+      if(!g.questManager.addQuest(quest))return {ready:false,reason:'guard_quest_not_added'};
+      pm.ensureWorldParties();
+      const convoy=g.worldManager.worldAi.parties.find(p=>
+        p.kind==='caravan' && p.escortQuestId===quest.id && p.routeId===entry.id);
+      if(!convoy)return {ready:false,reason:'guard_convoy_not_spawned'};
+      const guards=g.worldManager.worldAi.parties.filter(p=>
+        p.kind==='escort_guard' && p.escortGuardOf===convoy.id && p.alive!==false);
+      if(guards.length!==3)return {ready:false,reason:'no_live_world_guards',guards:guards.length};
+      const sec=g.questGenerator.generateFromTemplate('secure_trade_route',{
+        targetRouteId:entry.id,targetCityId:entry.fromCityId,issuerFactionId:'ottoman',
+      });
+      if(!sec)return {ready:false,reason:'no_security_source'};
+      sec.status='active';
+      if(!g.questManager.addQuest(sec))return {ready:false,reason:'security_not_added'};
+      const old=new Set(g.worldManager.worldAi.parties.map(p=>p.id));
+      pm.ensureActiveQuestRouteThreats({
+        worldState:g.state.map,tradeRoutes:routes,cfg:pm.getWorldAiCfg(),
+      });
+      const bandit=g.worldManager.worldAi.parties.find(p=>
+        !old.has(p.id) && p.routeId===entry.id && p.kind==='bandit');
+      g.questManager.activeQuests=g.questManager.activeQuests.filter(q=>q.id!==sec.id);
+      if(!bandit)return {ready:false,reason:'source_bandit_not_spawned'};
+      bandit.x=convoy.x+Number(g.state.map.tileSize||32);
+      bandit.y=convoy.y;
+      g.playerParty.x=convoy.x;
+      g.playerParty.y=convoy.y;
+      const goldBefore=g.playerParty.gold;
+      let ticks=0;
+      let damageWitnessed=false;
+      for(;ticks<90 && bandit.alive!==false;ticks++){
+        pm.processQuestEscortCaravans(0.2,{
+          worldState:g.state.map,tradeRoutes:routes,
+        });
+        damageWitnessed ||= convoy.escortCargo<100 || guards.some(x=>x.hp<30);
+      }
+      const noEarlyReward = g.playerParty.gold===goldBefore
+        && quest.objectives[0].outcome==null
+        && !g.questManager.completedQuests.some(q=>q.id===quest.id);
+      const banditDefeated=bandit.alive===false;
+      const defendedOnce=convoy.escortDefended===1;
+      const remainingGuards=guards.filter(x=>x.alive!==false && x.hp>0).length;
+      const hud=document.getElementById('questEscortStatus')?.textContent||'';
+      const hudHasStats=hud.includes('Muhafız:') && hud.includes('Yük:');
+      // Now proceed using the genuine arrival system — no minted event.
+      convoy.speed=18; // test-only fast arrival after the independent skirmish
+      let deliveryTicks=0;
+      for(;deliveryTicks<320 && quest.objectives[0].outcome==null;deliveryTicks++){
+        g.playerParty.x=convoy.x;g.playerParty.y=convoy.y;
+        pm.processQuestEscortCaravans(0.15,{
+          worldState:g.state.map,tradeRoutes:routes,
+        });
+      }
+      const root=document.getElementById('questCompletionOverlay');
+      const visible=[...(root?.querySelectorAll('button.quest-path')||[])]
+        .some(x=>!x.disabled && x.textContent.includes('Kervan güvenli ulaştı'));
+      return {ready:true,routeId:entry.id,questId:quest.id,ticks,deliveryTicks,
+        banditDefeated,defendedOnce,remainingGuards,
+        damageWitnessed,cargo:convoy.escortCargo,hull:convoy.escortHull,
+        hudHasStats,noEarlyReward,arrival:quest.objectives[0].outcome,
+        offerVisible:visible,goldBeforeClick:g.playerParty.gold};
+    });
+    report.npcGuardSkirmish=npcGuardSkirmish;
+    stage('live-world-ai-escort-guards-defend-convoy',npcGuardSkirmish);
+    if(!npcGuardSkirmish.ready || !npcGuardSkirmish.banditDefeated
+      || !npcGuardSkirmish.defendedOnce || !npcGuardSkirmish.damageWitnessed
+      || npcGuardSkirmish.remainingGuards<1
+      || npcGuardSkirmish.cargo>=100 || npcGuardSkirmish.cargo<=0
+      || !npcGuardSkirmish.hudHasStats || !npcGuardSkirmish.noEarlyReward
+      || npcGuardSkirmish.arrival!=='caravan_arrived'
+      || !npcGuardSkirmish.offerVisible){
+      throw new Error('Authentic NPC convoy guard win did not protect cargo and allow real delivery');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({hasText:'Kervan güvenli ulaştı'}).click();
+    const npcEscortReward=await page.evaluate(({id,gold})=>{
+      const g=window.game;
+      const completed=g.questManager.completedQuests.filter(q=>q.id===id);
+      const once=g.playerParty.gold-gold===250;
+      const replay=g.questManager.completeQuest(id,'caravan_delivered')!==true;
+      const saved=g.saveManager.quickSave()===true;
+      const payload=g.saveManager.buildSavePayload();
+      const guardSaveAbsent=!payload.game.worldAi.parties.some(p=>
+        String(p.id).startsWith('quest-escort-guard-') || p.escortQuestId);
+      const loaded=saved && g.saveManager.quickLoad()===true;
+      return {once,replay,saved,guardSaveAbsent,loaded,archive:
+        completed.length===1 && g.questManager.completedQuests
+          .filter(q=>q.id===id && q.archived).length===1};
+    },{id:npcGuardSkirmish.questId,gold:npcGuardSkirmish.goldBeforeClick});
+    report.npcEscortReward=npcEscortReward;
+    stage('npc-guarded-cargo-delivery-250g-once',npcEscortReward);
+    if(!npcEscortReward.once || !npcEscortReward.replay
+      || !npcEscortReward.saved || !npcEscortReward.loaded
+      || !npcEscortReward.archive || !npcEscortReward.guardSaveAbsent){
+      throw new Error('NPC guarded caravan created duplicate or saved fake reward');
+    }
+
+    const npcRaidLoss=await page.evaluate(()=>{
+      const g=window.game;
+      const pm=g.worldManager.simManager.worldPartyManager;
+      const routes=g.economyManager.ensureTradeRoutes().filter(r=>r.roadBacked);
+      const occupied=new Set(g.questManager.activeQuests.map(q=>q.targetRouteId));
+      const route=routes.find(r=>!occupied.has(r.id)
+        && !g.worldManager.worldAi.parties.some(p=>p.alive!==false
+          && p.kind==='bandit' && p.routeId===r.id));
+      if(!route)return {ready:false,reason:'no_raid_loss_route'};
+      const q=g.questGenerator.generateFromTemplate('escort_first_caravan',{
+        targetRouteId:route.id,issuerFactionId:'ottoman',
+      });
+      if(!q)return {ready:false,reason:'no_raid_loss_template'};
+      q.status='active';
+      if(!g.questManager.addQuest(q))return {ready:false,reason:'raid_loss_quest_add'};
+      pm.ensureWorldParties();
+      const caravan=g.worldManager.worldAi.parties.find(p=>
+        p.kind==='caravan' && p.escortQuestId===q.id);
+      if(!caravan)return {ready:false,reason:'no_raid_loss_caravan'};
+      const guards=g.worldManager.worldAi.parties.filter(p=>
+        p.kind==='escort_guard' && p.escortGuardOf===caravan.id);
+      const sec=g.questGenerator.generateFromTemplate('secure_trade_route',{
+        targetRouteId:route.id,targetCityId:route.fromCityId,issuerFactionId:'ottoman',
+      });
+      if(!sec)return {ready:false,reason:'no_raid_bandit_source'};
+      sec.status='active';
+      if(!g.questManager.addQuest(sec))return {ready:false,reason:'raid_source_not_added'};
+      const existing=new Set(g.worldManager.worldAi.parties.map(p=>p.id));
+      pm.ensureActiveQuestRouteThreats({
+        worldState:g.state.map,tradeRoutes:routes,cfg:pm.getWorldAiCfg(),
+      });
+      const bandit=g.worldManager.worldAi.parties.find(p=>
+        !existing.has(p.id) && p.routeId===route.id && p.kind==='bandit');
+      g.questManager.activeQuests=g.questManager.activeQuests.filter(q=>q.id!==sec.id);
+      if(!bandit)return {ready:false,reason:'raid_loss_bandit_missing'};
+      const routeDamage=Number(route.damage||0);
+      const originalGold=g.playerParty.gold;
+      // Deterministic QA weak-convoy fixture: the fight and damage are still
+      // calculated by actual runEscortNpcSkirmish ticks, never set to 'failed'.
+      guards.forEach(x=>{x.hp=0;x.alive=false;});
+      caravan.escortCargo=24;
+      caravan.escortHull=24;
+      bandit.x=caravan.x+Number(g.state.map.tileSize||32);
+      bandit.y=caravan.y;
+      g.playerParty.x=caravan.x;g.playerParty.y=caravan.y;
+      let ticks=0;
+      for(;ticks<32 && q.status==='active';ticks++){
+        pm.processQuestEscortCaravans(0.2,{
+          worldState:g.state.map,tradeRoutes:routes,
+        });
+      }
+      const failed=g.questManager.failedQuests.filter(x=>x.id===q.id);
+      const penalty=Number(route.damage||0)-routeDamage;
+      const alive=g.worldManager.worldAi.parties.some(x=>
+        x.id===bandit.id && x.alive!==false);
+      const noReward=g.playerParty.gold===originalGold
+        && !g.questManager.completedQuests.some(x=>x.id===q.id);
+      const saved=g.saveManager.quickSave()===true;
+      const loaded=saved && g.saveManager.quickLoad()===true;
+      const archived=g.questManager.failedQuests.filter(x=>
+        x.id===q.id && x.failReason==='escort_cargo_raided' && x.archived).length===1;
+      const exactAfter=Number(g.economyManager.ensureTradeRoutes()
+        .find(x=>x.id===route.id)?.damage||0)-routeDamage===2;
+      return {ready:true,ticks,failReason:failed[0]?.failReason,
+        failedOnce:failed.length===1,penalty,alive,noReward,saved,loaded,
+        archived,exactAfter,cargo:caravan.escortCargo,hull:caravan.escortHull};
+    });
+    report.npcRaidLoss=npcRaidLoss;
+    stage('live-world-ai-cargo-raid-fails-escort-once',npcRaidLoss);
+    if(!npcRaidLoss.ready || !npcRaidLoss.failedOnce
+      || npcRaidLoss.failReason!=='escort_cargo_raided'
+      || npcRaidLoss.penalty!==2 || !npcRaidLoss.alive
+      || !npcRaidLoss.noReward || !npcRaidLoss.saved || !npcRaidLoss.loaded
+      || !npcRaidLoss.archived || !npcRaidLoss.exactAfter){
+      throw new Error('Autonomous NPC bandit raid did not produce genuine one-time loss');
+    }
+
     // V1.24 — loss branch: a defenseless QA soldier is defeated by the
     // game's actual battle simulation. A real guard loss fails the original
     // escort objective, applies its canonical route-damage effect ONCE,
