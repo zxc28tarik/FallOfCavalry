@@ -132,6 +132,60 @@ async function main() {
       }
     }
     await page.screenshot({ path: imageDir + '/03-after-save-load.png', fullPage: true });
+
+    // V1.18: real browser world, real quest template and route registry:
+    // a pending security objective can provision a bounded source-linked
+    // procedural bandit. The test is disposable and leaves no test quest.
+    const routeThreat = await page.evaluate(() => {
+      const g = window.game;
+      const manager = g?.worldManager?.simManager?.worldPartyManager;
+      const routes = g?.economyManager?.ensureTradeRoutes?.() || [];
+      const target = routes.find((r, i) => i > 0 && r?.fromCityId
+        && r?.toCityId && r?.id);
+      if (!manager || !target || !g?.questGenerator || !g?.questManager) {
+        return { ready: false, routeCount: routes.length };
+      }
+      const quest = g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId: target.fromCityId,
+        targetRouteId: target.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, routeCount: routes.length, generatorFailed: true };
+      quest.status = 'active';
+      const beforeIds = new Set(g.worldManager.worldAi.parties.map(p => p.id));
+      const accepted = g.questManager.addQuest(quest);
+      manager.ensureWorldParties();
+      const found = g.worldManager.enemyParties.find(p => p.worldPartyKind === 'bandit'
+        && p.routeId === target.id);
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      manager.ensureWorldParties();
+      const restored = g.worldManager.enemyParties.find(p => p.worldPartyKind === 'bandit'
+        && p.routeId === target.id);
+      const questStillActive = g.questManager.activeQuests.some(q => q.id === quest.id);
+      const newIds = g.worldManager.worldAi.parties
+        .filter(p => !beforeIds.has(p.id)).map(p => p.id);
+      // Clean up this browser-only scenario; never leak a synthetic test quest.
+      g.questManager.activeQuests = g.questManager.activeQuests.filter(q => q.id !== quest.id);
+      g.worldManager.worldAi.parties = g.worldManager.worldAi.parties
+        .filter(p => !newIds.includes(p.id));
+      manager.syncVisiblePartiesToWorld();
+      const cleaned = g.saveManager.quickSave() === true;
+      return {
+        ready: true, routeCount: routes.length, accepted, saved, loaded,
+        linkedBeforeLoad: found?.routeId === target.id,
+        linkedAfterLoad: restored?.routeId === target.id,
+        questStillActive, cleaned, newParties: newIds.length,
+      };
+    });
+    report.routeThreat = routeThreat;
+    stage('canonical-route-threat-save-resume', routeThreat);
+    if (!routeThreat.ready || routeThreat.routeCount < 1 || !routeThreat.accepted
+      || !routeThreat.saved || !routeThreat.loaded || !routeThreat.linkedBeforeLoad
+      || !routeThreat.linkedAfterLoad || !routeThreat.questStillActive
+      || !routeThreat.cleaned) {
+      throw new Error('Active real-route threat creation or source-linked save/resume failed');
+    }
+
     // NPC production must be a deterministic, explicit promotion path, NOT
     // automatic city population, player creation or unit recruitment.
     const productionRoundtrip = await page.evaluate(() => {
