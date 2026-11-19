@@ -102,6 +102,32 @@ describe('Character v2 V1.14: canonical active quest save and trustworthy rehydr
     })).toMatchObject({ restored: 0, rejected: 0, acceptedIds: [] });
   });
 
+  it('rehydrates canonical world settlements with the real one-digit IDs (0, 1)', () => {
+    const source = normalizeQuestSnapshot({
+      version: 1, completed: [], failed: [],
+      active: [{
+        id: 'quest_world_city_0', templateId: 'secure_trade_route',
+        status: 'active', createdAt: 5,
+        targets: {
+          targetCityId: 0, targetRouteId: 'route:0:1',
+          issuerFactionId: 'ottoman',
+        },
+        objectiveClaims: [],
+      }],
+    });
+    expect(source.active).toHaveLength(1);
+    expect(source.active[0].targets.targetCityId).toBe('0');
+    const qm = manager();
+    const restored = restoreQuestSnapshot(qm, source, {
+      settlements: [{ id: 0, type: 'city' }, { id: 1, type: 'town' }],
+      tradeRoutes: [{ id: 'route:0:1' }],
+      currentDay: 6,
+    });
+    expect(restored.restored).toBe(1);
+    expect(qm.activeQuests[0].targetCityId).toBe('0');
+    expect(qm.activeQuests[0].completionPaths[0].worldEffects[0].cityId).toBe('0');
+  });
+
   it('snapshots ONLY IDs/targets and pending objective claims, never game rewards or world effects', () => {
     const questManager = manager();
     const quest = newQuest();
