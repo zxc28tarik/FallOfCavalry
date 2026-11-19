@@ -71,8 +71,14 @@ export class EconomyManager {
   }
 
   ensureTradeRoutes() {
-    if (!Array.isArray(this.state.tradeRoutes)) {
-      const settlements = (this.state?.map?.settlements || []).filter((settlement) => settlement?.id);
+    // World AI can query routes before the procedural settlements are ready.
+    // An early empty collection is not a finalized world route registry;
+    // rebuild it once two real settlements are available. Never overwrite
+    // non-empty route data, including modified quality/damage.
+    const settlements = (this.state?.map?.settlements || [])
+      .filter((settlement) => settlement?.id != null);
+    if (!Array.isArray(this.state.tradeRoutes)
+      || (this.state.tradeRoutes.length === 0 && settlements.length > 1)) {
       this.state.tradeRoutes = [];
       for (let i = 0; i < settlements.length - 1; i += 1) {
         this.state.tradeRoutes.push({
