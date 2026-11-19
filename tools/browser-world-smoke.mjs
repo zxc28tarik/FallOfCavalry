@@ -803,6 +803,114 @@ async function main() {
       throw new Error('Explicit legacy route replacement lost identity or manufactured a reward');
     }
 
+    // V1.22 — the actual WorldPartyManager moves a canonical caravan along
+    // the generated road. The player must escort it (proximity and time);
+    // the browser does not directly set caravan arrival or quest outcomes.
+    const caravanEscort = await page.evaluate(() => {
+      const g = window.game;
+      const routes = g.economyManager.ensureTradeRoutes()
+        .filter(r => r.roadBacked === true);
+      const roads = g.state.map.roads || [];
+      const small = routes.map(r => {
+        const road = roads.find(d => String(d.from) === String(r.fromCityId)
+          && String(d.to) === String(r.toCityId));
+        return { route: r, segments: road?.path?.length ?? Infinity };
+      }).filter(r => r.segments >= 2 && r.segments < 15)
+        .sort((a, b) => a.segments - b.segments);
+      const chosen = small[0]?.route;
+      if (!chosen) return { ready: false, reason: 'no_short_registered_road' };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: chosen.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'real_escort_template_not_generated' };
+      quest.status = 'active';
+      const accepted = g.questManager.addQuest(quest);
+      const manager = g.worldManager.simManager.worldPartyManager;
+      manager.ensureWorldParties();
+      const party = g.worldManager.worldAi.parties.find(p =>
+        p.escortQuestId === quest.id && p.routeId === chosen.id);
+      if (!party || !accepted) return { ready: false, reason: 'real_escort_party_missing' };
+      const original = { x: party.x, y: party.y };
+      // A real player who is far away cannot cause the convoy to move.
+      const originalPlayer = { x: g.playerParty.x, y: g.playerParty.y };
+      g.playerParty.x = 100000;
+      g.playerParty.y = 100000;
+      manager.updateWorldParties(0.15);
+      const waitsForPlayer = party.x === original.x && party.y === original.y
+        && party.escortStarted === false;
+      g.playerParty.x = original.x;
+      g.playerParty.y = original.y;
+      // Test-only faster convoy to make E2E bounded. The real AI update
+      // performs ALL movement/arrival checks, never forced victory.
+      party.speed = 7;
+      let ticks = 0;
+      for (; ticks < 700 && quest.objectives[0].outcome == null; ticks += 1) {
+        g.playerParty.x = party.x;
+        g.playerParty.y = party.y;
+        manager.updateWorldParties(0.15);
+      }
+      const event = g.state.questEventLedger.observed.find(e =>
+        e.source === 'caravan_arrival' && e.questId === quest.id
+        && e.routeId === chosen.id && e.result === 'caravan_arrived');
+      const root = document.getElementById('questCompletionOverlay');
+      const button = [...(root?.querySelectorAll('.quest-path') || [])].find(b =>
+        b.textContent.includes('Kervan güvenli ulaştı') && !b.disabled);
+      return {
+        ready: true, accepted, waitsForPlayer,
+        routeId: chosen.id, questId: quest.id,
+        caravanId: party.id, ticks, visited: party.escortVisitedPoints,
+        realArrival: party.escortArrived === true,
+        objective: quest.objectives[0].outcome,
+        ledgerSource: event?.source, ledgerRoute: event?.routeId,
+        noEarlyReward: g.questManager.completedQuests
+          .every(q => q.id !== quest.id),
+        buttonVisible: Boolean(button && root && !root.classList.contains('hidden')),
+        goldBeforeClick: g.playerParty.gold,
+        originalPlayer,
+      };
+    });
+    report.caravanEscort = caravanEscort;
+    stage('real-road-live-caravan-escort', caravanEscort);
+    if (!caravanEscort.ready || !caravanEscort.accepted
+      || !caravanEscort.waitsForPlayer || !caravanEscort.realArrival
+      || caravanEscort.visited < 2 || caravanEscort.objective !== 'caravan_arrived'
+      || caravanEscort.ledgerSource !== 'caravan_arrival'
+      || caravanEscort.ledgerRoute !== caravanEscort.routeId
+      || !caravanEscort.noEarlyReward || !caravanEscort.buttonVisible) {
+      throw new Error('Real route caravan did not produce witnessed arrival objective');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Kervan güvenli ulaştı' }).click();
+    const caravanPayout = await page.evaluate(({ id, gold }) => {
+      const g = window.game;
+      const complete = g.questManager.completedQuests.filter(q => q.id === id);
+      const reward = g.playerParty.gold - gold;
+      const replayRejected = g.questManager.completeQuest(id, 'caravan_delivered') !== true;
+      const afterReplay = g.playerParty.gold;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const afterLoad = g.questManager.completedQuests.filter(q => q.id === id);
+      return {
+        completeExactlyOnce: complete.length === 1,
+        completedPath: complete[0]?.completedPath,
+        reward, replayRejected, saved, loaded,
+        moneyUnchanged: g.playerParty.gold === afterReplay,
+        archivedExactlyOnce: afterLoad.length === 1 && afterLoad[0].archived === true,
+        activeNotRecreated: !g.questManager.activeQuests.some(q => q.id === id),
+        savedEscortsInert: !g.saveManager.buildSavePayload().game.worldAi.parties
+          .some(p => String(p.id).startsWith('quest-escort-')),
+      };
+    }, { id: caravanEscort.questId, gold: caravanEscort.goldBeforeClick });
+    report.caravanPayout = caravanPayout;
+    stage('verified-caravan-250-gold-no-replay', caravanPayout);
+    if (!caravanPayout.completeExactlyOnce || caravanPayout.completedPath !== 'caravan_delivered'
+      || caravanPayout.reward !== 250 || !caravanPayout.replayRejected
+      || !caravanPayout.saved || !caravanPayout.loaded || !caravanPayout.moneyUnchanged
+      || !caravanPayout.archivedExactlyOnce || !caravanPayout.activeNotRecreated
+      || !caravanPayout.savedEscortsInert) {
+      throw new Error('Verified escort payout double-credited or failed save archive');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
