@@ -1,5 +1,8 @@
 import * as CONST from '../constants.js';
 import { canonicalRoadLinks } from '../systems/world-trade-road-topology.js';
+import {
+  establishMarketStockBridge, mirrorCityStockChange,
+} from '../systems/market-stock-bridge.js';
 import * as capacitySystem from '../systems/capacity.js';
 import * as tradeSystem from '../systems/trade.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -61,7 +64,7 @@ export class EconomyManager {
 
   getSettlementOpportunityKey(settlement) {
     if (!settlement || typeof settlement !== 'object') return null;
-    if (settlement.id) return String(settlement.id);
+    if (settlement.id != null) return String(settlement.id);
     if (Number.isFinite(settlement.tx) && Number.isFinite(settlement.ty)) return `${settlement.tx},${settlement.ty}`;
     if (Number.isFinite(settlement.x) && Number.isFinite(settlement.y)) {
       const tx = Math.floor(settlement.x / CONST.WORLD.TILE_SIZE);
@@ -287,14 +290,16 @@ export class EconomyManager {
 
   getOrCreateMarketForSettlement(settlement) {
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
-    if (!settlement?.id) return tradeSystem.initMarket(settlement, this.state?.seed);
-    if (!this.state.markets[settlement.id]) {
-      this.state.markets[settlement.id] = tradeSystem.initMarket(settlement, this.state?.seed);
-    }
-    if (!this.state.markets[settlement.id].momentum || typeof this.state.markets[settlement.id].momentum !== 'object') {
-      this.state.markets[settlement.id].momentum = {};
-    }
-    return this.state.markets[settlement.id];
+    if (settlement?.id == null) return tradeSystem.initMarket(settlement, this.state?.seed);
+    const key = String(settlement.id);
+    const isNew = !this.state.markets[key];
+    if (isNew) this.state.markets[key] = tradeSystem.initMarket(settlement, this.state?.seed);
+    const market = this.state.markets[key];
+    if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+    // Link only complete/equal ledgers. Existing conflicting saves are
+    // preserved and never silently migrated to a guessed quantity.
+    establishMarketStockBridge(settlement, market, this.itemCatalog, { marketIsNew: isNew });
+    return market;
   }
 
   generateRecruitOffersForSettlement(settlement) {
@@ -363,10 +368,17 @@ export class EconomyManager {
     const tier = this.getSettlementTier(settlement);
     const itemCatalog = this.itemCatalog;
     if (!Array.isArray(settlement.marketStock)) {
-      settlement.marketStock = itemCatalog.map((item, idx) => ({
-        id: item.id,
-        qty: Math.max(1, 4 + tier + idx % 3),
-      }));
+      const existing = settlement.id != null
+        ? this.state?.markets?.[String(settlement.id)] : null;
+      // If only the live micro-market exists, reuse that stock instead of
+      // fabricating a second independent supply in the legacy city screen.
+      if (existing) establishMarketStockBridge(settlement, existing, itemCatalog);
+      if (!Array.isArray(settlement.marketStock)) {
+        settlement.marketStock = itemCatalog.map((item, idx) => ({
+          id: item.id,
+          qty: Math.max(1, 4 + tier + idx % 3),
+        }));
+      }
     }
     if (typeof settlement.priceMultiplier !== 'object' || !settlement.priceMultiplier) {
       settlement.priceMultiplier = {};
@@ -612,7 +624,11 @@ Up/Down select, Enter heal, Esc back`,
         return false;
       }
       playerParty.gold -= cost;
-      if (stockEntry) stockEntry.qty = Math.max(0, available - buyQty);
+      if (stockEntry) {
+        stockEntry.qty = Math.max(0, available - buyQty);
+        mirrorCityStockChange(city, this.state?.markets?.[String(city?.id)],
+          entry.id, available, stockEntry.qty);
+      }
       this.addItem(entry.id, entry.name, buyQty, entry.unitValue ?? entry.baseBuy);
       this.game?.setLastEventLog?.(`Bought ${entry.name} x${buyQty}`);
       return true;
@@ -624,7 +640,12 @@ Up/Down select, Enter heal, Esc back`,
       return false;
     }
     this.removeItem(entry.id, sellQty);
-    if (stockEntry) stockEntry.qty = Math.max(0, Math.floor(stockEntry.qty ?? 0)) + sellQty;
+    if (stockEntry) {
+      const before = Math.max(0, Math.floor(stockEntry.qty ?? 0));
+      stockEntry.qty = before + sellQty;
+      mirrorCityStockChange(city, this.state?.markets?.[String(city?.id)],
+        entry.id, before, stockEntry.qty);
+    }
     playerParty.gold = (playerParty.gold ?? 0) + (sellPrice * sellQty);
     this.game?.setLastEventLog?.(`Sold ${entry.name} x${sellQty}`);
     return true;
@@ -746,7 +767,8 @@ Up/Down select, Enter heal, Esc back`,
 
     if (this.state.markets && typeof this.state.markets === 'object') {
       const settlements = this.state?.map?.settlements || [];
-      const settlementMap = new Map(settlements.filter((s) => s?.id).map((s) => [s.id, s]));
+      const settlementMap = new Map(settlements.filter((s) => s?.id != null)
+        .map((s) => [String(s.id), s]));
       Object.entries(this.state.markets).forEach(([settlementKey, market]) => {
         const settlement = settlementMap.get(settlementKey);
         if (!settlement) return;
