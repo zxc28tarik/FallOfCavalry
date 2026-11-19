@@ -244,14 +244,14 @@ export class WorldPartyManager {
           this.world.state.questEventLedger = emptyQuestEventLedger();
         }
         const ledger = this.world.state.questEventLedger;
+        const resolvedAt = Date.now();
         const stamped = recordVerifiedCaravanArrivalEvent(ledger, {
-          party, quest, worldState, tradeRoutes, currentDay: day,
-          resolvedAt: Date.now(),
+          party, quest, worldState, tradeRoutes, currentDay: day, resolvedAt,
         });
         if (stamped) {
           const receipt = creditQuestObjectivesForVerifiedEvent({
             ledger, questManager: this.game?.questManager,
-            eventId: ledger.observed.at(-1)?.eventId,
+            eventId: `caravan:${party.id}:${resolvedAt}`,
           });
           outcomes.push({ questId: quest.id, status: 'arrived',
             credited: receipt.some(r => r.questId === quest.id) });
