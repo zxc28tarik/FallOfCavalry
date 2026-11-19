@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as CONST from '../../js/constants.js';
-import EconomyManager from '../../js/managers/EconomyManager.js';
+import { EconomyManager } from '../../js/managers/EconomyManager.js';
 import * as trade from '../../js/systems/trade.js';
 import {
   auditMarketStockBridge, establishMarketStockBridge,
