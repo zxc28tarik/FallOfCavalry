@@ -853,6 +853,46 @@ async function main() {
       g.playerParty.hasDestination = false;
       g.playerParty.destX = null;
       g.playerParty.destY = null;
+      // V1.24: real DOM activation of dynamic escort following. The player's
+      // coordinates are moved ONLY by WorldSimManager.updatePlayerParty,
+      // not by the test, during the measured movement interval.
+      const tile = Number(g.state.map.tileSize || 32);
+      const roadNearOrigin = [
+        { x: original.x - tile * 2, y: original.y },
+        { x: original.x + tile * 2, y: original.y },
+        { x: original.x, y: original.y - tile * 2 },
+        { x: original.x, y: original.y + tile * 2 },
+      ].find(c => c.x > 0 && c.y > 0
+        && !g.worldManager.getMovementContextAt(c.x, c.y).blocked);
+      let nativeMove = false;
+      let followPressed = false;
+      let manualOverride = false;
+      if (roadNearOrigin) {
+        g.playerParty.x = roadNearOrigin.x;
+        g.playerParty.y = roadNearOrigin.y;
+        const beforeMove = { x: g.playerParty.x, y: g.playerParty.y };
+        document.getElementById('questEscortFollow')?.click();
+        followPressed = g.questEscortHud.followId === party.id
+          && document.getElementById('questEscortFollow')?.textContent === 'Takibi durdur';
+        for (let i = 0; i < 35; i++) {
+          g.worldManager.simManager.updatePlayerParty(0.15);
+        }
+        nativeMove = Math.hypot(g.playerParty.x - beforeMove.x,
+          g.playerParty.y - beforeMove.y) > 1;
+        // A manual new click-to-move destination takes priority.
+        const overrideX = g.playerParty.x + tile * 4;
+        const overrideY = g.playerParty.y + tile * 2;
+        g.playerParty.destX = overrideX;
+        g.playerParty.destY = overrideY;
+        g.playerParty.hasDestination = true;
+        g.questEscortHud.refreshFollowTarget();
+        manualOverride = g.questEscortHud.followId == null
+          && g.playerParty.destX === overrideX
+          && g.playerParty.destY === overrideY;
+      }
+      g.playerParty.hasDestination = false;
+      g.playerParty.destX = null;
+      g.playerParty.destY = null;
       g.playerParty.x = original.x;
       g.playerParty.y = original.y;
       // Test-only faster convoy to make E2E bounded. The real AI update
@@ -873,6 +913,7 @@ async function main() {
       return {
         ready: true, accepted, waitsForPlayer,
         hudVisibleWhileWaiting, hudNavigationWorks,
+        followPressed, nativeMove, manualOverride,
         hudHidesAfterArrival: document.getElementById('questEscortHud')?.style.display === 'none',
         routeId: chosen.id, questId: quest.id,
         caravanId: party.id, ticks, visited: party.escortVisitedPoints,
@@ -898,6 +939,8 @@ async function main() {
     if (!caravanEscort.ready || !caravanEscort.accepted
       || !caravanEscort.waitsForPlayer || !caravanEscort.hudVisibleWhileWaiting
       || !caravanEscort.hudNavigationWorks || !caravanEscort.hudHidesAfterArrival
+      || !caravanEscort.followPressed || !caravanEscort.nativeMove
+      || !caravanEscort.manualOverride
       || !caravanEscort.realArrival
       || caravanEscort.visited < 2 || caravanEscort.objective !== 'caravan_arrived'
       || caravanEscort.ledgerSource !== 'caravan_arrival'
