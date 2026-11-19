@@ -6,9 +6,12 @@
  * independent evidence of battle/quest victory and MUST NOT unlock rewards.
  * Only a separate, in-session, canonical-source matcher may advance objectives.
  */
+import { isLiveEscortParty } from './quest-caravan-escort.js';
+import { registeredTradeRoute } from './quest-world-party-links.js';
+
 export const QUEST_EVENT_LEDGER_VERSION = 1;
 const LIMIT = 1024;
-const EVENT_ID = /^(?:battle|encounter):[a-zA-Z0-9_.:-]{1,128}:[1-9]\d{0,15}$/;
+const EVENT_ID = /^(?:battle|encounter|caravan):[a-zA-Z0-9_.:-]{1,128}:[1-9]\d{0,15}$/;
 const ENTITY_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
 const DAY = (day) => Number.isSafeInteger(day) && day >= 1 && day <= 10000000;
 const record = (item) => item && typeof item === 'object' && !Array.isArray(item);
@@ -18,12 +21,13 @@ export function emptyQuestEventLedger() {
 }
 
 function normalizeRow(row) {
-  if (!record(row) || !['battle_result', 'encounter_choice'].includes(row.source)
+  if (!record(row) || !['battle_result', 'encounter_choice', 'caravan_arrival'].includes(row.source)
     || typeof row.eventId !== 'string' || !EVENT_ID.test(row.eventId)
     || typeof row.enemyId !== 'string' || !ENTITY_ID.test(row.enemyId)
     || typeof row.enemyFactionId !== 'string' || !ENTITY_ID.test(row.enemyFactionId)
     || !DAY(row.day)) return null;
-  const prefix = row.source === 'battle_result' ? 'battle:' : 'encounter:';
+  const prefix = row.source === 'battle_result' ? 'battle:'
+    : row.source === 'caravan_arrival' ? 'caravan:' : 'encounter:';
   if (!row.eventId.startsWith(prefix)) return null;
   // World-party IDs may contain colons. Only the final segment is the time.
   const lastColon = row.eventId.lastIndexOf(':');
@@ -32,6 +36,17 @@ function normalizeRow(row) {
     eventId: row.eventId, source: row.source, enemyId: row.enemyId,
     enemyFactionId: row.enemyFactionId, result: row.result, day: row.day,
   };
+  if (row.source === 'caravan_arrival') {
+    if (row.result !== 'caravan_arrived' || row.partyType !== 'caravan'
+      || typeof row.questId !== 'string' || !ENTITY_ID.test(row.questId)
+      || typeof row.routeId !== 'string' || !ENTITY_ID.test(row.routeId)
+      || typeof row.fromCityId !== 'string' || !ENTITY_ID.test(row.fromCityId)
+      || typeof row.toCityId !== 'string' || !ENTITY_ID.test(row.toCityId)) return null;
+    return {
+      ...base, partyType: 'caravan', questId: row.questId,
+      routeId: row.routeId, fromCityId: row.fromCityId, toCityId: row.toCityId,
+    };
+  }
   if (row.source === 'encounter_choice') {
     if (row.result !== 'messenger_caught'
       || row.partyType !== 'messenger' || row.optionId !== 'seize') return null;
@@ -158,4 +173,46 @@ export function captureQuestEventLedger(ledger) {
 export function restoreQuestEventLedger(input) {
   // Pending entries retain historical context but are NOT completion receipts.
   return normalizeQuestEventLedger(input, { forLoad: true });
+}
+
+
+/**
+ * Only an in-memory, runtime-spawned escort party may produce arrival proof.
+ * No generic city entry, contract or imported JSON field can trigger it.
+ */
+export function recordVerifiedCaravanArrivalEvent(ledger, {
+  party, quest, worldState, tradeRoutes = [], currentDay, resolvedAt,
+} = {}) {
+  if (!record(ledger) || !Array.isArray(ledger.observed)
+    || !Array.isArray(ledger.pending)
+    || !DAY(currentDay) || !isLiveEscortParty(party)
+    || party?.kind !== 'caravan' || party?.alive === false
+    || party?.escortArrived !== true || party?.escortFailed === true
+    || party?.escortStarted !== true
+    || party?.escortVisitedPoints < 2 || party?.escortElapsedSeconds < 1
+    || !Number.isSafeInteger(resolvedAt) || resolvedAt <= 0
+    || quest?.status !== 'active' || quest?.templateId !== 'escort_first_caravan'
+    || quest?.id !== party.escortQuestId || quest.createdAt > currentDay
+    || (Number.isSafeInteger(quest?.timeLimitDays)
+      && quest.createdAt + quest.timeLimitDays < currentDay)
+    || party.routeId !== quest.targetRouteId) return false;
+  const link = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
+  if (!link?.road || String(link.from.id) !== String(party.homeCityId)
+    || String(link.to.id) !== String(party.escortDestinationCityId)
+    || Math.hypot(party.x - link.to.x, party.y - link.to.y)
+      > Math.max(64, Number(worldState?.tileSize || 32) * 2)) return false;
+  const row = normalizeRow({
+    eventId: `caravan:${party.id}:${resolvedAt}`,
+    source: 'caravan_arrival', enemyId: party.id,
+    enemyFactionId: party.factionId, partyType: 'caravan',
+    result: 'caravan_arrived', questId: quest.id, routeId: link.routeId,
+    fromCityId: String(link.from.id), toCityId: String(link.to.id),
+    day: currentDay,
+  });
+  if (!row || ledger.observed.some(e => e.eventId === row.eventId)
+    || ledger.pending.some(e => e.eventId === row.eventId)
+    || ledger.observed.length + ledger.pending.length >= LIMIT) return false;
+  ledger.observed.push(row);
+  ledger.observed.sort((a, b) => a.eventId.localeCompare(b.eventId, 'en'));
+  return true;
 }

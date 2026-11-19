@@ -69,6 +69,16 @@ const RULES = Object.freeze([
         && o.threatType === 'bandit' && o.targetRouteId === event.routeId),
   }),
   Object.freeze({
+    templateId: 'escort_first_caravan',
+    objectiveId: 'deliver_caravan_safely', objectiveType: 'escort_party',
+    pathId: 'caravan_delivered', outcome: 'caravan_arrived',
+    matches: (quest, event) => event.source === 'caravan_arrival'
+      && event.partyType === 'caravan' && event.result === 'caravan_arrived'
+      && event.questId === quest.id && event.routeId === quest.targetRouteId
+      && quest.objectives?.some(o => o.id === 'deliver_caravan_safely'
+        && o.type === 'escort_party' && o.targetRouteId === event.routeId),
+  }),
+  Object.freeze({
     templateId: 'neutralize_commander',
     objectiveId: 'neutralize', objectiveType: 'neutralize_target',
     pathId: 'defeated_in_battle', outcome: 'commander_defeated',
