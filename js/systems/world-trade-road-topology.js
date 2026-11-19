@@ -11,6 +11,7 @@ const usable = (s) => s && typeof s === 'object'
   && Number.isFinite(s.x) && Number.isFinite(s.y);
 const tile = (world) => Number(world?.tileSize || CONST.WORLD.TILE_SIZE || 32);
 const routeId = (from, to) => `route:${from}:${to}`;
+const topologyCache = new WeakMap();
 
 function settlementTilePosition(s, tileSize) {
   return {
@@ -22,6 +23,9 @@ function settlementTilePosition(s, tileSize) {
 /** Reject invalid, dangling, or physically disconnected road metadata. */
 export function canonicalRoadLinks(worldState) {
   if (!Array.isArray(worldState?.roads) || !Array.isArray(worldState?.settlements)) return [];
+  const saved = topologyCache.get(worldState.roads);
+  if (saved?.settlements === worldState.settlements
+    && saved.tileSize === tile(worldState)) return saved.links;
   const settlements = new Map(worldState.settlements
     .filter((s) => s?.id != null && usable(s)).map((s) => [String(s.id), s]));
   const links = [];
@@ -52,6 +56,9 @@ export function canonicalRoadLinks(worldState) {
       from, to, road,
     });
   }
+  topologyCache.set(worldState.roads, {
+    settlements: worldState.settlements, tileSize: size, links,
+  });
   return links;
 }
 
