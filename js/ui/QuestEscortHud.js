@@ -1,3 +1,5 @@
+import { chooseEscortRoadFollowTarget } from '../systems/quest-escort-road-follow.js';
+
 /**
  * V1.23 — minimal live escort HUD; textContent only, no template HTML and
  * no automatic world teleport. Player chooses a waypoint by clicking.
@@ -11,6 +13,8 @@ export class QuestEscortHud {
     this.followButton = null;
     this.followId = null;
     this.assignedTarget = null;
+    this.followIssue = null;
+    this.followStage = null;
   }
   ensureRoot() {
     if (typeof document === 'undefined') return null;
@@ -58,6 +62,7 @@ export class QuestEscortHud {
         && this.game?.state?.mode === 'map') {
         this.followId = party.id;
         this.assignedTarget = null;
+        this.followIssue = null;
         // Explicit follow toggling overrides a previous manual destination.
         if (this.game?.playerParty) this.game.playerParty.hasDestination = false;
         this.refreshFollowTarget();
@@ -91,7 +96,10 @@ export class QuestEscortHud {
       : status === 'waiting_for_player' ? 'Uzaklaştın, kervan seni bekliyor'
       : status === 'confirming_arrival' ? 'Varış doğrulanıyor'
       : 'Kervan ilerliyor';
-    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}`;
+    const follower = this.followId
+      ? '\nTakip: gerçek yol noktaları kullanılıyor'
+      : this.followIssue ? '\nTakip durdu: yol engelli / geçilemez' : '';
+    this.status.textContent = `${state}\nMesafe: ${Math.round(dist / tile)} kare · Yol: %${progress}${follower}`;
     this.root.style.display = 'block';
     this.button.disabled = !Number.isFinite(party.x) || !Number.isFinite(party.y);
   }
@@ -165,11 +173,29 @@ export class QuestEscortHud {
       this.stopFollowing();
       return false;
     }
-    player.destX = party.x;
-    player.destY = party.y;
+    const result = chooseEscortRoadFollowTarget({
+      playerParty: player, caravan: party, worldState: map,
+      terrainAt: typeof this.game?.worldManager?.getMovementContextAt === 'function'
+        ? (x,y) => this.game.worldManager.getMovementContextAt(x,y)
+        : null,
+    });
+    if (result.status === 'near') {
+      if (this.assignedTarget && player.hasDestination) player.hasDestination = false;
+      this.assignedTarget = null;
+      return true;
+    }
+    if (result.status !== 'moving' || !result.target) {
+      this.followIssue = result.status;
+      this.stopFollowing();
+      return false;
+    }
+    player.destX = result.target.x;
+    player.destY = result.target.y;
     player.hasDestination = true;
     player.selected = true;
-    this.assignedTarget = { x: party.x, y: party.y };
+    this.assignedTarget = { ...result.target };
+    this.followIssue = null;
+    this.followStage = result.stage;
     return true;
   }
 
