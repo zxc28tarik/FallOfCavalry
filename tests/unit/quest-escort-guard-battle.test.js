@@ -175,7 +175,13 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
       f.playerParty.y - f.caravan.y)).toBeLessThan(160);
     // Being close may clear hasDestination without disabling follow.
     // Move the caravan away and confirm a fresh real movement target.
-    f.caravan.x += 500;
+    // The convoy must remain on the verified road; a world caravan
+    // cannot legally jump 500 pixels beyond the destination to be chased.
+    f.caravan.x = 528;
+    f.playerParty.x = 140;
+    f.playerParty.y = 208;
+    f.playerParty.hasDestination = false;
+    hud.assignedTarget = null;
     sim.updatePlayerParty(0.1);
     expect(f.playerParty.hasDestination).toBe(true);
     // A manual map click overrides the followers' target.

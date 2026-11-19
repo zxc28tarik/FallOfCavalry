@@ -76,7 +76,15 @@ describe('WEB V1.25 — live escort road waypoint follower',()=>{
     const p=escort();
     const player={x:300,y:208};
     const terrainAt=(x,y)=>({blocked:x>=307 && x<=350 && y>=195 && y<=260});
-    const choice=follow(player,p,terrainAt);
+    let choice;
+    for (let i=0;i<15;i++) {
+      choice=follow(player,p,terrainAt);
+      if (choice.status === 'blocked') break;
+      expect(choice.status).toBe('moving');
+      expect(choice.target.x).toBeLessThan(307);
+      player.x=choice.target.x;
+      player.y=choice.target.y;
+    }
     expect(choice.status).toBe('blocked');
     expect(choice.target).toBeUndefined();
   });
