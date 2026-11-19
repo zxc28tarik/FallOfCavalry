@@ -18,6 +18,9 @@ import {
   spawnEscortNpcGuards, isRuntimeEscortGuard,
   activeEscortGuards, runEscortNpcSkirmish,
 } from '../../js/systems/quest-escort-npc-guards.js';
+import {
+  inspectLiveEscortCargo, outstandingEscortCargoForSave,
+} from '../../js/systems/quest-escort-cargo.js';
 
 const worldMap = {
   width: 30, height: 20, tileSize: 32,
@@ -368,5 +371,44 @@ describe('WEB V1.26 — independent escort NPC guards and cargo raids', () => {
       || String(p.id).startsWith('quest-escort-'))).toHaveLength(0);
     expect(qm.activeQuests[0].objectives[0].outcome).toBeUndefined();
     expect(state.questEventLedger.observed).toEqual([]);
+  });
+});
+
+
+describe('WEB V1.27 — real market inventory / safe active-quest save integration', () => {
+  it('debites source market and refunds pending goods only inside saved snapshot', () => {
+    const { manager, world, state, game } = make();
+    // Local copy: do not mutate module-level test world or create phantom goods.
+    state.map = { ...worldMap,
+      settlements: worldMap.settlements.map(s => ({
+        ...s, marketStock: [
+          { id: 'wheat', qty: 8 }, { id: 'iron', qty: 8 },
+          { id: 'cloth', qty: 8 },
+        ],
+      })),
+    };
+    game.economyManager.itemCatalog = [
+      { id: 'wheat' }, { id: 'iron' }, { id: 'cloth' },
+    ];
+    game.economyManager.ensureSettlementMarketState = vi.fn();
+    manager.ensureWorldParties();
+    const caravan = world.worldAi.parties.find(p => p.escortQuestId
+      && p.kind === 'caravan');
+    expect(caravan).toBeTruthy();
+    expect(inspectLiveEscortCargo(caravan)).toHaveLength(3);
+    expect(state.map.settlements[0].marketStock.every(s => s.qty === 0)).toBe(true);
+    expect(outstandingEscortCargoForSave(world.worldAi.parties).get('0')
+      .get('wheat')).toBe(8);
+    const save = new SaveManager(state);
+    save.init(game);
+    const payload = save.buildSavePayload();
+    expect(payload.game.settlementsMarkets.find(x => x.settlementId === 0)
+      .marketStock).toEqual([
+        { id: 'wheat', qty: 8 },
+        { id: 'iron', qty: 8 },
+        { id: 'cloth', qty: 8 },
+      ]);
+    expect(state.map.settlements[0].marketStock.every(s => s.qty === 0)).toBe(true);
+    expect(payload.game.worldAi.parties.some(p => p.escortQuestId)).toBe(false);
   });
 });
