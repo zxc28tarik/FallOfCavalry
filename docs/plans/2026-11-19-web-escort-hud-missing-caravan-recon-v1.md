@@ -34,7 +34,7 @@ V1.22 kervanlar için gerçek harita yolu boyunca hareket, oyuncu yakınlığı,
 
 ## Test kanıtları
 
-**Son test edilmiş kod HEAD:** `cfb021eb2a7b2992dc676372ef49d0ec572b4d7c`.
+**Son test edilmiş kod HEAD:** `2ffa91d97cb7df436a60d977e70b40bd741351ea` (yükleme ve harita-dışı modda HUD gizleme düzeltmesi dahil).
 
 - [Web validation #44529483856](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44529483856): **PASS 702/702 unit**, **1.114 full PASS +1 skipped**, statik/build PASS, world integrity **881 settlements, 304 roads, 3 rivers, 4 crossings, 0 errors, 1 mevcut warning**.
 - [Gerçek Chromium #44529484043](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44529484043): **PASS**. Kaynaklı gerçek escort görevi ve 250 altın tek ödeme hâlâ geçer; `hudVisibleWhileWaiting=true`, `hudNavigationWorks=true`, `hudHidesAfterArrival=true`.
@@ -43,7 +43,7 @@ V1.22 kervanlar için gerçek harita yolu boyunca hareket, oyuncu yakınlığı,
 - `verified-missing-caravan-100-gold-no-replay`: DOM butonu ile `bandits_identified`, tam 100 altın, ikinci ödül yok, Save/Load archive kimliği 1, observeds inert.
 - **7 yeni unit test:** 6 adet `tests/unit/quest-route-recon.test.js`, 1 adet `tests/unit/quest-caravan-escort.test.js` fiziksel tehdit; sahte klon/ledger, yanlış ID, gözlem süresi/sıfırlama, yakın encounter source, reward replay kapısı.
 - İlk kod sürümünde [Web validation #44528266188](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44528266188) **1 FAIL**: V1.18 sentetik roads içermeyen quest route testine istemeden fiziksel yol şartı eklendi; `ensureActiveQuestRouteThreats` güvenlik görevi fallback'i geri getirilerek düzeltildi. Ardından [#44528924905](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44528924905) ve son [#44529483856](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44529483856) PASS.
-- Yükleme sırasında HUD kapanması ve mod geçişi HUD temizliği için **son ufak kaynak commit** `2ffa91d` kod mantığına eklendi. Bu değişiklik öncesinde son QA `cfb021e` PASS; son HEAD için ayrı CI kontrolü ayrıca yapılır.
+- Yükleme sırasında HUD kapanması ve mod geçişi HUD temizliği için son kod commit `2ffa91d`: [Web validation #44529843808](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44529843808) **PASS** ve [Chromium #44529843783](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44529843783) **PASS**. Önceki `cfb021e` kod testleri de PASS.
 
 ## Bilinçli açık işler
 
