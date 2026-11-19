@@ -132,7 +132,8 @@ describe('WEB V1.15: city quest assignment read model', () => {
         closest: () => ({ querySelector: () => ({ value: 'Explicit player assignment' }) }),
       }) },
     });
-    expect(onAssignQuest).toHaveBeenCalledExactlyOnceWith(
+    expect(onAssignQuest).toHaveBeenCalledTimes(1);
+    expect(onAssignQuest).toHaveBeenCalledWith(
       f.quest.id, f.actor.id, 'Explicit player assignment',
     );
     expect(ui.questAssignmentFeedback).toContain('kaydedildi');
