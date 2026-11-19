@@ -814,9 +814,14 @@ async function main() {
       const small = routes.map(r => {
         const road = roads.find(d => String(d.from) === String(r.fromCityId)
           && String(d.to) === String(r.toCityId));
-        return { route: r, segments: road?.path?.length ?? Infinity };
-      }).filter(r => r.segments >= 2 && r.segments < 15)
-        .sort((a, b) => a.segments - b.segments);
+        const points = road?.path || [];
+        const length = points.slice(1).reduce((sum, point, i) =>
+          sum + Math.hypot(point.x - points[i].x, point.y - points[i].y), 0);
+        return { route: r, segments: points.length, length };
+      }).filter(r => r.segments >= 2 && Number.isFinite(r.length) && r.length > 0)
+        // Do not mistake a two-point road spanning the entire continent for
+        // a short test route. Choose actual physical length, not node count.
+        .sort((a, b) => a.length - b.length);
       const chosen = small[0]?.route;
       if (!chosen) return { ready: false, reason: 'no_short_registered_road' };
       const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
@@ -842,7 +847,7 @@ async function main() {
       g.playerParty.y = original.y;
       // Test-only faster convoy to make E2E bounded. The real AI update
       // performs ALL movement/arrival checks, never forced victory.
-      party.speed = 7;
+      party.speed = 18;
       let ticks = 0;
       for (; ticks < 700 && quest.objectives[0].outcome == null; ticks += 1) {
         g.playerParty.x = party.x;
@@ -859,6 +864,13 @@ async function main() {
         ready: true, accepted, waitsForPlayer,
         routeId: chosen.id, questId: quest.id,
         caravanId: party.id, ticks, visited: party.escortVisitedPoints,
+        totalWaypoints: party.path?.length,
+        roadLengthTiles: small[0]?.length,
+        escortStarted: party.escortStarted,
+        failed: party.escortFailed, alive: party.alive,
+        x: party.x, y: party.y, targetX: party.targetX, targetY: party.targetY,
+        separationSeconds: party.escortSeparationSeconds,
+        questStatus: quest.status,
         realArrival: party.escortArrived === true,
         objective: quest.objectives[0].outcome,
         ledgerSource: event?.source, ledgerRoute: event?.routeId,
