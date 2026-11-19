@@ -58,6 +58,8 @@ export class QuestEscortHud {
         && this.game?.state?.mode === 'map') {
         this.followId = party.id;
         this.assignedTarget = null;
+        // Explicit follow toggling overrides a previous manual destination.
+        if (this.game?.playerParty) this.game.playerParty.hasDestination = false;
         this.refreshFollowTarget();
       }
       this.syncFollowButton();
@@ -142,8 +144,17 @@ export class QuestEscortHud {
       return false;
     }
     const tile = Math.max(1, Number(map?.tileSize || 32));
+    const radius = Math.max(18, tile * 1.35);
+    // Once close to the caravan we deliberately release the moving target.
+    // A NEW map click during this idle-follow state still cancels following.
+    if (!this.assignedTarget && player.hasDestination
+      && Math.hypot(player.destX - party.x, player.destY - party.y) > radius) {
+      this.followId = null;
+      this.syncFollowButton();
+      return false;
+    }
     const distance = Math.hypot(player.x - party.x, player.y - party.y);
-    if (distance <= Math.max(18, tile * 1.35)) {
+    if (distance <= radius) {
       if (this.assignedTarget && player.hasDestination) {
         player.hasDestination = false;
       }

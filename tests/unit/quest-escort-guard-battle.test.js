@@ -185,6 +185,25 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     expect(f.playerParty.destX).toBe(1000);
   });
 
+  it('manual click overrides following even after auto target is released near the convoy', () => {
+    const f = fixture();
+    const hud = new QuestEscortHud(f.game);
+    hud._party = f.caravan;
+    hud.followId = f.caravan.id;
+    f.playerParty.x = f.caravan.x;
+    f.playerParty.y = f.caravan.y;
+    expect(hud.refreshFollowTarget()).toBe(true);
+    expect(hud.assignedTarget).toBeNull();
+    expect(f.playerParty.hasDestination).toBe(false);
+    f.playerParty.destX = f.caravan.x + 300;
+    f.playerParty.destY = f.caravan.y + 100;
+    f.playerParty.hasDestination = true;
+    expect(hud.refreshFollowTarget()).toBe(false);
+    expect(hud.followId).toBeNull();
+    expect(f.playerParty.destX).toBe(f.caravan.x + 300);
+    expect(f.playerParty.hasDestination).toBe(true);
+  });
+
   it('following ends on blocked terrain, manual stops and leaving map mode', () => {
     const f = fixture();
     const hud = new QuestEscortHud(f.game);
