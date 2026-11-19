@@ -644,6 +644,41 @@ async function main() {
       throw new Error('Canonical quest button failed or replayed completion/reward on save');
     }
 
+    // A stale completion prompt must not silently vanish or grant rewards.
+    // Simulate an old UI payload for an already-completed genuine quest; the
+    // canonical manager must reject a duplicate, and the UI must stay open.
+    const staleOffer = await page.evaluate((id) => {
+      const g = window.game;
+      const shown = g.questCompletionOverlay.show({
+        questId: id, title: 'Already completed quest',
+        paths: [{ id: 'defeat_bandits', label: 'Haydutları savaşta yendim', available: true }],
+      });
+      return { shown, gold: g.playerParty.gold };
+    }, questBattle.questId);
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Haydutları savaşta yendim' }).click();
+    const rejectedStale = await page.evaluate(({ id, gold }) => {
+      const g = window.game;
+      const root = document.getElementById('questCompletionOverlay');
+      const button = root?.querySelector('button.quest-path');
+      const check = {
+        goldUnchanged: g.playerParty.gold === gold,
+        completedExactlyOnce: g.questManager.completedQuests
+          .filter(q => q.id === id).length === 1,
+        overlayRemainsOpen: !root?.classList.contains('hidden'),
+        staleButtonDisabled: button?.disabled === true,
+      };
+      g.questCompletionOverlay.hide();
+      return check;
+    }, { id: questBattle.questId, gold: staleOffer.gold });
+    report.rejectedStale = rejectedStale;
+    stage('rejected-stale-quest-button', rejectedStale);
+    if (!staleOffer.shown || !rejectedStale.goldUnchanged
+      || !rejectedStale.completedExactlyOnce || !rejectedStale.overlayRemainsOpen
+      || !rejectedStale.staleButtonDisabled) {
+      throw new Error('Stale quest completion UI misleadingly dismissed or paid twice');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
