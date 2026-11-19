@@ -230,6 +230,17 @@ export class CityManager {
         g.gameFlowManager.setLastEventLog(result?.message || 'Insaat tamamlandi.');
         g.saveManager.runAutosave('city-build');
       },
+      getQuestManager: () => g.questManager,
+      onAssignQuest: (questId, characterId, reason) => {
+        const ok = g.gameFlowManager.assignWorldCharacterToQuest(questId, characterId, {
+          reason,
+        });
+        g.gameFlowManager.setLastEventLog(ok
+          ? 'Önemli karakter gerçek göreve atandı.'
+          : 'Görevlendirme reddedildi; karakter görevi veya hedef uyuşmuyor.');
+        if (ok) g.saveManager.runAutosave('character-quest-assignment');
+        return ok;
+      },
       getFactionContext: (settlement) => g.diplomacyManager.getCityFactionContext(settlement),
       onClose: () => g.economyManager.exitCityServices(),
     });
