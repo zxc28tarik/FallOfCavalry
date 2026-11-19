@@ -5,6 +5,7 @@
 import { validBanditRoute } from './quest-world-party-links.js';
 const runtimeBandits = new WeakSet();
 const observed = new WeakMap();
+const witnessed = new WeakMap();
 const same = (a,b) => String(a) === String(b);
 export function registerRuntimeRouteBandit(party) {
   if (party?.kind === 'bandit' && party?.factionId === 'bandits') runtimeBandits.add(party);
@@ -39,5 +40,13 @@ export function observeMissingCaravanBandits({
   records.set(quest.id, total);
   if (total < 1.5) return false;
   records.delete(quest.id);
+  let book = witnessed.get(party);
+  if (!book) { book = new Set(); witnessed.set(party, book); }
+  book.add(quest.id);
   return true;
+}
+
+/** A recovered save record cannot manufacture the time-on-target witness. */
+export function hasWitnessedMissingCaravanBandits(party, questId) {
+  return Boolean(isRuntimeRouteBandit(party) && witnessed.get(party)?.has(questId));
 }
