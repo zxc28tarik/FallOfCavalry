@@ -352,6 +352,9 @@ export class WorldSimManager {
 
   updateTransientUIState() {
     if (!this.world.state) return;
+    // A map-only guidance surface must never float over a battle, city or
+    // encounter panel even if the caravan remains alive in world state.
+    if (this.world.state.mode !== 'map') this.game?.questEscortHud?.hide?.();
     this.game?.ensureFactionState?.();
     this.world.state.encounterRisk = this.computeEncounterRiskContext();
     if (this.world.state.clueMarker && Number(this.world.state.day ?? 1) > Number(this.world.state.clueMarker.expiresDay ?? 0)) {
