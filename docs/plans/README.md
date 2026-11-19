@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [19 Kasım 2026 — WEB Character System v2 V1.23 refakat HUD, gerçek yol haydut tehdidi ve kayıp kervan araştırması](2026-11-19-web-escort-hud-missing-caravan-recon-v1.md): RAM-only route_recon, gerçek DOM görev ödülü, 7 test ve uzun yol sınırları
 - [19 Kasım 2026 — WEB Character System v2 V1.22 gerçek yol kervan refakati ve eski görev bırakma](2026-11-19-web-real-caravan-escort-v1.md): gerçek caravan_arrival ledger, oyuncu yakınlığı, 250 altın tek ödül, Save/Load ve 8 yeni unit test
 - [19 Kasım 2026 — WEB Character System v2 V1.21 güvenli aynı-oturum görev devamı ve eski rota onayı](2026-11-19-web-quest-session-legacy-recovery-v1.md): RAM-only verified quest progress, pending claim incelemesi, gerçek yola opt-in migration ve 16 yeni test
 - [19 Kasım 2026 — WEB Character System v2 V1.20 canlı savaş→görev tamamlama](2026-11-19-web-real-battle-quest-completion-v1.md): gerçek savaş tikleri, Enter→quest overlay DOM tıklaması, 300 altın tek ödeme, Save/Load replay koruması ve hedef şehir ID=0 düzeltmesi
