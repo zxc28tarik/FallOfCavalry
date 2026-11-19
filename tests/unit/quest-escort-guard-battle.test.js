@@ -83,8 +83,9 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     expect(f.effects).toEqual([]);
     expect(f.qm.completedQuests).toEqual([]);
     expect(f.manager.recordEscortGuardBattle(context(f, b))).toMatchObject({
-      relevant: true, defended: true,
+      relevant: true, defended: false,
     });
+    expect(f.caravan.escortDefended).toBe(1);
     // The production exit removes the single defeated world threat.
     removeWorldParty(f.world.worldAi, f.bandit.id);
     f.manager.updateWorldParties(0.1);
@@ -170,6 +171,12 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     expect(f.playerParty.x).toBeGreaterThan(x0 + 70);
     expect(f.playerParty.x).toBeLessThan(f.caravan.x);
     expect(hud.followId).toBe(f.caravan.id);
+    expect(Math.hypot(f.playerParty.x - f.caravan.x,
+      f.playerParty.y - f.caravan.y)).toBeLessThan(160);
+    // Being close may clear hasDestination without disabling follow.
+    // Move the caravan away and confirm a fresh real movement target.
+    f.caravan.x += 500;
+    sim.updatePlayerParty(0.1);
     expect(f.playerParty.hasDestination).toBe(true);
     // A manual map click overrides the followers' target.
     f.playerParty.destX = 1000;

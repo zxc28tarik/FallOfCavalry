@@ -102,6 +102,7 @@ export class WorldPartyManager {
     this.game = null;
     this.surpriseCooldownMs = 9000;
     this._lastSurpriseAt = 0;
+    this._guardBattleReceipts = new WeakMap();
   }
 
   init(world, game) {
@@ -254,6 +255,16 @@ export class WorldPartyManager {
       currentDay: Math.max(1, Math.floor(Number(this.world?.state?.day) || 1)),
     });
     if (!match) return { relevant: false, retainBandit: false };
+    let witnessed = this._guardBattleReceipts.get(match.caravan);
+    if (!witnessed) {
+      witnessed = new Set();
+      this._guardBattleReceipts.set(match.caravan, witnessed);
+    }
+    if (witnessed.has(match.battleId)) {
+      return { relevant: true, retainBandit: match.result === 'defeat',
+        defended: false, repeated: true, routeId: match.routeId };
+    }
+    witnessed.add(match.battleId);
     if (match.result === 'defeat') {
       const failed = this.game?.questManager?.failQuest(
         match.quest.id, 'escort_guard_defeated',
