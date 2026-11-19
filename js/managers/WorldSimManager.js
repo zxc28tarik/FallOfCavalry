@@ -10,6 +10,7 @@ import { createInitialRegionState, getActiveRegionModifiers } from '../systems/r
 import { ensureModeManager } from '../core/ModeManager.js';
 import WorldPartyManager from './WorldPartyManager.js';
 import { normalizeEncounterType } from '../data/encounter-defs.js';
+import { validatedPartyQuestLinks } from '../systems/quest-world-party-links.js';
 
 export class WorldSimManager {
   constructor() {
@@ -332,6 +333,11 @@ export class WorldSimManager {
         factionId: party.factionId,
         worldPartyKind: party.kind,
         encounterType: normalizeEncounterType(party.encounterType || party.kind),
+        ...validatedPartyQuestLinks(party, {
+          worldState: this.world.state?.map,
+          tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+          commanders: this.world.state?.commanders || [],
+        }),
       });
     }
 

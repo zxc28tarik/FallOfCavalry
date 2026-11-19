@@ -412,6 +412,9 @@ Esc close`,
             speed: Number.isFinite(party.speed) ? party.speed : 1,
             alive: party.alive !== false,
             homeCityId: party.homeCityId || null,
+            // Local-save party relationship is a claim; it is revalidated
+            // against the present route registry and physical corridor on load.
+            routeId: typeof party.routeId === 'string' ? party.routeId : null,
           })) : [],
         },
         settlementsRecruit,
@@ -585,6 +588,7 @@ Esc close`,
         speed: Number.isFinite(party.speed) ? party.speed : 1,
         alive: party.alive !== false,
         homeCityId: party.homeCityId || null,
+        routeId: typeof party.routeId === 'string' ? party.routeId : null,
       })) : [],
     };
     this.game.worldManager.worldEncounterPartyByEnemyId = {};

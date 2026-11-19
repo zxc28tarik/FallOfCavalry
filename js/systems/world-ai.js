@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { spawnBanditOnRegisteredRoute, nextBanditRouteTarget, validBanditRoute } from './quest-world-party-links.js';
 
 const DEFAULT_FACTION_IDS = ['ottoman', 'hre', 'polish', 'spanish', 'venice'];
 
@@ -146,7 +147,7 @@ export function createInitialWorldAiState() {
   return { parties: [], lastRespawnDay: 0 };
 }
 
-export function spawnPartyBandit(worldState, factions, cfg = {}) {
+export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes = [], routeIndex = 0 } = {}) {
   const bounds = getWorldBounds(worldState);
   const settlements = getSettlements(worldState);
   let x = randomInRange(bounds.minX, bounds.maxX);
@@ -156,10 +157,15 @@ export function spawnPartyBandit(worldState, factions, cfg = {}) {
     x = Number(near?.x ?? x) + randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
     y = Number(near?.y ?? y) + randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
   }
-  const clamped = clampToBounds(x, y, bounds);
-  const target = pickRoamTarget(worldState, clamped.x, clamped.y);
+  const linked = spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex);
+  const clamped = linked ? clampToBounds(linked.x, linked.y, bounds)
+    : clampToBounds(x, y, bounds);
+  const target = linked
+    ? { x: linked.targetX, y: linked.targetY }
+    : pickRoamTarget(worldState, clamped.x, clamped.y);
   return {
     id: makeId('bandit'),
+    ...(linked ? { routeId: linked.routeId, homeCityId: linked.homeCityId } : {}),
     factionId: 'bandits',
     kind: 'bandit',
     x: clamped.x,
@@ -228,7 +234,10 @@ export function getBanditCap(worldEvents, defaultCap, eventsCfg = null) {
   return Math.max(base, Math.ceil(base * spikeMult));
 }
 
-export function ensureWorldParties({ aiState, worldState, factions, cfg, currentDay, banditCapOverride }) {
+export function ensureWorldParties({
+  aiState, worldState, factions, cfg, currentDay, banditCapOverride,
+  tradeRoutes = [],
+}) {
   if (!aiState || !Array.isArray(aiState.parties)) return;
   const respawnDays = Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3);
   const dayNow = Number(currentDay ?? 0);
@@ -242,7 +251,8 @@ export function ensureWorldParties({ aiState, worldState, factions, cfg, current
 
   const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
   while (hasRoomByType('bandit', banditCap)) {
-    aiState.parties.push(spawnPartyBandit(worldState, factions, cfg));
+    const routeIndex = aiState.parties.filter((p) => p?.kind === 'bandit').length;
+    aiState.parties.push(spawnPartyBandit(worldState, factions, cfg, { tradeRoutes, routeIndex }));
   }
   const hasSettlements = getSettlements(worldState).length > 0;
   while (hasSettlements && hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {
@@ -255,9 +265,10 @@ export function ensureWorldParties({ aiState, worldState, factions, cfg, current
   aiState.lastRespawnDay = dayNow;
 }
 
-function pickNextTarget(party, worldState) {
+function pickNextTarget(party, worldState, tradeRoutes) {
   if (party.kind === 'bandit') {
-    return pickRoamTarget(worldState, party.x, party.y);
+    return nextBanditRouteTarget(party, worldState, tradeRoutes)
+      || pickRoamTarget(worldState, party.x, party.y);
   }
   const destination = pickOtherSettlement(worldState, party.homeCityId, party.kind === 'patrol' ? party.factionId : null);
   if (destination) return { x: Number(destination.x), y: Number(destination.y) };
@@ -271,7 +282,10 @@ function factionIsHostileToPlayer(partyFactionId, playerFactionId) {
   return partyFactionId !== playerFactionId;
 }
 
-export function updateWorldParties({ aiState, worldState, playerParty, factions: _factions, cfg, dtSec }) {
+export function updateWorldParties({
+  aiState, worldState, playerParty, factions: _factions, cfg, dtSec,
+  tradeRoutes = [],
+}) {
   if (!aiState || !Array.isArray(aiState.parties)) return [];
   const dt = Number(dtSec ?? 0);
   const encounters = [];
@@ -285,7 +299,9 @@ export function updateWorldParties({ aiState, worldState, playerParty, factions:
     if (!party || party.alive === false) return;
 
     if (!Array.isArray(party.path) || party.path.length === 0 || party.pathIndex >= party.path.length) {
-      const path = findRoadPath(worldState, party.x, party.y, party.targetX, party.targetY);
+      const linkedBandit = validBanditRoute(party, worldState, tradeRoutes);
+      const path = linkedBandit ? [{ x: Number(party.targetX), y: Number(party.targetY) }]
+        : findRoadPath(worldState, party.x, party.y, party.targetX, party.targetY);
       party.path = path.length ? path : [{ x: Number(party.targetX ?? party.x), y: Number(party.targetY ?? party.y) }];
       party.pathIndex = 0;
     }
@@ -302,7 +318,7 @@ export function updateWorldParties({ aiState, worldState, playerParty, factions:
       party.y = Number(waypoint.y ?? party.y);
       party.pathIndex += 1;
       if (party.pathIndex >= party.path.length) {
-        const next = pickNextTarget(party, worldState);
+        const next = pickNextTarget(party, worldState, tradeRoutes);
         party.targetX = next.x;
         party.targetY = next.y;
         party.path = null;

@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { validatedPartyQuestLinks } from '../systems/quest-world-party-links.js';
 import {
   createInitialWorldAiState,
   ensureWorldParties as ensureBaseWorldParties,
@@ -107,6 +108,7 @@ export class WorldPartyManager {
     if (!Array.isArray(this.world.worldAi.parties)) this.world.worldAi.parties = [];
 
     const worldState = this.world.state?.map || {};
+    const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
     const cfg = this.getWorldAiCfg();
     ensureBaseWorldParties({
       aiState: this.world.worldAi,
@@ -114,6 +116,7 @@ export class WorldPartyManager {
       factions: this.world.state?.factions || CONST.FACTIONS,
       cfg,
       currentDay: this.world.state?.day ?? 1,
+      tradeRoutes,
       banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
     });
 
@@ -132,8 +135,15 @@ export class WorldPartyManager {
     const parties = Array.isArray(this.world?.worldAi?.parties)
       ? this.world.worldAi.parties.filter((p) => p?.alive !== false)
       : [];
+    const worldState = this.world.state?.map || {};
+    const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
+    const commanders = this.world.state?.commanders || [];
     this.world.enemyParties = parties.map((party) => ({
       ...party,
+      // Strip save-supplied relationship IDs, rebuild them from current world.
+      routeId: undefined,
+      commanderId: undefined,
+      ...validatedPartyQuestLinks(party, { worldState, tradeRoutes, commanders }),
       worldPartyKind: party.kind,
       encounterType: normalizeEncounterType(party.encounterType || party.kind),
       factionId: party?.factionId || CONST.FACTION?.ID?.BANDITS || 'bandits',
@@ -155,6 +165,7 @@ export class WorldPartyManager {
       playerParty: this.game?.playerParty,
       factions: this.world.state?.factions || CONST.FACTIONS,
       cfg: this.getWorldAiCfg(),
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
       dtSec,
     });
     this.syncVisiblePartiesToWorld();
