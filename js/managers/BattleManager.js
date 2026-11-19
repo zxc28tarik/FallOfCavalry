@@ -861,8 +861,16 @@ export class BattleManager {
       g.gameFlowManager.setLastEventLog('Battle result continued');
     }
 
+    // Guard outcomes only apply to the actual source-linked enemy and
+    // live convoy. The winner/loser is already finalized by BattleManager.
+    const guard = g.worldManager?.simManager?.worldPartyManager?.recordEscortGuardBattle?.({
+      battle, enemyId, linkedWorldPartyId,
+    }) || { relevant: false, retainBandit: false };
     if (linkedWorldPartyId) {
-      removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
+      // Defeat must not magically eliminate the bandits that just won.
+      if (!guard.retainBandit) {
+        removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
+      }
       delete g.worldManager.worldEncounterPartyByEnemyId[enemyId];
     }
 

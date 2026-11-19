@@ -12,6 +12,7 @@ import {
   witnessMissingCaravanEncounter,
 } from '../systems/quest-route-recon.js';
 import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
+import { linkedEscortBattleThreat } from '../systems/quest-escort-threat-battle.js';
 import {
   createInitialWorldAiState,
   spawnPartyBandit,
@@ -235,6 +236,38 @@ export class WorldPartyManager {
       spawned += 1;
     }
     return spawned;
+  }
+
+  /**
+   * Called once after actual BattleManager resolution but BEFORE world-party
+   * cleanup. Only a live near-escort bandit battle can alter guard status.
+   * Winning clears its real threat via the normal battle cleanup; losing
+   * fails the escort and retains the world bandit for future encounters.
+   */
+  recordEscortGuardBattle({ battle, enemyId, linkedWorldPartyId } = {}) {
+    const match = linkedEscortBattleThreat({
+      battle, enemyId, linkedWorldPartyId,
+      worldAi: this.world?.worldAi,
+      questManager: this.game?.questManager,
+      worldState: this.world?.state?.map || {},
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+      currentDay: Math.max(1, Math.floor(Number(this.world?.state?.day) || 1)),
+    });
+    if (!match) return { relevant: false, retainBandit: false };
+    if (match.result === 'defeat') {
+      const failed = this.game?.questManager?.failQuest(
+        match.quest.id, 'escort_guard_defeated',
+      ) === true;
+      if (failed) match.caravan.alive = false;
+      this.game?.questEscortHud?.hide?.();
+      return { relevant: true, retainBandit: true,
+        failed, routeId: match.routeId };
+    }
+    // A guard victory is not a quest completion and earns no extra gold.
+    // Real battle cleanup will remove this one genuine source bandit.
+    match.caravan.escortDefended = (match.caravan.escortDefended || 0) + 1;
+    return { relevant: true, retainBandit: false,
+      defended: true, routeId: match.routeId };
   }
 
   /** A live route-bandit encounter is a first-hand investigation clue.
