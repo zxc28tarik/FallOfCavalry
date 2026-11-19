@@ -182,9 +182,15 @@ describe('WEB V1.24 — genuine guarded escort combat', () => {
     f.playerParty.y = 208;
     f.playerParty.hasDestination = false;
     hud.assignedTarget = null;
+    hud.followId = f.caravan.id;
+    f.playerParty.moveState = 'idle';
     sim.updatePlayerParty(0.1);
-    expect(f.playerParty.hasDestination).toBe(true);
+    // A follow waypoint can be reached in one normal movement tick, so
+    // hasDestination is not itself a required long-lived flag.
+    expect(f.playerParty.x).toBeGreaterThan(140);
+    expect(f.playerParty.x).toBeLessThanOrEqual(156);
     // A manual map click overrides the followers' target.
+    f.playerParty.hasDestination = true;
     f.playerParty.destX = 1000;
     sim.updatePlayerParty(0.1);
     expect(hud.followId).toBeNull();
