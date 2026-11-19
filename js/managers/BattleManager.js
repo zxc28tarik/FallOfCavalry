@@ -14,6 +14,7 @@ import { applyBattleOutcomes } from '../systems/casualties.js';
 import { removeWorldParty } from '../systems/world-ai.js';
 import { emitContractEvent } from '../systems/contracts.js';
 import { emptyQuestEventLedger, recordVerifiedBattleQuestEvent } from '../systems/quest-event-ledger.js';
+import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
@@ -755,6 +756,9 @@ export class BattleManager {
     this.state.questEventLedger ||= emptyQuestEventLedger();
     recordVerifiedBattleQuestEvent(this.state.questEventLedger, {
       battle, currentDay: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+      enemyParty: this.game?.worldManager?.enemyParties?.find((p) => p?.id === enemyId),
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+      commanders: this.state.commanders || [],
     });
     this.state.uiPanel = this.game?.buildBattleResultPanelData?.();
     this.battleCommandsUI?.hide?.();
@@ -905,6 +909,12 @@ export class BattleManager {
     this.battleResult = null;
     this.battlePhase = null;
     ensureModeManager(this.state)?.switchTo(ensureModeManager(this.state)?.getReturnTarget?.() || 'map');
+    if (result === 'victory' && Number.isSafeInteger(battle.resolvedAt)) {
+      creditQuestObjectivesForVerifiedEvent({
+        ledger: this.state.questEventLedger, questManager: g.questManager,
+        eventId: `battle:${enemyId}:${battle.resolvedAt}`,
+      });
+    }
     g.saveManager.runAutosave('battle-result-close');
     return true;
   }

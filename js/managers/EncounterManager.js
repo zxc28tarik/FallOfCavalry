@@ -8,6 +8,10 @@ import {
   normalizeEncounterType,
 } from '../data/encounter-defs.js';
 import { DEBUG } from '../constants/ui.js';
+import {
+  emptyQuestEventLedger, recordVerifiedMessengerCaptureEvent,
+} from '../systems/quest-event-ledger.js';
+import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 
 // Lazy import — Phaser'ın browser-only global'larini Node test ortamından korur.
 let _battleBootModule = null;
@@ -183,9 +187,21 @@ export class EncounterManager {
       return true;
     }
 
-    this.applyEncounterOutcome(selected, type);
+    const resolution = this.applyEncounterOutcome(selected, type);
+    this.state.questEventLedger ||= emptyQuestEventLedger();
+    const resolvedAt = Date.now();
+    const creditedSource = recordVerifiedMessengerCaptureEvent(this.state.questEventLedger, {
+      encounter, enemyParty: enemy, choice: selected, resolution,
+      currentDay: Math.max(1, Math.floor(Number(this.state.day) || 1)), resolvedAt,
+    });
     this.onEncounterOutcome(type, this.mapQuestOutcome(type, selected), this.buildQuestContext(encounter));
     this.finishEncounterToMap(enemy, encounter.enemyId);
+    // Award credit only to already-active, source-matched quests after the
+    // map transition, never to a newly generated unaccepted quest.
+    if (creditedSource) creditQuestObjectivesForVerifiedEvent({
+      ledger: this.state.questEventLedger, questManager: g.questManager,
+      eventId: `encounter:${encounter.enemyId}:${resolvedAt}`,
+    });
     return true;
   }
 
@@ -285,6 +301,7 @@ export class EncounterManager {
       encounter.lastResult = result.join(', ') || `${option.label} resolved`;
       encounter.resultLog = [...(encounter.resultLog || []), encounter.lastResult];
     }
+    return { optionId: option.id, success };
   }
 
   enterRoster(enemyId, battleContext = {}) {
