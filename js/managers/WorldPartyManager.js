@@ -17,6 +17,7 @@ import {
   spawnEscortNpcGuards, runEscortNpcSkirmish,
   retireEscortNpcGuards,
 } from '../systems/quest-escort-npc-guards.js';
+import { reserveEscortCargo, deliverEscortCargo } from '../systems/quest-escort-cargo.js';
 import {
   createInitialWorldAiState,
   spawnPartyBandit,
@@ -237,6 +238,15 @@ export class WorldPartyManager {
       const party = spawnQuestEscortCaravan(quest, worldState, tradeRoutes,
         day, Number(cfg?.CARAVAN_SPEED ?? 0.8));
       if (!party) continue;
+      // Reserve typed goods exclusively from the registered origin city's
+      // canonical market stock. No stock/cargo is synthesized from a quest ID.
+      const route = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
+      if (route?.road && this.game?.economyManager?.ensureSettlementMarketState) {
+        this.game.economyManager.ensureSettlementMarketState(route.from);
+        reserveEscortCargo({ caravan: party, quest, worldState, tradeRoutes,
+          currentDay: day,
+          catalog: this.game.economyManager.itemCatalog || CONST.TRADE_ITEMS });
+      }
       parties.push(party);
       spawnEscortNpcGuards(party, parties);
       spawned += 1;
@@ -416,6 +426,14 @@ export class WorldPartyManager {
           party, quest, worldState, tradeRoutes, currentDay: day, resolvedAt,
         });
         if (stamped) {
+          // V1.27: only an authenticated arrival may deliver the remaining
+          // reserved source goods. Never complete a mission from inventory.
+          const route = registeredTradeRoute(worldState, tradeRoutes, party.routeId);
+          if (route?.road && this.game?.economyManager?.ensureSettlementMarketState) {
+            this.game.economyManager.ensureSettlementMarketState(route.to);
+            deliverEscortCargo({ caravan: party, quest, worldState,
+              tradeRoutes, currentDay: day });
+          }
           const receipt = creditQuestObjectivesForVerifiedEvent({
             ledger, questManager: this.game?.questManager,
             eventId: `caravan:${party.id}:${resolvedAt}`,
