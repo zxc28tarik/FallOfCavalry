@@ -12,6 +12,8 @@ import { QUEST_DEFS } from '../data/quest-defs.js';
 export const QUEST_SNAPSHOT_VERSION = 1;
 const LIMIT = 512;
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
+// Canonical world settlement IDs can be a single numeric token ('0'..'880').
+const WORLD_TARGET_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
 const DAY = (x) => Number.isSafeInteger(x) && x >= 0 && x <= 10000000;
 const isRecord = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const targetFields = Object.freeze([
@@ -34,8 +36,9 @@ function normalizeRow(row, phase) {
     const targets = {};
     for (const key of targetFields) {
       const value = row.targets[key] ?? null;
-      if (value !== null && !onlyId(value)) return null;
-      targets[key] = value;
+      if (value !== null && !(typeof value === 'string' && WORLD_TARGET_ID.test(value))
+        && !(Number.isSafeInteger(value) && value >= 0)) return null;
+      targets[key] = value === null ? null : String(value);
     }
     const priorClaims = Array.isArray(row.objectiveClaims) ? row.objectiveClaims : [];
     if (priorClaims.length > 32) return null;
