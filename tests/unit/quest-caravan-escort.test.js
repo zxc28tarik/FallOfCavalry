@@ -410,5 +410,23 @@ describe('WEB V1.27 — real market inventory / safe active-quest save integrati
       ]);
     expect(state.map.settlements[0].marketStock.every(s => s.qty === 0)).toBe(true);
     expect(payload.game.worldAi.parties.some(p => p.escortQuestId)).toBe(false);
+    // Genuine manager update reaches the road destination; credited delivery
+    // must move exactly the reserved 24 units to the destination market once.
+    for (let tick = 0; tick < 800; tick += 1) {
+      game.playerParty.x = caravan.x;
+      game.playerParty.y = caravan.y;
+      manager.updateWorldParties(0.1);
+      if (game.questManager.activeQuests[0]?.objectives[0]?.outcome
+        === 'caravan_arrived') break;
+    }
+    expect(game.questManager.activeQuests[0]?.objectives[0]?.outcome)
+      .toBe('caravan_arrived');
+    expect(state.map.settlements[1].marketStock)
+      .toEqual([{ id: 'wheat', qty: 16 },
+        { id: 'iron', qty: 16 }, { id: 'cloth', qty: 16 }]);
+    expect(outstandingEscortCargoForSave(world.worldAi.parties).size).toBe(0);
+    const deliveredSnapshot = save.buildSavePayload();
+    expect(deliveredSnapshot.game.settlementsMarkets
+      .find(x => x.settlementId === 1).marketStock[0].qty).toBe(16);
   });
 });
