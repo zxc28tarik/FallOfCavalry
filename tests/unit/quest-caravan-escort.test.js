@@ -337,6 +337,12 @@ describe('WEB V1.26 — independent escort NPC guards and cargo raids', () => {
     expect(guards.every(g => g.hp === 30)).toBe(true);
     const swapped = { ...guards[0] };
     expect(isRuntimeEscortGuard(swapped)).toBe(false);
+    const otherQuest = { ...q, id: 'quest_escort_wrong_identity' };
+    expect(runEscortNpcSkirmish({
+      caravan, quest:otherQuest, parties, worldState:worldMap, tradeRoutes:routes,
+      currentDay:4, dtSec:0.8,
+    }).status).toBe('invalid');
+    expect(caravan.escortCargo).toBe(100);
     const mismatched = { ...bandit, routeId: 'route:unknown' };
     parties[parties.indexOf(bandit)] = mismatched;
     caravan.escortStarted = true;

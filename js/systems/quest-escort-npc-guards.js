@@ -80,8 +80,13 @@ export function runEscortNpcSkirmish({
   caravan, quest, parties, worldState, tradeRoutes,
   currentDay, dtSec,
 }={}) {
+  const route=validEscortQuest(quest,worldState,tradeRoutes,currentDay);
   if(!isLiveEscortParty(caravan) || caravan?.alive===false
-    || !validEscortQuest(quest,worldState,tradeRoutes,currentDay)
+    || caravan?.kind!=='caravan' || !route?.road
+    || quest?.id !== caravan.escortQuestId
+    || route.routeId !== caravan.routeId
+    || String(route.from.id) !== String(caravan.homeCityId)
+    || String(route.to.id) !== String(caravan.escortDestinationCityId)
     || !Array.isArray(parties) || !parties.includes(caravan)
     || !Number.isFinite(dtSec) || dtSec<=0 || dtSec>1)
     return {status:'invalid'};

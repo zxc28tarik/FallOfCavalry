@@ -477,7 +477,10 @@ export class WorldPartyManager {
     this.processQuestRouteRecon(dtSec, { worldState, tradeRoutes });
     this.processQuestEscortCaravans(dtSec, { worldState, tradeRoutes });
     this.syncVisiblePartiesToWorld();
-    return encounters;
+    // NPC guards can eliminate a bandit AFTER the baseline AI has emitted
+    // aggro for it. Never offer an encounter for that dead source party.
+    return encounters.filter(e => this.world.worldAi.parties
+      .some(p => p.id === e.partyId && p.alive !== false));
   }
 
   pickSurpriseType() {
