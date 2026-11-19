@@ -843,6 +843,16 @@ async function main() {
       manager.updateWorldParties(0.15);
       const waitsForPlayer = party.x === original.x && party.y === original.y
         && party.escortStarted === false;
+      const escortHud = document.getElementById('questEscortHud');
+      const hudVisibleWhileWaiting = escortHud?.style.display === 'block'
+        && document.getElementById('questEscortStatus')?.textContent
+          .includes('Kervan başlangıçta seni bekliyor');
+      document.getElementById('questEscortNavigate')?.click();
+      const hudNavigationWorks = g.playerParty.hasDestination === true
+        && g.playerParty.destX === party.x && g.playerParty.destY === party.y;
+      g.playerParty.hasDestination = false;
+      g.playerParty.destX = null;
+      g.playerParty.destY = null;
       g.playerParty.x = original.x;
       g.playerParty.y = original.y;
       // Test-only faster convoy to make E2E bounded. The real AI update
@@ -862,6 +872,8 @@ async function main() {
         b.textContent.includes('Kervan güvenli ulaştı') && !b.disabled);
       return {
         ready: true, accepted, waitsForPlayer,
+        hudVisibleWhileWaiting, hudNavigationWorks,
+        hudHidesAfterArrival: document.getElementById('questEscortHud')?.style.display === 'none',
         routeId: chosen.id, questId: quest.id,
         caravanId: party.id, ticks, visited: party.escortVisitedPoints,
         totalWaypoints: party.path?.length,
@@ -884,7 +896,9 @@ async function main() {
     report.caravanEscort = caravanEscort;
     stage('real-road-live-caravan-escort', caravanEscort);
     if (!caravanEscort.ready || !caravanEscort.accepted
-      || !caravanEscort.waitsForPlayer || !caravanEscort.realArrival
+      || !caravanEscort.waitsForPlayer || !caravanEscort.hudVisibleWhileWaiting
+      || !caravanEscort.hudNavigationWorks || !caravanEscort.hudHidesAfterArrival
+      || !caravanEscort.realArrival
       || caravanEscort.visited < 2 || caravanEscort.objective !== 'caravan_arrived'
       || caravanEscort.ledgerSource !== 'caravan_arrival'
       || caravanEscort.ledgerRoute !== caravanEscort.routeId
@@ -990,6 +1004,94 @@ async function main() {
       || !retired.saved || !retired.loaded
       || !retired.archiveSurvives || !retired.noRewardAfterLoad) {
       throw new Error('Unsupported legacy quest opt-in retirement applied hidden penalties');
+    }
+
+    // V1.23 — a true generated-bandit sighting/encounter must identify a
+    // MISSING caravan on the EXACT registered road. This is independent from
+    // bandit combat victories and imported ledger claims.
+    const missingCaravanRecon = await page.evaluate(() => {
+      const g = window.game;
+      if (g.state.mode !== 'map') return { ready: false, reason: 'not_on_map' };
+      const roadRoutes = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
+      const busy = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
+      const route = roadRoutes.find(r => !busy.has(r.id));
+      if (!route) return { ready: false, reason: 'no_free_route' };
+      const quest = g.questGenerator.generateFromTemplate('investigate_missing_caravan', {
+        targetRouteId: route.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'missing_caravan_template_failed' };
+      quest.status = 'active';
+      const added = g.questManager.addQuest(quest);
+      const pm = g.worldManager.simManager.worldPartyManager;
+      const before = new Set(g.worldManager.worldAi.parties.map(p => p.id));
+      pm.ensureWorldParties();
+      const bandit = g.worldManager.worldAi.parties.find(p =>
+        !before.has(p.id) && p.routeId === route.id && p.kind === 'bandit');
+      if (!bandit) return { ready: false, reason: 'no_runtime_route_bandit' };
+      g.playerParty.x = bandit.x;
+      g.playerParty.y = bandit.y;
+      const enemyId = `wai-${bandit.id}`;
+      const encountered = g.worldManager.simManager.processWorldAiEncounters([{
+        partyId: bandit.id, factionId: bandit.factionId,
+        x: bandit.x, y: bandit.y,
+      }]);
+      const evidence = g.state.questEventLedger?.observed?.find(e =>
+        e.source === 'route_recon' && e.questId === quest.id
+        && e.routeId === route.id && e.enemyId === bandit.id);
+      const objective = quest.objectives?.[0]?.outcome;
+      const fled = g.encounterManager.resolveEncounter('flee') === true;
+      const root = document.getElementById('questCompletionOverlay');
+      const option = [...(root?.querySelectorAll('button.quest-path') || [])].find(b =>
+        b.textContent.includes('Haydut grubunu tespit ettim') && !b.disabled);
+      return {
+        ready: true, added, enemyId, encountered, fled,
+        sameEncounter: evidence?.enemyId === bandit.id
+          && evidence?.result === 'bandits_located',
+        source: evidence?.source, objective,
+        mode: g.state.mode, questId: quest.id, routeId: route.id,
+        overlayVisible: Boolean(option && !root?.classList.contains('hidden')),
+        goldBeforeChoice: g.playerParty.gold,
+        noAutoReward: !g.questManager.completedQuests.some(q => q.id === quest.id),
+      };
+    });
+    report.missingCaravanRecon = missingCaravanRecon;
+    stage('real-missing-caravan-route-bandit-recon', missingCaravanRecon);
+    if (!missingCaravanRecon.ready || !missingCaravanRecon.added
+      || !missingCaravanRecon.encountered || !missingCaravanRecon.fled
+      || !missingCaravanRecon.sameEncounter || missingCaravanRecon.source !== 'route_recon'
+      || missingCaravanRecon.objective !== 'bandits_located'
+      || !missingCaravanRecon.noAutoReward || !missingCaravanRecon.overlayVisible
+      || missingCaravanRecon.mode !== 'map') {
+      throw new Error('Missing caravan investigation lacks real route-bandit encounter proof');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Haydut grubunu tespit ettim' }).click();
+    const missingCaravanReward = await page.evaluate(({ id, gold }) => {
+      const g = window.game;
+      const done = g.questManager.completedQuests.filter(q => q.id === id);
+      const reward = g.playerParty.gold - gold;
+      const repeatRejected = g.questManager.completeQuest(id, 'bandits_identified') !== true;
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      return {
+        completedOnce: done.length === 1,
+        path: done[0]?.completedPath,
+        reward, repeatRejected, saved, loaded,
+        archivedOnce: g.questManager.completedQuests
+          .filter(q => q.id === id && q.archived === true).length === 1,
+        noReplay: g.playerParty.gold === gold + 100,
+        noActiveReplay: !g.questManager.activeQuests.some(q => q.id === id),
+        inertLedger: g.state.questEventLedger?.observed?.length === 0,
+      };
+    }, { id: missingCaravanRecon.questId, gold: missingCaravanRecon.goldBeforeChoice });
+    report.missingCaravanReward = missingCaravanReward;
+    stage('verified-missing-caravan-100-gold-no-replay', missingCaravanReward);
+    if (!missingCaravanReward.completedOnce || missingCaravanReward.path !== 'bandits_identified'
+      || missingCaravanReward.reward !== 100 || !missingCaravanReward.repeatRejected
+      || !missingCaravanReward.saved || !missingCaravanReward.loaded
+      || !missingCaravanReward.archivedOnce || !missingCaravanReward.noReplay
+      || !missingCaravanReward.noActiveReplay || !missingCaravanReward.inertLedger) {
+      throw new Error('Missing caravan reward archive or save replay validation failed');
     }
 
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
