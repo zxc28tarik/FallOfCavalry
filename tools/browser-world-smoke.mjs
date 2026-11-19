@@ -140,14 +140,21 @@ async function main() {
       const g = window.game;
       const manager = g?.worldManager?.simManager?.worldPartyManager;
       const routes = g?.economyManager?.ensureTradeRoutes?.() || [];
+      const generatedRoads = g?.state?.map?.roads || [];
+      const roadRoutes = routes.filter(r => r?.roadBacked === true);
+      const topologyExact = roadRoutes.length > 0 && roadRoutes.length <= generatedRoads.length
+        && roadRoutes.every(route => generatedRoads.some(road =>
+          (String(road.from) === String(route.fromCityId)
+            && String(road.to) === String(route.toCityId))
+          && Array.isArray(road.path) && road.path.length >= 2));
       // Establish ordinary world AI first so test cleanup removes ONLY
       // quest-created threats, never the world's baseline parties.
       manager?.ensureWorldParties?.();
       const occupied = new Set((g?.worldManager?.worldAi?.parties || [])
         .filter((p) => p.kind === 'bandit' && p.alive !== false)
         .map((p) => p.routeId).filter(Boolean));
-      const target = routes.find((r, i) => i > 0 && r?.fromCityId
-        && r?.toCityId && r?.id && !occupied.has(r.id));
+      const target = roadRoutes.find((r, i) => i > 0 && r?.fromCityId != null
+        && r?.toCityId != null && r?.id && !occupied.has(r.id));
       if (!manager || !target || !g?.questGenerator || !g?.questManager) {
         return { ready: false, routeCount: routes.length };
       }
@@ -180,7 +187,9 @@ async function main() {
       manager.syncVisiblePartiesToWorld();
       const cleaned = g.saveManager.quickSave() === true;
       return {
-        ready: true, routeCount: routes.length, accepted, saved, loaded,
+        ready: true, routeCount: routes.length, roadRouteCount: roadRoutes.length,
+        generatedRoadCount: generatedRoads.length, topologyExact,
+        targetIsRealRoad: target?.roadBacked === true, accepted, saved, loaded,
         linkedBeforeLoad: found?.routeId === target.id,
         linkedAfterLoad: restored?.routeId === target.id,
         samePartyId, persistedWorldParty,
@@ -189,7 +198,9 @@ async function main() {
     });
     report.routeThreat = routeThreat;
     stage('canonical-route-threat-save-resume', routeThreat);
-    if (!routeThreat.ready || routeThreat.routeCount < 1 || !routeThreat.accepted
+    if (!routeThreat.ready || routeThreat.routeCount < 1
+      || routeThreat.roadRouteCount < 1 || !routeThreat.topologyExact
+      || !routeThreat.targetIsRealRoad || !routeThreat.accepted
       || !routeThreat.saved || !routeThreat.loaded || !routeThreat.linkedBeforeLoad
       || !routeThreat.linkedAfterLoad || !routeThreat.samePartyId
       || !routeThreat.persistedWorldParty || !routeThreat.questStillActive
