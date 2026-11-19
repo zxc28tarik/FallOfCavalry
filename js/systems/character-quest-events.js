@@ -57,7 +57,7 @@ export function applyApprovedQuestCharacterOutcome({
     || !Array.isArray(questManager?.completedQuests)) return none('unverified_completion');
 
   const quest = questManager.completedQuests.find((entry) =>
-    entry.id === receipt.questId && entry.templateId === receipt.templateId
+    entry.archived !== true && entry.id === receipt.questId && entry.templateId === receipt.templateId
     && entry.completedPath === receipt.pathId
     && entry.status === 'completed'
     && entry.assignedCharacterId === receipt.assignedCharacterId);

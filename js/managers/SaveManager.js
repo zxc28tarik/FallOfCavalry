@@ -16,7 +16,10 @@ import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
 import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
 import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
-import { normalizeCharacterQuestBindings } from '../systems/character-quest-assignments.js';
+import {
+  normalizeCharacterQuestBindings, reactivateRestoredQuestBindings,
+} from '../systems/character-quest-assignments.js';
+import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -367,6 +370,7 @@ Esc close`,
           roster: this.state?.worldCharacters,
           settlements,
         }),
+        questSnapshot: captureQuestSnapshot(this.game?.questManager),
         characterSocial: restoreAuthorizedCharacterSocialState(
           this.state?.characterSocial, this.state?.characterSocialPending, {
             roster: this.state?.worldCharacters,
@@ -473,8 +477,8 @@ Esc close`,
       roster: this.state.worldCharacters,
       settlements: this.state?.map?.settlements || [],
     });
-    // QuestManager currently does not serialize live quest instances. Never
-    // silently restore an apparently 'active' NPC quest with no live owner.
+    // Live quest bindings remain SUSPENDED until V1.14 reconstructs an exact
+    // active quest from current trusted templates and actual world targets.
     this.state.characterQuestBindings = normalizeCharacterQuestBindings(
       game.characterQuestBindings, {
         roster: this.state.worldCharacters,
@@ -669,6 +673,30 @@ Esc close`,
         currentDay: this.state?.day ?? 1,
       });
     }
+
+    // Rehydrate only quests reconstructed from canonical QUEST_DEFS and
+    // actual target registries. Saved objectives/claimed outcomes remain inert.
+    // Older saves with no snapshot retain suspended bindings safely.
+    this.state.questRestoreReport = restoreQuestSnapshot(
+      this.game?.questManager, game.questSnapshot, {
+        currentDay: Math.max(0, Math.floor(Number(this.state.day) || 0)),
+        settlements: this.state?.map?.settlements || [],
+        tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.()
+          || this.state?.tradeRoutes || [],
+        commanders: this.state?.commanders || [],
+        regionIds: Array.isArray(this.state?.regionState?.regions)
+          ? this.state.regionState.regions.map((r) => r?.id).filter(Boolean) : [],
+      },
+    );
+    this.state.questRestoreReport.restoredBindings = reactivateRestoredQuestBindings({
+      bindings: this.state.characterQuestBindings,
+      savedBindings: game.characterQuestBindings,
+      questManager: this.game?.questManager,
+      roster: this.state.worldCharacters,
+      characterOrganization: this.state.characterOrganization,
+      settlements: this.state?.map?.settlements || [],
+      day: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+    });
 
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);

@@ -13,8 +13,11 @@ export class QuestManager {
   }
 
   addQuest(questInstance) {
-    if (!questInstance) return;
+    if (!questInstance || typeof questInstance.id !== 'string'
+      || [...this.activeQuests, ...this.completedQuests, ...this.failedQuests]
+        .some((quest) => quest.id === questInstance.id)) return false;
     this.activeQuests.push(questInstance);
+    return true;
   }
 
   activateQuest(questId) {

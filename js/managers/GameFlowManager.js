@@ -355,6 +355,11 @@ export class GameFlowManager {
       authoredCharacters: authoredDefinitions.accepted ? authoredDefinitions.characters : [],
     });
     this.state.characterQuestBindings = emptyCharacterQuestBindings();
+    if (g.questManager) {
+      g.questManager.activeQuests = [];
+      g.questManager.completedQuests = [];
+      g.questManager.failedQuests = [];
+    }
 
     g.mode = 'playing';
     g.saveManager.startAutosaveLoop();
