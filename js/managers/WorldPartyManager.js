@@ -15,7 +15,7 @@ import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-ma
 import { linkedEscortBattleThreat } from '../systems/quest-escort-threat-battle.js';
 import {
   spawnEscortNpcGuards, runEscortNpcSkirmish,
-  retireEscortNpcGuards, activeEscortGuards,
+  retireEscortNpcGuards,
 } from '../systems/quest-escort-npc-guards.js';
 import {
   createInitialWorldAiState,
