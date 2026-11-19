@@ -22,6 +22,7 @@ import {
 import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
 import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
 import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
+import { outstandingEscortCargoForSave } from '../systems/quest-escort-cargo.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
 } from '../systems/character-social-authority.js';
@@ -325,6 +326,9 @@ Esc close`,
     const enemyParties = this.game?.worldManager?.enemyParties
       || this.game?.enemyParties || [];
     const worldAi = this.game?.worldManager?.worldAi || this.game?.worldAi;
+    // Escorts are process-only; refund undelivered typed cargo in the save
+    // snapshot (not the running world) before the quest respawns on load.
+    const pendingEscortGoods = outstandingEscortCargoForSave(worldAi?.parties || []);
     const lastEncounterEndTimeByEnemyId =
       this.game?.worldManager?.lastEncounterEndTimeByEnemyId
       || this.game?.lastEncounterEndTimeByEnemyId || {};
@@ -429,11 +433,21 @@ Esc close`,
           })) : [],
         },
         settlementsRecruit,
-        settlementsMarkets: settlements.filter((st) => st?.id).map((st) => ({
-          settlementId: st.id,
-          marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
-          priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
-        })),
+        settlementsMarkets: settlements.filter((st) => st?.id != null).map((st) => {
+          const marketStock = Array.isArray(st.marketStock)
+            ? st.marketStock.map(row => ({ id: row.id, qty: row.qty })) : [];
+          const pending = pendingEscortGoods.get(String(st.id));
+          if (pending) for (const [id, qty] of pending) {
+            const row = marketStock.find(entry => entry.id === id);
+            if (row && Number.isSafeInteger(row.qty) && row.qty >= 0) row.qty += qty;
+            else if (!row) marketStock.push({ id, qty });
+          }
+          return {
+            settlementId: st.id,
+            marketStock,
+            priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
+          };
+        }),
         settlementsOwners: settlements.filter((st) => st?.id).map((st) => ({
           settlementId: st.id,
           ownerFactionId: st.ownerFactionId || null,
