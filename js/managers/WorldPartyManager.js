@@ -20,6 +20,7 @@ import {
 import {
   reserveEscortCargo, deliverEscortCargo, disposeLiveBanditCargo,
   inspectCargoDispositions, auditLiveEscortCargoConservation,
+  classifyRetiredEscortCargo,
 } from '../systems/quest-escort-cargo.js';
 import { mirrorCityStockChange } from '../systems/market-stock-bridge.js';
 import {
@@ -393,6 +394,7 @@ export class WorldPartyManager {
       const quest = quests.find(q => q.id === party.escortQuestId);
       if (!quest || quest.status !== 'active') {
         party.alive = false;
+        classifyRetiredEscortCargo({ caravan: party, reason: 'quest_inactive' });
         retireEscortNpcGuards(party, parties);
         continue;
       }
@@ -422,6 +424,10 @@ export class WorldPartyManager {
       }
       if (status === 'failed' || status === 'raided') {
         party.alive = false;
+        classifyRetiredEscortCargo({
+          caravan: party, reason: status === 'raided'
+            ? 'escort_raided' : 'escort_failed',
+        });
         retireEscortNpcGuards(party, parties);
         this.game?.questManager?.failQuest(quest.id,
           status === 'raided' ? 'escort_cargo_raided' : 'escort_abandoned');
