@@ -2013,6 +2013,65 @@ async function main() {
     }
     await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
       .filter({ hasText: 'Kervan güvenli ulaştı' }).click();
+    // V1.34: open the ACTUAL optional player panel on the real world.
+    // Reading, filtering and refreshing must never mutate either market book.
+    const playerMarketCargoReport = await page.evaluate(({fromId,toId})=>{
+      const g=window.game;
+      const widget=g.cargoMarketReportPanel;
+      const source=g.state.map.settlements.find(s=>String(s.id)===fromId);
+      const dest=g.state.map.settlements.find(s=>String(s.id)===toId);
+      const snapshot=()=>JSON.stringify({
+        a:source.marketStock,b:dest.marketStock,
+        ma:g.state.markets[fromId]?.stocks,mb:g.state.markets[toId]?.stocks,
+        gold:g.playerParty.gold,
+        items:g.playerParty.inventory?.items,
+      });
+      const before=snapshot();
+      widget.syncVisibility();
+      const button=document.getElementById('cargoMarketReportToggle');
+      const canOpen=button?.style.display==='block';
+      button?.click();
+      const panel=document.getElementById('cargoMarketReportPanel');
+      const opened=panel?.style.display==='block';
+      const cityFilter=document.getElementById('cargoMarketReportCity');
+      cityFilter.value=fromId;
+      cityFilter.dispatchEvent(new Event('change'));
+      const sourceReport=g.economyManager.buildCargoMarketReport(fromId,80);
+      const destReport=g.economyManager.buildCargoMarketReport(toId,80);
+      const sourceTypes=new Set(sourceReport.movements.map(x=>x.kind));
+      const destTypes=new Set(destReport.movements.map(x=>x.kind));
+      const hasActualTrades=sourceTypes.has('modern_buy')
+        && sourceTypes.has('modern_sell');
+      const hasActualConvoy=sourceTypes.has('escort_reserved')
+        && destTypes.has('escort_delivered');
+      const noConflict=sourceReport.stockAudit.conflicts===0
+        && destReport.stockAudit.conflicts===0;
+      const hasCityFilter=cityFilter.value===fromId
+        && widget.content.textContent.includes('Kervana ayrıldı');
+      const reportText=widget.content.textContent;
+      document.getElementById('cargoMarketReportRefresh')?.click();
+      const unchanged=before===snapshot();
+      document.getElementById('cargoMarketReportClose')?.click();
+      const closed=panel?.style.display==='none';
+      return {canOpen,opened,hasCityFilter,noConflict,hasActualTrades,
+        hasActualConvoy,sourceEvents:sourceReport.movements.length,
+        destEvents:destReport.movements.length,
+        visible:reportText.includes('Pazar defterleri')
+          && reportText.includes('Gerçek stok hareketleri'),
+        unchanged,closed,readonly:sourceReport.readOnly};
+    },stockTradeSetup);
+    report.playerMarketCargoReport=playerMarketCargoReport;
+    stage('real-player-market-cargo-report-readonly',playerMarketCargoReport);
+    if(!playerMarketCargoReport.canOpen || !playerMarketCargoReport.opened
+      || !playerMarketCargoReport.hasCityFilter
+      || !playerMarketCargoReport.noConflict
+      || !playerMarketCargoReport.hasActualTrades
+      || !playerMarketCargoReport.hasActualConvoy
+      || !playerMarketCargoReport.visible
+      || !playerMarketCargoReport.unchanged
+      || !playerMarketCargoReport.closed
+      || !playerMarketCargoReport.readonly)
+      throw new Error('V1.34 market/convoy UI audit did not reconcile read-only events');
     const stockAfterLoad = await page.evaluate(({ fromId, toId }) => {
       const g = window.game;
       const before = [fromId,toId].map(id => {
@@ -2027,10 +2086,13 @@ async function main() {
         return row.wheat === s.marketStock?.find(x => x.id === 'wheat')?.qty
           && row.market === g.state.markets[row.id]?.stocks?.wheat;
       });
-      return { saved, loaded, unchanged };
+      const journalCleared=g.economyManager.buildCargoMarketReport(fromId,80)
+        .movements.length===0;
+      return { saved, loaded, unchanged,journalCleared };
     }, stockTradeSetup);
     stage('market-stock-escort-save-load-roundtrip', stockAfterLoad);
-    if (!stockAfterLoad.saved || !stockAfterLoad.loaded || !stockAfterLoad.unchanged)
+    if (!stockAfterLoad.saved || !stockAfterLoad.loaded
+      || !stockAfterLoad.journalCleared || !stockAfterLoad.unchanged)
       throw new Error('V1.29 stock market/convoy completed save load mismatch');
 
     // V1.30 — recover actual stolen, typed convoy goods from a REAL world
