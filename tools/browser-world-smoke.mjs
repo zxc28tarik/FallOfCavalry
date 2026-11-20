@@ -2175,6 +2175,23 @@ async function main() {
       || !sourcedLootBattle.battlePanel || !sourcedLootBattle.noEarlyReward) {
       throw new Error('V1.30 source bandit raid did not lead to real tactical victory');
     }
+    const recoveredCargoPreview=await page.evaluate(({expected})=>{
+      const g=window.game;
+      const data=g.encounterManager.buildBattleResultPanelData();
+      const active=g.state.uiPanel;
+      const header='Recovered caravan goods (collect on Continue)';
+      const itemsVisible=expected.every(item=>
+        data.body.includes(`${g.economyManager.getItemName(item.id)} x${item.qty}`));
+      const panelIsCurrent=active?.body===data.body;
+      return {headerVisible:data.body.includes(header),
+        itemsVisible,panelIsCurrent,
+        expectedUnits:expected.reduce((n,x)=>n+x.qty,0)};
+    },sourcedLootBattle);
+    stage('source-bandit-verified-itemized-battle-result-panel',recoveredCargoPreview);
+    if(!recoveredCargoPreview.headerVisible
+      || !recoveredCargoPreview.itemsVisible
+      || !recoveredCargoPreview.panelIsCurrent)
+      throw new Error('V1.32 sourced loot is not listed in real battle result panel');
     await page.keyboard.press('Enter');
     const recoveredSourcedLoot=await page.evaluate(data=>{
       const g=window.game;
@@ -2198,7 +2215,17 @@ async function main() {
         .map(x=>[x.id,x.qty]));
       const durable=JSON.stringify(Object.entries(afterLoad).sort())===
         JSON.stringify(Object.entries(after).sort());
-      return {mode:g.state.mode,delta,expected,exact,removed,
+      const trace=g.worldManager.simManager.worldPartyManager
+        .inspectBanditCargoDispositions(30)
+        .filter(x=>x.banditId===data.banditId);
+      const custody=trace.some(x=>x.kind==='player_recovered'
+        && x.reason==='player_victory_claimed'
+        && JSON.stringify(Object.entries(Object.fromEntries(
+          x.goods.map(row=>[row.id,row.qty]))).sort())
+          ===JSON.stringify(Object.entries(expected).sort())
+        && x.sources.some(s=>s.questId===data.questId));
+      return {mode:g.state.mode,delta,expected,exact,removed,custody,
+        traceCount:trace.length,
         retryRejected,noDoubleClaim:afterRetry===
           JSON.stringify(payload.game.inventory?.items||[]) || retryRejected,
         safeSave,saved,loaded,durable,
@@ -2211,7 +2238,7 @@ async function main() {
     if(!recoveredSourcedLoot.exact || !recoveredSourcedLoot.removed
       || !recoveredSourcedLoot.retryRejected || !recoveredSourcedLoot.safeSave
       || !recoveredSourcedLoot.saved || !recoveredSourcedLoot.loaded
-      || !recoveredSourcedLoot.durable
+      || !recoveredSourcedLoot.durable || !recoveredSourcedLoot.custody
       || !recoveredSourcedLoot.goldUnchangedFromClaim) {
       throw new Error('V1.30 raid source loot failed one-time durable player transfer');
     }
