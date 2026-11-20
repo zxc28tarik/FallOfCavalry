@@ -11,6 +11,7 @@ import { isRuntimeRouteBandit } from './quest-route-recon.js';
 import { validBanditRoute } from './quest-world-party-links.js';
 import {
   recordEscortCargoRaid, returnGuardRecoveredEscortCargo,
+  disposeLiveBanditCargo,
 } from './quest-escort-cargo.js';
 
 const runtimeGuards = new WeakSet();
@@ -133,6 +134,10 @@ export function runEscortNpcSkirmish({
     const returnedCargo=returnGuardRecoveredEscortCargo({
       caravan,bandit,quest,worldState,tradeRoutes,currentDay,
     });
+    // Other caravans may also have been robbed by the same live bandit.
+    // Their remaining goods are classified as unrecovered, NOT granted to
+    // this convoy or to the player without a trusted recovery event.
+    disposeLiveBanditCargo({bandit,reason:'escort_guard_kill'});
     caravan.escortDefended=(caravan.escortDefended||0)+1;
     record.guardClock=0;
     record.banditClock=0;
