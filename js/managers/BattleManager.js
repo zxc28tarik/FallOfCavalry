@@ -14,6 +14,7 @@ import { applyBattleOutcomes } from '../systems/casualties.js';
 import { removeWorldParty } from '../systems/world-ai.js';
 import {
   witnessBanditCargoBattleVictory, recoverWitnessedBanditCargo,
+  disposeLiveBanditCargo,
 } from '../systems/quest-escort-cargo.js';
 import { emitContractEvent } from '../systems/contracts.js';
 import { emptyQuestEventLedger, recordVerifiedBattleQuestEvent } from '../systems/quest-event-ledger.js';
@@ -901,6 +902,17 @@ export class BattleManager {
     if (linkedWorldPartyId) {
       // Defeat must not magically eliminate the bandits that just won.
       if (!guard.retainBandit) {
+        const removedBandit = g.worldManager?.worldAi?.parties?.find(p =>
+          p?.id === linkedWorldPartyId);
+        if (result === 'victory' && removedBandit) {
+          // The real source has been resolved in this result screen. Never
+          // create another reward when the player skips taking the cargo.
+          disposeLiveBanditCargo({
+            bandit: removedBandit, battle,
+            reason: recoveredCargo.length
+              ? 'player_victory_claimed' : 'player_victory_forfeited',
+          });
+        }
         removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
       }
       delete g.worldManager.worldEncounterPartyByEnemyId[enemyId];
