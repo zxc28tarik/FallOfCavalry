@@ -1913,6 +1913,9 @@ async function main() {
       const routes = g.economyManager.ensureTradeRoutes();
       const from = worldState.settlements.find(s => String(s.id) === fromId);
       const to = worldState.settlements.find(s => String(s.id) === toId);
+      // Mirror the real city's first-service initialization: an old saved
+      // empty [] must not be mistaken for a complete already-open market.
+      g.economyManager.ensureSettlementMarketState(to);
       const market = g.economyManager.getOrCreateMarketForSettlement(to);
       const initialSource = Object.fromEntries(from.marketStock.map(x => [x.id,x.qty]));
       const initialTarget = { ...market.stocks };
