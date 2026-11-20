@@ -136,4 +136,25 @@ describe('WEB V1.28 — audited dual market stock bridge', () => {
     expect(rejected['0'].stocks.wheat).toBe(50);
     expect(rejected['0'].stockBridge).toBeUndefined();
   });
+  it('reinitializes only truly unopened empty saved city stocks, not competing legacy market', () => {
+    const state = { markets: {}, seed: 1337 };
+    const manager = new EconomyManager(state);
+    const emptyUnvisited = { id: 0, type: 'city', marketStock: [] };
+    manager.ensureSettlementMarketState(emptyUnvisited);
+    expect(emptyUnvisited.marketStock).toHaveLength(CONST.TRADE_ITEMS.length);
+    expect(emptyUnvisited.marketStock.every(row => row.qty > 0)).toBe(true);
+    const linked = manager.getOrCreateMarketForSettlement(emptyUnvisited);
+    expect(linked.stockBridge).toEqual({ version: 1, settlementId: '0' });
+    expect(linked.stocks.wheat).toBe(emptyUnvisited.marketStock.find(x => x.id === 'wheat').qty);
+
+    const existing = trade.initMarket({ id: 55, type: 'city', tier: 3 }, 1337);
+    state.markets['55'] = existing;
+    const oldConflict = { id: 55, type: 'city', marketStock: [] };
+    manager.ensureSettlementMarketState(oldConflict);
+    expect(oldConflict.marketStock).toEqual([]); // Competing ledgers: never invent.
+    expect(state.markets['55'].stocks.wheat).toBeGreaterThan(0);
+    expect(manager.getOrCreateMarketForSettlement(oldConflict).stockBridge)
+      .toBeUndefined();
+  });
+
 });
