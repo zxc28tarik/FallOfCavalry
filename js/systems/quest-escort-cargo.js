@@ -164,8 +164,7 @@ export function returnGuardRecoveredEscortCargo({
   if (!returning.length || !returning.every(({ id, qty }) =>
     typeof id === 'string' && safeQty(qty) && qty > 0
     && current.has(id) && safeQty(current.get(id))
-    && Number.isSafeInteger(current.get(id) + qty))
-    || false) return [];
+    && Number.isSafeInteger(current.get(id) + qty))) return [];
   const amount = itemCount(returning);
   if (amount > manifest.lost) return [];
   const next = manifest.goods.map(row => ({
@@ -316,9 +315,11 @@ export function deliverEscortCargo({
 }
 
 /**
- * In-flight escort parties are excluded from SaveData. Return their remaining
- * un-delivered goods to the origin in the SAVE SNAPSHOT ONLY, so reloading an
- * active quest does not reserve the same stock twice. Runtime stock is untouched.
+ * In-flight escort parties are excluded from SaveData. Return their
+ * remaining goods AND unclaimed process-only bandit loot to the genuine
+ * origin in the SAVE SNAPSHOT ONLY. The loaded bandit has no trustworthy
+ * persisted loot proof; the live world remains untouched. A player-recovered
+ * item never appears in the unclaimed refund.
  */
 export function outstandingEscortCargoForSave(parties = []) {
   const result = new Map();
