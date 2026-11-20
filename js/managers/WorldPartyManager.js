@@ -17,7 +17,10 @@ import {
   spawnEscortNpcGuards, runEscortNpcSkirmish,
   retireEscortNpcGuards,
 } from '../systems/quest-escort-npc-guards.js';
-import { reserveEscortCargo, deliverEscortCargo } from '../systems/quest-escort-cargo.js';
+import {
+  reserveEscortCargo, deliverEscortCargo, disposeLiveBanditCargo,
+  inspectCargoDispositions,
+} from '../systems/quest-escort-cargo.js';
 import { mirrorCityStockChange } from '../systems/market-stock-bridge.js';
 import {
   createInitialWorldAiState,
@@ -504,6 +507,8 @@ export class WorldPartyManager {
       cfg: this.getWorldAiCfg(),
       tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
       dtSec,
+      onBanditRemoved: (bandit, reason) =>
+        disposeLiveBanditCargo({ bandit, reason }),
     });
     const worldState = this.world.state?.map || {};
     const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
@@ -514,6 +519,11 @@ export class WorldPartyManager {
     // aggro for it. Never offer an encounter for that dead source party.
     return encounters.filter(e => this.world.worldAi.parties
       .some(p => p.id === e.partyId && p.alive !== false));
+  }
+
+  /** Diagnostic report; cannot give gold, stock, or NPC loot. */
+  inspectBanditCargoDispositions(limit = 20) {
+    return inspectCargoDispositions(limit);
   }
 
   pickSurpriseType() {
