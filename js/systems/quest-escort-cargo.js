@@ -7,9 +7,13 @@
  */
 import { validEscortQuest, isLiveEscortParty } from './quest-caravan-escort.js';
 import { isRuntimeRouteBandit } from './quest-route-recon.js';
+import { validBanditRoute } from './quest-world-party-links.js';
 
 const liveCargo = new WeakMap();
 const banditCargo = new WeakMap();
+// Only the real battle-resolution path can preauthorize a loot recovery.
+// The receipt is not serialized; a saved battle/party ID never becomes proof.
+const battleRecoveryReceipts = new WeakMap();
 const safeQty = value => Number.isSafeInteger(value) && value >= 0;
 const same = (a, b) => a != null && b != null && String(a) === String(b);
 const isLiveCargo = party => isLiveEscortParty(party) && liveCargo.has(party);
@@ -91,17 +95,113 @@ export function recordEscortCargoRaid({
     gained.push({ id: row.id, qty });
   }
   if (gained.length) {
-    const loot = banditCargo.get(bandit) || new Map();
-    for (const item of gained) loot.set(item.id, (loot.get(item.id) || 0) + item.qty);
-    banditCargo.set(bandit, loot);
+    const record = banditCargo.get(bandit) || {
+      routeId: bandit.routeId, goods: new Map(), claimed: false,
+    };
+    // Stolen goods cannot be relabeled to another road or a spent receipt.
+    if (record.routeId !== bandit.routeId || record.claimed) return [];
+    for (const item of gained) record.goods.set(item.id,
+      (record.goods.get(item.id) || 0) + item.qty);
+    banditCargo.set(bandit, record);
   }
   return gained;
 }
 
 export function inspectLiveBanditCargo(bandit) {
   if (!isRuntimeRouteBandit(bandit)) return [];
-  return [...(banditCargo.get(bandit) || new Map())]
-    .map(([id, qty]) => ({ id, qty }));
+  const record = banditCargo.get(bandit);
+  if (!record || record.claimed) return [];
+  return [...record.goods].map(([id, qty]) => ({ id, qty }));
+}
+
+/**
+ * V1.30 first proof: the engine completed an actual victory against exactly
+ * one live, registered worldAI bandit with sourced cargo. A JSON-restored
+ * bandit or a battle-result claim cannot create this process-local receipt.
+ */
+export function witnessBanditCargoBattleVictory({
+  battle, bandit, worldAi, enemyId, linkedWorldPartyId,
+  worldState, tradeRoutes,
+} = {}) {
+  if (!battle || typeof battle !== 'object'
+    || battleRecoveryReceipts.has(battle)
+    || battle.phase !== 'result'
+    || battle.result !== 'victory'
+    || battle.battleResult?.result !== 'victory'
+    || !Number.isSafeInteger(battle.resolvedAt)
+    || !Array.isArray(worldAi?.parties)
+    || !worldAi.parties.includes(bandit)
+    || !isRuntimeRouteBandit(bandit) || bandit.alive === false
+    || bandit?.id == null || bandit.kind !== 'bandit'
+    || enemyId !== battle.enemyId
+    || enemyId !== battle.battleResult.enemyId
+    || enemyId !== `wai-${bandit.id}`
+    || linkedWorldPartyId !== bandit.id
+    || !validBanditRoute(bandit, worldState, tradeRoutes)?.road)
+    return false;
+  const source = banditCargo.get(bandit);
+  if (!source || source.claimed || source.routeId !== bandit.routeId
+    || source.goods.size === 0) return false;
+  battleRecoveryReceipts.set(battle, {
+    bandit, enemyId, linkedWorldPartyId, consumed: false,
+  });
+  return true;
+}
+
+/**
+ * Called ONLY while BattleManager is leaving that exact victorious battle,
+ * BEFORE the bandit world party is removed. Goods move atomically into the
+ * existing player inventory; SaveManager already persists this inventory.
+ * No generated loot, currency, quest completion or new item type is minted.
+ */
+export function recoverWitnessedBanditCargo({
+  battle, bandit, worldAi, enemyId, linkedWorldPartyId,
+  playerParty, catalog,
+} = {}) {
+  const receipt = battleRecoveryReceipts.get(battle);
+  if (!receipt || receipt.consumed || receipt.bandit !== bandit
+    || receipt.enemyId !== enemyId
+    || receipt.linkedWorldPartyId !== linkedWorldPartyId
+    || !Array.isArray(worldAi?.parties) || !worldAi.parties.includes(bandit)
+    || !isRuntimeRouteBandit(bandit) || bandit.alive === false
+    || battle.phase !== 'result' || battle.result !== 'victory'
+    || battle.battleResult?.result !== 'victory'
+    || battle.enemyId !== enemyId || battle.battleResult.enemyId !== enemyId
+    || !Array.isArray(playerParty?.inventory?.items)
+    || !Array.isArray(catalog)) return [];
+  const source = banditCargo.get(bandit);
+  if (!source || source.claimed || source.routeId !== bandit.routeId
+    || source.goods.size === 0) return [];
+  const byId = new Map(catalog.filter(x =>
+    typeof x?.id === 'string' && /^[a-z0-9_:-]{1,64}$/i.test(x.id))
+    .map(x => [x.id, x]));
+  const incoming = [...source.goods].map(([id, qty]) => ({ id, qty }));
+  if (!incoming.every(item => byId.has(item.id)
+    && safeQty(item.qty) && item.qty > 0)) return [];
+  const current = playerParty.inventory.items;
+  const next = current.map(item => ({ ...item }));
+  for (const { id, qty } of incoming) {
+    const matches = next.filter(item => item?.id === id);
+    if (matches.length > 1) return [];
+    const row = matches[0];
+    if (row) {
+      if (!safeQty(row.qty) || !Number.isSafeInteger(row.qty + qty)) return [];
+      row.qty += qty;
+    } else {
+      const definition = byId.get(id);
+      next.push({
+        id, name: definition.name || id, qty,
+        unitValue: Number.isFinite(definition.unitValue)
+          ? definition.unitValue : Number(definition.basePrice ?? 1),
+      });
+    }
+  }
+  // One synchronous state write; never partly credit goods and then fail.
+  playerParty.inventory.items = next;
+  receipt.consumed = true;
+  source.claimed = true;
+  source.goods.clear();
+  return incoming;
 }
 
 /** After an authentic witnessed arrival, surviving stock goes to the real destination. */
