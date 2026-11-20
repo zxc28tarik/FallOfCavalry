@@ -76,6 +76,15 @@ export function inspectCargoDispositions(limit = 20) {
 }
 
 /**
+ * V1.36: diagnostics belong only to the current campaign/load interval.
+ * This clears observations, NEVER the trusted in-process escrow WeakMaps
+ * or an already earned player inventory item.
+ */
+export function resetCargoDispositionJournal() {
+  cargoDispositionLedger.length = 0;
+}
+
+/**
  * Record authentic removal of a bandit's still-unclaimed stolen inventory.
  * No cargo is transferred here: it is classified as unrecovered loss.
  * WorldAI calls this after the real patrol/despawn/guard death; BattleManager
