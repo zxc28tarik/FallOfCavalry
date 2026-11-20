@@ -19,7 +19,7 @@ import {
 } from '../systems/quest-escort-npc-guards.js';
 import {
   reserveEscortCargo, deliverEscortCargo, disposeLiveBanditCargo,
-  inspectCargoDispositions,
+  inspectCargoDispositions, auditLiveEscortCargoConservation,
 } from '../systems/quest-escort-cargo.js';
 import { mirrorCityStockChange } from '../systems/market-stock-bridge.js';
 import {
@@ -519,6 +519,13 @@ export class WorldPartyManager {
     // aggro for it. Never offer an encounter for that dead source party.
     return encounters.filter(e => this.world.worldAi.parties
       .some(p => p.id === e.partyId && p.alive !== false));
+  }
+
+  /** Per-convoy source-backed goods conservation, including unaccounted gaps. */
+  auditEscortCargoConservation(caravan) {
+    return auditLiveEscortCargoConservation({
+      caravan, worldAi: this.world?.worldAi,
+    });
   }
 
   /** Diagnostic report; cannot give gold, stock, or NPC loot. */
