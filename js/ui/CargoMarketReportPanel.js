@@ -1,183 +1,318 @@
 /**
- * V1.34 - optional read-only market / convoy audit panel.
- * No inputs in this panel trigger trade, quest progress, save or recovery.
+ * V1.35 — player-facing, strictly read-only market & convoy diagnostics.
+ * All tab/filter/page/CSV operations use derived views, never game receipts.
  */
+import {
+  queryMarketCargoReportRows, marketCargoReportCsv,
+} from '../systems/market-cargo-report.js';
+
+const sections = [
+  ['movements','Gerçek stok hareketleri'],
+  ['stock','Pazar defterleri'],
+  ['escorts','Canlı kervan dengesi'],
+  ['dispositions','Haydut ganimeti akıbeti'],
+];
+const types = {
+  movements: [
+    ['modern_buy','Pazar alımı'], ['modern_sell','Pazar satışı'],
+    ['legacy_buy','Şehir alımı'], ['legacy_sell','Şehir satışı'],
+    ['day_drift','Günlük arz değişimi'],
+    ['escort_reserved','Kervana ayrıldı'],
+    ['escort_delivered','Kervan teslim etti'],
+  ],
+  stock: [
+    ['conflict','Çelişen miktar'],['missing_market','İkinci defter eksik'],
+    ['missing_city','Şehir defteri eksik'],
+    ['invalid_quantity','Geçersiz miktar'],
+    ['unknown_item','Bilinmeyen ürün'],
+    ['duplicate_city_item','Tekrarlanan ürün'],
+    ['orphan_market','Sahipsiz pazar'],
+    ['duplicate_settlement','Tekrarlanan şehir'],
+    ['equal','Eşit'],
+  ],
+  escorts: [['balanced','Dengeli'],['mismatch','Açıklanamayan fark']],
+  dispositions: [
+    ['player_recovered','Oyuncunun kazandığı'],
+    ['guard_returned','Muhafızın geri aldığı'],
+    ['unrecovered_loss','Geri alınamayan kayıp'],
+    ['patrol_kill','Devriye temizliği'],
+    ['out_of_range','Haydut uzaklaştı'],
+    ['escort_guard_kill','Muhafız çarpışması'],
+    ['player_victory_forfeited','Alınmadan bırakıldı'],
+  ],
+};
+const names = {
+  modern_buy:'Pazar alımı',modern_sell:'Pazar satışı',
+  legacy_buy:'Şehir alımı',legacy_sell:'Şehir satışı',
+  day_drift:'Günlük arz değişimi',
+  escort_reserved:'Kervana ayrıldı',escort_delivered:'Kervan teslim etti',
+  equal:'Eşit',conflict:'ÇATIŞMA',balanced:'Dengeli',mismatch:'FARK VAR',
+  player_recovered:'Oyuncu kazandı',guard_returned:'Muhafız geri aldı',
+  unrecovered_loss:'Geri alınamayan mal',
+};
 const safeText = value => String(value ?? '-');
-const statuses = {
-  equal: 'Eşit', conflict: 'ÇATIŞMA',
-  missing_city: 'Şehir defteri eksik',
-  missing_market: 'İkinci pazar defteri yok',
-  invalid_quantity: 'Geçersiz miktar',
-  unknown_item: 'Bilinmeyen ürün',
-  duplicate_city_item: 'Tekrarlanan ürün',
-};
-const kinds = {
-  legacy_buy: 'Şehir alımı', legacy_sell: 'Şehir satışı',
-  modern_buy: 'Pazar alımı', modern_sell: 'Pazar satışı',
-  day_drift: 'Günlük arz değişimi',
-  escort_reserved: 'Kervana ayrıldı',
-  escort_delivered: 'Kervan teslim etti',
-};
-const cargoReasons = {
-  guard_returned: 'Muhafız kervana geri aldı',
-  player_recovered: 'Oyuncu kazandı',
-  unrecovered_loss: 'Geri alınamayan kayıp',
-};
+function addOption(select, id, label) {
+  const option = document.createElement('option');
+  option.value = id; option.textContent = label;
+  select.append(option);
+}
+function button(id,label,callback) {
+  const element = document.createElement('button');
+  element.type = 'button';element.id = id;element.textContent = label;
+  element.style.cssText = 'padding:6px 9px;background:#314b52;color:#fff;'
+    + 'border:1px solid #b8a076;border-radius:4px;cursor:pointer';
+  element.addEventListener('click',callback);
+  return element;
+}
 
 export default class CargoMarketReportPanel {
   constructor(game) {
     this.game = game;
-    this.toggle = null;
-    this.root = null;
-    this.filter = null;
-    this.content = null;
-    this.selectedCity = '';
+    this.root = null;this.toggle = null;this.content = null;
+    this.selectedCity = '';this.selectedSection = 'movements';
+    this.selectedType = '';this.itemId = '';this.search = '';
+    this.page = 1;this.pageSize = 20;
+    this.lastReport = null;this._settlementsRef = null;
   }
 
   ensureRoot() {
     if (typeof document === 'undefined') return null;
     if (this.root) return this.root;
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.id = 'cargoMarketReportToggle';
-    toggle.textContent = 'Mal Hareketleri';
+    const toggle = button('cargoMarketReportToggle','Mal Hareketleri',()=>{
+      this.syncVisibility();
+      if (this.root.style.display === 'none') {
+        this.refresh();this.root.style.display = 'block';
+      } else this.root.style.display = 'none';
+    });
     toggle.style.cssText = 'position:fixed;left:12px;bottom:14px;z-index:19000;'
-      + 'padding:8px 12px;background:#233b42;color:#fff;border:1px solid #b8a076;'
-      + 'border-radius:6px;cursor:pointer;font:14px sans-serif;display:none';
+      + 'padding:8px 12px;background:#233b42;color:#fff;'
+      + 'border:1px solid #b8a076;border-radius:6px;cursor:pointer;'
+      + 'font:14px sans-serif;display:none';
     const panel = document.createElement('aside');
     panel.id = 'cargoMarketReportPanel';
-    panel.setAttribute('aria-label', 'Pazar ve kervan mal hareketleri raporu');
+    panel.setAttribute('aria-label','Pazar ve kervan mal hareketleri raporu');
     panel.style.cssText = 'position:fixed;left:12px;bottom:57px;z-index:19000;'
-      + 'width:min(520px,calc(100vw - 24px));max-height:65vh;overflow:auto;'
+      + 'width:min(560px,calc(100vw - 24px));max-height:68vh;overflow:auto;'
       + 'padding:13px;background:#182a31;color:#f0e5d0;border:1px solid #b8a076;'
       + 'border-radius:7px;box-shadow:0 6px 24px #0008;'
       + 'font:13px/1.45 sans-serif;display:none';
-    const heading = document.createElement('strong');
-    heading.textContent = 'Pazar ve kervan muhasebesi';
-    const note = document.createElement('p');
-    note.textContent = 'Salt okunur. İşlemler ve ganimet kayıtları yalnız bu oturumda tutulur. '
-      + 'İki pazar defteri çelişiyorsa hiçbir miktar otomatik düzeltilmez.';
-    note.style.margin = '6px 0 10px';
-    const controlRow = document.createElement('div');
-    controlRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0';
-    const select = document.createElement('select');
-    select.id = 'cargoMarketReportCity';
-    select.setAttribute('aria-label', 'Şehir filtresi');
-    select.style.cssText = 'background:#223d44;color:#fff;min-width:170px;max-width:300px;'
-      + 'padding:6px;border:1px solid #b8a076;border-radius:4px;flex:1';
-    select.addEventListener('change', () => {
-      this.selectedCity = select.value;
-      this.refresh();
+    const heading=document.createElement('strong');
+    heading.textContent='Pazar ve kervan muhasebesi';
+    const note=document.createElement('p');
+    note.textContent='Salt okunur. Olay günlüğü sadece bu oturumdan gelir '
+      + '(en son 160 stok, 128 ganimet kaydı). '
+      + 'Eski iki pazar defteri birleştirilmez. CSV yalnızca süzülmüş gözlemleri içerir.';
+    note.style.margin='6px 0 10px';
+    const controls=document.createElement('div');
+    controls.style.cssText='display:flex;gap:7px;flex-wrap:wrap;align-items:center;'
+      + 'margin:8px 0';
+    const category=document.createElement('select');
+    category.id='cargoMarketReportSection';
+    category.setAttribute('aria-label','Rapor kategorisi');
+    for(const [id,label] of sections)addOption(category,id,label);
+    category.addEventListener('change',()=>{
+      this.selectedSection=category.value;this.selectedType='';this.page=1;
+      this.populateTypes();this.refresh();
     });
-    const button = (id, label, callback) => {
-      const element = document.createElement('button');
-      element.type = 'button'; element.id = id; element.textContent = label;
-      element.style.cssText = 'padding:6px 9px;background:#314b52;color:#fff;'
-        + 'border:1px solid #b8a076;border-radius:4px;cursor:pointer';
-      element.addEventListener('click', callback);
-      return element;
-    };
-    const refresh = button('cargoMarketReportRefresh', 'Yenile', () => this.refresh());
-    const close = button('cargoMarketReportClose', 'Kapat', () => {
-      panel.style.display = 'none';
+    this.category=category;
+    const select=document.createElement('select');
+    select.id='cargoMarketReportCity';
+    select.setAttribute('aria-label','Şehir filtresi');
+    select.style.maxWidth='235px';
+    select.addEventListener('change',()=>{
+      this.selectedCity=select.value;this.page=1;this.refresh();
     });
-    controlRow.append(select, refresh, close);
-    const content = document.createElement('div');
-    content.id = 'cargoMarketReportContent';
-    panel.append(heading, note, controlRow, content);
-    toggle.addEventListener('click', () => {
-      this.syncVisibility();
-      if (panel.style.display === 'none') {
-        this.refresh();
-        panel.style.display = 'block';
-      } else panel.style.display = 'none';
+    this.filter=select;
+    const type=document.createElement('select');
+    type.id='cargoMarketReportType';
+    type.setAttribute('aria-label','İşlem veya durum filtresi');
+    type.addEventListener('change',()=>{
+      this.selectedType=type.value;this.page=1;this.refresh();
     });
-    document.body.append(toggle, panel);
-    this.root = panel;
-    this.toggle = toggle;
-    this.filter = select;
-    this.content = content;
+    this.type=type;
+    this.populateTypes();
+    const item=document.createElement('input');
+    item.id='cargoMarketReportItem';
+    item.type='search';item.placeholder='Ürün ID (örn wheat)';
+    item.setAttribute('aria-label','Ürün filtresi');
+    item.style.cssText='min-width:115px;max-width:175px;padding:6px;'
+      + 'background:#223d44;color:#fff;border:1px solid #b8a076;border-radius:4px';
+    item.addEventListener('input',()=>{
+      this.itemId=item.value;this.page=1;this.refresh();
+    });
+    const search=document.createElement('input');
+    search.id='cargoMarketReportSearch';
+    search.type='search';search.placeholder='Şehir / rota / görev ara';
+    search.setAttribute('aria-label','Metinle ara');
+    search.style.cssText=item.style.cssText;
+    search.addEventListener('input',()=>{
+      this.search=search.value;this.page=1;this.refresh();
+    });
+    controls.append(select,category,type,item,search);
+    const navigation=document.createElement('div');
+    navigation.style.cssText='display:flex;gap:7px;flex-wrap:wrap;align-items:center;'
+      + 'margin:8px 0';
+    const size=document.createElement('select');
+    size.id='cargoMarketReportPageSize';size.setAttribute('aria-label','Sayfa başına kayıt');
+    for(const n of [10,20,50])addOption(size,String(n),n+' / sayfa');
+    size.value='20';
+    size.addEventListener('change',()=>{
+      this.pageSize=Number(size.value);this.page=1;this.refresh();
+    });
+    const prev=button('cargoMarketReportPrev','Önceki',()=>{
+      if(this.page>1){this.page--;this.refresh();}
+    });
+    const next=button('cargoMarketReportNext','Sonraki',()=>{
+      if(this.lastPage && this.page<this.lastPage){
+        this.page++;this.refresh();
+      }
+    });
+    const pageInfo=document.createElement('span');
+    pageInfo.id='cargoMarketReportPageInfo';
+    pageInfo.setAttribute('role','status');
+    const exportButton=button('cargoMarketReportCsv','CSV indir',()=>this.exportCsv());
+    const refresh=button('cargoMarketReportRefresh','Yenile',()=>this.refresh());
+    const close=button('cargoMarketReportClose','Kapat',()=>{
+      panel.style.display='none';
+    });
+    navigation.append(size,prev,pageInfo,next,exportButton,refresh,close);
+    const content=document.createElement('div');
+    content.id='cargoMarketReportContent';
+    panel.append(heading,note,controls,navigation,content);
+    document.body.append(toggle,panel);
+    this.root=panel;this.toggle=toggle;this.content=content;
+    this.pageInfo=pageInfo;this.prev=prev;this.next=next;
     this.syncVisibility();
     return panel;
   }
 
+  populateTypes() {
+    if(!this.type)return;
+    this.type.replaceChildren();
+    addOption(this.type,'','Tüm işlem / durumlar');
+    for(const [key,label] of types[this.selectedSection] || [])
+      addOption(this.type,key,label);
+    this.type.value=this.selectedType;
+  }
+
   syncVisibility() {
-    if (!this.toggle) return;
-    const visible = this.game?.started
-      && ['map', 'city'].includes(this.game?.state?.mode);
-    this.toggle.style.display = visible ? 'block' : 'none';
-    if (!visible && this.root) this.root.style.display = 'none';
+    if(!this.toggle)return;
+    const visible=this.game?.started
+      && ['map','city'].includes(this.game?.state?.mode);
+    this.toggle.style.display=visible?'block':'none';
+    if(!visible && this.root)this.root.style.display='none';
+  }
+
+  updateCityOptions(settlements) {
+    if(this._settlementsRef===settlements)return;
+    this._settlementsRef=settlements;
+    this.filter.replaceChildren();
+    addOption(this.filter,'','Tüm şehirler (genel)');
+    const cities=[...settlements].filter(s=>s?.id!=null).sort((a,b)=>
+      safeText(a.name||a.id).localeCompare(safeText(b.name||b.id),'tr'));
+    for(const city of cities)addOption(this.filter,String(city.id),
+      safeText(city.name||city.id)+' #'+city.id);
+    if(![...this.filter.options].some(o=>o.value===this.selectedCity))
+      this.selectedCity='';
+    this.filter.value=this.selectedCity;
+  }
+
+  getQueryOptions() {
+    return {section:this.selectedSection,itemId:this.itemId,
+      type:this.selectedType,search:this.search,
+      page:this.page,pageSize:this.pageSize};
   }
 
   refresh() {
-    if (!this.ensureRoot()) return null;
-    const g = this.game;
-    const settlements = Array.isArray(g?.state?.map?.settlements)
+    if(!this.ensureRoot())return null;
+    const g=this.game;
+    const settlements=Array.isArray(g?.state?.map?.settlements)
       ? g.state.map.settlements : [];
-    const existingId = this.selectedCity;
-    this.filter.replaceChildren();
-    const all = document.createElement('option');
-    all.value = ''; all.textContent = 'Tüm şehirler (genel)';
-    this.filter.append(all);
-    for (const city of [...settlements].filter(s => s?.id != null)
-      .sort((a,b) => safeText(a.name || a.id).localeCompare(
-        safeText(b.name || b.id), 'tr'))) {
-      const opt = document.createElement('option');
-      opt.value = String(city.id);
-      opt.textContent = safeText(city.name || city.id) + ' #' + city.id;
-      this.filter.append(opt);
-    }
-    this.selectedCity = existingId && [...this.filter.options].some(o =>
-      o.value === existingId) ? existingId : '';
-    this.filter.value = this.selectedCity;
-    const report = g?.economyManager?.buildCargoMarketReport?.(
-      this.selectedCity || null, 24);
+    this.updateCityOptions(settlements);
+    const report=g?.economyManager?.buildCargoMarketReport?.(
+      this.selectedCity||null,160);
     this.content.replaceChildren();
-    if (!report) return null;
-    const add = (heading, text) => {
-      const section = document.createElement('section');
-      section.style.cssText = 'border-top:1px solid #52676c;padding:9px 0';
-      const title = document.createElement('strong');
-      title.textContent = heading;
-      const body = document.createElement('pre');
-      body.style.cssText = 'white-space:pre-wrap;word-break:break-word;'
+    if(!report)return null;
+    this.lastReport=report;
+    const page=queryMarketCargoReportRows(report,this.getQueryOptions());
+    this.page=page.page;this.lastPage=page.pageCount;
+    this.prev.disabled=page.page<=1;this.next.disabled=page.page>=page.pageCount;
+    this.pageInfo.textContent=' '+page.first+'–'+page.last+' / '+page.total
+      +' (sayfa '+page.page+'/'+page.pageCount+') ';
+    const add=(heading,text)=>{
+      const section=document.createElement('section');
+      section.style.cssText='border-top:1px solid #52676c;padding:9px 0';
+      const title=document.createElement('strong');title.textContent=heading;
+      const body=document.createElement('pre');
+      body.style.cssText='white-space:pre-wrap;word-break:break-word;'
         + 'margin:5px 0 0;font:12px/1.5 monospace';
-      body.textContent = text;
-      section.append(title, body);
+      body.textContent=text;
+      section.append(title,body);
       this.content.append(section);
     };
-    const counts = report.stockAudit.counts || {};
-    add('Pazar defterleri (anlık)', [
-      'Şehir sayısı: ' + report.stockAudit.settlementCount,
-      'Eşit satırlar: ' + (counts.equal || 0),
-      'Çakışan miktarlar: ' + report.stockAudit.conflicts,
-      'Diğer eksik/uyumsuz: ' + (report.stockAudit.unresolved
-        - report.stockAudit.conflicts),
-      ...report.stockAudit.rows.filter(row => row.status !== 'equal')
-        .slice(0,12).map(row => `${safeText(row.itemId)}: şehir ${safeText(row.cityQty)}, `
-          + `pazar ${safeText(row.marketQty)} — ${statuses[row.status] || row.status}`),
-    ].join('\n'));
-    add('Gerçek stok hareketleri (son 24)', report.movements.length
-      ? [...report.movements].reverse().map(row =>
-        `G${row.day} ${kinds[row.kind] || row.kind} #${row.settlementId} `
-        + `${row.itemId}: ${row.before} → ${row.after} (${row.delta > 0 ? '+' : ''}${row.delta}); `
-        + `${statuses[row.status] || row.status}`
-        + (row.routeId ? ` [${row.routeId}]` : '')).join('\n')
-      : 'Bu oturumda gözlemlenmiş işlem yok.');
-    add('Canlı kervanların ürün dengesi', report.escorts.length
-      ? report.escorts.slice(0,8).map(e => `${e.questId}: `
-        + `${e.accounted}/${e.reserved}, fark ${e.gap} — ${e.status}`
-        + '\n' + e.rows.map(x => `  ${x.id}: kervan ${x.inCaravan}, `
-          + `haydut ${x.inBandits}, oyuncu ${x.inPlayer}, `
-          + `hedef ${x.atDestination}, kayıp ${x.unrecovered}, fark ${x.gap}`)
-          .join('\n')).join('\n')
-      : 'Aktif, kaynaklı kervan raporu yok.');
-    add('Gerçek haydut ganimet akıbeti (son 24)', report.cargoDispositions.length
-      ? [...report.cargoDispositions].reverse().map(e =>
-        `${cargoReasons[e.kind] || e.kind} (${e.reason}), `
-        + `haydut ${e.banditId}, yol ${e.routeId}: `
-        + e.goods.map(x => `${x.id} x${x.qty}`).join(', ')).join('\n')
-      : 'Bu oturumda doğrulanmış ganimet hareketi yok.');
+    const counts=report.stockAudit.counts||{};
+    add('Pazar defterleri (anlık)',
+      'Şehir: '+report.stockAudit.settlementCount
+      +' | Eşit: '+(counts.equal||0)
+      +' | Çatışma: '+report.stockAudit.conflicts
+      +' | Eksik / diğer: '+(report.stockAudit.unresolved
+      -report.stockAudit.conflicts));
+    add('Genel durum',
+      'Gerçek stok hareketleri: '+report.movements.length
+      +' (son 160 oturum kaydı)\nCanlı kervanlar: '+report.escorts.length
+      +'\nHaydut ganimet akıbeti: '+report.cargoDispositions.length
+      +' (son 128 oturum kaydı)\nCSV: seçilen kategoriye ve filtreye uyan '
+      +'bütün mevcut satırlar; sadece görünen sayfa değil.');
+    const fmt=row=>{
+      switch(page.section){
+        case 'stock':
+          return '#'+safeText(row.settlementId)+' '+safeText(row.itemId)
+            +' | şehir '+safeText(row.cityQty)
+            +' | pazar '+safeText(row.marketQty)
+            +' | '+(names[row.status]||row.status);
+        case 'movements':
+          return 'G'+safeText(row.day)+' '+(names[row.kind]||row.kind)
+            +' #'+safeText(row.settlementId)+' '+safeText(row.itemId)
+            +': '+safeText(row.before)+' → '+safeText(row.after)
+            +' ('+(row.delta>0?'+':'')+safeText(row.delta)+')'
+            +(row.routeId?' ['+row.routeId+']':'')
+            +' | '+(names[row.status]||row.status);
+        case 'escorts':
+          return safeText(row.questId)+' '+safeText(row.itemId)
+            +' | ayrılan '+row.reserved+'; kervan '+row.inCaravan
+            +'; haydut '+row.inBandits+'; oyuncu '+row.inPlayer
+            +'; hedef '+row.atDestination+'; kayıp '+row.unrecovered
+            +'; fark '+row.gap+' | '+(names[row.status]||row.status);
+        default:
+          return (names[row.kind]||row.kind)+' ('+row.reason+')'
+            +' '+safeText(row.itemId)+' x'+row.qty
+            +' | haydut '+safeText(row.banditId)
+            +' | kaynak '+safeText(row.fromId)
+            +' | görev '+safeText(row.questId);
+      }
+    };
+    const sectionName=sections.find(x=>x[0]===page.section)?.[1]||page.section;
+    add(sectionName+' — '+page.first+'–'+page.last+' / '+page.total,
+      page.rows.length?page.rows.map(fmt).join('\n')
+        :'Bu filtre için kayıt yok.');
     return report;
+  }
+
+  exportCsv() {
+    if(!this.ensureRoot())return null;
+    const report=this.refresh();
+    if(!report)return null;
+    const csv=marketCargoReportCsv(report,this.getQueryOptions());
+    const filename='foc-mal-hareketleri-'
+      +this.selectedSection+'-'
+      +String(this.selectedCity||'tum').replace(/[^a-zA-Z0-9_-]/g,'_')
+      +'.csv';
+    const blob=new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download=filename;
+    document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),0);
+    return csv;
   }
 }
