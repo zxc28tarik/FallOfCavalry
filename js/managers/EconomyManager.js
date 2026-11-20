@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
 import { canonicalRoadLinks } from '../systems/world-trade-road-topology.js';
+import { auditCampaignMarketStocks } from '../systems/market-stock-audit.js';
 import {
   establishMarketStockBridge, mirrorCityStockChange,
 } from '../systems/market-stock-bridge.js';
@@ -51,6 +52,15 @@ export class EconomyManager {
     if (!this.state.dailyLedger || typeof this.state.dailyLedger !== 'object') this.state.dailyLedger = { tradePL: 0 };
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
+  }
+
+  // Read-only V1.29 audit. Do not initialize missing markets or change city stock.
+  auditMarketStocks() {
+    return auditCampaignMarketStocks({
+      settlements: this.state?.map?.settlements || [],
+      markets: this.state?.markets || {},
+      catalog: this.itemCatalog,
+    });
   }
 
   // -- Phase 5A: Pure economy utilities & inventory -----
