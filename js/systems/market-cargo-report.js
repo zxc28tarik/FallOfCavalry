@@ -72,45 +72,63 @@ export function resetMarketMovementJournal() {
 /** A current-world, unmodified, scoped view of independent ledgers. */
 export function buildMarketCargoReport({
   settlements = [], markets = {}, catalog = [], worldAi,
-  settlementId = null, limit = 25,
+  settlementId = null, limit = 25, section = 'all',
 } = {}) {
+  // V1.36: the player opens ONE report category at a time. Avoid scanning
+  // 881 settlements and their ledgers for a movement/escort/loot tab.
+  // The public default 'all' remains compatible with existing tools/tests.
+  const scope = REPORT_SECTIONS.includes(section) ? section : 'all';
+  const includes = category => scope === 'all' || scope === category;
   const id = settlementId == null ? null : String(settlementId);
   const places = Array.isArray(settlements) ? settlements : [];
-  const selected = id === null ? places : places.filter(s => String(s?.id) === id);
-  const books = markets && typeof markets === 'object' && !Array.isArray(markets)
-    ? markets : {};
-  const scopedMarkets = id === null ? books
-    : Object.fromEntries(Object.entries(books).filter(([key]) => key === id));
-  const stockAudit = auditCampaignMarketStocks({
-    settlements: selected, markets: scopedMarkets, catalog,
-  });
-  const goods = stockAudit.rows.filter(x => x.status !== 'equal');
-  const parties = Array.isArray(worldAi?.parties) ? worldAi.parties : [];
-  const escorts = parties.filter(p => p?.escortQuestId
+  let stockAudit = null;
+  let unresolved = [];
+  if (includes('stock')) {
+    const selected = id === null ? places : places.filter(s =>
+      String(s?.id) === id);
+    const books = markets && typeof markets === 'object'
+      && !Array.isArray(markets) ? markets : {};
+    const scopedMarkets = id === null ? books
+      : Object.fromEntries(Object.entries(books).filter(([key]) =>
+        key === id));
+    stockAudit = auditCampaignMarketStocks({
+      settlements: selected, markets: scopedMarkets, catalog,
+    });
+    unresolved = stockAudit.rows.filter(x => x.status !== 'equal');
+  }
+  const parties = includes('escorts')
+    && Array.isArray(worldAi?.parties) ? worldAi.parties : [];
+  const escorts = includes('escorts') ? parties.filter(p => p?.escortQuestId
     && p.kind === 'caravan' && !p.escortGuardOf
     && (id === null || String(p.homeCityId) === id
       || String(p.escortDestinationCityId) === id))
     .map(caravan => auditLiveEscortCargoConservation({caravan,worldAi}))
     .filter(row => row.status !== 'unverified')
-    .sort((a,b) => compare(a.questId,b.questId));
-  const dispositionRows = inspectCargoDispositions(128).filter(row =>
-    id === null || row.sources.some(source => String(source.fromId) === id));
+    .sort((a,b) => compare(a.questId,b.questId)) : [];
   const n = Number.isSafeInteger(limit) ? Math.max(0,Math.min(MAX_EVENTS,limit)) : 25;
+  const dispositionRows = includes('dispositions') && n
+    ? inspectCargoDispositions(Math.min(128,n)).filter(row =>
+      id === null || row.sources.some(source =>
+        String(source.fromId) === id)) : [];
   return {
-    readOnly: true, sessionOnly: true,
-    settlementId: id, stockAudit: {
-      settlementCount: stockAudit.settlementCount,
-      counts: { ...stockAudit.counts },
-      conflicts: goods.filter(x => x.status === 'conflict').length,
-      unresolved: goods.length,
-      // Include world-wide rows for on-demand V1.35 page queries and CSV.
-      // Never render the full array into the DOM in a single operation.
-      rows: stockAudit.rows.map(row => ({ ...row })),
+    readOnly: true, sessionOnly: true, settlementId: id,
+    computedSections: {
+      stock: includes('stock'), movements: includes('movements'),
+      escorts: includes('escorts'), dispositions: includes('dispositions'),
     },
-    movements: inspectMarketMovements(n, id),
-    escorts, cargoDispositions: n ? dispositionRows.slice(-Math.min(128,n)) : [],
-    // These are intentionally separate facts. Do not subtract market drift
-    // from stolen cargo or equate market stock conflicts with stolen units.
+    stockAudit: {
+      scanned: stockAudit !== null,
+      settlementCount: stockAudit?.settlementCount ?? 0,
+      counts: { ...(stockAudit?.counts || {}) },
+      conflicts: unresolved.filter(x => x.status === 'conflict').length,
+      unresolved: unresolved.length,
+      // Rows are only materialized for explicit stock or legacy 'all'.
+      rows: stockAudit?.rows.map(row => ({ ...row })) || [],
+    },
+    movements: includes('movements') ? inspectMarketMovements(n,id) : [],
+    escorts, cargoDispositions: dispositionRows,
+    // Never net daily market drift against stolen cargo, or choose an old
+    // save's authoritative ledger on behalf of the user.
   };
 }
 
