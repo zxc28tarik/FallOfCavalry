@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { profileMarketReportInChromium } from './browser-market-performance.mjs';
 
 const getArg = (key, fallback) => {
   const idx = process.argv.indexOf(key);
@@ -2272,6 +2273,12 @@ async function main() {
       || lazyMarketReportPerf.cities!==881
       || !lazyMarketReportPerf.reportClosed)
       throw new Error('V1.36 player report performed an unexpected full-economy rescan');
+    // V1.37: observe actual map RAF frame pacing and CDP JS heap/CPU
+    // alongside real panel opening, full-stock audit, keypress and page
+    // actions. Hardware-dependent figures are diagnostic, NOT fixed budgets.
+    const marketPerformance = await profileMarketReportInChromium(page);
+    report.marketPerformance = marketPerformance;
+    stage('real-881-city-market-report-performance',marketPerformance);
     const stockAfterLoad = await page.evaluate(({ fromId, toId }) => {
       const g = window.game;
       const before = [fromId,toId].map(id => {
