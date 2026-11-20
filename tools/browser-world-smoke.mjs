@@ -1863,7 +1863,16 @@ async function main() {
       || stockTradeSetup.cityQty <= 0) {
       throw new Error('V1.29 no canonical short-road city with usable real market');
     }
-    await page.locator('#cityScenePanelBody button[data-action="buy"][data-id="wheat"]').click();
+    const realBuyClick = await page.evaluate(() => {
+      // Live city panel re-renders every frame. A synchronous DOM click fires
+      // the actual bound CityServicesUI handler without Playwright detachment.
+      const button = document.querySelector(
+        '#cityScenePanelBody button[data-action="buy"][data-id="wheat"]');
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    });
+    if (!realBuyClick) throw new Error('Real city market buy button missing');
     const stockAfterBuy = await page.evaluate(({ fromId, before }) => {
       const g = window.game;
       const s = g.state.map.settlements.find(x => String(x.id) === fromId);
@@ -1878,7 +1887,14 @@ async function main() {
       || stockAfterBuy.microQty !== stockAfterBuy.expectedQty
       || stockAfterBuy.inventoryQty < 1)
       throw new Error('Real city UI purchase did not debit both linked ledgers');
-    await page.locator('#cityScenePanelBody button[data-action="sell"][data-id="wheat"]').click();
+    const realSellClick = await page.evaluate(() => {
+      const button = document.querySelector(
+        '#cityScenePanelBody button[data-action="sell"][data-id="wheat"]');
+      if (!button || button.disabled) return false;
+      button.click();
+      return true;
+    });
+    if (!realSellClick) throw new Error('Real city market sell button missing');
     const stockAfterSell = await page.evaluate(({ fromId, before }) => {
       const g = window.game;
       const s = g.state.map.settlements.find(x => String(x.id) === fromId);
