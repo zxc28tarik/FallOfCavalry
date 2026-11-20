@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [20 Kasım 2026 — WEB V1.37 gerçek Chromium 881 şehir FPS/CPU/bellek profili ve stok raporu tahsis sadeleştirmesi](2026-11-20-web-market-browser-performance-v1.md): iki gerçek koşuda RAF FPS panel kapalı/açık kıyaslandı (8,52/8,50 ve 5,34/5,34); CDP heap/CPU ve DOM işlem süreleri ölçüldü; gereksiz tam stok dizi kopyası kaldırıldı; 3 yeni test, gerçek Chromium PASS
 - [20 Kasım 2026 — WEB V1.36 kategori bazlı tembel rapor hesaplaması ve oturumluk ganimet günlüğü sıfırlama](2026-11-20-web-market-cargo-lazy-audit-v1.md): 881 şehir stokları yalnız stok sekmesinde taranır; filtre/sayfa/CSV anlık snapshot'ı tekrar kullanır; yeni oyun/Save-Load geçmiş olayları temizler ama gerçek envanteri korur; 5 yeni test ve Chromium QA PASS
 - [20 Kasım 2026 — WEB V1.35 881 şehir raporu için filtre, sayfalama ve güvenli CSV](2026-11-20-web-market-cargo-paginated-csv-v1.md): dört kategori, şehir/ürün/tür/metin filtreleme, 10/20/50 sayfa, tüm süzülmüş kayıtların CSV indirmesi, gerçek Chromium 204/204 satır ve 8 yeni test PASS
 - [20 Kasım 2026 — WEB V1.34 oyuncuya açık Mal Hareketleri raporu, şehir ticareti/kervan stok denetimi](2026-11-20-web-market-cargo-player-report-v1.md): şehir filtresi, dört bilgi bölümü, normal alış/satış + günlük drift + gerçek kervan yük/teslim olayları, eski çift defter uyuşmazlıkları, salt okunur UI, 8 yeni test ve Chromium QA PASS
