@@ -19,7 +19,8 @@ import {
   activeEscortGuards, runEscortNpcSkirmish,
 } from '../../js/systems/quest-escort-npc-guards.js';
 import {
-  inspectLiveEscortCargo, outstandingEscortCargoForSave,
+  inspectLiveEscortCargo, inspectLiveBanditCargo, recordEscortCargoRaid,
+  outstandingEscortCargoForSave,
 } from '../../js/systems/quest-escort-cargo.js';
 
 const worldMap = {
@@ -428,5 +429,60 @@ describe('WEB V1.27 — real market inventory / safe active-quest save integrati
     const deliveredSnapshot = save.buildSavePayload();
     expect(deliveredSnapshot.game.settlementsMarkets
       .find(x => x.settlementId === 1).marketStock[0].qty).toBe(16);
+  });
+});
+
+
+describe('WEB V1.31 — genuine save payload escrow without NPC loot authority', () => {
+  it('refunds stolen and outstanding goods into BOTH saved ledgers without mutating the game', () => {
+    const { manager, world, state, game } = make();
+    state.map = { ...worldMap,
+      settlements: worldMap.settlements.map(s => ({
+        ...s, marketStock:[
+          {id:'wheat',qty:8},{id:'iron',qty:8},{id:'cloth',qty:8},
+        ],
+      })),
+    };
+    game.economyManager.itemCatalog=[
+      {id:'wheat'},{id:'iron'},{id:'cloth'},
+    ];
+    game.economyManager.ensureSettlementMarketState=vi.fn();
+    manager.ensureWorldParties();
+    const caravan=world.worldAi.parties.find(p=>
+      p.escortQuestId && p.kind==='caravan');
+    const bandit=spawnPartyBandit(state.map,{}, {BANDIT_SPEED:0.01},{
+      tradeRoutes:routes,
+    });
+    world.worldAi.parties.push(bandit);
+    const stolen=recordEscortCargoRaid({
+      caravan,bandit,remainingPercent:75,
+    });
+    expect(stolen).toEqual([{id:'wheat',qty:6}]);
+    expect(inspectLiveBanditCargo(bandit)).toEqual(stolen);
+    const origin=state.map.settlements[0];
+    state.markets={'0':{
+      stocks:{wheat:0,iron:0,cloth:0},demand:{},momentum:{},
+      stockBridge:{version:1,settlementId:'0'},
+    }};
+    const save=new SaveManager(state);
+    save.init(game);
+    const snapshot=save.buildSavePayload();
+    const city=snapshot.game.settlementsMarkets.find(x=>
+      x.settlementId===0).marketStock;
+    expect(city).toEqual([
+      {id:'wheat',qty:8},{id:'iron',qty:8},{id:'cloth',qty:8},
+    ]);
+    expect(snapshot.game.markets['0'].stocks)
+      .toEqual({wheat:8,iron:8,cloth:8});
+    expect(snapshot.game.worldAi.parties.find(x=>x.id===bandit.id))
+      .not.toHaveProperty('loot');
+    expect(snapshot.game.worldAi.parties.some(p=>p.escortQuestId))
+      .toBe(false);
+    expect(origin.marketStock.every(x=>x.qty===0)).toBe(true);
+    expect(state.markets['0'].stocks).toEqual({
+      wheat:0,iron:0,cloth:0,
+    });
+    expect(inspectLiveBanditCargo(bandit)).toEqual(stolen);
+    expect(inspectLiveEscortCargo(caravan).reduce((n,x)=>n+x.qty,0)).toBe(18);
   });
 });
