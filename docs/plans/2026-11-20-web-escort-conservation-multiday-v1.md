@@ -28,7 +28,7 @@ Bu sürüm **tam kıta üretim-tüketim ekonomisi değil**, her bir gerçek esco
 - Kanıtsız çıkarılmış haydutun 6 birimlik **mismatch** üretmesi; sahte bandit/kervan klonunun yetki kazanamaması.
 - Başarısız gerçek kervanın kalan 18 birimi `escort_failed` kaybına çevirmesi; canlı haydutun 6 biriminin ayrı bulunması.
 - Açıklamasız ölümün 24 birim fark olarak açık kalması.
-- Aynı gerçek haydutun **iki farklı kaynaklı kervandan** çaldığı malların bir oyuncu zaferinde toplam 12 birim olmasına rağmen **her kervanın riêng 6** olarak denetlenmesi.
+- Aynı gerçek haydutun **iki farklı kaynaklı kervandan** çaldığı malların bir oyuncu zaferinde toplam 12 birim olmasına rağmen **her kervan için ayrı ayrı 6** olarak denetlenmesi.
 
 **Yalnız izole test senaryolarında** dünya şehir stoklarının başlangıç ve sonuçları ile gerçek `inCaravan + inBandits + inPlayer + unrecovered` toplamı her mal türü için ayrıca karşılaştırıldı; hedefe teslim edilen mal zaten hedef `marketStock` stoğunda olduğundan **ikinci kez eklenmedi**. Gerçek üretim/tüketim veya başka dünya olayları içinde aynı şekilde sabit toplam beklemek doğru olmaz.
 
