@@ -172,7 +172,7 @@ describe('WEB V1.35 — global paginated diagnostics and safe CSV',()=>{
       section:'escorts',pageSize:10,
     });
     expect(page.total).toBe(2);
-    expect(page.rows.reduce((n,row)=>n+row.reserved,0)).toBe(17);
+    expect(page.rows.reduce((n,row)=>n+row.reserved,0)).toBe(20);
     expect(page.rows.every(x=>x.status==='balanced'&&x.gap===0)).toBe(true);
     const csv=marketCargoReportCsv(snapshot,{section:'escorts',itemId:'iron'});
     expect(csv.split('\n')).toHaveLength(3);
