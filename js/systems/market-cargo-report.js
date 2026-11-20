@@ -82,7 +82,8 @@ export function buildMarketCargoReport({
   const id = settlementId == null ? null : String(settlementId);
   const places = Array.isArray(settlements) ? settlements : [];
   let stockAudit = null;
-  let unresolved = [];
+  let unresolvedCount = 0;
+  let conflictCount = 0;
   if (includes('stock')) {
     const selected = id === null ? places : places.filter(s =>
       String(s?.id) === id);
@@ -94,7 +95,13 @@ export function buildMarketCargoReport({
     stockAudit = auditCampaignMarketStocks({
       settlements: selected, markets: scopedMarkets, catalog,
     });
-    unresolved = stockAudit.rows.filter(x => x.status !== 'equal');
+    // The stock audit already builds detached value rows. Count in one
+    // traversal and retain those rows: do not allocate a second full-world
+    // array or duplicate every 881-city stock record on each refresh.
+    for (const row of stockAudit.rows) {
+      if (row.status !== 'equal') unresolvedCount++;
+      if (row.status === 'conflict') conflictCount++;
+    }
   }
   const parties = includes('escorts')
     && Array.isArray(worldAi?.parties) ? worldAi.parties : [];
@@ -120,10 +127,11 @@ export function buildMarketCargoReport({
       scanned: stockAudit !== null,
       settlementCount: stockAudit?.settlementCount ?? 0,
       counts: { ...(stockAudit?.counts || {}) },
-      conflicts: unresolved.filter(x => x.status === 'conflict').length,
-      unresolved: unresolved.length,
-      // Rows are only materialized for explicit stock or legacy 'all'.
-      rows: stockAudit?.rows.map(row => ({ ...row })) || [],
+      conflicts: conflictCount,
+      unresolved: unresolvedCount,
+      // auditCampaignMarketStocks already creates new read-only value records;
+      // never duplicate 881-city rows just to prepare a presentation snapshot.
+      rows: stockAudit?.rows || [],
     },
     movements: includes('movements') ? inspectMarketMovements(n,id) : [],
     escorts, cargoDispositions: dispositionRows,
