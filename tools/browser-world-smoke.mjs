@@ -1821,6 +1821,7 @@ async function main() {
       // Browser QA only: give player sufficient gold to test buying an item;
       // the purchase and sale themselves use actual city UI callbacks.
       g.playerParty.gold = Math.max(2000, g.playerParty.gold);
+      const rejectedSources = [];
       for (const chosen of candidates.slice(0, 120)) {
         const opened = g.economyManager.enterCityServicesForSettlement(chosen.from);
         if (!opened) continue;
@@ -1831,16 +1832,31 @@ async function main() {
         if (buy && sell && g.state.mode === 'city') {
           const market = g.state.markets[String(chosen.from.id)];
           const cityQty = chosen.from.marketStock?.find(x => x.id === 'wheat')?.qty;
-          return { ready: true, routeId: chosen.route.id,
+          const sourceLinked = market?.stockBridge?.version === 1
+            && cityQty === market?.stocks?.wheat;
+          if (sourceLinked && cityQty > 0) return {
+            ready: true, routeId: chosen.route.id,
             fromId: String(chosen.from.id), toId: String(chosen.to.id),
-            cityQty, marketQty: market?.stocks?.wheat, sourceLinked:
-              market?.stockBridge?.version === 1 && cityQty === market?.stocks?.wheat,
-            length: chosen.length, candidates: candidates.length };
+            cityQty, marketQty: market?.stocks?.wheat,
+            sourceLinked, length: chosen.length,
+            candidates: candidates.length,
+          };
+          if (rejectedSources.length < 3) rejectedSources.push({
+            id: chosen.from.id,
+            cityStock: Array.isArray(chosen.from.marketStock)
+              ? chosen.from.marketStock.length : typeof chosen.from.marketStock,
+            cityQty, marketQty: market?.stocks?.wheat,
+            bridge: market?.stockBridge || null,
+            managerSameState: g.economyManager.state === g.state,
+            stateCitySame: g.economyManager.state?.city === chosen.from,
+            marketBookSame: g.economyManager.state?.markets === g.state?.markets,
+            managerStateCityId: g.economyManager.state?.city?.id,
+          });
         }
         g.economyManager.exitCityServices();
       }
-      return { ready: false, reason: 'no_open_real_trade_service_on_free_short_road',
-        candidates: candidates.length };
+      return { ready: false, reason: 'no_open_linked_real_market_on_free_short_road',
+        candidates: candidates.length, rejectedSources };
     });
     stage('market-stock-real-city-trade-setup', stockTradeSetup);
     if (!stockTradeSetup.ready || !stockTradeSetup.sourceLinked
