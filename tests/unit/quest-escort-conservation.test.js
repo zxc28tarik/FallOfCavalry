@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { QUEST_DEFS } from '../../js/data/quest-defs.js';
 import { spawnQuestEscortCaravan, tickQuestEscortCaravan } from '../../js/systems/quest-caravan-escort.js';
-import { spawnPartyBandit, updateWorldParties } from '../../js/systems/world-ai.js';
+import { spawnPartyBandit } from '../../js/systems/world-ai.js';
 import {
-  reserveEscortCargo, recordEscortCargoRaid, inspectLiveBanditCargo,
+  reserveEscortCargo, recordEscortCargoRaid,
   auditLiveEscortCargoConservation, outstandingEscortCargoForSave,
   classifyRetiredEscortCargo, deliverEscortCargo,
   witnessBanditCargoBattleVictory, recoverWitnessedBanditCargo,
