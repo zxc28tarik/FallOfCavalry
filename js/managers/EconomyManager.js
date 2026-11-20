@@ -377,13 +377,19 @@ export class EconomyManager {
     if (!settlement || typeof settlement !== 'object') return;
     const tier = this.getSettlementTier(settlement);
     const itemCatalog = this.itemCatalog;
-    if (!Array.isArray(settlement.marketStock)) {
-      const existing = settlement.id != null
-        ? this.state?.markets?.[String(settlement.id)] : null;
-      // If only the live micro-market exists, reuse that stock instead of
-      // fabricating a second independent supply in the legacy city screen.
+    const existing = settlement.id != null
+      ? this.state?.markets?.[String(settlement.id)] : null;
+    // Historical saves stored [] even for an UNOPENED city whose real stock
+    // had never been initialized. A genuine trade never removes stock rows;
+    // sold-out items stay in the catalog with qty=0. An empty [] with NO
+    // competing saved market therefore means uninitialized, not "sold out".
+    // Preserve [] if a separate market already exists: that legacy conflict
+    // needs explicit reconciliation, not silent inventory creation.
+    const uninitialized = !Array.isArray(settlement.marketStock)
+      || (settlement.marketStock.length === 0 && !existing);
+    if (uninitialized) {
       if (existing) establishMarketStockBridge(settlement, existing, itemCatalog);
-      if (!Array.isArray(settlement.marketStock)) {
+      if (!Array.isArray(settlement.marketStock) || settlement.marketStock.length === 0) {
         settlement.marketStock = itemCatalog.map((item, idx) => ({
           id: item.id,
           qty: Math.max(1, 4 + tier + idx % 3),
