@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { profileMarketReportInChromium } from './browser-market-performance.mjs';
 import { profileLiveWorldLoop } from './browser-world-loop-profile.mjs';
+import { profileChromiumWorldFrames } from './browser-world-frame-trace.mjs';
 
 const getArg = (key, fallback) => {
   const idx = process.argv.indexOf(key);
@@ -2560,6 +2561,18 @@ async function main() {
       || worldLoopProfile.before.mode!=='map'
       || worldLoopProfile.after.mode!=='map')
       throw new Error('V1.38 full-world loop breakdown missing a real game callback');
+    // V1.39: independent Chrome main-thread/Canvas2D/rAF/CDP/trace sampling.
+    // Executed only after all functional acceptance scenarios and V1.38.
+    // Missing GPU/trace events are reported as unavailable, never zero.
+    const chromeFrameProfile=await profileChromiumWorldFrames(page,{samples:32});
+    report.chromeFrameProfile=chromeFrameProfile;
+    stage('chromium-frame-scheduler-canvas-compositor-profile',chromeFrameProfile);
+    if (!chromeFrameProfile.ready
+      || chromeFrameProfile.frameCount!==32
+      || chromeFrameProfile.rafIntervals.samples!==31
+      || !Number.isFinite(chromeFrameProfile.rafIntervals.meanMs)
+      || !Number.isFinite(chromeFrameProfile.cdpMetrics.deltas.taskMs))
+      throw new Error('V1.39 real Chrome frame profile is missing mandatory CDP/rAF evidence');
     // CI runs in a disposable browser context: saving is safe and does not touch user files.
 
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
