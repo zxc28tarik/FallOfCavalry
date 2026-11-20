@@ -288,7 +288,7 @@ function factionIsHostileToPlayer(partyFactionId, playerFactionId) {
 
 export function updateWorldParties({
   aiState, worldState, playerParty, factions: _factions, cfg, dtSec,
-  tradeRoutes = [],
+  tradeRoutes = [], onBanditRemoved = null,
 }) {
   if (!aiState || !Array.isArray(aiState.parties)) return [];
   const dt = Number(dtSec ?? 0);
@@ -345,6 +345,9 @@ export function updateWorldParties({
       }
       if (playerDist > despawnDistance) {
         party.alive = false;
+        // Observational only: classify the actual removal of sourced loot.
+        if (party.kind === 'bandit' && typeof onBanditRemoved === 'function')
+          onBanditRemoved(party, 'out_of_range');
       }
     }
   });
@@ -355,7 +358,11 @@ export function updateWorldParties({
   patrols.forEach((patrol) => {
     bandits.forEach((bandit) => {
       if (bandit.alive === false) return;
-      if (distance(patrol, bandit) <= purgeDist) bandit.alive = false;
+      if (distance(patrol, bandit) <= purgeDist) {
+        bandit.alive = false;
+        if (typeof onBanditRemoved === 'function')
+          onBanditRemoved(bandit, 'patrol_kill');
+      }
     });
   });
 
