@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [20 Kasım 2026 — WEB V1.35 881 şehir raporu için filtre, sayfalama ve güvenli CSV](2026-11-20-web-market-cargo-paginated-csv-v1.md): dört kategori, şehir/ürün/tür/metin filtreleme, 10/20/50 sayfa, tüm süzülmüş kayıtların CSV indirmesi, gerçek Chromium 204/204 satır ve 8 yeni test PASS
 - [20 Kasım 2026 — WEB V1.34 oyuncuya açık Mal Hareketleri raporu, şehir ticareti/kervan stok denetimi](2026-11-20-web-market-cargo-player-report-v1.md): şehir filtresi, dört bilgi bölümü, normal alış/satış + günlük drift + gerçek kervan yük/teslim olayları, eski çift defter uyuşmazlıkları, salt okunur UI, 8 yeni test ve Chromium QA PASS
 - [20 Kasım 2026 — WEB V1.33 çok günlük kervan mal korunumu ve başarısız konvoy muhasebesi](2026-11-20-web-escort-conservation-multiday-v1.md): ürün başına kaynaklı manifest, haydut, oyuncu, hedef, kayıp ve açıklanamayan fark denetimi; 4–7. günler çok günlük testleri, 8 yeni test, canlı Chromium dengesi PASS
 - [20 Kasım 2026 — WEB V1.32 kaynaklı haydut ganimeti akıbet muhasebesi ve gerçek savaş sonuç paneli](2026-11-20-web-bandit-cargo-disposition-audit-v1.md): NPC devriye/uzaklaşma/koruma/oyuncu alım veya bırakma gerekçeleri, kaynak kervan bazlı salt-okunur 128 satırlık audit, gerçek savaşta ürün-adet dökümü, 7 yeni test ve Chromium QA PASS
