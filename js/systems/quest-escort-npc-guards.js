@@ -9,7 +9,9 @@
 import { isLiveEscortParty, validEscortQuest } from './quest-caravan-escort.js';
 import { isRuntimeRouteBandit } from './quest-route-recon.js';
 import { validBanditRoute } from './quest-world-party-links.js';
-import { recordEscortCargoRaid } from './quest-escort-cargo.js';
+import {
+  recordEscortCargoRaid, returnGuardRecoveredEscortCargo,
+} from './quest-escort-cargo.js';
 
 const runtimeGuards = new WeakSet();
 const skirmishRecords = new WeakMap();
@@ -125,11 +127,17 @@ export function runEscortNpcSkirmish({
   }
   record.banditHp.set(bandit,Math.max(0,hp));
   if(hp<=0){
+    // The verified live skirmish has ACTUALLY killed this exact road bandit.
+    // Only its sourced cargo stolen from this convoy returns to the manifest.
     bandit.alive=false;
+    const returnedCargo=returnGuardRecoveredEscortCargo({
+      caravan,bandit,quest,worldState,tradeRoutes,currentDay,
+    });
     caravan.escortDefended=(caravan.escortDefended||0)+1;
     record.guardClock=0;
     record.banditClock=0;
-    return {status:'defended',guards:living.length,threats:0,attacks,raids};
+    return {status:'defended',guards:living.length,threats:0,attacks,raids,
+      returnedCargo,returnedUnits:returnedCargo.reduce((n,r)=>n+r.qty,0)};
   }
   while(record.banditClock>=1.2 && raids<3){
     record.banditClock-=1.2;
