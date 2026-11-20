@@ -1788,6 +1788,189 @@ async function main() {
       throw new Error('Defeated guard incorrectly cleared bandits or replayed route penalties');
     }
 
+    // V1.29: genuine city trade DOM actions + source-linked convoy stock
+    // transit + destination deposition in this disposable Chromium game.
+    // This is not a world-data pilot or a synthetic completion receipt.
+    const stockTradeSetup = await page.evaluate(() => {
+      const g = window.game;
+      if (g.state.mode !== 'map') return { ready: false, reason: 'not_on_map' };
+      const routes = g.economyManager.ensureTradeRoutes().filter(x => x.roadBacked);
+      const settlements = g.state.map.settlements || [];
+      const byId = new Map(settlements.map(s => [String(s.id), s]));
+      const busy = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
+      const roads = g.state.map.roads || [];
+      const candidates = routes.map(route => {
+        const from = byId.get(String(route.fromCityId));
+        const to = byId.get(String(route.toCityId));
+        const road = roads.find(row =>
+          String(row.from) === String(route.fromCityId)
+          && String(row.to) === String(route.toCityId));
+        const points = road?.path || [];
+        const length = points.slice(1).reduce((sum,p,i) =>
+          sum + Math.hypot(p.x-points[i].x,p.y-points[i].y), 0);
+        return { route, from, to, points, length };
+      }).filter(x => x.from && x.to && x.points.length >= 2
+        && x.length > 0 && x.length <= 16
+        && !busy.has(x.route.id)
+        && !g.state.markets?.[String(x.from.id)]
+        && !g.state.markets?.[String(x.to.id)]
+        && !g.worldManager.worldAi.parties.some(p =>
+          p.alive !== false && p.kind === 'bandit' && p.routeId === x.route.id))
+        .sort((a,b) => a.length-b.length);
+      // Browser QA only: give player sufficient gold to test buying an item;
+      // the purchase and sale themselves use actual city UI callbacks.
+      g.playerParty.gold = Math.max(2000, g.playerParty.gold);
+      for (const chosen of candidates.slice(0, 120)) {
+        const opened = g.economyManager.enterCityServicesForSettlement(chosen.from);
+        if (!opened) continue;
+        g.cityUI?.openService('trade');
+        const root = document.getElementById('cityScenePanelBody');
+        const buy = root?.querySelector('button[data-action="buy"][data-id="wheat"]');
+        const sell = root?.querySelector('button[data-action="sell"][data-id="wheat"]');
+        if (buy && sell && g.state.mode === 'city') {
+          const market = g.state.markets[String(chosen.from.id)];
+          const cityQty = chosen.from.marketStock?.find(x => x.id === 'wheat')?.qty;
+          return { ready: true, routeId: chosen.route.id,
+            fromId: String(chosen.from.id), toId: String(chosen.to.id),
+            cityQty, marketQty: market?.stocks?.wheat, sourceLinked:
+              market?.stockBridge?.version === 1 && cityQty === market?.stocks?.wheat,
+            length: chosen.length, candidates: candidates.length };
+        }
+        g.economyManager.exitCityServices();
+      }
+      return { ready: false, reason: 'no_open_real_trade_service_on_free_short_road',
+        candidates: candidates.length };
+    });
+    stage('market-stock-real-city-trade-setup', stockTradeSetup);
+    if (!stockTradeSetup.ready || !stockTradeSetup.sourceLinked
+      || stockTradeSetup.cityQty <= 0) {
+      throw new Error('V1.29 no canonical short-road city with usable real market');
+    }
+    await page.locator('#cityScenePanelBody button[data-action="buy"][data-id="wheat"]').click();
+    const stockAfterBuy = await page.evaluate(({ fromId, before }) => {
+      const g = window.game;
+      const s = g.state.map.settlements.find(x => String(x.id) === fromId);
+      const market = g.state.markets[fromId];
+      return { cityQty: s.marketStock.find(x => x.id === 'wheat')?.qty,
+        microQty: market?.stocks?.wheat,
+        inventoryQty: g.playerParty.inventory?.items?.find(x => x.id === 'wheat')?.qty,
+        expectedQty: before - 1 };
+    }, { fromId: stockTradeSetup.fromId, before: stockTradeSetup.cityQty });
+    stage('market-stock-real-dom-buy', stockAfterBuy);
+    if (stockAfterBuy.cityQty !== stockAfterBuy.expectedQty
+      || stockAfterBuy.microQty !== stockAfterBuy.expectedQty
+      || stockAfterBuy.inventoryQty < 1)
+      throw new Error('Real city UI purchase did not debit both linked ledgers');
+    await page.locator('#cityScenePanelBody button[data-action="sell"][data-id="wheat"]').click();
+    const stockAfterSell = await page.evaluate(({ fromId, before }) => {
+      const g = window.game;
+      const s = g.state.map.settlements.find(x => String(x.id) === fromId);
+      return { cityQty: s.marketStock.find(x => x.id === 'wheat')?.qty,
+        microQty: g.state.markets[fromId]?.stocks?.wheat,
+        expectedQty: before };
+    }, { fromId: stockTradeSetup.fromId, before: stockTradeSetup.cityQty });
+    stage('market-stock-real-dom-sell', stockAfterSell);
+    if (stockAfterSell.cityQty !== stockAfterSell.expectedQty
+      || stockAfterSell.microQty !== stockAfterSell.expectedQty)
+      throw new Error('Real city UI sale did not restore both linked ledgers');
+    const stockRouteDelivery = await page.evaluate(({ routeId, fromId, toId }) => {
+      const g = window.game;
+      g.economyManager.exitCityServices();
+      const worldState = g.state.map;
+      const routes = g.economyManager.ensureTradeRoutes();
+      const from = worldState.settlements.find(s => String(s.id) === fromId);
+      const to = worldState.settlements.find(s => String(s.id) === toId);
+      const market = g.economyManager.getOrCreateMarketForSettlement(to);
+      const initialSource = Object.fromEntries(from.marketStock.map(x => [x.id,x.qty]));
+      const initialTarget = { ...market.stocks };
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: routeId, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'quest_template' };
+      quest.status = 'active';
+      if (!g.questManager.addQuest(quest)) return { ready: false, reason: 'quest_rejected' };
+      const pm = g.worldManager.simManager.worldPartyManager;
+      pm.ensureWorldParties();
+      const caravan = g.worldManager.worldAi.parties.find(p =>
+        p.kind === 'caravan' && p.escortQuestId === quest.id
+          && p.routeId === routeId && p.alive !== false);
+      if (!caravan) return { ready: false, reason: 'no_live_escort' };
+      const reserved = Object.fromEntries(from.marketStock.map(row =>
+        [row.id, (initialSource[row.id] || 0) - row.qty])
+        .filter(([,qty]) => qty > 0));
+      const total = Object.values(reserved).reduce((sum,n)=>sum+n,0);
+      const beforeStartEqual = Object.entries(reserved).every(([id,qty]) =>
+        qty > 0 && from.marketStock.find(row => row.id === id)?.qty === g.state.markets[fromId]?.stocks?.[id]);
+      const snapshot = g.saveManager.buildSavePayload();
+      const savedCity = snapshot.game.settlementsMarkets.find(x =>
+        String(x.settlementId) === fromId)?.marketStock;
+      const savedMicro = snapshot.game.markets[fromId]?.stocks;
+      const snapshotEscrow = Object.entries(reserved).every(([id]) =>
+        savedCity?.find(x => x.id === id)?.qty === initialSource[id]
+          && savedMicro?.[id] === initialSource[id]);
+      g.playerParty.hasDestination = false;
+      g.playerParty.destX = null; g.playerParty.destY = null;
+      g.playerParty.x = caravan.x; g.playerParty.y = caravan.y;
+      caravan.speed = 18; // bounded QA only, same real NPC movement mechanics
+      let ticks = 0;
+      for (; ticks < 600 && quest.objectives[0].outcome == null
+          && quest.status === 'active'; ticks++) {
+        g.playerParty.x = caravan.x; g.playerParty.y = caravan.y;
+        pm.processQuestEscortCaravans(0.15, { worldState, tradeRoutes: routes });
+      }
+      const delivered = quest.objectives[0].outcome === 'caravan_arrived'
+        && caravan.escortArrived === true;
+      const targetGoods = Object.entries(reserved).every(([id,qty]) =>
+        to.marketStock?.find(row => row.id === id)?.qty === (initialTarget[id] || 0) + qty
+          && g.state.markets[toId]?.stocks?.[id] === (initialTarget[id] || 0) + qty);
+      const originGoods = Object.entries(reserved).every(([id,qty]) =>
+        from.marketStock.find(row => row.id === id)?.qty === initialSource[id] - qty
+          && g.state.markets[fromId]?.stocks?.[id] === initialSource[id] - qty);
+      const sourceReport = g.economyManager.auditMarketStocks();
+      const noConflictSource = !sourceReport.rows.some(row =>
+        (row.settlementId === fromId || row.settlementId === toId)
+          && row.status === 'conflict');
+      return { ready: true, ticks, total, reserved, beforeStartEqual,
+        snapshotEscrow, delivered, targetGoods, originGoods, noConflictSource,
+        questId: quest.id, fromId, toId, routeId,
+        canonicalSource: g.state.markets[fromId]?.stockBridge?.version === 1,
+        canonicalDestination: g.state.markets[toId]?.stockBridge?.version === 1,
+        completionButton: [...(document.querySelectorAll(
+          '#questCompletionOverlay button.quest-path:not([disabled])'))]
+          .some(b => b.textContent.includes('Kervan güvenli ulaştı')) };
+    }, stockTradeSetup);
+    report.stockRouteDelivery = stockRouteDelivery;
+    stage('market-stock-live-source-to-destination-escort', stockRouteDelivery);
+    if (!stockRouteDelivery.ready || !stockRouteDelivery.beforeStartEqual
+      || !stockRouteDelivery.snapshotEscrow || stockRouteDelivery.total < 1
+      || !stockRouteDelivery.delivered || !stockRouteDelivery.targetGoods
+      || !stockRouteDelivery.originGoods || !stockRouteDelivery.noConflictSource
+      || !stockRouteDelivery.canonicalSource
+      || !stockRouteDelivery.canonicalDestination || !stockRouteDelivery.completionButton) {
+      throw new Error('V1.29 real browser stock/escort source-destination validation failed');
+    }
+    await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
+      .filter({ hasText: 'Kervan güvenli ulaştı' }).click();
+    const stockAfterLoad = await page.evaluate(({ fromId, toId }) => {
+      const g = window.game;
+      const before = [fromId,toId].map(id => {
+        const s = g.state.map.settlements.find(x => String(x.id) === id);
+        return { id, wheat: s.marketStock.find(x => x.id === 'wheat')?.qty,
+          market: g.state.markets[id]?.stocks?.wheat };
+      });
+      const saved = g.saveManager.quickSave() === true;
+      const loaded = saved && g.saveManager.quickLoad() === true;
+      const unchanged = before.every(row => {
+        const s = g.state.map.settlements.find(x => String(x.id) === row.id);
+        return row.wheat === s.marketStock?.find(x => x.id === 'wheat')?.qty
+          && row.market === g.state.markets[row.id]?.stocks?.wheat;
+      });
+      return { saved, loaded, unchanged };
+    }, stockTradeSetup);
+    stage('market-stock-escort-save-load-roundtrip', stockAfterLoad);
+    if (!stockAfterLoad.saved || !stockAfterLoad.loaded || !stockAfterLoad.unchanged)
+      throw new Error('V1.29 stock market/convoy completed save load mismatch');
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
