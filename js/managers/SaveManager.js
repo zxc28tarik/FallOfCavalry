@@ -22,9 +22,10 @@ import {
 import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
 import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
 import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
-import { outstandingEscortCargoForSave } from '../systems/quest-escort-cargo.js';
+import {
+  outstandingEscortCargoForSave, resetCargoDispositionJournal,
+} from '../systems/quest-escort-cargo.js';
 import { resetMarketMovementJournal } from '../systems/market-cargo-report.js';
-import { resetCargoDispositionJournal } from '../systems/quest-escort-cargo.js';
 import { snapshotMarketsWithPendingEscorts } from '../systems/market-stock-bridge.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
