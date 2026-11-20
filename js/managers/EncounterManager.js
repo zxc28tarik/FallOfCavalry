@@ -8,6 +8,7 @@ import {
   normalizeEncounterType,
 } from '../data/encounter-defs.js';
 import { DEBUG } from '../constants/ui.js';
+import { previewWitnessedBanditCargo } from '../systems/quest-escort-cargo.js';
 import {
   emptyQuestEventLedger, recordVerifiedMessengerCaptureEvent,
 } from '../systems/quest-event-ledger.js';
@@ -604,6 +605,14 @@ export class EncounterManager {
 
     const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
     const lootLines = (a.loot || []).map((l) => `- ${g.economyManager.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
+    // Purely informational. The actual player transfer remains guarded by
+    // the live battle receipt and happens only after Continue is chosen.
+    const sourcedGoods = previewWitnessedBanditCargo(this.state?.battle);
+    const sourcedSection = sourcedGoods.length
+      ? `\n\nRecovered caravan goods (collect on Continue)\n${sourcedGoods
+        .map(item => `- ${g.economyManager.getItemName(item.id)} x${item.qty}`)
+        .join('\n')}`
+      : '';
 
     return {
       title: 'Battle Result',
@@ -615,7 +624,7 @@ Casualties
 
 Loot
 - Gold gained: +${Math.max(0, Math.floor(a.goldDelta ?? 0))}
-${lootLines}
+${lootLines}${sourcedSection}
 
 Renown
 - +${Math.max(0, Math.floor(a.renownDelta ?? 0))} renown
