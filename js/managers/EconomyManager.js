@@ -65,13 +65,13 @@ export class EconomyManager {
   }
 
   /** Current-game report: no market creation, no reconciliation mutation. */
-  buildCargoMarketReport(settlementId = null, limit = 25) {
+  buildCargoMarketReport(settlementId = null, limit = 25, section = 'all') {
     return buildMarketCargoReport({
       settlements: this.state?.map?.settlements || [],
       markets: this.state?.markets || {},
       catalog: this.itemCatalog,
       worldAi: this.game?.worldManager?.worldAi,
-      settlementId, limit,
+      settlementId, limit, section,
     });
   }
 
