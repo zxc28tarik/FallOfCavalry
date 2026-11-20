@@ -127,7 +127,7 @@ export default class CargoMarketReportPanel {
     type.id='cargoMarketReportType';
     type.setAttribute('aria-label','İşlem veya durum filtresi');
     type.addEventListener('change',()=>{
-      this.selectedType=type.value;this.page=1;this.refresh();
+      this.selectedType=type.value;this.page=1;this.renderCached();
     });
     this.type=type;
     this.populateTypes();
@@ -138,7 +138,7 @@ export default class CargoMarketReportPanel {
     item.style.cssText='min-width:115px;max-width:175px;padding:6px;'
       + 'background:#223d44;color:#fff;border:1px solid #b8a076;border-radius:4px';
     item.addEventListener('input',()=>{
-      this.itemId=item.value;this.page=1;this.refresh();
+      this.itemId=item.value;this.page=1;this.renderCached();
     });
     const search=document.createElement('input');
     search.id='cargoMarketReportSearch';
@@ -146,7 +146,7 @@ export default class CargoMarketReportPanel {
     search.setAttribute('aria-label','Metinle ara');
     search.style.cssText=item.style.cssText;
     search.addEventListener('input',()=>{
-      this.search=search.value;this.page=1;this.refresh();
+      this.search=search.value;this.page=1;this.renderCached();
     });
     controls.append(select,category,type,item,search);
     const navigation=document.createElement('div');
@@ -157,14 +157,14 @@ export default class CargoMarketReportPanel {
     for(const n of [10,20,50])addOption(size,String(n),n+' / sayfa');
     size.value='20';
     size.addEventListener('change',()=>{
-      this.pageSize=Number(size.value);this.page=1;this.refresh();
+      this.pageSize=Number(size.value);this.page=1;this.renderCached();
     });
     const prev=button('cargoMarketReportPrev','Önceki',()=>{
-      if(this.page>1){this.page--;this.refresh();}
+      if(this.page>1){this.page--;this.renderCached();}
     });
     const next=button('cargoMarketReportNext','Sonraki',()=>{
       if(this.lastPage && this.page<this.lastPage){
-        this.page++;this.refresh();
+        this.page++;this.renderCached();
       }
     });
     const pageInfo=document.createElement('span');
@@ -200,7 +200,20 @@ export default class CargoMarketReportPanel {
     const visible=this.game?.started
       && ['map','city'].includes(this.game?.state?.mode);
     this.toggle.style.display=visible?'block':'none';
-    if(!visible && this.root)this.root.style.display='none';
+    if(!visible && this.root) {
+      this.root.style.display='none';
+      this.lastReport=null; // no stale preview after a mode transition
+    }
+  }
+
+  /**
+   * Invalidate snapshots when a new campaign/save restore changes the
+   * underlying world. Never reset trusted economy inventories from this UI.
+   */
+  invalidate() {
+    this.lastReport=null;
+    this._settlementsRef=null;
+    if(this.root)this.root.style.display='none';
   }
 
   updateCityOptions(settlements) {
@@ -229,11 +242,21 @@ export default class CargoMarketReportPanel {
     const settlements=Array.isArray(g?.state?.map?.settlements)
       ? g.state.map.settlements : [];
     this.updateCityOptions(settlements);
-    const report=g?.economyManager?.buildCargoMarketReport?.(
-      this.selectedCity||null,160);
+    // Only the requested category is scanned. Full 881-city stock audit
+    // is deferred until the stock tab is opened or explicitly refreshed.
+    this.lastReport=g?.economyManager?.buildCargoMarketReport?.(
+      this.selectedCity||null,160,this.selectedSection) || null;
+    return this.renderCached();
+  }
+
+  /**
+   * Pure presentation path for typing, sorting by filters and paging:
+   * no economy/world scan until explicit Refresh, city or tab selection.
+   */
+  renderCached() {
+    const report=this.lastReport;
+    if(!report || !this.content)return null;
     this.content.replaceChildren();
-    if(!report)return null;
-    this.lastReport=report;
     const page=queryMarketCargoReportRows(report,this.getQueryOptions());
     this.page=page.page;this.lastPage=page.pageCount;
     this.prev.disabled=page.page<=1;this.next.disabled=page.page>=page.pageCount;
@@ -252,16 +275,24 @@ export default class CargoMarketReportPanel {
     };
     const counts=report.stockAudit.counts||{};
     add('Pazar defterleri (anlık)',
-      'Şehir: '+report.stockAudit.settlementCount
-      +' | Eşit: '+(counts.equal||0)
-      +' | Çatışma: '+report.stockAudit.conflicts
-      +' | Eksik / diğer: '+(report.stockAudit.unresolved
-      -report.stockAudit.conflicts));
+      report.stockAudit.scanned
+        ? 'Şehir: '+report.stockAudit.settlementCount
+          +' | Eşit: '+(counts.equal||0)
+          +' | Çatışma: '+report.stockAudit.conflicts
+          +' | Eksik / diğer: '+(report.stockAudit.unresolved
+            -report.stockAudit.conflicts)
+        : 'Detaylar yalnız Pazar defterleri sekmesinde hesaplanır.');
     add('Genel durum',
-      'Gerçek stok hareketleri: '+report.movements.length
-      +' (son 160 oturum kaydı)\nCanlı kervanlar: '+report.escorts.length
-      +'\nHaydut ganimet akıbeti: '+report.cargoDispositions.length
-      +' (son 128 oturum kaydı)\nCSV: seçilen kategoriye ve filtreye uyan '
+      'Gerçek stok hareketleri: '
+        +(report.computedSections.movements ? report.movements.length
+          +' (son 160 oturum kaydı)' : 'İşlemler sekmesinde')
+      +'\nCanlı kervanlar: '
+        +(report.computedSections.escorts ? report.escorts.length
+          : 'Kervan sekmesinde')
+      +'\nHaydut ganimet akıbeti: '
+        +(report.computedSections.dispositions
+          ? report.cargoDispositions.length : 'Ganimet sekmesinde')
+      +'\nCSV: seçilen kategoriye ve filtreye uyan '
       +'bütün mevcut satırlar; sadece görünen sayfa değil.');
     const fmt=row=>{
       switch(page.section){
@@ -300,7 +331,9 @@ export default class CargoMarketReportPanel {
 
   exportCsv() {
     if(!this.ensureRoot())return null;
-    const report=this.refresh();
+    // Export EXACTLY the currently displayed snapshot. Do not trigger a
+    // hidden rescan or mix a new day with the visible preview on download.
+    const report=this.lastReport || this.refresh();
     if(!report)return null;
     const csv=marketCargoReportCsv(report,this.getQueryOptions());
     const filename='foc-mal-hareketleri-'
