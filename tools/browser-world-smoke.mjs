@@ -1793,7 +1793,8 @@ async function main() {
     // This is not a world-data pilot or a synthetic completion receipt.
     const stockTradeSetup = await page.evaluate(() => {
       const g = window.game;
-      if (g.state.mode !== 'map') return { ready: false, reason: 'not_on_map' };
+      // The preceding save/load may leave a transient UI mode. The actual
+      // enterCityServicesForSettlement transition below is the gate here.
       const routes = g.economyManager.ensureTradeRoutes().filter(x => x.roadBacked);
       const settlements = g.state.map.settlements || [];
       const byId = new Map(settlements.map(s => [String(s.id), s]));
