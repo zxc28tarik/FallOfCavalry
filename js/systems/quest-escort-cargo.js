@@ -59,6 +59,7 @@ function appendDisposition({ kind, reason, bandit, goods, sources = [] }) {
 /** Recent sourced movements and losses; diagnostic only, never a replay log. */
 export function inspectCargoDispositions(limit = 20) {
   const n = Number.isSafeInteger(limit) ? Math.max(0, Math.min(128, limit)) : 20;
+  if (n === 0) return [];
   return cargoDispositionLedger.slice(-n).map(row => ({
     ...row, goods: cloneItems(row.goods),
     sources: row.sources.map(source => ({
