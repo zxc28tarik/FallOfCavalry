@@ -82,7 +82,8 @@ export function recordEscortCargoRaid({
   const rec = liveCargo.get(caravan);
   const previousLoot = banditCargo.get(bandit);
   if (rec.delivered || (previousLoot
-    && (previousLoot.claimed || previousLoot.routeId !== bandit.routeId))) return [];
+    && (previousLoot.claimed || previousLoot.locked
+      || previousLoot.routeId !== bandit.routeId))) return [];
   const targetLost = Math.min(rec.total,
     Math.round(rec.total * (100 - remainingPercent) / 100));
   let toMove = Math.max(0, targetLost - rec.lost);
@@ -98,11 +99,22 @@ export function recordEscortCargoRaid({
   }
   if (gained.length) {
     const record = banditCargo.get(bandit) || {
-      routeId: bandit.routeId, goods: new Map(), claimed: false,
+      routeId: bandit.routeId, goods: new Map(), claims: new Map(),
+      claimed: false, locked: false,
     };
     // Provenance/claimed state was checked BEFORE debiting the caravan.
-    for (const item of gained) record.goods.set(item.id,
-      (record.goods.get(item.id) || 0) + item.qty);
+    // An authenticated theft remains attributed to the EXACT live caravan
+    // and its canonical origin. A second caravan on this road cannot take
+    // another caravan's stolen units back from the bandit.
+    const claim = record.claims.get(caravan) || {
+      fromId: String(rec.fromId), questId: rec.questId,
+      routeId: rec.routeId, goods: new Map(),
+    };
+    for (const item of gained) {
+      record.goods.set(item.id, (record.goods.get(item.id) || 0) + item.qty);
+      claim.goods.set(item.id, (claim.goods.get(item.id) || 0) + item.qty);
+    }
+    record.claims.set(caravan, claim);
     banditCargo.set(bandit, record);
   }
   return gained;
@@ -113,6 +125,71 @@ export function inspectLiveBanditCargo(bandit) {
   const record = banditCargo.get(bandit);
   if (!record || record.claimed) return [];
   return [...record.goods].map(([id, qty]) => ({ id, qty }));
+}
+
+
+/**
+ * V1.31: only an actual NPC guard kill of a live bandit on the same registered
+ * road can recover typed goods stolen from THIS live caravan. The caller must
+ * use the real skirmish's lethal HP transition, never a saved victory flag.
+ * This does not grant player inventory, gold or quest completion.
+ */
+export function returnGuardRecoveredEscortCargo({
+  caravan, bandit, quest, worldState, tradeRoutes, currentDay,
+} = {}) {
+  const route = validEscortQuest(quest, worldState, tradeRoutes, currentDay);
+  const manifest = liveCargo.get(caravan);
+  const loot = banditCargo.get(bandit);
+  if (!isLiveCargo(caravan) || caravan.alive === false
+    || !route?.road || manifest?.delivered
+    || !isRuntimeRouteBandit(bandit) || bandit?.alive !== false
+    || !validBanditRoute(bandit, worldState, tradeRoutes)?.road
+    || !same(caravan.routeId, bandit.routeId)
+    || !same(caravan.routeId, route.routeId)
+    || !same(manifest.questId, quest.id)
+    || !same(manifest.fromId, route.from.id)
+    || !same(manifest.toId, route.to.id)
+    || !loot || loot.claimed || loot.locked
+    || loot.routeId !== bandit.routeId || !(loot.claims instanceof Map))
+    return [];
+  const claim = loot.claims.get(caravan);
+  if (!claim || claim.questId !== manifest.questId
+    || !same(claim.fromId, manifest.fromId)
+    || claim.routeId !== manifest.routeId
+    || !(claim.goods instanceof Map)) return [];
+  const returning = [...claim.goods].map(([id, amount]) => ({
+    id, qty: amount,
+  }));
+  const current = new Map(manifest.goods.map(row => [row.id, row.qty]));
+  if (!returning.length || !returning.every(({ id, qty }) =>
+    typeof id === 'string' && safeQty(qty) && qty > 0
+    && current.has(id) && safeQty(current.get(id))
+    && Number.isSafeInteger(current.get(id) + qty))
+    || false) return [];
+  const amount = itemCount(returning);
+  if (amount > manifest.lost) return [];
+  const next = manifest.goods.map(row => ({
+    ...row, qty: row.qty + (claim.goods.get(row.id) || 0),
+  }));
+  // Verify the claimed units are an exact subset of this actual manifest.
+  if (itemCount(next) > manifest.total) return [];
+  manifest.goods = next;
+  manifest.lost -= amount;
+  for (const { id, qty } of returning) {
+    const before = loot.goods.get(id);
+    if (!safeQty(before) || before < qty) return [];
+  }
+  for (const { id, qty } of returning) {
+    const left = loot.goods.get(id) - qty;
+    if (left) loot.goods.set(id, left);
+    else loot.goods.delete(id);
+  }
+  loot.claims.delete(caravan);
+  const remainingPercent = Math.round(100 * (manifest.total - manifest.lost)
+    / Math.max(1, manifest.total));
+  caravan.escortCargo = Math.min(Number(caravan.escortCargoMax) || 100,
+    Math.max(Number(caravan.escortCargo) || 0, remainingPercent));
+  return returning;
 }
 
 /**
@@ -143,6 +220,9 @@ export function witnessBanditCargoBattleVictory({
   const source = banditCargo.get(bandit);
   if (!source || source.claimed || source.routeId !== bandit.routeId
     || source.goods.size === 0) return false;
+  // Once an actual battle is resolved, later NPC raids cannot extend this
+  // reward's contents while the result screen is open.
+  source.locked = true;
   battleRecoveryReceipts.set(battle, {
     bandit, enemyId, linkedWorldPartyId, consumed: false,
   });
@@ -204,6 +284,7 @@ export function recoverWitnessedBanditCargo({
   receipt.consumed = true;
   source.claimed = true;
   source.goods.clear();
+  source.claims?.clear();
   return incoming;
 }
 
@@ -256,6 +337,33 @@ export function outstandingEscortCargoForSave(parties = []) {
       if (row.qty > 0) stock.set(row.id, (stock.get(row.id) || 0) + row.qty);
     }
     result.set(key, stock);
+  }
+  // V1.31: a saved worldAI bandit is restored as a plain JSON party. Its
+  // process-only stolen loot cannot be reauthorized on load. Instead, refund
+  // any UNCLAIMED goods still owned by a live authentic bandit to their real
+  // origin IN THE SAVE SNAPSHOT ONLY. Runtime ownership and stock do not move.
+  // The original ledger already received the genuine reservation debit;
+  // unlike a forged save field, this memory-only claim cannot mint goods.
+  for (const bandit of parties) {
+    if (!isRuntimeRouteBandit(bandit) || bandit?.alive === false) continue;
+    const loot = banditCargo.get(bandit);
+    if (!loot || loot.claimed || !(loot.claims instanceof Map)
+      || loot.routeId !== bandit.routeId) continue;
+    for (const [caravan, claim] of loot.claims) {
+      const origin = liveCargo.get(caravan);
+      if (!origin || !isLiveEscortParty(caravan)
+        || claim.questId !== origin.questId
+        || claim.routeId !== origin.routeId
+        || !same(claim.fromId, origin.fromId)
+        || !(claim.goods instanceof Map)) continue;
+      const key = String(origin.fromId);
+      const stock = result.get(key) || new Map();
+      for (const [id, amount] of claim.goods) {
+        if (safeQty(amount) && amount > 0)
+          stock.set(id, (stock.get(id) || 0) + amount);
+      }
+      result.set(key, stock);
+    }
   }
   return result;
 }
