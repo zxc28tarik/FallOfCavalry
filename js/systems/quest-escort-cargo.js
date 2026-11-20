@@ -80,7 +80,9 @@ export function recordEscortCargoRaid({
     || remainingPercent < 0 || remainingPercent > 100)
     return [];
   const rec = liveCargo.get(caravan);
-  if (rec.delivered) return [];
+  const previousLoot = banditCargo.get(bandit);
+  if (rec.delivered || (previousLoot
+    && (previousLoot.claimed || previousLoot.routeId !== bandit.routeId))) return [];
   const targetLost = Math.min(rec.total,
     Math.round(rec.total * (100 - remainingPercent) / 100));
   let toMove = Math.max(0, targetLost - rec.lost);
@@ -98,8 +100,7 @@ export function recordEscortCargoRaid({
     const record = banditCargo.get(bandit) || {
       routeId: bandit.routeId, goods: new Map(), claimed: false,
     };
-    // Stolen goods cannot be relabeled to another road or a spent receipt.
-    if (record.routeId !== bandit.routeId || record.claimed) return [];
+    // Provenance/claimed state was checked BEFORE debiting the caravan.
     for (const item of gained) record.goods.set(item.id,
       (record.goods.get(item.id) || 0) + item.qty);
     banditCargo.set(bandit, record);
@@ -192,7 +193,9 @@ export function recoverWitnessedBanditCargo({
       next.push({
         id, name: definition.name || id, qty,
         unitValue: Number.isFinite(definition.unitValue)
-          ? definition.unitValue : Number(definition.basePrice ?? 1),
+          ? Math.max(1, definition.unitValue)
+          : (Number.isFinite(definition.basePrice)
+            ? Math.max(1, definition.basePrice) : 1),
       });
     }
   }
