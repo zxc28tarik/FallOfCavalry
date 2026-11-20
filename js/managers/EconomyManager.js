@@ -422,6 +422,10 @@ export class EconomyManager {
     const activeSettlement = this.state.city;
     if (!activeSettlement || typeof activeSettlement !== 'object') return false;
     ensureSettlementCityState(activeSettlement);
+    // V1.29: first entry to the real city service must initialize its
+    // legacy stock before creating/linking the richer trade market.
+    // Existing legacy conflicting ledgers still stay untouched.
+    this.ensureSettlementMarketState(activeSettlement);
     activeSettlement.tier = this.getSettlementTier(activeSettlement);
     const recruitPool = recruitmentSystem.getRecruitPool(activeSettlement, this.state?.seed);
     activeSettlement.recruitPool = recruitPool;
