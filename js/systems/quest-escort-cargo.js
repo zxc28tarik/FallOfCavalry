@@ -455,6 +455,25 @@ export function deliverEscortCargo({
 }
 
 /**
+ * V1.33: a real convoy can be retired when its quest is withdrawn or the
+ * genuine road escort fails. Its remaining typed goods become accounted
+ * unrecovered goods; the running source city is not artificially refunded.
+ */
+export function classifyRetiredEscortCargo({ caravan, reason } = {}) {
+  const allowed = reason === 'quest_inactive' || reason === 'escort_failed'
+    || reason === 'escort_raided';
+  if (!allowed || !isLiveCargo(caravan) || caravan.alive !== false) return [];
+  const manifest = liveCargo.get(caravan);
+  if (manifest.delivered || manifest.retiredReason) return [];
+  const remaining = cloneItems(manifest.goods).filter(row => safeQty(row.qty)
+    && row.qty > 0);
+  addUnits(manifest.unrecovered, remaining);
+  manifest.goods = [];
+  manifest.retiredReason = reason;
+  return remaining;
+}
+
+/**
  * V1.33: process-only manifest conservation observer. This is diagnostic,
  * not a proof of world-wide economy (markets can produce/consume goods).
  * It NEVER mints, recovers, saves, or overwrites an inventory. A lost party
@@ -483,7 +502,11 @@ export function auditLiveEscortCargoConservation({ caravan, worldAi } = {}) {
     addUnits(outstanding,
       [...claim.goods].map(([id, qty]) => ({ id, qty })));
   }
-  const remaining = mapUnits(manifest.goods);
+  // Dead or retired parties are not live storage. A genuine retirement
+  // classifies the remaining goods explicitly; an unexplained disappearance
+  // is an unmatched gap instead of a fictitious in-transit balance.
+  const remaining = caravan.alive === false ? new Map()
+    : mapUnits(manifest.goods);
   const delivered = mapUnits(manifest.deliveredGoods);
   const rows = initial.map(({ id, qty: reserved }) => {
     const inCaravan = remaining.get(id) || 0;
@@ -501,6 +524,7 @@ export function auditLiveEscortCargoConservation({ caravan, worldAi } = {}) {
   const sum = field => rows.reduce((total, row) => total + row[field], 0);
   return { status: rows.every(row => row.status === 'balanced')
     ? 'balanced' : 'mismatch', questId: manifest.questId,
+  retiredReason: manifest.retiredReason || null,
   fromId: String(manifest.fromId), toId: String(manifest.toId),
   reserved: sum('reserved'), accounted: sum('accounted'), gap: sum('gap'),
   rows };
