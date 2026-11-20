@@ -1979,12 +1979,19 @@ async function main() {
       const originGoods = Object.entries(reserved).every(([id,qty]) =>
         from.marketStock.find(row => row.id === id)?.qty === initialSource[id] - qty
           && g.state.markets[fromId]?.stocks?.[id] === initialSource[id] - qty);
+      const conservation = pm.auditEscortCargoConservation(caravan);
+      const allDelivered = conservation.status === 'balanced'
+        && conservation.reserved === total
+        && conservation.rows.every(row => row.atDestination === row.reserved
+          && row.inCaravan === 0 && row.inBandits === 0
+          && row.inPlayer === 0 && row.unrecovered === 0);
       const sourceReport = g.economyManager.auditMarketStocks();
       const noConflictSource = !sourceReport.rows.some(row =>
         (row.settlementId === fromId || row.settlementId === toId)
           && row.status === 'conflict');
       return { ready: true, ticks, total, reserved, beforeStartEqual,
         snapshotEscrow, delivered, targetGoods, originGoods, noConflictSource,
+        conservationBalanced: allDelivered, conservationGap: conservation.gap,
         questId: quest.id, fromId, toId, routeId,
         canonicalSource: g.state.markets[fromId]?.stockBridge?.version === 1,
         canonicalDestination: g.state.markets[toId]?.stockBridge?.version === 1,
@@ -1999,7 +2006,9 @@ async function main() {
       || !stockRouteDelivery.delivered || !stockRouteDelivery.targetGoods
       || !stockRouteDelivery.originGoods || !stockRouteDelivery.noConflictSource
       || !stockRouteDelivery.canonicalSource
-      || !stockRouteDelivery.canonicalDestination || !stockRouteDelivery.completionButton) {
+      || !stockRouteDelivery.canonicalDestination
+      || !stockRouteDelivery.conservationBalanced
+      || !stockRouteDelivery.completionButton) {
       throw new Error('V1.29 real browser stock/escort source-destination validation failed');
     }
     await page.locator('#questCompletionOverlay button.quest-path:not([disabled])')
@@ -2205,6 +2214,15 @@ async function main() {
       const removed=!g.worldManager.worldAi.parties.some(p=>
         p.id===data.banditId);
       const retryRejected=g.battleManager.exitBattleResultToMap()===false;
+      const authenticCaravan=g.worldManager.worldAi.parties.find(p=>
+        p.escortQuestId===data.questId && p.kind==='caravan');
+      const conservation=authenticCaravan
+        ? g.worldManager.simManager.worldPartyManager
+          .auditEscortCargoConservation(authenticCaravan)
+        : null;
+      const conservedPlayerLoot=conservation?.status==='balanced'
+        && conservation.rows.reduce((sum,row)=>sum+row.inPlayer,0)
+          ===data.stolenCount && conservation.gap===0;
       const afterRetry=JSON.stringify(g.playerParty.inventory?.items||[]);
       const payload=g.saveManager.buildSavePayload();
       const safeSave=!payload.game.worldAi.parties.some(p=>
@@ -2225,6 +2243,7 @@ async function main() {
           ===JSON.stringify(Object.entries(expected).sort())
         && x.sources.some(s=>s.questId===data.questId));
       return {mode:g.state.mode,delta,expected,exact,removed,custody,
+        conservedPlayerLoot, conservationGap:conservation?.gap ?? null,
         traceCount:trace.length,
         retryRejected,noDoubleClaim:afterRetry===
           JSON.stringify(payload.game.inventory?.items||[]) || retryRejected,
@@ -2239,6 +2258,7 @@ async function main() {
       || !recoveredSourcedLoot.retryRejected || !recoveredSourcedLoot.safeSave
       || !recoveredSourcedLoot.saved || !recoveredSourcedLoot.loaded
       || !recoveredSourcedLoot.durable || !recoveredSourcedLoot.custody
+      || !recoveredSourcedLoot.conservedPlayerLoot
       || !recoveredSourcedLoot.goldUnchangedFromClaim) {
       throw new Error('V1.30 raid source loot failed one-time durable player transfer');
     }
