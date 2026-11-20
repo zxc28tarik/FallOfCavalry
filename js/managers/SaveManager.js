@@ -327,8 +327,10 @@ Esc close`,
     const enemyParties = this.game?.worldManager?.enemyParties
       || this.game?.enemyParties || [];
     const worldAi = this.game?.worldManager?.worldAi || this.game?.worldAi;
-    // Escorts are process-only; refund undelivered typed cargo in the save
-    // snapshot (not the running world) before the quest respawns on load.
+    // Escort manifests and unclaimed bandit theft evidence are process-only.
+    // Snapshot-restoring their typed units to the proven origin prevents a
+    // load from erasing escrow OR turning a JSON bandit into loot authority.
+    // Never touch the running-world settlement or market here.
     const pendingEscortGoods = outstandingEscortCargoForSave(worldAi?.parties || []);
     const lastEncounterEndTimeByEnemyId =
       this.game?.worldManager?.lastEncounterEndTimeByEnemyId
