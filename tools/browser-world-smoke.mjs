@@ -1471,10 +1471,23 @@ async function main() {
       if(!quest)return {ready:false,reason:'no_escort_guard_template'};
       quest.status='active';
       if(!g.questManager.addQuest(quest))return {ready:false,reason:'guard_quest_not_added'};
+      const origin=g.state.map.settlements.find(s=>
+        String(s.id)===String(entry.fromCityId));
+      const destination=g.state.map.settlements.find(s=>
+        String(s.id)===String(entry.toCityId));
+      if(!origin || !destination)return{ready:false,reason:'guard_route_cities_absent'};
+      g.economyManager.ensureSettlementMarketState(origin);
+      g.economyManager.ensureSettlementMarketState(destination);
+      const originBefore=Object.fromEntries(origin.marketStock.map(r=>[r.id,r.qty]));
+      const destinationBefore=Object.fromEntries(destination.marketStock.map(r=>[r.id,r.qty]));
       pm.ensureWorldParties();
       const convoy=g.worldManager.worldAi.parties.find(p=>
         p.kind==='caravan' && p.escortQuestId===quest.id && p.routeId===entry.id);
       if(!convoy)return {ready:false,reason:'guard_convoy_not_spawned'};
+      const reserved=origin.marketStock.map(row=>({
+        id:row.id,qty:(originBefore[row.id]||0)-row.qty,
+      })).filter(x=>x.qty>0);
+      const initialReserved=reserved.reduce((n,x)=>n+x.qty,0);
       const guards=g.worldManager.worldAi.parties.filter(p=>
         p.kind==='escort_guard' && p.escortGuardOf===convoy.id && p.alive!==false);
       if(guards.length!==3)return {ready:false,reason:'no_live_world_guards',guards:guards.length};
@@ -1525,7 +1538,11 @@ async function main() {
       const root=document.getElementById('questCompletionOverlay');
       const visible=[...(root?.querySelectorAll('button.quest-path')||[])]
         .some(x=>!x.disabled && x.textContent.includes('Kervan güvenli ulaştı'));
+      const fullManifestDelivered=initialReserved>0 && reserved.every(row=>
+        destination.marketStock.find(x=>x.id===row.id)?.qty===
+          (destinationBefore[row.id]||0)+row.qty);
       return {ready:true,routeId:entry.id,questId:quest.id,ticks,deliveryTicks,
+        initialReserved,fullManifestDelivered,
         banditDefeated,defendedOnce,remainingGuards,
         damageWitnessed,cargo:convoy.escortCargo,hull:convoy.escortHull,
         hudHasStats,noEarlyReward,arrival:quest.objectives[0].outcome,
@@ -1536,7 +1553,7 @@ async function main() {
     if(!npcGuardSkirmish.ready || !npcGuardSkirmish.banditDefeated
       || !npcGuardSkirmish.defendedOnce || !npcGuardSkirmish.damageWitnessed
       || npcGuardSkirmish.remainingGuards<1
-      || npcGuardSkirmish.cargo>=100 || npcGuardSkirmish.cargo<=0
+      || npcGuardSkirmish.cargo!==100 || !npcGuardSkirmish.fullManifestDelivered
       || !npcGuardSkirmish.hudHasStats || !npcGuardSkirmish.noEarlyReward
       || npcGuardSkirmish.arrival!=='caravan_arrived'
       || !npcGuardSkirmish.offerVisible){
