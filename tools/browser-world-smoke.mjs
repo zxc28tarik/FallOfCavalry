@@ -2072,6 +2072,133 @@ async function main() {
       || !playerMarketCargoReport.closed
       || !playerMarketCargoReport.readonly)
       throw new Error('V1.34 market/convoy UI audit did not reconcile read-only events');
+    // V1.35 — interact with the ACTUAL paginated global-stock UI, download
+    // its complete filtered CSV, and verify that page 1 != full export.
+    const pagedMarketCargoReport = await page.evaluate(({fromId,toId})=>{
+      const g=window.game;
+      const widget=g.cargoMarketReportPanel;
+      const city=document.getElementById('cargoMarketReportCity');
+      const section=document.getElementById('cargoMarketReportSection');
+      const type=document.getElementById('cargoMarketReportType');
+      const pageSize=document.getElementById('cargoMarketReportPageSize');
+      const good=document.getElementById('cargoMarketReportItem');
+      const search=document.getElementById('cargoMarketReportSearch');
+      const before=JSON.stringify({
+        from:g.state.map.settlements.find(s=>String(s.id)===fromId)?.marketStock,
+        to:g.state.map.settlements.find(s=>String(s.id)===toId)?.marketStock,
+        markets:{from:g.state.markets[fromId]?.stocks,
+          to:g.state.markets[toId]?.stocks},
+        items:g.playerParty.inventory?.items,gold:g.playerParty.gold,
+      });
+      document.getElementById('cargoMarketReportToggle')?.click();
+      const change=(element,value,event='change')=>{
+        element.value=value;
+        element.dispatchEvent(new Event(event,{bubbles:true}));
+      };
+      change(city,'');
+      change(section,'stock');
+      change(type,'missing_market');
+      change(pageSize,'10');
+      const expected=g.economyManager.buildCargoMarketReport(null,160)
+        .stockAudit.counts.missing_market||0;
+      const first=widget.page;
+      const total=widget.lastReport.stockAudit.counts.missing_market||0;
+      const next=document.getElementById('cargoMarketReportNext');
+      const prev=document.getElementById('cargoMarketReportPrev');
+      next?.click();const second=widget.page;
+      prev?.click();const restored=widget.page;
+      const pageInfo=document.getElementById('cargoMarketReportPageInfo')?.textContent;
+      const missingCityCount=widget.lastReport.stockAudit.settlementCount;
+      const reportHasGlobal=missingCityCount===g.state.map.settlements.length;
+      const beforeExport=before===JSON.stringify({
+        from:g.state.map.settlements.find(s=>String(s.id)===fromId)?.marketStock,
+        to:g.state.map.settlements.find(s=>String(s.id)===toId)?.marketStock,
+        markets:{from:g.state.markets[fromId]?.stocks,
+          to:g.state.markets[toId]?.stocks},
+        items:g.playerParty.inventory?.items,gold:g.playerParty.gold,
+      });
+      return {ready:true,expected,total,first,second,restored,
+        pageInfo,missingCityCount,reportHasGlobal,
+        perPage:widget.pageSize,section:widget.selectedSection,
+        filter:widget.selectedType,beforeExport,
+        exportFilenameExpected:'foc-mal-hareketleri-stock-tum.csv',
+      };
+    },stockTradeSetup);
+    report.pagedMarketCargoReport=pagedMarketCargoReport;
+    stage('global-881-city-stock-pagination',pagedMarketCargoReport);
+    if(!pagedMarketCargoReport.ready || !pagedMarketCargoReport.reportHasGlobal
+      || pagedMarketCargoReport.expected<=10
+      || pagedMarketCargoReport.total!==pagedMarketCargoReport.expected
+      || pagedMarketCargoReport.first!==1
+      || pagedMarketCargoReport.second!==2
+      || pagedMarketCargoReport.restored!==1
+      || pagedMarketCargoReport.perPage!==10
+      || pagedMarketCargoReport.section!=='stock'
+      || pagedMarketCargoReport.filter!=='missing_market'
+      || !pagedMarketCargoReport.beforeExport)
+      throw new Error('V1.35 real world stock pagination or type filtering failed');
+    const downloadPromise=page.waitForEvent('download',{timeout:15000});
+    await page.evaluate(()=>{
+      document.getElementById('cargoMarketReportCsv')?.click();
+    });
+    const download=await downloadPromise;
+    const contents=[];
+    const stream=await download.createReadStream();
+    for await(const chunk of stream)contents.push(chunk);
+    const csvText=Buffer.concat(contents).toString('utf8').replace(/^\uFEFF/,'');
+    const csvLines=csvText.trimEnd().split('\n');
+    const csvOutput={
+      file:download.suggestedFilename(),
+      records:csvLines.length-1,
+      expected:pagedMarketCargoReport.expected,
+      hasHeader:csvLines[0]==='settlementId,itemId,status,cityQty,marketQty,cityIssue,marketIssue',
+      allRowsNotOnlyPage:csvLines.length-1>pagedMarketCargoReport.perPage,
+      everyRowMissingMarket:csvLines.slice(1).every(line=>line.includes('"missing_market"')),
+    };
+    stage('full-filtered-market-stock-csv-download',csvOutput);
+    if(csvOutput.file!==pagedMarketCargoReport.exportFilenameExpected
+      || csvOutput.records!==csvOutput.expected
+      || !csvOutput.hasHeader || !csvOutput.allRowsNotOnlyPage
+      || !csvOutput.everyRowMissingMarket)
+      throw new Error('V1.35 filtered CSV did not contain all global stock rows');
+    const filteredTradePage=await page.evaluate(({fromId,toId})=>{
+      const widget=window.game.cargoMarketReportPanel;
+      const change=(id,value,event='change')=>{
+        const field=document.getElementById(id);
+        field.value=value;
+        field.dispatchEvent(new Event(event,{bubbles:true}));
+      };
+      change('cargoMarketReportCity',fromId);
+      change('cargoMarketReportSection','movements');
+      change('cargoMarketReportType','modern_buy');
+      change('cargoMarketReportItem','wheat','input');
+      change('cargoMarketReportSearch',fromId,'input');
+      const pageInfo=document.getElementById('cargoMarketReportPageInfo')?.textContent;
+      const selected=widget.getQueryOptions();
+      const hasBuy=widget.content.textContent.includes('Pazar alımı')
+        && widget.content.textContent.includes('wheat');
+      const source=window.game.state.map.settlements.find(s=>String(s.id)===fromId);
+      const destination=window.game.state.map.settlements.find(s=>String(s.id)===toId);
+      const before=JSON.stringify({
+        a:source.marketStock,b:destination.marketStock,
+        market:window.game.state.markets[fromId]?.stocks,
+      });
+      document.getElementById('cargoMarketReportRefresh')?.click();
+      const unchanged=before===JSON.stringify({
+        a:source.marketStock,b:destination.marketStock,
+        market:window.game.state.markets[fromId]?.stocks,
+      });
+      document.getElementById('cargoMarketReportClose')?.click();
+      return {hasBuy,unchanged,pageInfo,selected,
+        page:widget.page,closed:widget.root.style.display==='none'};
+    },stockTradeSetup);
+    stage('city-item-type-search-filter-readonly',filteredTradePage);
+    if(!filteredTradePage.hasBuy || !filteredTradePage.unchanged
+      || !filteredTradePage.closed
+      || filteredTradePage.selected.section!=='movements'
+      || filteredTradePage.selected.type!=='modern_buy'
+      || filteredTradePage.selected.itemId!=='wheat')
+      throw new Error('V1.35 trade city/product/type/search filter did not work');
     const stockAfterLoad = await page.evaluate(({ fromId, toId }) => {
       const g = window.game;
       const before = [fromId,toId].map(id => {
