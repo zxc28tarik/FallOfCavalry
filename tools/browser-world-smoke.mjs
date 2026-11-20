@@ -2007,6 +2007,198 @@ async function main() {
     if (!stockAfterLoad.saved || !stockAfterLoad.loaded || !stockAfterLoad.unchanged)
       throw new Error('V1.29 stock market/convoy completed save load mismatch');
 
+    // V1.30 — recover actual stolen, typed convoy goods from a REAL world
+    // bandit only after winning the actual tactical battle. The page fixture
+    // weakens the test-only convoy guards and boosts test soldiers, but NEVER
+    // manufactures combat outcomes, inventory loot, or victory receipts.
+    const sourcedLootBattle = await page.evaluate(() => {
+      const g = window.game;
+      if (g.state.mode === 'city') g.economyManager.exitCityServices();
+      const m = g.worldManager.simManager.worldPartyManager;
+      const routes = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
+      const roads = g.state.map.roads || [];
+      const occupied = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
+      const candidates = routes.map(route => {
+        const from = g.state.map.settlements.find(s =>
+          String(s.id) === String(route.fromCityId));
+        const road = roads.find(x => String(x.from) === String(route.fromCityId)
+          && String(x.to) === String(route.toCityId));
+        const pts = road?.path || [];
+        const length = pts.slice(1).reduce((n,p,i) =>
+          n + Math.hypot(p.x - pts[i].x, p.y - pts[i].y), 0);
+        return { route, from, length };
+      }).filter(x => x.from && x.length > 0 && x.length <= 8
+        && !occupied.has(x.route.id)
+        && !g.worldManager.worldAi.parties.some(p =>
+          p.alive !== false && p.kind === 'bandit'
+            && p.routeId === x.route.id)).sort((a,b) => a.length - b.length);
+      if (g.state.mode !== 'map') return {
+        ready: false, reason: 'v130_not_on_map', mode: g.state.mode,
+      };
+      let chosen = null;
+      for (const candidate of candidates) {
+        g.economyManager.ensureSettlementMarketState(candidate.from);
+        const units = (candidate.from.marketStock || []).filter(x =>
+          Number.isSafeInteger(x.qty) && x.qty > 0)
+          .slice(0,3).reduce((n,x) => n+x.qty,0);
+        if (units >= 6) { chosen = candidate; break; }
+      }
+      if (!chosen) return { ready: false, reason: 'no_free_stocked_road',
+        candidates: candidates.length };
+      const beforeStock = Object.fromEntries(chosen.from.marketStock.map(x =>
+        [x.id,x.qty]));
+      const quest = g.questGenerator.generateFromTemplate('escort_first_caravan', {
+        targetRouteId: chosen.route.id, issuerFactionId: 'ottoman',
+      });
+      if (!quest) return { ready: false, reason: 'v130_missing_escort_template' };
+      quest.status='active';
+      if (!g.questManager.addQuest(quest)) return {
+        ready: false, reason:'v130_cannot_add_escort',
+      };
+      m.ensureWorldParties();
+      const caravan = g.worldManager.worldAi.parties.find(p =>
+        p.escortQuestId === quest.id && p.kind === 'caravan');
+      if (!caravan) return { ready:false, reason:'v130_no_live_caravan' };
+      const reserved = chosen.from.marketStock.map(x =>
+        ({ id:x.id, qty:(beforeStock[x.id] || 0)-x.qty }))
+        .filter(x => x.qty > 0);
+      const total = reserved.reduce((n,x)=>n+x.qty,0);
+      if (total < 6) return { ready:false, reason:'v130_no_reservable_goods',
+        total, reserved };
+      const guards = g.worldManager.worldAi.parties.filter(p =>
+        p.escortGuardOf === caravan.id && p.kind === 'escort_guard');
+      // Create a native road-bandit source through the existing route-threat
+      // spawner, not through a forged save or synthetic world-party clone.
+      const security=g.questGenerator.generateFromTemplate('secure_trade_route', {
+        targetCityId:chosen.route.fromCityId,targetRouteId:chosen.route.id,
+        issuerFactionId:'ottoman',
+      });
+      if(!security)return{ready:false,reason:'v130_no_security_template'};
+      security.status='active';
+      if(!g.questManager.addQuest(security))return{
+        ready:false,reason:'v130_security_not_added',
+      };
+      const existingIds = new Set(g.worldManager.worldAi.parties.map(p=>p.id));
+      m.ensureActiveQuestRouteThreats({
+        worldState:g.state.map,tradeRoutes:routes,cfg:m.getWorldAiCfg(),
+      });
+      const bandit=g.worldManager.worldAi.parties.find(p=>
+        !existingIds.has(p.id) && p.kind==='bandit'
+        && p.routeId===chosen.route.id);
+      g.questManager.activeQuests = g.questManager.activeQuests.filter(q =>
+        q.id !== security.id);
+      if(!bandit)return {ready:false,reason:'v130_no_source_bandit'};
+      guards.forEach(p=>{p.hp=0;p.alive=false;});
+      bandit.x=caravan.x+Number(g.state.map.tileSize||32);
+      bandit.y=caravan.y;
+      g.playerParty.x=caravan.x;g.playerParty.y=caravan.y;
+      g.playerParty.hasDestination=false;
+      g.playerParty.destX=null;g.playerParty.destY=null;
+      // These are actual NPC attacks and stock-loss bookkeeping.
+      let raidTicks=0;
+      for(;raidTicks<22 && caravan.escortCargo>=100
+        && quest.status==='active' && bandit.alive!==false;raidTicks++) {
+        m.processQuestEscortCaravans(0.2,{worldState:g.state.map,tradeRoutes:routes});
+      }
+      const cargoPct=caravan.escortCargo;
+      const stolenCount=Math.round(total*(100-cargoPct)/100);
+      let remaining=stolenCount;
+      const expected=[];
+      for(const row of reserved){
+        const n=Math.min(row.qty,remaining);
+        if(n>0)expected.push({id:row.id,qty:n});
+        remaining-=n;
+      }
+      const startGold=g.playerParty.gold;
+      const noEarlyReward=g.playerParty.gold===startGold
+        && !g.questManager.completedQuests.some(q=>q.id===quest.id);
+      if(cargoPct>=100 || bandit.alive===false || stolenCount<1) return{
+        ready:false, reason:'v130_real_raid_not_observed',
+        raidTicks,cargoPct,stolenCount,banditAlive:bandit.alive,
+      };
+      g.playerParty.roster=Array.from({length:6},(_,i)=>({
+        id:`qa-v130-recovery-${i}`,name:`QA Recovery ${i+1}`,
+        class:'infantry',hp:4500,maxHp:4500,atk:3500,def:500,
+        speed:1100,meleeRange:240,isRanged:false,
+        status:'healthy',healProgress:0,
+      }));
+      m.syncVisiblePartiesToWorld();
+      const encountered=g.worldManager.simManager.processWorldAiEncounters([{
+        partyId:bandit.id,factionId:bandit.factionId,x:bandit.x,y:bandit.y,
+      }]);
+      const enemyId=g.state.encounter?.enemyId;
+      const sourceMatched=enemyId===`wai-${bandit.id}`
+        && g.worldManager.worldEncounterPartyByEnemyId?.[enemyId]===bandit.id;
+      const fight=encountered && sourceMatched
+        && g.encounterManager.resolveEncounter('fight')===true;
+      const selected=fight && g.battleManager.confirmRosterSelection()===true;
+      const deployed=selected && g.battleManager.confirmBattleDeployment()===true;
+      let combatTicks=0;
+      for(;combatTicks<360 && g.state.battle?.phase==='active';combatTicks++){
+        g.battleManager.updateBattleSimulation(0.12);
+      }
+      const battleResult=g.state.battle?.battleResult?.result;
+      const beforeExit=Object.fromEntries(
+        (g.playerParty.inventory?.items||[]).map(x=>[x.id,x.qty]));
+      return {ready:true,routeId:chosen.route.id,questId:quest.id,
+        banditId:bandit.id,enemyId,raidTicks,cargoPct,total,
+        stolenCount,expected,combatTicks,encountered,sourceMatched,
+        fight,selected,deployed,battleResult,
+        battlePanel:g.state.battle?.phase==='result',
+        beforeExit,noEarlyReward,playerGoldBeforeExit:g.playerParty.gold,
+      };
+    });
+    report.sourcedLootBattle=sourcedLootBattle;
+    stage('source-bandit-real-cargo-raid-and-tactical-victory',sourcedLootBattle);
+    if(!sourcedLootBattle.ready || !sourcedLootBattle.encountered
+      || !sourcedLootBattle.sourceMatched || !sourcedLootBattle.fight
+      || !sourcedLootBattle.selected || !sourcedLootBattle.deployed
+      || sourcedLootBattle.stolenCount<1
+      || sourcedLootBattle.battleResult!=='victory'
+      || !sourcedLootBattle.battlePanel || !sourcedLootBattle.noEarlyReward) {
+      throw new Error('V1.30 source bandit raid did not lead to real tactical victory');
+    }
+    await page.keyboard.press('Enter');
+    const recoveredSourcedLoot=await page.evaluate(data=>{
+      const g=window.game;
+      const after=Object.fromEntries((g.playerParty.inventory?.items||[])
+        .map(x=>[x.id,x.qty]));
+      const delta=Object.fromEntries(Object.keys(after).map(id=>
+        [id,after[id]-(data.beforeExit[id]||0)]).filter(([,qty])=>qty!==0));
+      const expected=Object.fromEntries(data.expected.map(x=>[x.id,x.qty]));
+      const exact=JSON.stringify(Object.entries(delta).sort())===
+        JSON.stringify(Object.entries(expected).sort());
+      const removed=!g.worldManager.worldAi.parties.some(p=>
+        p.id===data.banditId);
+      const retryRejected=g.battleManager.exitBattleResultToMap()===false;
+      const afterRetry=JSON.stringify(g.playerParty.inventory?.items||[]);
+      const payload=g.saveManager.buildSavePayload();
+      const safeSave=!payload.game.worldAi.parties.some(p=>
+        p.id===data.banditId && (p.loot||p.cargoManifest));
+      const saved=g.saveManager.quickSave()===true;
+      const loaded=saved && g.saveManager.quickLoad()===true;
+      const afterLoad=Object.fromEntries((g.playerParty.inventory?.items||[])
+        .map(x=>[x.id,x.qty]));
+      const durable=JSON.stringify(Object.entries(afterLoad).sort())===
+        JSON.stringify(Object.entries(after).sort());
+      return {mode:g.state.mode,delta,expected,exact,removed,
+        retryRejected,noDoubleClaim:afterRetry===
+          JSON.stringify(payload.game.inventory?.items||[]) || retryRejected,
+        safeSave,saved,loaded,durable,
+        goldUnchangedFromClaim:g.playerParty.gold===data.playerGoldBeforeExit,
+      };
+    },sourcedLootBattle);
+    report.recoveredSourcedLoot=recoveredSourcedLoot;
+    stage('verified-one-time-raided-goods-player-inventory-save-load',
+      recoveredSourcedLoot);
+    if(!recoveredSourcedLoot.exact || !recoveredSourcedLoot.removed
+      || !recoveredSourcedLoot.retryRejected || !recoveredSourcedLoot.safeSave
+      || !recoveredSourcedLoot.saved || !recoveredSourcedLoot.loaded
+      || !recoveredSourcedLoot.durable
+      || !recoveredSourcedLoot.goldUnchangedFromClaim) {
+      throw new Error('V1.30 raid source loot failed one-time durable player transfer');
+    }
+
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
     report.status = 'PASS_BOOT_WORLD_SAVELOAD';
