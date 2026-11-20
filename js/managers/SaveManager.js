@@ -24,6 +24,7 @@ import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/que
 import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
 import { outstandingEscortCargoForSave } from '../systems/quest-escort-cargo.js';
 import { resetMarketMovementJournal } from '../systems/market-cargo-report.js';
+import { resetCargoDispositionJournal } from '../systems/quest-escort-cargo.js';
 import { snapshotMarketsWithPendingEscorts } from '../systems/market-stock-bridge.js';
 import {
   restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
@@ -488,6 +489,8 @@ Esc close`,
     // The session observation journal is NOT a persisted game receipt.
     // Never carry pre-load events into a newly restored campaign state.
     resetMarketMovementJournal();
+    resetCargoDispositionJournal();
+    this.game?.cargoMarketReportPanel?.invalidate?.();
 
     this.state.day = Number.isFinite(game.day) ? game.day : 1;
     this.state.paused = Boolean(game.paused);
