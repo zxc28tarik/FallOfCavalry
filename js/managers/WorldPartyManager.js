@@ -23,6 +23,7 @@ import {
   classifyRetiredEscortCargo,
 } from '../systems/quest-escort-cargo.js';
 import { mirrorCityStockChange } from '../systems/market-stock-bridge.js';
+import { observeMarketMovement } from '../systems/market-cargo-report.js';
 import {
   createInitialWorldAiState,
   spawnPartyBandit,
@@ -255,8 +256,15 @@ export class WorldPartyManager {
         const market = this.world?.state?.markets?.[String(route.from.id)];
         for (const row of reserved || []) {
           const stock = route.from.marketStock.find(item => item.id === row.id);
-          if (stock) mirrorCityStockChange(route.from, market, row.id,
-            stock.qty + row.qty, stock.qty);
+          if (stock) {
+            mirrorCityStockChange(route.from, market, row.id,
+              stock.qty + row.qty, stock.qty);
+            observeMarketMovement({
+              kind: 'escort_reserved', ledger: 'city', settlement: route.from,
+              market, itemId: row.id, before: stock.qty + row.qty,
+              after: stock.qty, day, questId: quest.id, routeId: party.routeId,
+            });
+          }
         }
       }
       parties.push(party);
@@ -454,8 +462,16 @@ export class WorldPartyManager {
             const market = this.world?.state?.markets?.[String(route.to.id)];
             for (const row of delivered || []) {
               const stock = route.to.marketStock.find(item => item.id === row.id);
-              if (stock) mirrorCityStockChange(route.to, market, row.id,
-                stock.qty - row.qty, stock.qty);
+              if (stock) {
+                mirrorCityStockChange(route.to, market, row.id,
+                  stock.qty - row.qty, stock.qty);
+                observeMarketMovement({
+                  kind: 'escort_delivered', ledger: 'city', settlement: route.to,
+                  market, itemId: row.id, before: stock.qty - row.qty,
+                  after: stock.qty, day, questId: quest.id,
+                  routeId: party.routeId,
+                });
+              }
             }
           }
           const receipt = creditQuestObjectivesForVerifiedEvent({
