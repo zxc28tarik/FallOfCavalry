@@ -95,7 +95,7 @@ export function buildMarketCargoReport({
     .sort((a,b) => compare(a.questId,b.questId));
   const dispositionRows = inspectCargoDispositions(128).filter(row =>
     id === null || row.sources.some(source => String(source.fromId) === id));
-  const n = Number.isSafeInteger(limit) ? Math.max(0,Math.min(128,limit)) : 25;
+  const n = Number.isSafeInteger(limit) ? Math.max(0,Math.min(MAX_EVENTS,limit)) : 25;
   return {
     readOnly: true, sessionOnly: true,
     settlementId: id, stockAudit: {
@@ -103,11 +103,130 @@ export function buildMarketCargoReport({
       counts: { ...stockAudit.counts },
       conflicts: goods.filter(x => x.status === 'conflict').length,
       unresolved: goods.length,
-      rows: id === null ? [] : stockAudit.rows.map(row => ({...row})),
+      // Include world-wide rows for on-demand V1.35 page queries and CSV.
+      // Never render the full array into the DOM in a single operation.
+      rows: stockAudit.rows.map(row => ({ ...row })),
     },
     movements: inspectMarketMovements(n, id),
-    escorts, cargoDispositions: n ? dispositionRows.slice(-n) : [],
+    escorts, cargoDispositions: n ? dispositionRows.slice(-Math.min(128,n)) : [],
     // These are intentionally separate facts. Do not subtract market drift
     // from stolen cargo or equate market stock conflicts with stolen units.
   };
+}
+
+/**
+ * V1.35 — one bounded, reproducible query surface for the four separate
+ * accounting categories. Pages only affect presentation; CSV downloads every
+ * matching retained row and never reads/writes game state.
+ */
+export const REPORT_SECTIONS = Object.freeze([
+  'stock', 'movements', 'escorts', 'dispositions',
+]);
+export const REPORT_COLUMNS = Object.freeze({
+  stock: ['settlementId','itemId','status','cityQty','marketQty',
+    'cityIssue','marketIssue'],
+  movements: ['sequence','day','kind','ledger','settlementId',
+    'settlementName','itemId','before','after','delta','cityQty',
+    'marketQty','status','questId','routeId'],
+  escorts: ['questId','fromId','toId','retiredReason','status',
+    'itemId','reserved','inCaravan','inBandits','inPlayer',
+    'atDestination','unrecovered','accounted','gap'],
+  dispositions: ['sequence','kind','reason','banditId','routeId',
+    'questId','fromId','itemId','qty'],
+});
+const reportRowsForSection = (report, section) => {
+  if (!REPORT_SECTIONS.includes(section)) return [];
+  if (section === 'stock') return report?.stockAudit?.rows || [];
+  if (section === 'movements') return [...(report?.movements || [])].reverse();
+  if (section === 'escorts') return (report?.escorts || []).flatMap(escort =>
+    (escort.rows || []).map(item => ({
+      questId: escort.questId, fromId: escort.fromId, toId: escort.toId,
+      retiredReason: escort.retiredReason, status: item.status,
+      itemId: item.id, reserved: item.reserved,
+      inCaravan: item.inCaravan, inBandits: item.inBandits,
+      inPlayer: item.inPlayer, atDestination: item.atDestination,
+      unrecovered: item.unrecovered, accounted: item.accounted,
+      gap: item.gap,
+    })));
+  return [...(report?.cargoDispositions || [])].reverse().flatMap(event => {
+    // Multiple caravans can share a bandit. Preserve actual provenance when
+    // displaying a stolen unit; no source means UNKNOWN, never fake city.
+    const sources = Array.isArray(event.sources) && event.sources.length
+      ? event.sources : [null];
+    return (event.goods || []).flatMap(item => sources.flatMap(source => {
+      const qty = source?.goods?.find(row => row.id === item.id)?.qty;
+      if (source && (!validQty(qty) || qty === 0)) return [];
+      return [{
+        sequence: event.sequence, kind: event.kind, reason: event.reason,
+        banditId: event.banditId, routeId: event.routeId,
+        questId: source?.questId ?? null, fromId: source?.fromId ?? null,
+        itemId: item.id, qty: source ? qty : item.qty,
+      }];
+    }));
+  });
+};
+function safePageInt(value, fallback, max) {
+  return Number.isSafeInteger(value) && value > 0
+    ? Math.min(value, max) : fallback;
+}
+export function queryMarketCargoReportRows(report, {
+  section = 'movements', itemId = '', type = '', search = '',
+  page = 1, pageSize = 20,
+} = {}) {
+  const category = REPORT_SECTIONS.includes(section) ? section : 'movements';
+  const term = String(search || '').trim().toLocaleLowerCase('tr').slice(0,80);
+  const good = String(itemId || '').trim().toLocaleLowerCase('tr').slice(0,80);
+  const selectedType = String(type || '').trim();
+  const matching = reportRowsForSection(report, category).filter(row => {
+    if (good && String(row.itemId || '').toLocaleLowerCase('tr') !== good)
+      return false;
+    if (selectedType && row.status !== selectedType
+      && row.kind !== selectedType && row.reason !== selectedType)
+      return false;
+    if (!term) return true;
+    // Explicit searchable columns: avoid JSON of arbitrary attacker-controlled
+    // objects and keep large-world filtering bounded.
+    return ['itemId','settlementId','settlementName','questId',
+      'routeId','banditId','kind','reason','status'].some(key =>
+      String(row[key] ?? '').toLocaleLowerCase('tr').includes(term));
+  });
+  const perPage = safePageInt(pageSize, 20, 100);
+  const pageCount = Math.max(1, Math.ceil(matching.length / perPage));
+  const actualPage = Math.min(safePageInt(page, 1, pageCount), pageCount);
+  return {
+    section: category, columns: REPORT_COLUMNS[category],
+    total: matching.length, page: actualPage, pageCount, pageSize: perPage,
+    first: matching.length ? (actualPage - 1) * perPage + 1 : 0,
+    last: Math.min(actualPage * perPage, matching.length),
+    rows: matching.slice((actualPage - 1) * perPage, actualPage * perPage)
+      .map(row => ({ ...row })),
+  };
+}
+function csvCell(value) {
+  const input = String(value ?? '');
+  const safe = /^\s*[=+@-]/.test(input) ? `'${input}` : input;
+  return `"${safe.replaceAll('"','""')}"`;
+}
+/** All matching rows, not just the visible page, in stable UTF-8-safe CSV. */
+export function marketCargoReportCsv(report, options = {}) {
+  const category = REPORT_SECTIONS.includes(options.section)
+    ? options.section : 'movements';
+  // Page selection is deliberately ignored. The journal itself remains
+  // bounded (160 movements / 128 dispositions); the CSV cannot resurrect
+  // lost session history or invent stock.
+  const rows = reportRowsForSection(report, category).filter(row => {
+    const itemId = String(options.itemId || '').trim().toLocaleLowerCase('tr');
+    const type = String(options.type || '').trim();
+    const term = String(options.search || '').trim().toLocaleLowerCase('tr').slice(0,80);
+    if (itemId && String(row.itemId || '').toLocaleLowerCase('tr') !== itemId)
+      return false;
+    if (type && row.status !== type && row.kind !== type && row.reason !== type)
+      return false;
+    return !term || ['itemId','settlementId','settlementName','questId',
+      'routeId','banditId','kind','reason','status'].some(key =>
+      String(row[key] ?? '').toLocaleLowerCase('tr').includes(term));
+  });
+  const columns = REPORT_COLUMNS[category];
+  return [columns.join(','), ...rows.map(row => columns.map(key =>
+    csvCell(row[key])).join(','))].join('\n') + '\n';
 }
