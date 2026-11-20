@@ -171,14 +171,11 @@ export function returnGuardRecoveredEscortCargo({
   const next = manifest.goods.map(row => ({
     ...row, qty: row.qty + (claim.goods.get(row.id) || 0),
   }));
-  // Verify the claimed units are an exact subset of this actual manifest.
-  if (itemCount(next) > manifest.total) return [];
+  // All checks precede every mutation: never partly return goods.
+  if (itemCount(next) > manifest.total || !returning.every(({ id, qty }) =>
+    safeQty(loot.goods.get(id)) && loot.goods.get(id) >= qty)) return [];
   manifest.goods = next;
   manifest.lost -= amount;
-  for (const { id, qty } of returning) {
-    const before = loot.goods.get(id);
-    if (!safeQty(before) || before < qty) return [];
-  }
   for (const { id, qty } of returning) {
     const left = loot.goods.get(id) - qty;
     if (left) loot.goods.set(id, left);
