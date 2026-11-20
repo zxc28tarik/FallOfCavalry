@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [20 Kasım 2026 — WEB V1.30 gerçek haydut ganimetinin tek kullanımlık savaş zaferiyle oyuncuya aktarılması](2026-11-20-web-source-bandit-loot-recovery-v1.md): NPC baskın kaynaklı malların doğrulanmış zaferde envantere aktarımı, tek seferlik fiş, save/load, 8 yeni test ve gerçek Chromium QA PASS
 - [20 Kasım 2026 — WEB V1.29 eski stok salt-okunur denetim ve gerçek Chromium kervan/pazar](2026-11-20-web-market-stock-audit-real-browser-v1.md): şehir/market çakışma CSV, yalnız boş eski save city stock başlangıç düzeltmesi, gerçek DOM alım-satım, 24 birim kaynaklı kervan teslimi, 8 yeni test ve QA PASS
 - [19 Kasım 2026 — WEB Character System v2 V1.28 doğrulanmış çift pazar stok köprüsü](2026-11-19-web-market-stock-bridge-v1.md): mevcut şehir ve gelişmiş market stoklarının güvenli eşleşmesi, eskiden farklı miktarların korunması, id=0, Save escrow; 7 yeni test ve QA PASS
 - [19 Kasım 2026 — WEB Character System v2 V1.27 gerçek şehir stoklu kervan yükü ve canlı haydut ganimeti](2026-11-19-web-escort-source-cargo-economy-v1.md): kaynak marketStock rezervasyonu, baskında gerçek mal aktarımı, varışta teslim, save snapshot iadesi; kanıt/test ve açık çift stok modeli sınırları
