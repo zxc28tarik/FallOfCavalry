@@ -90,24 +90,6 @@ async function main() {
     if (report.map.worldNpcCount !== report.map.settlements * 2) throw new Error('World NPCs not generated for every settlement');
     if (!report.map.canvasWidth || !report.map.canvasHeight) throw new Error('Canvas has zero dimensions');
     if (report.map.bootErrorVisible) throw new Error('Boot error banner visible');
-    // V1.38: profile the UNMODIFIED real map loop before scripted quests.
-    // All temporary method wrappers are restored; none skip AI or rendering.
-    const worldLoopProfile=await profileLiveWorldLoop(page,56);
-    report.worldLoopProfile=worldLoopProfile;
-    stage('full-world-map-update-versus-render-profile',worldLoopProfile);
-    if (!worldLoopProfile.ready
-      || worldLoopProfile.sampledRafFrames!==56
-      || worldLoopProfile.stats['loop.updateMap']?.calls<40
-      || worldLoopProfile.stats['loop.renderMap']?.calls<40
-      || worldLoopProfile.stats['render.map']?.calls<40
-      || worldLoopProfile.stats['render.terrain']?.calls<40
-      || worldLoopProfile.stats['sim.updateMapSimulation']?.calls<40
-      || !Number.isFinite(worldLoopProfile.derived.mapFrameDrawMs)
-      || !Number.isFinite(worldLoopProfile.derived.mapUpdateMs)
-      || worldLoopProfile.before.mode!=='map'
-      || worldLoopProfile.after.mode!=='map')
-      throw new Error('V1.38 full-world loop breakdown missing a real game callback');
-    // CI runs in a disposable browser context: saving is safe and does not touch user files.
     const roundtrip = await page.evaluate(() => {
       const g = window.game;
       const capture = () => {
@@ -2556,6 +2538,27 @@ async function main() {
       || !recoveredSourcedLoot.goldUnchangedFromClaim) {
       throw new Error('V1.30 raid source loot failed one-time durable player transfer');
     }
+
+    // V1.38: profile the actual live map AFTER completing all authoritative
+    // game scenario assertions. Profiling consumes real game time; running
+    // earlier can legitimately change later quest encounter preconditions.
+    // All temporary method wrappers are restored; none skip AI or rendering.
+    const worldLoopProfile=await profileLiveWorldLoop(page,56);
+    report.worldLoopProfile=worldLoopProfile;
+    stage('full-world-map-update-versus-render-profile',worldLoopProfile);
+    if (!worldLoopProfile.ready
+      || worldLoopProfile.sampledRafFrames!==56
+      || worldLoopProfile.stats['loop.updateMap']?.calls<40
+      || worldLoopProfile.stats['loop.renderMap']?.calls<40
+      || worldLoopProfile.stats['render.map']?.calls<40
+      || worldLoopProfile.stats['render.terrain']?.calls<40
+      || worldLoopProfile.stats['sim.updateMapSimulation']?.calls<40
+      || !Number.isFinite(worldLoopProfile.derived.mapFrameDrawMs)
+      || !Number.isFinite(worldLoopProfile.derived.mapUpdateMs)
+      || worldLoopProfile.before.mode!=='map'
+      || worldLoopProfile.after.mode!=='map')
+      throw new Error('V1.38 full-world loop breakdown missing a real game callback');
+    // CI runs in a disposable browser context: saving is safe and does not touch user files.
 
     if (report.pageErrors.length) throw new Error('Uncaught page errors: ' + report.pageErrors.join('; '));
     if (report.firstPartyFailures.length) throw new Error('First-party requests failed');
