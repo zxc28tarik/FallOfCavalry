@@ -2553,6 +2553,8 @@ async function main() {
       || worldLoopProfile.stats['render.map']?.calls<40
       || worldLoopProfile.stats['render.terrain']?.calls<40
       || worldLoopProfile.stats['sim.updateMapSimulation']?.calls<40
+      || worldLoopProfile.rafIntervals?.samples!==55
+      || !Number.isFinite(worldLoopProfile.rafIntervals?.meanMs)
       || !Number.isFinite(worldLoopProfile.derived.mapFrameDrawMs)
       || !Number.isFinite(worldLoopProfile.derived.mapUpdateMs)
       || worldLoopProfile.before.mode!=='map'
