@@ -14,11 +14,113 @@ const banditCargo = new WeakMap();
 // Only the real battle-resolution path can preauthorize a loot recovery.
 // The receipt is not serialized; a saved battle/party ID never becomes proof.
 const battleRecoveryReceipts = new WeakMap();
+// Bounded process-local observational audit. Never a receipt, save payload,
+// or authority for creating stock, player rewards, or NPC inventory.
+const cargoDispositionLedger = [];
+const MAX_DISPOSITION_ROWS = 128;
+const DISPOSAL_REASONS = new Set([
+  'patrol_kill', 'out_of_range', 'escort_guard_kill',
+  'player_victory_claimed', 'player_victory_forfeited',
+  'other_battle_removal',
+]);
 const safeQty = value => Number.isSafeInteger(value) && value >= 0;
 const same = (a, b) => a != null && b != null && String(a) === String(b);
 const isLiveCargo = party => isLiveEscortParty(party) && liveCargo.has(party);
 const cloneItems = items => items.map(x => ({ id: x.id, qty: x.qty }));
 const itemCount = items => items.reduce((sum, x) => sum + x.qty, 0);
+
+const claimSources = (claims, onlyCaravan = null) => {
+  if (!(claims instanceof Map)) return [];
+  return [...claims].filter(([caravan]) => !onlyCaravan || caravan === onlyCaravan)
+    .map(([, claim]) => ({
+      questId: String(claim.questId), fromId: String(claim.fromId),
+      routeId: claim.routeId,
+      goods: [...claim.goods].map(([id, qty]) => ({ id, qty })),
+    }));
+};
+function appendDisposition({ kind, reason, bandit, goods, sources = [] }) {
+  if (!Array.isArray(goods) || goods.length === 0
+    || !goods.every(x => typeof x.id === 'string'
+      && safeQty(x.qty) && x.qty > 0)) return null;
+  const row = {
+    sequence: (cargoDispositionLedger.at(-1)?.sequence || 0) + 1,
+    kind, reason, banditId: String(bandit.id),
+    routeId: String(bandit.routeId),
+    goods: cloneItems(goods), sources: sources.map(source => ({
+      ...source, goods: cloneItems(source.goods || []),
+    })),
+  };
+  cargoDispositionLedger.push(row);
+  if (cargoDispositionLedger.length > MAX_DISPOSITION_ROWS)
+    cargoDispositionLedger.shift();
+  return row;
+}
+
+/** Recent sourced movements and losses; diagnostic only, never a replay log. */
+export function inspectCargoDispositions(limit = 20) {
+  const n = Number.isSafeInteger(limit) ? Math.max(0, Math.min(128, limit)) : 20;
+  return cargoDispositionLedger.slice(-n).map(row => ({
+    ...row, goods: cloneItems(row.goods),
+    sources: row.sources.map(source => ({
+      ...source, goods: cloneItems(source.goods),
+    })),
+  }));
+}
+
+/**
+ * Record authentic removal of a bandit's still-unclaimed stolen inventory.
+ * No cargo is transferred here: it is classified as unrecovered loss.
+ * WorldAI calls this after the real patrol/despawn/guard death; BattleManager
+ * may call it only when exiting the matched actual battle result.
+ */
+export function disposeLiveBanditCargo({
+  bandit, reason, battle = null,
+} = {}) {
+  if (!DISPOSAL_REASONS.has(reason) || !isRuntimeRouteBandit(bandit)) return null;
+  const isBattle = reason === 'player_victory_claimed'
+    || reason === 'player_victory_forfeited'
+    || reason === 'other_battle_removal';
+  if (isBattle) {
+    const receipt = battleRecoveryReceipts.get(battle);
+    if (!receipt || receipt.bandit !== bandit
+      || battle?.phase !== 'result'
+      || battle?.battleResult?.enemyId !== receipt.enemyId
+      || (reason !== 'other_battle_removal'
+        && battle?.result !== 'victory')) return null;
+  } else if (bandit.alive !== false) return null;
+
+  const record = banditCargo.get(bandit);
+  if (!record || record.claimed || record.disposed
+    || record.routeId !== bandit.routeId) return null;
+  const goods = [...record.goods].map(([id, qty]) => ({ id, qty }));
+  const row = appendDisposition({
+    kind: 'unrecovered_loss', reason, bandit, goods,
+    sources: claimSources(record.claims),
+  });
+  // Even if all goods had previously been recovered, disposition is terminal.
+  record.disposed = true;
+  record.locked = true;
+  record.goods.clear();
+  record.claims.clear();
+  return row;
+}
+
+/** Only an authenticated, still pending battle receipt may preview cargo. */
+export function previewWitnessedBanditCargo(battle) {
+  const receipt = battleRecoveryReceipts.get(battle);
+  const bandit = receipt?.bandit;
+  const record = banditCargo.get(bandit);
+  if (!receipt || receipt.consumed || !isRuntimeRouteBandit(bandit)
+    || bandit.alive === false || battle?.phase !== 'result'
+    || battle?.result !== 'victory'
+    || battle?.battleResult?.result !== 'victory'
+    || battle?.enemyId !== receipt.enemyId
+    || battle?.battleResult?.enemyId !== receipt.enemyId
+    || !record || record.claimed || record.disposed
+    || record.routeId !== bandit.routeId) return [];
+  return [...record.goods].filter(([, qty]) => safeQty(qty) && qty > 0)
+    .map(([id, qty]) => ({ id, qty }));
+}
 
 /** Inventory is reserved when the live quest convoy is spawned, not forged on load. */
 export function reserveEscortCargo({
@@ -82,7 +184,7 @@ export function recordEscortCargoRaid({
   const rec = liveCargo.get(caravan);
   const previousLoot = banditCargo.get(bandit);
   if (rec.delivered || (previousLoot
-    && (previousLoot.claimed || previousLoot.locked
+    && (previousLoot.claimed || previousLoot.disposed || previousLoot.locked
       || previousLoot.routeId !== bandit.routeId))) return [];
   const targetLost = Math.min(rec.total,
     Math.round(rec.total * (100 - remainingPercent) / 100));
@@ -100,7 +202,7 @@ export function recordEscortCargoRaid({
   if (gained.length) {
     const record = banditCargo.get(bandit) || {
       routeId: bandit.routeId, goods: new Map(), claims: new Map(),
-      claimed: false, locked: false,
+      claimed: false, disposed: false, locked: false,
     };
     // Provenance/claimed state was checked BEFORE debiting the caravan.
     // An authenticated theft remains attributed to the EXACT live caravan
@@ -123,7 +225,7 @@ export function recordEscortCargoRaid({
 export function inspectLiveBanditCargo(bandit) {
   if (!isRuntimeRouteBandit(bandit)) return [];
   const record = banditCargo.get(bandit);
-  if (!record || record.claimed) return [];
+  if (!record || record.claimed || record.disposed) return [];
   return [...record.goods].map(([id, qty]) => ({ id, qty }));
 }
 
@@ -149,7 +251,7 @@ export function returnGuardRecoveredEscortCargo({
     || !same(manifest.questId, quest.id)
     || !same(manifest.fromId, route.from.id)
     || !same(manifest.toId, route.to.id)
-    || !loot || loot.claimed || loot.locked
+    || !loot || loot.claimed || loot.disposed || loot.locked
     || loot.routeId !== bandit.routeId || !(loot.claims instanceof Map))
     return [];
   const claim = loot.claims.get(caravan);
@@ -175,12 +277,17 @@ export function returnGuardRecoveredEscortCargo({
     safeQty(loot.goods.get(id)) && loot.goods.get(id) >= qty)) return [];
   manifest.goods = next;
   manifest.lost -= amount;
+  const sources = claimSources(loot.claims, caravan);
   for (const { id, qty } of returning) {
     const left = loot.goods.get(id) - qty;
     if (left) loot.goods.set(id, left);
     else loot.goods.delete(id);
   }
   loot.claims.delete(caravan);
+  appendDisposition({
+    kind: 'guard_returned', reason: 'escort_guard_kill', bandit,
+    goods: returning, sources,
+  });
   const remainingPercent = Math.round(100 * (manifest.total - manifest.lost)
     / Math.max(1, manifest.total));
   caravan.escortCargo = Math.min(Number(caravan.escortCargoMax) || 100,
@@ -214,7 +321,8 @@ export function witnessBanditCargoBattleVictory({
     || !validBanditRoute(bandit, worldState, tradeRoutes)?.road)
     return false;
   const source = banditCargo.get(bandit);
-  if (!source || source.claimed || source.routeId !== bandit.routeId
+  if (!source || source.claimed || source.disposed
+    || source.routeId !== bandit.routeId
     || source.goods.size === 0) return false;
   // Once an actual battle is resolved, later NPC raids cannot extend this
   // reward's contents while the result screen is open.
@@ -247,7 +355,8 @@ export function recoverWitnessedBanditCargo({
     || !Array.isArray(playerParty?.inventory?.items)
     || !Array.isArray(catalog)) return [];
   const source = banditCargo.get(bandit);
-  if (!source || source.claimed || source.routeId !== bandit.routeId
+  if (!source || source.claimed || source.disposed
+    || source.routeId !== bandit.routeId
     || source.goods.size === 0) return [];
   const byId = new Map(catalog.filter(x =>
     typeof x?.id === 'string' && /^[a-z0-9_:-]{1,64}$/i.test(x.id))
@@ -277,8 +386,13 @@ export function recoverWitnessedBanditCargo({
   }
   // One synchronous state write; never partly credit goods and then fail.
   playerParty.inventory.items = next;
+  const sources = claimSources(source.claims);
   receipt.consumed = true;
   source.claimed = true;
+  appendDisposition({
+    kind: 'player_recovered', reason: 'player_victory_claimed',
+    bandit, goods: incoming, sources,
+  });
   source.goods.clear();
   source.claims?.clear();
   return incoming;
@@ -345,7 +459,8 @@ export function outstandingEscortCargoForSave(parties = []) {
   for (const bandit of parties) {
     if (!isRuntimeRouteBandit(bandit) || bandit?.alive === false) continue;
     const loot = banditCargo.get(bandit);
-    if (!loot || loot.claimed || !(loot.claims instanceof Map)
+    if (!loot || loot.claimed || loot.disposed
+      || !(loot.claims instanceof Map)
       || loot.routeId !== bandit.routeId) continue;
     for (const [caravan, claim] of loot.claims) {
       const origin = liveCargo.get(caravan);
