@@ -2199,6 +2199,79 @@ async function main() {
       || filteredTradePage.selected.type!=='modern_buy'
       || filteredTradePage.selected.itemId!=='wheat')
       throw new Error('V1.35 trade city/product/type/search filter did not work');
+    // V1.36: instrument real manager calls (without changing results).
+    // Rapid filter/page changes must use the existing selected-category
+    // snapshot instead of repeatedly scanning the 881-city economy.
+    const lazyMarketReportPerf=await page.evaluate(()=>{
+      const g=window.game;
+      const manager=g.economyManager;
+      const panel=g.cargoMarketReportPanel;
+      const original=manager.buildCargoMarketReport;
+      const requests=[];
+      manager.buildCargoMarketReport=function(...args){
+        requests.push(args[2]||'all');
+        return original.apply(this,args);
+      };
+      try {
+        const change=(id,value,event='change')=>{
+          const input=document.getElementById(id);
+          input.value=value;
+          input.dispatchEvent(new Event(event,{bubbles:true}));
+        };
+        document.getElementById('cargoMarketReportToggle')?.click();
+        const firstSnapshot=requests.length;
+        const lazyMovement=panel.lastReport?.computedSections?.movements===true
+          && panel.lastReport?.stockAudit?.scanned===false;
+        // Each keystroke, kind, page-size and paging update is pure UI.
+        for(const v of ['w','wh','whe','wheat',''])
+          change('cargoMarketReportItem',v,'input');
+        for(const v of ['x','xy',''])
+          change('cargoMarketReportSearch',v,'input');
+        change('cargoMarketReportType','modern_buy');
+        change('cargoMarketReportPageSize','10');
+        const callsAfterInputs=requests.length;
+        change('cargoMarketReportCity',''); // selected city change may rescan
+        change('cargoMarketReportSection','stock'); // ONE stock scan
+        const stockSnapshot=panel.lastReport?.stockAudit?.scanned===true
+          && panel.lastReport?.computedSections?.movements===false;
+        change('cargoMarketReportType','missing_market');
+        const page1=panel.page;
+        document.getElementById('cargoMarketReportNext')?.click();
+        const page2=panel.page;
+        document.getElementById('cargoMarketReportPrev')?.click();
+        const pageBack=panel.page;
+        const callsBeforeRefresh=requests.length;
+        document.getElementById('cargoMarketReportRefresh')?.click();
+        const callsAfterRefresh=requests.length;
+        const unchangedFilters=callsBeforeRefresh===firstSnapshot+2;
+        document.getElementById('cargoMarketReportClose')?.click();
+        return {
+          firstSnapshot, callsAfterInputs,callsBeforeRefresh,
+          callsAfterRefresh, requests, lazyMovement,stockSnapshot,
+          unchangedFilters, page1,page2,pageBack,
+          cities:g.state.map.settlements.length,
+          reportClosed:panel.root.style.display==='none',
+        };
+      }finally{
+        manager.buildCargoMarketReport=original;
+      }
+    });
+    stage('lazy-881-city-report-keystrokes-and-pages',lazyMarketReportPerf);
+    if(!lazyMarketReportPerf.lazyMovement
+      || !lazyMarketReportPerf.stockSnapshot
+      || lazyMarketReportPerf.firstSnapshot!==1
+      || lazyMarketReportPerf.callsAfterInputs!==1
+      || !lazyMarketReportPerf.unchangedFilters
+      || lazyMarketReportPerf.callsAfterRefresh
+        !==lazyMarketReportPerf.callsBeforeRefresh+1
+      || lazyMarketReportPerf.requests.join(',')
+        !=='movements,movements,stock,stock'
+      || lazyMarketReportPerf.page1!==1
+      || lazyMarketReportPerf.page2!==2
+      || lazyMarketReportPerf.pageBack!==1
+      || lazyMarketReportPerf.cities!==881
+      || !lazyMarketReportPerf.reportClosed)
+      throw new Error('V1.36 player report performed an unexpected full-economy rescan');
     const stockAfterLoad = await page.evaluate(({ fromId, toId }) => {
       const g = window.game;
       const before = [fromId,toId].map(id => {
