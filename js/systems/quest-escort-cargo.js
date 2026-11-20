@@ -28,6 +28,13 @@ const same = (a, b) => a != null && b != null && String(a) === String(b);
 const isLiveCargo = party => isLiveEscortParty(party) && liveCargo.has(party);
 const cloneItems = items => items.map(x => ({ id: x.id, qty: x.qty }));
 const itemCount = items => items.reduce((sum, x) => sum + x.qty, 0);
+function addUnits(target, items) {
+  for (const { id, qty } of items) {
+    if (!safeQty(qty) || qty === 0) continue;
+    target.set(id, (target.get(id) || 0) + qty);
+  }
+}
+const mapUnits = rows => new Map(rows.map(x => [x.id, x.qty]));
 
 const claimSources = (claims, onlyCaravan = null) => {
   if (!(claims instanceof Map)) return [];
@@ -99,6 +106,13 @@ export function disposeLiveBanditCargo({
     sources: claimSources(record.claims),
   });
   // Even if all goods had previously been recovered, disposition is terminal.
+  for (const [caravan, claim] of record.claims) {
+    const manifest = liveCargo.get(caravan);
+    if (manifest && claim.questId === manifest.questId
+      && same(claim.fromId, manifest.fromId)
+      && claim.routeId === manifest.routeId)
+      addUnits(manifest.unrecovered, [...claim.goods].map(([id, qty]) => ({ id, qty })));
+  }
   record.disposed = true;
   record.locked = true;
   record.goods.clear();
@@ -157,7 +171,9 @@ export function reserveEscortCargo({
   liveCargo.set(caravan, {
     questId: quest.id, routeId: route.routeId,
     fromId: route.from.id, toId: route.to.id,
-    goods, total: itemCount(goods), lost: 0, delivered: false,
+    goods, initialGoods: cloneItems(goods), deliveredGoods: [],
+    playerRecovered: new Map(), unrecovered: new Map(),
+    total: itemCount(goods), lost: 0, delivered: false,
   });
   return cloneItems(goods);
 }
@@ -387,6 +403,14 @@ export function recoverWitnessedBanditCargo({
   }
   // One synchronous state write; never partly credit goods and then fail.
   playerParty.inventory.items = next;
+  for (const [caravan, claim] of source.claims) {
+    const manifest = liveCargo.get(caravan);
+    if (manifest && claim.questId === manifest.questId
+      && same(claim.fromId, manifest.fromId)
+      && claim.routeId === manifest.routeId)
+      addUnits(manifest.playerRecovered,
+        [...claim.goods].map(([id, qty]) => ({ id, qty })));
+  }
   const sources = claimSources(source.claims);
   receipt.consumed = true;
   source.claimed = true;
@@ -425,8 +449,61 @@ export function deliverEscortCargo({
     else route.to.marketStock.push({ id: row.id, qty: row.qty });
   }
   rec.delivered = true;
+  rec.deliveredGoods = cloneItems(goods);
   rec.goods = [];
   return goods;
+}
+
+/**
+ * V1.33: process-only manifest conservation observer. This is diagnostic,
+ * not a proof of world-wide economy (markets can produce/consume goods).
+ * It NEVER mints, recovers, saves, or overwrites an inventory. A lost party
+ * which vanished without a trusted disposition is an explicit unmatched gap.
+ */
+export function auditLiveEscortCargoConservation({ caravan, worldAi } = {}) {
+  if (!isLiveCargo(caravan)) return {
+    status: 'unverified', rows: [], reserved: 0, accounted: 0, gap: 0,
+  };
+  const manifest = liveCargo.get(caravan);
+  const initial = Array.isArray(manifest.initialGoods) ? manifest.initialGoods : [];
+  if (!initial.length) return {
+    status: 'unverified', rows: [], reserved: 0, accounted: 0, gap: 0,
+  };
+  const outstanding = new Map();
+  for (const bandit of Array.isArray(worldAi?.parties) ? worldAi.parties : []) {
+    if (!isRuntimeRouteBandit(bandit) || bandit.alive === false
+      || bandit.routeId !== manifest.routeId) continue;
+    const loot = banditCargo.get(bandit);
+    if (!loot || loot.claimed || loot.disposed
+      || loot.routeId !== manifest.routeId) continue;
+    const claim = loot.claims?.get(caravan);
+    if (!claim || claim.questId !== manifest.questId
+      || claim.routeId !== manifest.routeId
+      || !same(claim.fromId, manifest.fromId)) continue;
+    addUnits(outstanding,
+      [...claim.goods].map(([id, qty]) => ({ id, qty })));
+  }
+  const remaining = mapUnits(manifest.goods);
+  const delivered = mapUnits(manifest.deliveredGoods);
+  const rows = initial.map(({ id, qty: reserved }) => {
+    const inCaravan = remaining.get(id) || 0;
+    const inBandits = outstanding.get(id) || 0;
+    const inPlayer = manifest.playerRecovered.get(id) || 0;
+    const atDestination = delivered.get(id) || 0;
+    const unrecovered = manifest.unrecovered.get(id) || 0;
+    const accounted = inCaravan + inBandits + inPlayer
+      + atDestination + unrecovered;
+    const gap = reserved - accounted;
+    return { id, reserved, inCaravan, inBandits, inPlayer,
+      atDestination, unrecovered, accounted, gap,
+      status: gap === 0 ? 'balanced' : 'mismatch' };
+  });
+  const sum = field => rows.reduce((total, row) => total + row[field], 0);
+  return { status: rows.every(row => row.status === 'balanced')
+    ? 'balanced' : 'mismatch', questId: manifest.questId,
+  fromId: String(manifest.fromId), toId: String(manifest.toId),
+  reserved: sum('reserved'), accounted: sum('accounted'), gap: sum('gap'),
+  rows };
 }
 
 /**
