@@ -114,9 +114,15 @@ export async function profileLiveWorldLoop(page, samples = PROFILE_WINDOW) {
     };
     const tStart=performance.now();
     let completed=0;
+    const frameIntervals=[];
+    let lastRafTimestamp=null;
     try{
       await new Promise(resolve=>{
-        const frame=()=>{
+        const frame=(timestamp)=>{
+          if(Number.isFinite(lastRafTimestamp)
+            && Number.isFinite(timestamp) && timestamp>lastRafTimestamp)
+            frameIntervals.push(timestamp-lastRafTimestamp);
+          lastRafTimestamp=timestamp;
           completed++;
           if(completed>=count)resolve();
           else requestAnimationFrame(frame);
@@ -142,6 +148,12 @@ export async function profileLiveWorldLoop(page, samples = PROFILE_WINDOW) {
         maxMs:round(sorted.length?sorted.at(-1):null),
         totalMs:round(sum)};
     }
+    const intervals=[...frameIntervals].sort((a,b)=>a-b);
+    const averageInterval=intervals.length
+      ? frameIntervals.reduce((sum,n)=>sum+n,0)/intervals.length : null;
+    const average=val=>val==null?null:Math.round(val*1000)/1000;
+    const rafP95=intervals.length
+      ? intervals[Math.floor((intervals.length-1)*0.95)] : null;
     const mapRender=values['render.map'].meanMs ?? 0;
     const terrain=values['render.terrain'].meanMs ?? 0;
     const overlays=values['render.overlays'].meanMs ?? 0;
@@ -150,6 +162,11 @@ export async function profileLiveWorldLoop(page, samples = PROFILE_WINDOW) {
     return {
       ready:true,wrapped,
       sampledRafFrames:completed,wallTimeMs:Math.round((performance.now()-tStart)*1000)/1000,
+      rafIntervals:{
+        samples:intervals.length,meanMs:average(averageInterval),
+        p95Ms:average(rafP95),
+        estimatedFps:average(averageInterval ? 1000/averageInterval : null),
+      },
       before,after,
       stats:values,
       // Inclusive subcalls: do not add terrain+dimetricTerrain together.
@@ -161,6 +178,12 @@ export async function profileLiveWorldLoop(page, samples = PROFILE_WINDOW) {
         mapUpdateMs:values['loop.updateMap'].meanMs ?? 0,
         worldAISubsetMs:simAI,
         simulationOtherMs:Math.max(0,simTotal-simAI),
+        unprofiledFrameTimeMs:average(averageInterval==null?null:
+          Math.max(0,averageInterval
+            -(values['loop.updateMap'].meanMs||0)
+            -(values['loop.renderMap'].meanMs||0))),
+        // This is NOT proof of GPU time: browser scheduler, compositor,
+        // VSYNC, CI CPU contention and all unwrapped work are included.
         syncWarMs:values['sim.warSync'].meanMs ?? 0,
         nearestCityMs:values['sim.nearestSettlement'].meanMs ?? 0,
         fogMs:values['sim.fog'].meanMs ?? 0,
