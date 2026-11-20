@@ -1,6 +1,7 @@
 import * as CONST from '../constants.js';
 import { canonicalRoadLinks } from '../systems/world-trade-road-topology.js';
 import { auditCampaignMarketStocks } from '../systems/market-stock-audit.js';
+import { observeMarketMovement, buildMarketCargoReport } from '../systems/market-cargo-report.js';
 import {
   establishMarketStockBridge, mirrorCityStockChange,
 } from '../systems/market-stock-bridge.js';
@@ -60,6 +61,17 @@ export class EconomyManager {
       settlements: this.state?.map?.settlements || [],
       markets: this.state?.markets || {},
       catalog: this.itemCatalog,
+    });
+  }
+
+  /** Current-game report: no market creation, no reconciliation mutation. */
+  buildCargoMarketReport(settlementId = null, limit = 25) {
+    return buildMarketCargoReport({
+      settlements: this.state?.map?.settlements || [],
+      markets: this.state?.markets || {},
+      catalog: this.itemCatalog,
+      worldAi: this.game?.worldManager?.worldAi,
+      settlementId, limit,
     });
   }
 
@@ -646,8 +658,13 @@ Up/Down select, Enter heal, Esc back`,
       playerParty.gold -= cost;
       if (stockEntry) {
         stockEntry.qty = Math.max(0, available - buyQty);
-        mirrorCityStockChange(city, this.state?.markets?.[String(city?.id)],
-          entry.id, available, stockEntry.qty);
+        const market = this.state?.markets?.[String(city?.id)];
+        mirrorCityStockChange(city, market, entry.id, available, stockEntry.qty);
+        observeMarketMovement({
+          kind: 'legacy_buy', ledger: 'city', settlement: city, market,
+          itemId: entry.id, before: available, after: stockEntry.qty,
+          day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+        });
       }
       this.addItem(entry.id, entry.name, buyQty, entry.unitValue ?? entry.baseBuy);
       this.game?.setLastEventLog?.(`Bought ${entry.name} x${buyQty}`);
@@ -663,8 +680,13 @@ Up/Down select, Enter heal, Esc back`,
     if (stockEntry) {
       const before = Math.max(0, Math.floor(stockEntry.qty ?? 0));
       stockEntry.qty = before + sellQty;
-      mirrorCityStockChange(city, this.state?.markets?.[String(city?.id)],
-        entry.id, before, stockEntry.qty);
+      const market = this.state?.markets?.[String(city?.id)];
+      mirrorCityStockChange(city, market, entry.id, before, stockEntry.qty);
+      observeMarketMovement({
+        kind: 'legacy_sell', ledger: 'city', settlement: city, market,
+        itemId: entry.id, before, after: stockEntry.qty,
+        day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      });
     }
     playerParty.gold = (playerParty.gold ?? 0) + (sellPrice * sellQty);
     this.game?.setLastEventLog?.(`Sold ${entry.name} x${sellQty}`);
