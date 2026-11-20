@@ -2413,6 +2413,15 @@ async function main() {
         && conservation.rows.reduce((sum,row)=>sum+row.inPlayer,0)
           ===data.stolenCount && conservation.gap===0;
       const afterRetry=JSON.stringify(g.playerParty.inventory?.items||[]);
+      const traceBefore=g.worldManager.simManager.worldPartyManager
+        .inspectBanditCargoDispositions(30)
+        .filter(x=>x.banditId===data.banditId);
+      const custody=traceBefore.some(x=>x.kind==='player_recovered'
+        && x.reason==='player_victory_claimed'
+        && JSON.stringify(Object.entries(Object.fromEntries(
+          x.goods.map(row=>[row.id,row.qty]))).sort())
+          ===JSON.stringify(Object.entries(expected).sort())
+        && x.sources.some(s=>s.questId===data.questId));
       const payload=g.saveManager.buildSavePayload();
       const safeSave=!payload.game.worldAi.parties.some(p=>
         p.id===data.banditId && (p.loot||p.cargoManifest));
@@ -2422,18 +2431,15 @@ async function main() {
         .map(x=>[x.id,x.qty]));
       const durable=JSON.stringify(Object.entries(afterLoad).sort())===
         JSON.stringify(Object.entries(after).sort());
-      const trace=g.worldManager.simManager.worldPartyManager
-        .inspectBanditCargoDispositions(30)
-        .filter(x=>x.banditId===data.banditId);
-      const custody=trace.some(x=>x.kind==='player_recovered'
-        && x.reason==='player_victory_claimed'
-        && JSON.stringify(Object.entries(Object.fromEntries(
-          x.goods.map(row=>[row.id,row.qty]))).sort())
-          ===JSON.stringify(Object.entries(expected).sort())
-        && x.sources.some(s=>s.questId===data.questId));
+      const postLoadTrace=g.worldManager.simManager.worldPartyManager
+        .inspectBanditCargoDispositions(30);
+      // A verified victory remains saved in actual inventory, but the
+      // previous session's informational custody journal never survives load.
+      const dispositionJournalCleared=loaded && postLoadTrace.length===0;
       return {mode:g.state.mode,delta,expected,exact,removed,custody,
+        dispositionJournalCleared,
         conservedPlayerLoot, conservationGap:conservation?.gap ?? null,
-        traceCount:trace.length,
+        traceCount:traceBefore.length,
         retryRejected,noDoubleClaim:afterRetry===
           JSON.stringify(payload.game.inventory?.items||[]) || retryRejected,
         safeSave,saved,loaded,durable,
@@ -2447,6 +2453,7 @@ async function main() {
       || !recoveredSourcedLoot.retryRejected || !recoveredSourcedLoot.safeSave
       || !recoveredSourcedLoot.saved || !recoveredSourcedLoot.loaded
       || !recoveredSourcedLoot.durable || !recoveredSourcedLoot.custody
+      || !recoveredSourcedLoot.dispositionJournalCleared
       || !recoveredSourcedLoot.conservedPlayerLoot
       || !recoveredSourcedLoot.goldUnchangedFromClaim) {
       throw new Error('V1.30 raid source loot failed one-time durable player transfer');
