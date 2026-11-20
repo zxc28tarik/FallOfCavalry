@@ -6,6 +6,7 @@
 import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
 import { resetMarketMovementJournal } from '../systems/market-cargo-report.js';
+import { resetCargoDispositionJournal } from '../systems/quest-escort-cargo.js';
 import StartScreen from '../ui/start-screen.js';
 import { getRelation, setRelation } from '../systems/factions.js';
 import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
@@ -326,7 +327,8 @@ export class GameFlowManager {
     if (!started) return false;
     // A new campaign has no authority to inherit previous session audit rows.
     resetMarketMovementJournal();
-    g.cargoMarketReportPanel?.refresh?.();
+    resetCargoDispositionJournal();
+    g.cargoMarketReportPanel?.invalidate?.();
 
     // Oyuncuyu kendi faction'ının ilk şehrine konumlandır
     const factionId = this.state?.selectedFaction?.id;
