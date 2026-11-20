@@ -3,6 +3,7 @@
 **Kapsam:** Yalnız `zxc28tarik/FallOfCavalry` web oyunu. `FallOfCavalry-Unity` ayrı projedir.
 
 ## Ana belge setleri
+- [20 Kasım 2026 — WEB V1.33 çok günlük kervan mal korunumu ve başarısız konvoy muhasebesi](2026-11-20-web-escort-conservation-multiday-v1.md): ürün başına kaynaklı manifest, haydut, oyuncu, hedef, kayıp ve açıklanamayan fark denetimi; 4–7. günler çok günlük testleri, 8 yeni test, canlı Chromium dengesi PASS
 - [20 Kasım 2026 — WEB V1.32 kaynaklı haydut ganimeti akıbet muhasebesi ve gerçek savaş sonuç paneli](2026-11-20-web-bandit-cargo-disposition-audit-v1.md): NPC devriye/uzaklaşma/koruma/oyuncu alım veya bırakma gerekçeleri, kaynak kervan bazlı salt-okunur 128 satırlık audit, gerçek savaşta ürün-adet dökümü, 7 yeni test ve Chromium QA PASS
 - [20 Kasım 2026 — WEB V1.31 NPC muhafızların gerçek çalıntı yükü kervana iadesi ve Save-only escrow](2026-11-20-web-guard-cargo-restitution-escrow-v1.md): kaynak-kervan bazlı ganimet, gerçek muhafız zaferi, yükün aynen teslimi, güvenli kaynak stok snapshot'ı, 8 yeni test ve Chromium QA PASS; NPC'de kalıcı mülkiyet hâlâ ayrı iş
 - [20 Kasım 2026 — WEB V1.30 gerçek haydut ganimetinin tek kullanımlık savaş zaferiyle oyuncuya aktarılması](2026-11-20-web-source-bandit-loot-recovery-v1.md): NPC baskın kaynaklı malların doğrulanmış zaferde envantere aktarımı, tek seferlik fiş, save/load, 8 yeni test ve gerçek Chromium QA PASS
