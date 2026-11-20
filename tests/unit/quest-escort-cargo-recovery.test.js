@@ -167,7 +167,7 @@ describe('WEB V1.30 — sourced bandit raid loot victory recovery', () => {
 
   it('rejects non-catalog rewards and cannot duplicate goods with a reused receipt', () => {
     const p = setup(); expect(p.witness()).toBe(true);
-    expect(p.claim({ catalog: [{ id: 'wheat' }] })).toEqual([]);
+    expect(p.claim({ catalog: [{ id: 'iron' }] })).toEqual([]);
     expect(count(inspectLiveBanditCargo(p.bandit))).toBe(6);
     expect(count(p.claim())).toBe(6);
     p.bandit.alive = false;
