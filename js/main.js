@@ -30,6 +30,7 @@ import { QuestManager } from './managers/QuestManager.js';
 import { QuestGenerator } from './systems/QuestGenerator.js';
 import QuestCompletionOverlay from './ui/QuestCompletionOverlay.js';
 import QuestRecoveryPanel from './ui/QuestRecoveryPanel.js';
+import CargoMarketReportPanel from './ui/CargoMarketReportPanel.js';
 
 window.__FOC_BOOT_OK__ = true;
 
@@ -150,6 +151,10 @@ class FallOfCavalry {
     this.questManager = this.questManager || new QuestManager(this.modeManager, this.worldManager, this.questGenerator);
     this.questCompletionOverlay = this.questCompletionOverlay || new QuestCompletionOverlay({ modeManager: this.modeManager, questManager: this.questManager });
     this.questRecoveryPanel = this.questRecoveryPanel || new QuestRecoveryPanel(this);
+    this.cargoMarketReportPanel = this.cargoMarketReportPanel
+      || new CargoMarketReportPanel(this);
+    this.state.on?.('mode:switched', () =>
+      this.cargoMarketReportPanel?.syncVisibility());
     this.questEscortHud = this.questEscortHud || new QuestEscortHud(this);
     this.state.on?.('overlay:pushed', ({ panel, context }) => {
       if (panel === 'questCompletion') this.questCompletionOverlay.show(context);
@@ -178,6 +183,7 @@ class FallOfCavalry {
     this.uiManager.refreshWeatherState(this.state?.day ?? 1);
     this.inputManager.setupPartyInputHandlers();
     this.uiManager.setupDOMReferences();
+    this.cargoMarketReportPanel.ensureRoot();
     this.uiManager.ensureHudEventsButton();
     this.hudManager?.setupElements?.();
     this.hudManager?.setupListeners?.();
