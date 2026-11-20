@@ -137,10 +137,9 @@ async function collectRealCanvasAndRaf(page,count) {
       });
       return {
         ready:true,frames:completed,intervals:intervals.length,
-        raf:({samples,meanMs,p95Ms,maxMs,totalMs})=>({samples,meanMs,p95Ms,maxMs,totalMs}),
         // These arrays have at most 32 entries and are summarized in Node.
         intervalValues:intervals,callbackLatencyValues:callbackLatencies,
-        longTaskValues:longTasks,
+        longTaskValues:longTasks,longTaskObserverSupported:supportedLongTask,
         canvas:Object.fromEntries(Object.entries(counters).map(([key,v])=>[
           key,{calls:v.calls,inclusiveTotalMs:Math.round(v.totalMs*1000)/1000}
         ])),
@@ -227,8 +226,7 @@ export async function profileChromiumWorldFrames(page,{samples=32,maxTraceBytes=
       rafIntervals:profileSummary(canvasRaf.intervalValues||[]),
       rafCallbackLatency:profileSummary(canvasRaf.callbackLatencyValues||[]),
       longTasks:profileSummary(canvasRaf.longTaskValues||[]),
-      longTaskObserverSupported:canvasRaf.ready===true&&
-        typeof canvasRaf.longTaskValues!=='undefined',
+      longTaskObserverSupported:canvasRaf.longTaskObserverSupported===true,
       canvas2d:clean.canvas||{},
       cdpMetrics:{before:metricsBefore,after:metricsAfter,
         deltas:summarizeChromiumMetrics(metricsBefore,metricsAfter)},
