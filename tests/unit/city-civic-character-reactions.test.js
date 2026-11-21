@@ -6,7 +6,8 @@ import {applyCivicDecision} from '../../js/systems/city-civic-decisions.js';
 import {normalizeWorldCharacters} from '../../js/systems/world-characters.js';
 
 const person=(id,role,kind='named',location='0')=>({
-  id,kind,name:id,role,status:'alive',
+  id,kind,name:id,role,status:'alive',cultureId:'ottoman',age:32,
+  importance:kind==='named'?'D':null,
   location:{kind:'settlement',settlementId:location},
   satisfaction:50,loyalty:50,reputation:50,standing:50,
   stats:{intelligence:50,observation:50,persuasion:50,leadership:50,
