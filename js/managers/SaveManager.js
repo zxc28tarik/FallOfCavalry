@@ -487,7 +487,10 @@ Esc close`,
             priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
           };
         }),
-        settlementsCivic: settlements.filter(st=>st?.id!=null).map(st=>({
+        // Only persist cities with real player-caused civic changes. An 881-city
+        // full snapshot would exceed some browsers' quick-save storage limits.
+        settlementsCivic: settlements.filter(st=>st?.id!=null
+          && (st.civicDirty===true || st.civicDecision!=null)).map(st=>({
           settlementId:st.id,
           security:Math.max(0,Math.min(100,Math.floor(Number(st.security??50)))),
           civicDecision:st.civicDecision&&Number.isFinite(Number(st.civicDecision.day))
@@ -709,6 +712,7 @@ Esc close`,
     settlements.forEach(city=>{
       const row=civicByCity.get(String(city.id));
       if(!row)return;
+      city.civicDirty=true;
       if(Number.isFinite(row.security))city.security=Math.max(0,Math.min(100,Math.floor(row.security)));
       if(row.civicDecision&&Number.isFinite(Number(row.civicDecision.day)))
         city.civicDecision={day:Math.floor(Number(row.civicDecision.day)),id:String(row.civicDecision.id||'')};
