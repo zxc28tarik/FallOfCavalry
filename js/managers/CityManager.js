@@ -195,6 +195,17 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onCivicDispatch: (contract) => {
+            const cities=this.state?.map?.settlements||[];
+            const ids=new Set((contract.dispatchStops||[]).map(String));
+            ids.add(String(contract.cityId));
+            for(const city of cities){
+              if(!ids.has(String(city.id)))continue;
+              city.security=Math.max(0,Math.min(100,Math.floor(
+                Number(city.security??50)+Number(contract.civicSecurityBonus??1),
+              )));
+            }
+          },
           onCivicRelief: (contract) => {
             const beneficiary=(this.state?.map?.settlements||[]).find(city=>
               String(city.id)===String(contract.targetCityId));
