@@ -160,6 +160,7 @@ export class WorldPartyManager {
       cfg,
       currentDay: this.world.state?.day ?? 1,
       tradeRoutes,
+      playerParty: this.game?.playerParty || null,
       banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
     });
 
