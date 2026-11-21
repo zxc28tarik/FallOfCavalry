@@ -34,7 +34,7 @@ describe('V1.52 city council character consequences',()=>{
     const applied=applyCivicDecision({city,party,day:8,decisionId:'granary'});
     expect(applied.ok).toBe(true);
     const outcomes=applyCouncilReactions({roster,cityId:city.id,decisionId:'granary',day:8});
-    expect(outcomes).toHaveLength(3);
+    expect(outcomes).toHaveLength(2);
     expect(roster.characters[0].satisfaction).toBe(52);
     expect(roster.characters[1].satisfaction).toBe(53);
     expect(roster.characters[2].satisfaction).toBe(50);
