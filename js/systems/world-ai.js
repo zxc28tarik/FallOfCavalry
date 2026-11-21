@@ -245,13 +245,18 @@ export function ensureWorldParties({
   if (!aiState || !Array.isArray(aiState.parties)) return;
   const respawnDays = Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3);
   const dayNow = Number(currentDay ?? 0);
-  if (aiState.parties.length === 0 && aiState.lastRespawnDay === 0) {
-    aiState.lastRespawnDay = dayNow;
-  }
+  // A newly generated/legacy world must get its first wave immediately.
+  // Once that wave is gone, an empty party list does NOT override the
+  // configured in-game respawn interval. Otherwise distant parties are
+  // spawned and culled on every render frame (observed 32 consecutive
+  // cycles on the real 881-settlement world in V1.42).
+  const initialPopulation = aiState.parties.length === 0
+    && Number(aiState.lastRespawnDay ?? 0) === 0;
+  if (initialPopulation) aiState.lastRespawnDay = dayNow;
 
   const elapsed = dayNow - Number(aiState.lastRespawnDay ?? 0);
   const hasRoomByType = (kind, max) => aiState.parties.filter((p) => p?.alive !== false && p?.kind === kind).length < max;
-  if (elapsed < respawnDays && aiState.parties.length > 0) return;
+  if (!initialPopulation && elapsed < respawnDays) return;
 
   const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
   while (hasRoomByType('bandit', banditCap)) {
