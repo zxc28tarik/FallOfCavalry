@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { getSettlementCharacters } from './world-characters.js';
 
 const runtime = {
   party: null,
@@ -7,7 +8,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -357,6 +358,54 @@ function createCivicFollowup({cityId,day,seed,map,ownerFactionId,cityName,civicD
   };
 }
 
+/**
+ * A supported named citizen may ask for ONE actual-world commission the next
+ * campaign day. A verified historic petition response is its provenance.
+ * No generated NPC is promoted and no target is inferred from a display name.
+ */
+function createCharacterCommission({cityId,day,seed,map,ownerFactionId,roster}){
+  if(cityId==null||!Number.isSafeInteger(day)||day<2)return null;
+  const people=getSettlementCharacters(roster,cityId)
+    .filter(p=>p.kind==='named'&&p.status==='alive'&&Array.isArray(p.history)
+      &&p.history.some(h=>h?.day===day-1&&h.type==='state-changed'
+        &&h.metric==='satisfaction'
+        &&h.reason==='Şehir dilekçesi: desteklendi'))
+    .sort((a,b)=>a.id.localeCompare(b.id,'en'));
+  const person=people[0];
+  if(!person)return null;
+  const home=getSettlementById(map,cityId);
+  const candidates=getSettlements(map)
+    .filter(s=>String(s.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(home,a)-distanceBetweenSettlements(home,b))
+    .slice(0,20);
+  if(!candidates.length)return null;
+  const target=candidates[hashString(`${seed}:${person.id}:${day}`)%candidates.length];
+  const supplies=person.role==='artisan'||person.role==='commander'||person.role==='traveler';
+  const amount=6;
+  const kindLabel={
+    merchant:'Tüccarın Ticaret Haberi',artisan:'Usta İçin İkmal',
+    administrator:'İdare Defteri Teslimi',commander:'Garnizon Erzak Görevi',
+    traveler:'Yol Hanı İkmali',scholar:'Bilginin Yazışması',
+  }[person.role]||'Kişisel Hizmet';
+  return {
+    ...buildContractBase({
+      id:`ct-character-${person.id}-${day}`,
+      type:'CHARACTER_COMMISSION',cityId,
+      title:`${person.name} — ${kindLabel}`,
+      desc:supplies
+        ?`${person.name} adına ${settlementName(target)} şehrine ${amount} buğday sat.`
+        :`${person.name} için ${settlementName(target)} şehrine git, sonra geri dön.`,
+      rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*1.1),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE*1.1)),
+      ownerFactionId,
+    }),
+    characterId:person.id,characterRole:person.role,commissionKind:supplies?'supply':'correspondence',
+    targetCityId:target.id,
+    commissionStops:supplies?[]:[target.id,cityId],
+    requiredAmount:supplies?amount:null,requiredCount:supplies?amount:2,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -413,6 +462,11 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     civicDecision:settlement?.civicDecision,
   });
   if(followup)contracts.push(followup);
+  const commission=createCharacterCommission({
+    cityId,day:Math.floor(Number(day)||0),seed:worldSeed,map:chosenMap,
+    ownerFactionId,roster:worldState?.worldCharacters,
+  });
+  if(commission)contracts.push(commission);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -466,6 +520,18 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = 1;
       }
     }
+    if (contract.type === 'CHARACTER_COMMISSION') {
+      if(contract.commissionKind==='supply' && event.type==='DELIVERED'
+        && event.itemId==='food' && event.cityId!=null
+        && String(event.cityId)===String(contract.targetCityId))
+        contract.progress=prev+Math.max(0,Number(event.qty??0));
+      if(contract.commissionKind==='correspondence' && event.type==='CITY_VISITED'){
+        const stops=Array.isArray(contract.commissionStops)?contract.commissionStops:[];
+        const next=Math.max(0,Math.floor(Number(contract.progress)||0));
+        if(next<stops.length && event.cityId!=null
+          && String(event.cityId)===String(stops[next]))contract.progress=next+1;
+      }
+    }
     if (contract.type === 'CIVIC_FOLLOWUP') {
       if(contract.civicKind==='granary' && event.type==='DELIVERED'
         && event.itemId==='food' && event.cityId!=null
@@ -503,7 +569,7 @@ export function updateContractProgress(event, party = runtime.party) {
       }
     }
 
-    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF' || contract.type === 'CIVIC_FOLLOWUP')
+    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF' || contract.type === 'CIVIC_FOLLOWUP' || contract.type === 'CHARACTER_COMMISSION')
       ? Math.max(1, Number(contract.requiredAmount ?? contract.requiredCount ?? 1))
       : Math.max(1, Number(contract.requiredCount ?? 1));
 
@@ -538,6 +604,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'CHARACTER_COMMISSION' && typeof options?.onCharacterCommission === 'function') {
+    options.onCharacterCommission(completed);
+  }
   if (contract.type === 'RELIEF' && typeof options?.onCivicRelief === 'function') {
     options.onCivicRelief(completed);
   }
