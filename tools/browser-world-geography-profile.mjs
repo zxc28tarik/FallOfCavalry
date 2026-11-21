@@ -262,6 +262,65 @@ async function run(){
       ||baseKinds.some(kind=>surviving[kind]<1))
       throw Error('V1.45 real source-valid base world population failed: '+
         JSON.stringify(report.basePopulationGate));
+    // V1.46: in a disposable Chromium page, move the ACTUAL production
+    // game player between two real world cities. This is a controlled
+    // cross-region scenario (not a claim that the player walked there).
+    // Test parking, real local replenishment, quick-save restore, and same-ID
+    // reactivation on the return leg. Existing V1.44/45 observations above
+    // were collected before this test-specific position change.
+    report.regionContinuity=await page.evaluate(()=>{
+      const game=window.game,world=game.worldManager;
+      const manager=world?.simManager?.worldPartyManager;
+      const player=game.playerParty,home={x:player.x,y:player.y};
+      const cities=world.state.map.settlements;
+      const tile=world.state.map.tileSize||32;
+      const target=cities.find(s=>s?.id!=null
+        &&Number.isFinite(s.x)&&Number.isFinite(s.y)
+        &&Math.hypot(s.x-home.x,s.y-home.y)>110*tile
+        &&Math.hypot(s.x-home.x,s.y-home.y)<240*tile
+        &&world.state.map.roads.some(r=>String(r.from)===String(s.id)
+          ||String(r.to)===String(s.id)));
+      if(!target||!manager)throw Error('No real second region or party manager');
+      const initialIds=world.worldAi.parties.map(p=>p.id);
+      player.x=target.x;player.y=target.y;
+      manager.ensureWorldParties();
+      manager.updateWorldParties(0.016);
+      const afterMove=world.worldAi.parties.map(p=>p.id);
+      const dormantAfterMove=world.worldAi.dormantParties?.map(p=>p.id)||[];
+      const secondHasOwnCitySources=world.worldAi.parties
+        .filter(p=>['bandit','patrol','caravan'].includes(p.kind))
+        .every(p=>cities.some(s=>String(s.id)===String(p.homeCityId)));
+      const saved=game.saveManager?.quickSave?.()===true;
+      const loaded=saved&&game.saveManager?.quickLoad?.()===true;
+      player.x=home.x;player.y=home.y;
+      manager.ensureWorldParties();
+      manager.updateWorldParties(0.016);
+      const restoredIds=world.worldAi.parties.map(p=>p.id);
+      const revivedInitial=initialIds.filter(id=>restoredIds.includes(id));
+      return {
+        targetCityId:target.id,
+        targetDistanceTiles:Math.hypot(target.x-home.x,target.y-home.y)/tile,
+        beforeCount:initialIds.length,
+        awayCount:afterMove.length,
+        dormantAfterMove:dormantAfterMove.length,
+        newIdsAway:afterMove.filter(id=>!initialIds.includes(id)).length,
+        secondHasOwnCitySources,
+        saved,loaded,
+        revivedInitial:revivedInitial.length,
+        returnCount:restoredIds.length,
+        dormantAfterReturn:world.worldAi.dormantParties?.length??0,
+        sameDayGlobalStamp:world.worldAi.lastRespawnDay===1,
+      };
+    });
+    if(!report.regionContinuity.saved||!report.regionContinuity.loaded
+      ||report.regionContinuity.dormantAfterMove<12
+      ||report.regionContinuity.newIdsAway<5
+      ||!report.regionContinuity.secondHasOwnCitySources
+      ||report.regionContinuity.revivedInitial<15
+      ||!report.regionContinuity.sameDayGlobalStamp)
+      throw Error('V1.46 regional save/return/ID regression: '+
+        JSON.stringify(report.regionContinuity));
+    console.log('[V1.46] '+JSON.stringify(report.regionContinuity));
     report.status='PASS_REGRESSION';
     console.log('[V1.44] '+JSON.stringify({
       status:report.status,source:report.snapshotSource,
