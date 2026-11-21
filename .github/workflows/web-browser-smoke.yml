@@ -57,6 +57,9 @@ jobs:
       - name: Play browser from menu into entire world
         run: npm run test:browser:world
 
+      - name: Compare independent Chrome graphics backends on the full game world
+        run: node tools/browser-world-backend-compare.mjs --url http://127.0.0.1:4173 --seed 1337
+
       - name: Upload browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4
