@@ -229,9 +229,9 @@ async function run(){
     const baseKinds=['bandit','patrol','caravan'];
     const originalBase=wave.parties.filter(p=>baseKinds.includes(p.kind));
     const afterBase=snapshot.after.parties.filter(p=>baseKinds.includes(p.kind));
-    const radius=40*snapshot.after.tileSize;
+    const activeRadiusPx=40*snapshot.after.tileSize;
     const inside=p=>Math.hypot(
-      p.x-actualPlayer.x,p.y-actualPlayer.y)<=radius;
+      p.x-actualPlayer.x,p.y-actualPlayer.y)<=activeRadiusPx;
     const validCity=p=>cityById.has(String(p.homeCityId));
     const quotas=Object.fromEntries(baseKinds.map(kind=>[
       kind,originalBase.filter(p=>p.kind===kind).length,
