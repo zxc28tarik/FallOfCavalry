@@ -99,12 +99,69 @@ async function run(){
       const after=state.state();
       state.restore();
       delete window.__v144;
-      return {events,after};
+      const first=events.find(x=>x.player&&x.parties.length>=10
+        &&x.mapSettlementCount===881&&x.roads===304);
+      if(first)return {events,after,wave:first,source:'LIVE_PRE_CULL'};
+      // WorldAI may initialize BEFORE the user clicks "Start" (and before
+      // an observer can be installed). The 881-city map is already live:
+      // invoke the UNMODIFIED, actual WorldPartyManager implementation on
+      // an isolated state clone. This is NOT an observed original initial
+      // wave: label it as a real-engine geography replay.
+      const g=window.game,real=g.worldManager;
+      const wm=real.simManager.worldPartyManager;
+      const ai={parties:[],lastRespawnDay:0,lastVisibleRespawnDay:null};
+      const detachedWorld={
+        state:{...real.state,worldAi:ai,aiParties:[]},
+        worldAi:ai,enemyParties:[],
+      };
+      const detachedGame=Object.create(g);
+      detachedGame.worldManager=detachedWorld;
+      detachedGame.enemyParties=[];
+      detachedGame.getWorldAiCfgWithRegionMods=()=>
+        g.getWorldAiCfgWithRegionMods?.()||{};
+      detachedGame.getCurrentEvents=(...args)=>g.getCurrentEvents?.(...args)||[];
+      detachedGame.getBanditCapWithEvents=(...args)=>
+        g.getBanditCapWithEvents?.(...args);
+      const clonedManager=Object.create(Object.getPrototypeOf(wm));
+      clonedManager.init(detachedWorld,detachedGame);
+      clonedManager.ensureWorldParties();
+      const map=detachedWorld.state.map||{};
+      const wave={
+        ...after,
+        width:map.width,height:map.height,tileSize:map.tileSize??32,
+        mapSettlementCount:map.settlements?.length??0,
+        roads:map.roads?.length??0,
+        settlements:(map.settlements||[]).map(s=>({
+          id:s.id,x:s.x,y:s.y,
+          ownerFactionId:s.ownerFactionId??s.factionId??null,
+        })),
+        parties:ai.parties.map(p=>({
+          id:p.id,kind:p.kind,x:p.x,y:p.y,factionId:p.factionId,
+          homeCityId:p.homeCityId,routeId:p.routeId,alive:p.alive!==false,
+        })),
+        lastRespawnDay:ai.lastRespawnDay,
+        lastVisibleRespawnDay:ai.lastVisibleRespawnDay,
+      };
+      return {events,after,wave,source:'REAL_ENGINE_DETACHED_REPLAY'};
     });
-    const wave=snapshot.events.find(x=>x.player&&x.parties.length>=10);
+    const wave=snapshot.wave;
+    report.captureEvents=snapshot.events.map(e=>({
+      partyCount:e.parties.length,player:e.player,
+      settlements:e.mapSettlementCount,roads:e.roads,
+      lastRespawnDay:e.lastRespawnDay,
+      lastVisibleRespawnDay:e.lastVisibleRespawnDay,
+    }));
+    report.snapshotSource=snapshot.source;
+    report.replayCaveat=snapshot.source==='REAL_ENGINE_DETACHED_REPLAY'
+      ?'Real unmodified spawner on detached state and authentic live map; generated after start, not the historical first spawn wave.'
+      :'Original first party wave observed before first real map tick';
     if(!wave||wave.mapSettlementCount!==881||wave.roads!==304
-      ||!wave.player||errors.length)throw Error('No complete original full-world start wave, errors='+
-        errors.slice(0,3).join('; '));
+      ||!wave.player||wave.parties.length<10||errors.length)
+      throw Error('V1.44 no complete world party sample: '+
+        JSON.stringify({source:snapshot.source,
+          partyCount:wave?.parties?.length,
+          cities:wave?.mapSettlementCount,roads:wave?.roads,
+          events:report.captureEvents,errors:errors.slice(0,3)}));
     const radius=40; // Actual default WORLD_AI DESPAWN_DISTANCE (tiles)
     // A new campaign selects the faction start tile AFTER its initial world
     // generation; compare every original spawn with the ACTUAL final player
@@ -130,14 +187,9 @@ async function run(){
       lastRespawnDay:snapshot.after.lastRespawnDay,
       lastVisibleRespawnDay:snapshot.after.lastVisibleRespawnDay,
     };
-    report.captureEvents=snapshot.events.map(e=>({
-      partyCount:e.parties.length,player:e.player,
-      lastRespawnDay:e.lastRespawnDay,
-      lastVisibleRespawnDay:e.lastVisibleRespawnDay,
-    }));
     report.status='PASS_DIAGNOSTIC';
     console.log('[V1.44] '+JSON.stringify({
-      status:report.status,
+      status:report.status,source:report.snapshotSource,
       scene:{settlements:wave.mapSettlementCount,roads:wave.roads,
         worldSize:[wave.width,wave.height],tileSize:wave.tileSize},
       spawnTimePlayer:wave.player,actualPlayer,
