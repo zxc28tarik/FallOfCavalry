@@ -22,11 +22,11 @@ const setup=(day=2)=>{
   return {party,offers};
 };
 
-describe('V1.48 — playable civil city job board',()=>{
+describe('V1.49 — playable civil city job board',()=>{
   it('offers six source-registered, distinct jobs instead of only three',()=>{
     const {offers}=setup();
     expect(offers).toHaveLength(6);
-    expect(new Set(offers.map(o=>o.type)).size).toBe(5);
+    expect(new Set(offers.map(o=>o.type)).size).toBe(6);
     expect(offers.map(o=>o.type)).toContain('COURIER');
     expect(offers.map(o=>o.type)).toContain('RELIEF');
     expect(offers.map(o=>o.type)).toContain('DISPATCH');
