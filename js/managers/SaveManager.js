@@ -417,6 +417,8 @@ Esc close`,
         enemyCooldowns: lastEncounterEndTimeByEnemyId,
         worldAi: {
           lastRespawnDay: Number.isFinite(worldAi?.lastRespawnDay) ? worldAi.lastRespawnDay : 0,
+          lastVisibleRespawnDay: Number.isFinite(worldAi?.lastVisibleRespawnDay)
+            ? worldAi.lastVisibleRespawnDay : null,
           // Escort proof and source-linked convoy state are PROCESS-LOCAL.
           // Always restart escort from a real origin after a load.
           parties: Array.isArray(worldAi?.parties) ? worldAi.parties
@@ -614,6 +616,8 @@ Esc close`,
     const savedWorldAi = game.worldAi && typeof game.worldAi === 'object' ? game.worldAi : {};
     this.game.worldManager.worldAi = {
       lastRespawnDay: Number.isFinite(savedWorldAi.lastRespawnDay) ? savedWorldAi.lastRespawnDay : 0,
+      lastVisibleRespawnDay: Number.isFinite(savedWorldAi.lastVisibleRespawnDay)
+        ? savedWorldAi.lastVisibleRespawnDay : null,
       parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties
         .filter(party => !String(party?.id || '').startsWith('quest-escort-')
           && !party?.escortQuestId)
