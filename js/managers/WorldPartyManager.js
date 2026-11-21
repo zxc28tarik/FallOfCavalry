@@ -149,12 +149,27 @@ export class WorldPartyManager {
     this.ensureActiveQuestRouteThreats({ worldState, tradeRoutes, cfg });
     this.ensureActiveQuestCaravans({ worldState, tradeRoutes, cfg });
 
-    EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
-      const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
-      while (this.world.worldAi.parties.filter((p) => p?.alive !== false && p?.kind === spec.kind).length < max) {
-        this.world.worldAi.parties.push(createVisibleParty(spec, worldState));
-      }
-    });
+    // Extra visible parties (refugees, merchants, messengers, villagers,
+    // nobles) obey the SAME in-game respawn interval as ordinary world AI.
+    // In a full map, faraway parties may legitimately despawn on their first
+    // update. Without a cooldown this immediately recreates all nine every
+    // rendered frame. A separate persisted stamp preserves the first-ever
+    // population and avoids restarting the timer on a save/load.
+    const day = Math.max(1, Math.floor(Number(this.world.state?.day) || 1));
+    const respawnDays = Math.max(0, Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3));
+    const lastVisibleDay = Number.isFinite(this.world.worldAi.lastVisibleRespawnDay)
+      ? this.world.worldAi.lastVisibleRespawnDay : null;
+    if (lastVisibleDay === null || day - lastVisibleDay >= respawnDays) {
+      let added = 0;
+      EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
+        const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
+        while (this.world.worldAi.parties.filter((p) => p?.alive !== false && p?.kind === spec.kind).length < max) {
+          this.world.worldAi.parties.push(createVisibleParty(spec, worldState));
+          added++;
+        }
+      });
+      if (added > 0) this.world.worldAi.lastVisibleRespawnDay = day;
+    }
 
     this.syncVisiblePartiesToWorld();
     return this.world.worldAi.parties;
