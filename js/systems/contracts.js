@@ -7,7 +7,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -84,7 +84,7 @@ export function setContractsRuntimeContext({ party, map, worldSeed } = {}) {
 }
 
 function getSettlements(map) {
-  return Array.isArray(map?.settlements) ? map.settlements.filter((s) => s?.id) : [];
+  return Array.isArray(map?.settlements) ? map.settlements.filter((s) => s?.id != null) : [];
 }
 
 function getPois(map) {
@@ -240,12 +240,63 @@ function createAssassinateContract({ cityId, day, rng, seed, ownerFactionId }) {
   };
 }
 
+/**
+ * A city-to-city letter uses an authentic existing settlement. Completing it
+ * requires entering the actual target city; viewing the board cannot credit it.
+ */
+function createCourierContract({cityId,day,rng,map,ownerFactionId,cityName}) {
+  const source=getSettlementById(map,cityId);
+  const destinations=getSettlements(map)
+    .filter(s=>String(s.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(source,a)-distanceBetweenSettlements(source,b))
+    .slice(0,12);
+  const target=pickOne(destinations,rng,null);
+  if(!target)return null;
+  return {
+    ...buildContractBase({
+      id:`ct-courier-${cityId}-${day}-${Math.floor(rng()*10000)}`,
+      type:'COURIER',cityId,
+      title:'Mühürlü Ferman',
+      desc:`${cityName} şehrinden ${settlementName(target)} şehrine mühürlü haberi götür.`,
+      rewardGold:CONST.CONTRACTS.REWARD_GOLD_BASE*0.9,
+      rewardRenown:CONST.CONTRACTS.REWARD_RENOWN_BASE,
+      ownerFactionId,
+    }),
+    targetCityId:target.id,requiredCount:1,
+  };
+}
+/** Food relief is credited only by a real successful wheat sale at target. */
+function createReliefContract({cityId,day,rng,map,ownerFactionId,cityName}) {
+  const source=getSettlementById(map,cityId);
+  const destinations=getSettlements(map)
+    .filter(s=>String(s.id)!==String(cityId))
+    .sort((a,b)=>Number(a.security??50)-Number(b.security??50)
+      ||distanceBetweenSettlements(source,a)-distanceBetweenSettlements(source,b))
+    .slice(0,16);
+  const target=pickOne(destinations,rng,null);
+  if(!target)return null;
+  const amount=Math.max(4,Math.min(20,Math.floor(Number(CONST.CONTRACTS.DELIVERY_FOOD_MIN)||8)));
+  return {
+    ...buildContractBase({
+      id:`ct-relief-${cityId}-${day}-${Math.floor(rng()*10000)}`,
+      type:'RELIEF',cityId,
+      title:'Halka Erzak Yardımı',
+      desc:`${cityName} adına ${settlementName(target)} pazarına ${amount} buğday sat.`,
+      rewardGold:CONST.CONTRACTS.REWARD_GOLD_BASE*1.15,
+      rewardRenown:CONST.CONTRACTS.REWARD_RENOWN_BASE*1.2,
+      ownerFactionId,
+    }),
+    targetCityId:target.id,requiredAmount:amount,requiredCount:amount,
+    civicSecurityBonus:3,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
     ? seed
     : (Number.isFinite(worldState?.seed) ? worldState.seed : runtime.worldSeed);
-  const key = `${cityId || 'city'}:${Number(day || 1)}:${worldSeed}`;
+  const key = `${cityId ?? 'city'}:${Number(day || 1)}:${worldSeed}`;
   const rng = makeRng(hashString(key));
   const settlement = getSettlementById(chosenMap, cityId);
   const ownerFactionId = settlement?.ownerFactionId || settlement?.owner || null;
@@ -274,7 +325,10 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     selected[replaceIndex] = warType;
   }
 
-  const contracts = selected.slice(0, 3).map((type) => {
+  // Keep the original three offers, then add two separate civilian paths.
+  // During wartime, the existing DEFEND/ASSASSINATE slot remains intact.
+  const expanded = [...selected.slice(0,3),'COURIER','RELIEF'];
+  const contracts = expanded.map((type) => {
     if (!CONTRACT_TYPES.includes(type)) return null;
     if (type === 'BANDIT') return createBanditContract({ cityId, day, seed: worldSeed, rng, ownerFactionId, cityName });
     if (type === 'DELIVER') return createDeliveryContract({ cityId, day, rng, map: chosenMap, ownerFactionId, cityName });
@@ -282,6 +336,8 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     if (type === 'DEFEND') return createDefendContract({ cityId, day, rng, ownerFactionId, cityName });
     if (type === 'ESCORT') return createEscortContract({ cityId, day, rng, map: chosenMap, ownerFactionId, cityName });
     if (type === 'ASSASSINATE') return createAssassinateContract({ cityId, day, rng, seed: worldSeed, ownerFactionId });
+    if (type === 'COURIER') return createCourierContract({cityId,day,rng,map:chosenMap,ownerFactionId,cityName});
+    if (type === 'RELIEF') return createReliefContract({cityId,day,rng,map:chosenMap,ownerFactionId,cityName});
     return null;
   }).filter(Boolean);
 
@@ -338,6 +394,13 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = 1;
       }
     }
+    if (contract.type === 'COURIER' && event.type === 'CITY_VISITED') {
+      if (String(event.cityId) === String(contract.targetCityId)) contract.progress=1;
+    }
+    if (contract.type === 'RELIEF' && event.type === 'DELIVERED') {
+      if (event.itemId === 'food' && String(event.cityId)===String(contract.targetCityId))
+        contract.progress=prev+Math.max(0,Number(event.qty??0));
+    }
     if (contract.type === 'DELIVER' && event.type === 'DELIVERED') {
       if (event.itemId === 'food' && event.cityId === contract.targetCityId) {
         contract.progress = prev + Math.max(0, Number(event.qty ?? 0));
@@ -349,7 +412,7 @@ export function updateContractProgress(event, party = runtime.party) {
       }
     }
 
-    const required = contract.type === 'DELIVER'
+    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF')
       ? Math.max(1, Number(contract.requiredAmount ?? contract.requiredCount ?? 1))
       : Math.max(1, Number(contract.requiredCount ?? 1));
 
@@ -382,6 +445,11 @@ export function completeContract(contractId, party = runtime.party, options = {}
   party.renown = Math.floor(Number(party.renown ?? 0) + Number(contract.rewardRenown ?? 0) + warBonus);
 
   const completed = { ...contract, bonusRenown: warBonus };
+  // Civilian relief improves the actual beneficiary settlement, not an
+  // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'RELIEF' && typeof options?.onCivicRelief === 'function') {
+    options.onCivicRelief(completed);
+  }
   party.contracts.splice(idx, 1);
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
