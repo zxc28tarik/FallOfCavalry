@@ -4,6 +4,9 @@ import {
   spawnBanditOnRegisteredRoute, nextBanditRouteTarget, validBanditRoute,
   getBanditRoadPatrolWaypoints,
 } from './quest-world-party-links.js';
+import {
+  selectLocalCity, localRoadFromCity, localWorldRadius,
+} from './world-ai-local-sources.js';
 
 const DEFAULT_FACTION_IDS = ['ottoman', 'hre', 'polish', 'spanish', 'venice'];
 
@@ -151,17 +154,32 @@ export function createInitialWorldAiState() {
   return { parties: [], lastRespawnDay: 0, lastVisibleRespawnDay: null };
 }
 
-export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes = [], routeIndex = 0 } = {}) {
+export function spawnPartyBandit(worldState, factions, cfg = {},
+  { tradeRoutes = [], routeIndex = 0, playerParty = null } = {}) {
   const bounds = getWorldBounds(worldState);
   const settlements = getSettlements(worldState);
-  let x = randomInRange(bounds.minX, bounds.maxX);
-  let y = randomInRange(bounds.minY, bounds.maxY);
-  if (settlements.length > 0) {
-    const near = settlements[Math.floor(Math.random() * settlements.length)];
-    x = Number(near?.x ?? x) + randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
-    y = Number(near?.y ?? y) + randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
+  // Unlinked bandits still originate near an ACTUAL existing city. When the
+  // player is in a populated region, prefer real city outskirts there.
+  const localHome = selectLocalCity(worldState, playerParty, cfg, { minDistanceTiles: 10 });
+  const home = localHome || (settlements.length
+    ? settlements[Math.floor(Math.random() * settlements.length)] : null);
+  let x = Number(home?.x ?? randomInRange(bounds.minX, bounds.maxX));
+  let y = Number(home?.y ?? randomInRange(bounds.minY, bounds.maxY));
+  x += randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
+  y += randomInRange(-bounds.tileSize * 1.5, bounds.tileSize * 1.5);
+  if (localHome && Number.isFinite(playerParty?.x) && Number.isFinite(playerParty?.y)) {
+    const dist = Math.hypot(x - playerParty.x, y - playerParty.y);
+    const min = Math.min(bounds.tileSize * 8, localWorldRadius(worldState, cfg) * 0.5);
+    if (min > 0 && dist < min) {
+      const angle = dist > 0.001
+        ? Math.atan2(y - playerParty.y, x - playerParty.x)
+        : randomInRange(0, Math.PI * 2);
+      x = playerParty.x + Math.cos(angle) * min;
+      y = playerParty.y + Math.sin(angle) * min;
+    }
   }
-  const linked = spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex);
+  const linked = spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex,
+    { playerParty: localHome ? playerParty : null, cfg });
   const clamped = linked ? clampToBounds(linked.x, linked.y, bounds)
     : clampToBounds(x, y, bounds);
   const target = linked
@@ -169,7 +187,8 @@ export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes =
     : pickRoamTarget(worldState, clamped.x, clamped.y);
   return registerRuntimeRouteBandit({
     id: makeId('bandit'),
-    ...(linked ? { routeId: linked.routeId, homeCityId: linked.homeCityId } : {}),
+    ...(linked ? { routeId: linked.routeId, homeCityId: linked.homeCityId }
+      : home?.id != null ? { homeCityId: home.id } : {}),
     factionId: 'bandits',
     kind: 'bandit',
     x: clamped.x,
@@ -183,13 +202,25 @@ export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes =
   });
 }
 
-export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {}) {
-  const factionId = ownerFactionId || chooseFactionForPatrol(worldState, factions);
-  const home = findCityForFaction(worldState, factionId);
+export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {},
+  { playerParty = null } = {}) {
+  const localHome = selectLocalCity(worldState, playerParty, cfg,
+    ownerFactionId ? { factionId: ownerFactionId } : {});
+  const factionId = ownerFactionId
+    || (localHome ? ownerFactionIdOf(localHome) : null)
+    || chooseFactionForPatrol(worldState, factions);
+  const home = localHome || findCityForFaction(worldState, factionId);
   const bounds = getWorldBounds(worldState);
   const sx = Number(home?.x ?? randomInRange(bounds.minX, bounds.maxX));
   const sy = Number(home?.y ?? randomInRange(bounds.minY, bounds.maxY));
-  const targetCity = pickOtherSettlement(worldState, home?.id, factionId) || pickOtherSettlement(worldState, home?.id, null);
+  const realRoad = localHome ? localRoadFromCity(worldState, home, playerParty, cfg) : null;
+  const targetCity = realRoad?.city
+    || (localHome && selectLocalCity(worldState, playerParty, cfg,
+      { factionId, excludeCityId: home?.id }))
+    || (localHome && selectLocalCity(worldState, playerParty, cfg,
+      { excludeCityId: home?.id }))
+    || pickOtherSettlement(worldState, home?.id, factionId)
+    || pickOtherSettlement(worldState, home?.id, null);
   return {
     id: makeId('patrol'),
     factionId,
@@ -201,15 +232,28 @@ export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {})
     speed: getSpeedByKind('patrol', cfg),
     alive: true,
     homeCityId: home?.id,
-    path: null,
+    path: realRoad?.path || null,
     pathIndex: 0,
   };
 }
 
-export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {}) {
-  const factionId = ownerFactionId || chooseFactionForPatrol(worldState, factions);
-  const fromCity = findCityForFaction(worldState, factionId) || getSettlements(worldState)[0] || null;
-  const toCity = pickOtherSettlement(worldState, fromCity?.id, null) || fromCity;
+export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {},
+  { playerParty = null } = {}) {
+  const localHome = selectLocalCity(worldState, playerParty, cfg,
+    ownerFactionId ? { factionId: ownerFactionId } : {});
+  const factionId = ownerFactionId
+    || (localHome ? ownerFactionIdOf(localHome) : null)
+    || chooseFactionForPatrol(worldState, factions);
+  const fromCity = localHome || findCityForFaction(worldState, factionId)
+    || getSettlements(worldState)[0] || null;
+  // Canonical connectivity wins. Without a connected road, choose another
+  // actual nearby settlement but NEVER assign an unverified routeId.
+  const realRoad = localHome
+    ? localRoadFromCity(worldState, fromCity, playerParty, cfg) : null;
+  const toCity = realRoad?.city
+    || (localHome && selectLocalCity(worldState, playerParty, cfg,
+      { excludeCityId: fromCity?.id }))
+    || pickOtherSettlement(worldState, fromCity?.id, null) || fromCity;
   const bounds = getWorldBounds(worldState);
   const sx = Number(fromCity?.x ?? randomInRange(bounds.minX, bounds.maxX));
   const sy = Number(fromCity?.y ?? randomInRange(bounds.minY, bounds.maxY));
@@ -224,7 +268,7 @@ export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {}
     speed: getSpeedByKind('caravan', cfg),
     alive: true,
     homeCityId: fromCity?.id,
-    path: null,
+    path: realRoad?.path || null,
     pathIndex: 0,
   };
 }
@@ -240,7 +284,7 @@ export function getBanditCap(worldEvents, defaultCap, eventsCfg = null) {
 
 export function ensureWorldParties({
   aiState, worldState, factions, cfg, currentDay, banditCapOverride,
-  tradeRoutes = [],
+  tradeRoutes = [], playerParty = null,
 }) {
   if (!aiState || !Array.isArray(aiState.parties)) return;
   const respawnDays = Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3);
@@ -261,14 +305,15 @@ export function ensureWorldParties({
   const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
   while (hasRoomByType('bandit', banditCap)) {
     const routeIndex = aiState.parties.filter((p) => p?.kind === 'bandit').length;
-    aiState.parties.push(spawnPartyBandit(worldState, factions, cfg, { tradeRoutes, routeIndex }));
+    aiState.parties.push(spawnPartyBandit(worldState, factions, cfg,
+      { tradeRoutes, routeIndex, playerParty }));
   }
   const hasSettlements = getSettlements(worldState).length > 0;
   while (hasSettlements && hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {
-    aiState.parties.push(spawnPartyPatrol(worldState, factions, null, cfg));
+    aiState.parties.push(spawnPartyPatrol(worldState, factions, null, cfg, { playerParty }));
   }
   while (hasSettlements && hasRoomByType('caravan', Number(cfg?.MAX_CARAVAN_PARTIES ?? 0))) {
-    aiState.parties.push(spawnPartyCaravan(worldState, factions, null, cfg));
+    aiState.parties.push(spawnPartyCaravan(worldState, factions, null, cfg, { playerParty }));
   }
 
   aiState.lastRespawnDay = dayNow;
