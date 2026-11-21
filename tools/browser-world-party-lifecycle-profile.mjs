@@ -223,7 +223,13 @@ async function run() {
       ||report.raw.rafIntervals.length!==31||errors.length)
       throw Error('V1.42 incomplete real lifecycle: '+
         JSON.stringify({reason:report.summary.reason,errors}));
-    report.status='PASS_DIAGNOSTIC';
+    // V1.42 regression: with the game on day one and its initial party wave
+    // already processed, no 10-party base respawn may be repeated 32 times.
+    // Allow one complete base wave for tolerant startup timing, not 32 waves.
+    if(report.scene.day===1&&report.summary.basePhaseCreatedIds>10)
+      throw Error('V1.42 recurring base-party spawn/cull regression: '+
+        report.summary.basePhaseCreatedIds+' base parties created in 32 frames');
+    report.status='PASS_REGRESSION';
     const keySummary={
       ensureCalls:report.summary.ensureCalls,
       updateCalls:report.summary.updateCalls,
