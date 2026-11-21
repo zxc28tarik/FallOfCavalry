@@ -12,6 +12,7 @@ import {
   witnessMissingCaravanEncounter,
 } from '../systems/quest-route-recon.js';
 import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
+import { streamWorldAiRegion } from '../systems/world-ai-regional-stream.js';
 import { linkedEscortBattleThreat } from '../systems/quest-escort-threat-battle.js';
 import {
   spawnEscortNpcGuards, runEscortNpcSkirmish,
@@ -153,6 +154,15 @@ export class WorldPartyManager {
     const worldState = this.world.state?.map || {};
     const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
     const cfg = this.getWorldAiCfg();
+    // Only quest-linked, authentic route bandits stay on their mission road
+    // when offscreen. Other real parties sleep with their original IDs.
+    const protectedRouteIds = this.getProtectedRouteIds(worldState, tradeRoutes);
+    const region = streamWorldAiRegion({
+      aiState: this.world.worldAi, worldState,
+      playerParty: this.game?.playerParty, cfg,
+      currentDay: this.world.state?.day ?? 1,
+      protectedRouteIds,
+    });
     ensureBaseWorldParties({
       aiState: this.world.worldAi,
       worldState,
@@ -161,6 +171,7 @@ export class WorldPartyManager {
       currentDay: this.world.state?.day ?? 1,
       tradeRoutes,
       playerParty: this.game?.playerParty || null,
+      forceRegionPopulation: region.forcePopulation,
       banditCapOverride: this.game?.getBanditCapWithEvents?.(this.game?.getCurrentEvents?.(this.world.state?.day ?? 1)),
     });
 
@@ -177,7 +188,8 @@ export class WorldPartyManager {
     const respawnDays = Math.max(0, Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3));
     const lastVisibleDay = Number.isFinite(this.world.worldAi.lastVisibleRespawnDay)
       ? this.world.worldAi.lastVisibleRespawnDay : null;
-    if (lastVisibleDay === null || day - lastVisibleDay >= respawnDays) {
+    if (lastVisibleDay === null || day - lastVisibleDay >= respawnDays
+      || region.forcePopulation) {
       let added = 0;
       EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
         const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
@@ -188,11 +200,26 @@ export class WorldPartyManager {
           added++;
         }
       });
-      if (added > 0) this.world.worldAi.lastVisibleRespawnDay = day;
+      if (added > 0 && (lastVisibleDay === null
+        || day - lastVisibleDay >= respawnDays))
+        this.world.worldAi.lastVisibleRespawnDay = day;
     }
 
     this.syncVisiblePartiesToWorld();
     return this.world.worldAi.parties;
+  }
+
+  /** Retain only CURRENT, actually registered mission routes as protected. */
+  getProtectedRouteIds(worldState, tradeRoutes) {
+    const quests=this.game?.questManager?.activeQuests;
+    if(!Array.isArray(quests))return [];
+    const verified=new Set();
+    quests.forEach(q=>{
+      if(q?.status!=='active'||!q.targetRouteId)return;
+      const route=registeredTradeRoute(worldState,tradeRoutes,q.targetRouteId);
+      if(route?.road)verified.add(String(route.routeId));
+    });
+    return [...verified];
   }
 
   /**
@@ -563,6 +590,8 @@ export class WorldPartyManager {
       factions: this.world.state?.factions || CONST.FACTIONS,
       cfg: this.getWorldAiCfg(),
       tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+      protectedRouteIds: this.getProtectedRouteIds(this.world.state?.map || {},
+        this.game?.economyManager?.ensureTradeRoutes?.() || []),
       dtSec,
       onBanditRemoved: (bandit, reason) =>
         disposeLiveBanditCargo({ bandit, reason }),
