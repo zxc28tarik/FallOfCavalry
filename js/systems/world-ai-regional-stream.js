@@ -83,6 +83,11 @@ export function streamWorldAiRegion({
       &&valid(p)&&dist(p,playerParty)<=activeRadius
       &&!activeIds.has(String(p.id))
       &&typeCount(living,p.kind)<maxKind(p.kind,cfg)){
+      // Returning to a region is not an instant ambush at the streaming
+      // threshold; the actual patrol/bandit still exists and can engage once
+      // a brief transition grace has elapsed.
+      if(p.kind==='bandit'||p.kind==='patrol')
+        p.regionEntryGraceSeconds=6;
       living.push(p);
       activeIds.add(String(p.id));
       restored++;
