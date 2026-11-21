@@ -45,8 +45,14 @@ async function realPartyLifecycle(page,frames) {
       // For initial diagnostic, preserve only tiny examples, not all IDs.
       exampleIds:s.ids.slice(0,5),
     });
-    const countDelta=(a,b)=>new Set(b.ids.filter(id=>!new Set(a.ids).has(id))).size;
-    const removed=(a,b)=>new Set(a.ids.filter(id=>!new Set(b.ids).has(id))).size;
+    const countDelta=(a,b)=>{
+      const previous=new Set(a.ids);
+      return new Set(b.ids.filter(id=>!previous.has(id))).size;
+    };
+    const removed=(a,b)=>{
+      const current=new Set(b.ids);
+      return new Set(a.ids.filter(id=>!current.has(id))).size;
+    };
     const wrap=(holder,key,label,{before,after}={})=>{
       const original=holder?.[key];
       if(typeof original!=='function')return;
