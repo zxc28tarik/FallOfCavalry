@@ -66,6 +66,9 @@ jobs:
       - name: Trace authentic world-party creation and removal per map tick
         run: node tools/browser-world-party-lifecycle-profile.mjs --url http://127.0.0.1:4173 --seed 1337
 
+      - name: Audit original world-party spawn geography against actual player and cities
+        run: node tools/browser-world-geography-profile.mjs --url http://127.0.0.1:4173 --seed 1337
+
       - name: Upload browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4
