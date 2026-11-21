@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
+import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import {
   CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
@@ -384,6 +385,10 @@ export default class CityServicesUI {
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const residentReactions=Object.fromEntries(Object.keys(CIVIC_DECISIONS).map(id=>[
+      id,previewCouncilReactions({roster:this.state?.worldCharacters,
+        cityId:this.currentSettlement?.id,decisionId:id}),
+    ]));
     const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
       .filter((person) => person.status === 'alive');
     this.setPanelChrome(
@@ -409,7 +414,11 @@ export default class CityServicesUI {
           <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
           ${Object.entries(CIVIC_DECISIONS).map(([id,decision])=>`
             <div class="city-overview-row">
-              <span><strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)} (${decision.cost>=0?'-':'+'}${Math.abs(decision.cost)} altın)</span>
+              <span>
+                <strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)}
+                (${decision.cost>=0?'-':'+'}${Math.abs(decision.cost)} altın)
+                ${residentReactions[id].length ? `<small class="block opacity-80">Önemli kişiler: ${residentReactions[id].slice(0,3).map(row=>`${escapeHtml(row.name)} ${row.delta>0?'+':''}${row.delta} memnuniyet`).join(' · ')}${residentReactions[id].length>3?' · …':''}</small>` : ''}
+              </span>
               <button type="button" class="action-btn text-xs" data-action="civic-decision" data-id="${id}"
                 ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
             </div>
