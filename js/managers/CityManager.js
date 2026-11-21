@@ -186,12 +186,22 @@ export class CityManager {
             active: true,
           };
         }
-        if (accepted) g.gameFlowManager.setLastEventLog('Contract accepted.');
+        if (accepted) {
+          g.gameFlowManager.setLastEventLog('Contract accepted.');
+          g.saveManager?.runAutosave?.('contract-accepted');
+        }
       },
       onCompleteContract: (contractId) => {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onCivicRelief: (contract) => {
+            const beneficiary=(this.state?.map?.settlements||[]).find(city=>
+              String(city.id)===String(contract.targetCityId));
+            if (beneficiary) beneficiary.security=Math.max(0,Math.min(100,
+              Math.floor(Number(beneficiary.security??50)
+                + Number(contract.civicSecurityBonus??3))));
+          },
           onRelationBonus: (contract) => {
             const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
             applyContractRelationBonus({
@@ -210,6 +220,7 @@ export class CityManager {
           if (extra > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + extra);
           const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
           g.gameFlowManager.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${boosted} renown${bonusText}${extra > 0 ? ' (pilgrimage bonus)' : ''}`);
+          g.saveManager?.runAutosave?.('contract-completed');
         }
       },
       onDiplomacyAction: (summary) => {
