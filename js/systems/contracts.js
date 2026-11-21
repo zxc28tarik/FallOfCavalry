@@ -7,7 +7,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -321,6 +321,42 @@ function createReliefContract({cityId,day,rng,map,ownerFactionId,cityName}) {
   };
 }
 
+/**
+ * Daily follow-up to a genuine council decision. A later day opens one
+ * source-backed petition, not a free daily payout or a synthetic encounter.
+ */
+function createCivicFollowup({cityId,day,seed,map,ownerFactionId,cityName,civicDecision}) {
+  if(!civicDecision||Math.floor(Number(civicDecision.day))!==Math.floor(Number(day))-1)
+    return null;
+  const kind=String(civicDecision.id||'');
+  if(!['patrol','granary','levy'].includes(kind))return null;
+  const source=getSettlementById(map,cityId);
+  if(!source)return null;
+  const destinations=getSettlements(map)
+    .filter(city=>String(city.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(source,a)-distanceBetweenSettlements(source,b));
+  const target=destinations[hashString(`${seed}:${cityId}:${day}:civic`) % (destinations.length||1)];
+  if(kind!=='granary'&&!target)return null;
+  const config={
+    patrol:{title:'Devriye Güzergâhı Raporu',desc:`Yeni nöbet düzenini ${settlementName(target)} şehrinde denetle, ardından ${cityName} şehrine rapor getir.`,bonus:3},
+    granary:{title:'İmaret Dağıtım Nöbeti',desc:`${cityName} pazarına 6 buğday satarak imaretin erzak ihtiyacını karşıla.`,bonus:4},
+    levy:{title:'Vergi İtiraznamesi',desc:`${settlementName(target)} şehrinde halkın dilekçesini topla, ardından ${cityName} şehrine dön.`,bonus:5},
+  }[kind];
+  return {
+    ...buildContractBase({
+      id:`ct-civic-${cityId}-${day}-${kind}`,type:'CIVIC_FOLLOWUP',
+      cityId,title:config.title,desc:config.desc,
+      rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*0.75),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE)),
+      ownerFactionId,
+    }),
+    civicKind:kind,civicSecurityBonus:config.bonus,
+    targetCityId:kind==='granary'?cityId:target.id,
+    civicStops:kind==='granary'?[]:[target.id,cityId],
+    requiredCount:kind==='granary'?6:2,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -372,7 +408,12 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     return null;
   }).filter(Boolean);
 
-  runtime.offersByCity.set(String(cityId || ''), contracts.map((c) => ({ ...c })));
+  const followup=createCivicFollowup({
+    cityId,day,seed:worldSeed,map:chosenMap,ownerFactionId,cityName,
+    civicDecision:settlement?.civicDecision,
+  });
+  if(followup)contracts.push(followup);
+  runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
 
@@ -425,6 +466,18 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = 1;
       }
     }
+    if (contract.type === 'CIVIC_FOLLOWUP') {
+      if(contract.civicKind==='granary' && event.type==='DELIVERED'
+        && event.itemId==='food' && event.cityId!=null
+        && String(event.cityId)===String(contract.cityId))
+        contract.progress=prev+Math.max(0,Number(event.qty??0));
+      if(contract.civicKind!=='granary' && event.type==='CITY_VISITED'){
+        const stops=Array.isArray(contract.civicStops)?contract.civicStops:[];
+        const next=Math.max(0,Math.floor(Number(contract.progress)||0));
+        if(next<stops.length && event.cityId!=null
+          && String(event.cityId)===String(stops[next]))contract.progress=next+1;
+      }
+    }
     if (contract.type === 'DISPATCH' && event.type === 'CITY_VISITED') {
       const stops=Array.isArray(contract.dispatchStops)?contract.dispatchStops:[];
       const index=Math.max(0,Math.floor(Number(contract.progress)||0));
@@ -450,7 +503,7 @@ export function updateContractProgress(event, party = runtime.party) {
       }
     }
 
-    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF')
+    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF' || contract.type === 'CIVIC_FOLLOWUP')
       ? Math.max(1, Number(contract.requiredAmount ?? contract.requiredCount ?? 1))
       : Math.max(1, Number(contract.requiredCount ?? 1));
 
@@ -487,6 +540,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   // unverified quest title or a synthetic regional economy location.
   if (contract.type === 'RELIEF' && typeof options?.onCivicRelief === 'function') {
     options.onCivicRelief(completed);
+  }
+  if (contract.type === 'CIVIC_FOLLOWUP' && typeof options?.onCivicFollowup === 'function') {
+    options.onCivicFollowup(completed);
   }
   if (contract.type === 'DISPATCH' && typeof options?.onCivicDispatch === 'function') {
     options.onCivicDispatch(completed);
