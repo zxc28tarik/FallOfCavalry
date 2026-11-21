@@ -35,6 +35,7 @@ export function applyCivicDecision({city,party,day,decisionId}={}){
   party.gold=Math.floor(gold-definition.cost);
   party.renown=Math.max(0,Math.floor(Number(party.renown??0)+definition.renown));
   city.security=newSecurity;
+  city.civicDirty=true;
   city.civicDecision={day:today,id:decisionId};
   return {
     ok:true,
