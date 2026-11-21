@@ -5,13 +5,40 @@
 
 import * as utils from '../utils.js';
 import * as CONST from '../constants.js';
+import { resetMarketMovementJournal } from '../systems/market-cargo-report.js';
+import { resetCargoDispositionJournal } from '../systems/quest-escort-cargo.js';
 import StartScreen from '../ui/start-screen.js';
 import { getRelation, setRelation } from '../systems/factions.js';
 import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventState } from '../systems/events.js';
 import { showWinScreen, showLoseScreen } from '../ui/modals.js';
 import { applySettingsPatch, serializeSettings, deserializeSettings } from '../systems/settings.js';
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
+import { resolveFactionStartLocation } from '../systems/faction-start-location.js';
 import { ensureModeManager } from '../core/ModeManager.js';
+import { createWorldCharacterRoster } from '../systems/world-characters.js';
+import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
+import { produceUnregisteredCharacterCandidates, registerProducedCharacter } from '../systems/character-production.js';
+import { discoverCharacterProductionSources } from '../systems/character-production-sources.js';
+import { advanceNamedCharacterImportance } from '../systems/character-importance.js';
+import { changeNamedCharacterMetric, getNamedCharacterState } from '../systems/named-character-state.js';
+import { applyApprovedQuestCharacterOutcome } from '../systems/character-quest-events.js';
+import { emptyQuestEventLedger } from '../systems/quest-event-ledger.js';
+import { clearInSessionQuestProofs } from '../systems/quest-event-matcher.js';
+import {
+  bindNamedCharacterToQuest, emptyCharacterQuestBindings,
+  normalizeCharacterQuestBindings, recordNamedCharacterQuestResult,
+  getNamedCharacterQuestRecords,
+} from '../systems/character-quest-assignments.js';
+import {
+  getCharacterSocialProfile, linkCharacterToExistingHouse,
+  linkCharacterToExistingClique, linkExistingHouseToClique,
+} from '../systems/character-social.js';
+import { reconcileCharacterSocialState } from '../systems/character-social-authority.js';
+import {
+  addCharacterBranchMembership, completeCharacterAssignment,
+  getCharacterOrganizationProfile, normalizeCharacterOrganizationState,
+  startCharacterAssignment,
+} from '../systems/character-organization.js';
 
 export class GameFlowManager {
   constructor(gameState) {
@@ -247,6 +274,7 @@ export class GameFlowManager {
 
     g.gameLoop.start();
     g.started = true;
+    g.cargoMarketReportPanel?.syncVisibility();
     return true;
   }
 
@@ -283,6 +311,7 @@ export class GameFlowManager {
     const g = this.game;
     this.stop();
     g.mode = 'menu';
+    g.cargoMarketReportPanel?.syncVisibility();
 
     g.hudManager?.setPaused?.(false);
     g.hudManager?.setMenuVisible?.(true);
@@ -297,27 +326,59 @@ export class GameFlowManager {
     const g = this.game;
     const started = this.start();
     if (!started) return false;
+    // A new campaign has no authority to inherit previous session audit rows.
+    resetMarketMovementJournal();
+    resetCargoDispositionJournal();
+    g.cargoMarketReportPanel?.invalidate?.();
 
     // Oyuncuyu kendi faction'ının ilk şehrine konumlandır
     const factionId = this.state?.selectedFaction?.id;
     const map = g.worldManager?.state?.map;
     const mapData = map?.mapData || map?.__mapData || g.worldManager?.state?.mapData;
-    const startTile = findFactionStartTile(mapData, factionId);
     const tileSize = Number(CONST.WORLD?.TILE_SIZE) || 32;
-    if (startTile && g.playerParty) {
-      const startX = (startTile.tx + 0.5) * tileSize;
-      const startY = (startTile.ty + 0.5) * tileSize;
-      g.playerParty.x = startX;
-      g.playerParty.y = startY;
+    const location = resolveFactionStartLocation({
+      startTile: findFactionStartTile(mapData, factionId),
+      settlements: map?.settlements || [],
+      factionId, tileSize,
+    });
+    if (location && g.playerParty) {
+      // Generated maps need a real owned city as the fallback: otherwise
+      // the player stays at state.player's uninhabited (0, 0) placeholder.
+      g.playerParty.x = location.x;
+      g.playerParty.y = location.y;
       const cam = this.state?.camera;
       if (cam) {
-        cam.x = startX - CONST.GAME.VIEW_WIDTH / 2;
-        cam.y = startY - CONST.GAME.VIEW_HEIGHT / 2;
+        cam.x = location.x - CONST.GAME.VIEW_WIDTH / 2;
+        cam.y = location.y - CONST.GAME.VIEW_HEIGHT / 2;
       }
       g.worldManager?.updateFogFromPlayer?.();
     }
     g.followParty = true;
     if (g.playerParty) g.playerParty.selected = true;
+
+    // World NPCs are generated from actual settlement IDs after world boot.
+    // This is a separate persistent collection, never the player's combat roster.
+    const authoredDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    // Bad or partially reviewed catalogs never inject a single actor.
+    this.state.characterDefinitionDiagnostics = authoredDefinitions.diagnostics;
+    this.state.worldCharacters = createWorldCharacterRoster({
+      seed: this.state.seed,
+      settlements: this.state?.map?.settlements || [],
+      authoredCharacters: authoredDefinitions.accepted ? authoredDefinitions.characters : [],
+    });
+    this.state.characterQuestBindings = emptyCharacterQuestBindings();
+    this.state.questEventLedger = emptyQuestEventLedger();
+    clearInSessionQuestProofs(g.questManager);
+    g.questRecoveryPanel?.hide?.();
+    g.questEscortHud?.hide?.();
+    if (g.questManager) {
+      g.questManager.activeQuests = [];
+      g.questManager.completedQuests = [];
+      g.questManager.failedQuests = [];
+    }
 
     g.mode = 'playing';
     g.saveManager.startAutosaveLoop();
@@ -325,6 +386,295 @@ export class GameFlowManager {
     g.hudManager?.setSettingsVisible?.(false);
     g.hudManager?.setPaused?.(false);
     return true;
+  }
+
+  /**
+   * On-demand world character production. The caller supplies the source that
+   * the city/quest/enterprise system actually knows about; facilities require
+   * their authoritative registeredSources list.
+   *
+   * Preview does not mutate state or add recruits/companions.
+   */
+  /**
+   * Read-only list of real settlement and constructed-facility character
+   * sources. Does not create new cityState/buildings or permanent people.
+   */
+  /**
+   * Read-only immutable-identity metadata. A generated NPC (even Named D)
+   * never becomes a historical person by matching the same display name.
+   */
+  getWorldCharacterDefinition(characterId) {
+    const authored = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    if (!authored.accepted || !this.state?.worldCharacters?.characters?.some(
+      (person) => person.id === characterId && person.kind === 'named')) return null;
+    return authored.definitions.find((item) => item.characterId === characterId) || null;
+  }
+
+  listWorldCharacterProductionSources() {
+    return discoverCharacterProductionSources(this.state?.map?.settlements || []);
+  }
+
+  previewWorldCharacterCandidates(source, {
+    count = 2,
+    firstSlot = 1,
+  } = {}) {
+    const settlements = this.state?.map?.settlements || [];
+    const registeredSources = this.listWorldCharacterProductionSources();
+    const canonicalSource = registeredSources.find((item) => item.type === source?.type
+      && item.id === String(source?.id) && item.settlementId === String(source?.settlementId));
+    if (!canonicalSource) throw new RangeError('Character production requires a real world source.');
+    return produceUnregisteredCharacterCandidates({
+      roster: this.state?.worldCharacters,
+      worldSeed: this.state?.seed,
+      source: canonicalSource,
+      settlements,
+      registeredSources,
+      count,
+      firstSlot,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+  }
+
+  /**
+   * An explicit story/event/recruitment decision retains one produced person.
+   * This is registration as a world NamedCharacter(D), NOT party recruitment.
+   */
+  retainWorldCharacter(production, characterId) {
+    if (!this.state?.worldCharacters) return false;
+    const registeredSources = this.listWorldCharacterProductionSources();
+    const candidateSource = production?.source;
+    const canonicalSource = registeredSources.find((item) => item.type === candidateSource?.type
+      && item.id === candidateSource?.id
+      && item.settlementId === candidateSource?.settlementId);
+    if (!canonicalSource || canonicalSource.cultureId !== candidateSource.cultureId
+      || (canonicalSource.originFactionId ?? null) !== candidateSource.originFactionId) return false;
+    return registerProducedCharacter(this.state.worldCharacters, production, characterId, {
+      settlements: this.state?.map?.settlements || [],
+      registeredSources,
+      expectedWorldSeed: this.state?.seed,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+  }
+
+  /**
+   * Explicit Character System v2 importance change for an approved story,
+   * office or event command. No random or day-driven promotions.
+   * This changes neither the actor's role nor their player organization.
+   */
+  advanceWorldCharacterImportance(characterId, toImportance, {
+    reason,
+    reviewTier = 'standard',
+  } = {}) {
+    if (!this.state?.worldCharacters) return false;
+    return advanceNamedCharacterImportance(this.state.worldCharacters, characterId, {
+      toImportance,
+      reason,
+      reviewTier,
+      day: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+    });
+  }
+
+  /**
+   * Explicit descriptive Character System v2 membership and assignment.
+   * No automatic office, troops, trade effects, player party recruitment,
+   * political affiliation, family or clique creation.
+   */
+  getWorldCharacterOrganizationProfile(characterId) {
+    return getCharacterOrganizationProfile(this.state?.characterOrganization, characterId, {
+      roster: this.state?.worldCharacters,
+    });
+  }
+
+  addWorldCharacterBranchMembership(characterId, branch, { reason } = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = addCharacterBranchMembership(organization, characterId, branch, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  startWorldCharacterAssignment(characterId, assignment = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = startCharacterAssignment(organization, characterId, {
+      ...assignment,
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  completeWorldCharacterAssignment(characterId, { reason } = {}) {
+    const organization = normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    const done = completeCharacterAssignment(organization, characterId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterOrganization = organization;
+    return done;
+  }
+
+  /**
+   * House/Clique are independent, authored entities. There is deliberately
+   * NO GameFlow API that creates a family or clique out of a character.
+   */
+  getWorldCharacterSocialProfile(characterId) {
+    return getCharacterSocialProfile(reconcileCharacterSocialState(
+      this.state?.characterSocial, {
+        roster: this.state?.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+        catalog: this.state?.characterSocialAuthority,
+      },
+    ), characterId, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+  }
+
+  linkWorldCharacterToHouse(characterId, houseId, { reason } = {}) {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
+    });
+    const done = linkCharacterToExistingHouse(social, characterId, houseId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
+    return done;
+  }
+
+  linkWorldCharacterToClique(characterId, cliqueId, { reason } = {}) {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
+    });
+    const done = linkCharacterToExistingClique(social, characterId, cliqueId, {
+      roster: this.state?.worldCharacters,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
+    return done;
+  }
+
+  linkWorldHouseToClique(houseId, cliqueId, { reason } = {}) {
+    const social = reconcileCharacterSocialState(this.state?.characterSocial, {
+      roster: this.state?.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
+    });
+    const done = linkExistingHouseToClique(social, houseId, cliqueId, {
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)), reason,
+    });
+    if (done) this.state.characterSocial = social;
+    return done;
+  }
+
+  /**
+   * V1.11: immutable authored CharacterDefinition remains separate from this
+   * mutable NamedCharacterState projection of the current campaign actor.
+   */
+  getWorldNamedCharacterState(characterId) {
+    return getNamedCharacterState(this.state?.worldCharacters, characterId);
+  }
+
+  /**
+   * Applies ONE explicitly reasoned event. No automatic leveling or change
+   * to the actor's origin, identity, office, family, religion or status.
+   */
+  changeWorldCharacterMetric(characterId, metric, value, { reason } = {}) {
+    return changeNamedCharacterMetric(this.state?.worldCharacters, characterId, {
+      metric, value, reason,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+    });
+  }
+
+  /**
+   * The live QuestManager calls this only after a real completion. Effect
+   * amounts must still be present in trusted reviewed quest content; currently
+   * that policy catalog is empty, so NO automatic experience/reputation bonus.
+   */
+  /**
+   * Explicitly place an existing NamedCharacter on a REAL active quest.
+   * The current organizational duty must already exist; no extra membership,
+   * fabricated quest, title, status, or numerical reward is granted.
+   */
+  assignWorldCharacterToQuest(questId, characterId, { reason } = {}) {
+    const bindings = normalizeCharacterQuestBindings(
+      this.state?.characterQuestBindings, {
+        roster: this.state?.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+      },
+    );
+    const done = bindNamedCharacterToQuest({
+      questManager: this.game?.questManager,
+      bindings,
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      settlements: this.state?.map?.settlements || [],
+      questId, characterId,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      reason,
+    });
+    if (done) this.state.characterQuestBindings = bindings;
+    return done;
+  }
+
+  getWorldCharacterQuestRecords(characterId) {
+    return getNamedCharacterQuestRecords(this.state?.characterQuestBindings, characterId, {
+      roster: this.state?.worldCharacters,
+    });
+  }
+
+  applyVerifiedQuestCharacterOutcome(receipt) {
+    const bindings = this.state?.characterQuestBindings;
+    const active = Array.isArray(bindings?.entries) && bindings.entries.some((item) =>
+      item.status === 'active'
+      && item.questId === receipt?.questId
+      && item.templateId === receipt?.templateId
+      && item.characterId === receipt?.assignedCharacterId);
+    // Old/unbound quest completion stays a valid quest but has no character
+    // link. A forged quest.assignedCharacterId cannot grant player-NPC stats.
+    if (!active) return { status: 'unbound_quest', applied: false };
+    const day = Math.max(1, Math.floor(Number(this.state?.day) || 1));
+    const reward = applyApprovedQuestCharacterOutcome({
+      receipt,
+      questManager: this.game?.questManager,
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      day,
+    });
+    recordNamedCharacterQuestResult(bindings, receipt, {
+      questManager: this.game?.questManager, day, outcome: 'completed',
+    });
+    return reward;
+  }
+
+  recordVerifiedQuestCharacterFailure(receipt) {
+    return recordNamedCharacterQuestResult(this.state?.characterQuestBindings, receipt, {
+      questManager: this.game?.questManager,
+      day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      outcome: 'failed',
+    });
   }
 
   applyMasterVolume(value) {

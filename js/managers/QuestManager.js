@@ -1,3 +1,5 @@
+import { recordCompletedSessionQuest } from '../systems/quest-event-matcher.js';
+
 export class QuestManager {
   constructor(modeManager, worldEffectManager, questGenerator) {
     this.modeManager = modeManager;
@@ -6,11 +8,18 @@ export class QuestManager {
     this.activeQuests = [];
     this.completedQuests = [];
     this.failedQuests = [];
+    // Optional observer of VERIFIED quest completion; no reward policy here.
+    this.onQuestCompleted = null;
+    this.onQuestFailed = null;
+    this.lastCompletionObserverError = null;
   }
 
   addQuest(questInstance) {
-    if (!questInstance) return;
+    if (!questInstance || typeof questInstance.id !== 'string'
+      || [...this.activeQuests, ...this.completedQuests, ...this.failedQuests]
+        .some((quest) => quest.id === questInstance.id)) return false;
     this.activeQuests.push(questInstance);
+    return true;
   }
 
   activateQuest(questId) {
@@ -63,7 +72,51 @@ export class QuestManager {
     quest.completedPath = selectedPathId;
     this.completedQuests.push(quest);
     this.activeQuests = this.activeQuests.filter((item) => item.id !== questId);
+    recordCompletedSessionQuest(this, questId);
     this._createChainQuestIfNeeded(quest);
+    // Called once AFTER the quest has left activeQuests and entered completedQuests.
+    // A failing character observer must never undo an actual quest completion or
+    // turn existing player gold/reputation rewards into a second NPC reward.
+    if (typeof this.onQuestCompleted === 'function') {
+      const receipt = Object.freeze({
+        questId: quest.id,
+        templateId: quest.templateId,
+        pathId: selectedPathId,
+        assignedCharacterId: quest.assignedCharacterId ?? null,
+      });
+      try {
+        this.onQuestCompleted(receipt);
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Explicit player retirement of an obsolete legacy route. This is not a
+   * gameplay failure and never applies the template's failure effects.
+   * Its archive reason remains visible after load.
+   */
+  retireLegacyQuest(questId) {
+    const quest = this._findActive(questId);
+    if (!quest || quest.status !== 'active') return false;
+    quest.status = 'failed';
+    quest.failReason = 'legacy_route_retired';
+    this.failedQuests.push(quest);
+    this.activeQuests = this.activeQuests.filter(item => item.id !== questId);
+    if (typeof this.onQuestFailed === 'function') {
+      try {
+        this.onQuestFailed(Object.freeze({
+          questId: quest.id, templateId: quest.templateId,
+          assignedCharacterId: quest.assignedCharacterId ?? null,
+          reason: 'legacy_route_retired',
+        }));
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
   }
 
   failQuest(questId, reason) {
@@ -74,6 +127,19 @@ export class QuestManager {
     for (const effect of (quest.failureEffects ?? [])) this.worldEffectManager?.applyEffect?.(effect);
     this.failedQuests.push(quest);
     this.activeQuests = this.activeQuests.filter((item) => item.id !== questId);
+    if (typeof this.onQuestFailed === 'function') {
+      const receipt = Object.freeze({
+        questId: quest.id, templateId: quest.templateId,
+        assignedCharacterId: quest.assignedCharacterId ?? null,
+        reason: typeof reason === 'string' ? reason : 'unspecified',
+      });
+      try {
+        this.onQuestFailed(receipt);
+      } catch (error) {
+        this.lastCompletionObserverError = String(error?.message || error).slice(0, 180);
+      }
+    }
+    return true;
   }
 
   expireQuests(currentDay) {

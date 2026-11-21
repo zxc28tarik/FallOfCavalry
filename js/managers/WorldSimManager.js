@@ -10,6 +10,7 @@ import { createInitialRegionState, getActiveRegionModifiers } from '../systems/r
 import { ensureModeManager } from '../core/ModeManager.js';
 import WorldPartyManager from './WorldPartyManager.js';
 import { normalizeEncounterType } from '../data/encounter-defs.js';
+import { validatedPartyQuestLinks } from '../systems/quest-world-party-links.js';
 
 export class WorldSimManager {
   constructor() {
@@ -332,18 +333,28 @@ export class WorldSimManager {
         factionId: party.factionId,
         worldPartyKind: party.kind,
         encounterType: normalizeEncounterType(party.encounterType || party.kind),
+        ...validatedPartyQuestLinks(party, {
+          worldState: this.world.state?.map,
+          tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+          commanders: this.world.state?.commanders || [],
+        }),
       });
     }
 
     this.world.worldEncounterPartyByEnemyId[enemyId] = party.id;
-    return this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12, worldPartyKind: party.kind, encounterType: party.encounterType, factionId: party.factionId }, {
+    const entered = this.triggerEncounter({ id: enemyId, x: party.x, y: party.y, radius: 12, worldPartyKind: party.kind, encounterType: party.encounterType, factionId: party.factionId }, {
       encounterType: party.encounterType || party.kind,
       worldPartyId: party.id,
     });
+    if (entered) this.worldPartyManager?.recordReconEncounter(party, enemyId);
+    return entered;
   }
 
   updateTransientUIState() {
     if (!this.world.state) return;
+    // A map-only guidance surface must never float over a battle, city or
+    // encounter panel even if the caravan remains alive in world state.
+    if (this.world.state.mode !== 'map') this.game?.questEscortHud?.hide?.();
     this.game?.ensureFactionState?.();
     this.world.state.encounterRisk = this.computeEncounterRiskContext();
     if (this.world.state.clueMarker && Number(this.world.state.day ?? 1) > Number(this.world.state.clueMarker.expiresDay ?? 0)) {
@@ -432,6 +443,8 @@ export class WorldSimManager {
       if (party.moveState !== 'arrived') party.moveState = 'idle';
       return;
     }
+
+    this.game?.questEscortHud?.refreshFollowTarget?.();
 
     if (!party.hasDestination) {
       party.vx = 0;

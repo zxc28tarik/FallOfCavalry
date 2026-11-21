@@ -1,4 +1,11 @@
 import * as CONST from '../constants.js';
+import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
+import {
+  CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
+  getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
+} from '../systems/world-characters.js';
+import { getNamedCharacterState } from '../systems/named-character-state.js';
+import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -41,6 +48,9 @@ export default class CityServicesUI {
     onClose,
     onHeal,
     onConstruct,
+    onCivicDecision,
+    getQuestManager,
+    onAssignQuest,
   }) {
     this.state = state;
     this.party = party;
@@ -57,6 +67,12 @@ export default class CityServicesUI {
     this.onClose = onClose;
     this.onHeal = onHeal;
     this.onConstruct = onConstruct;
+    this.onCivicDecision = onCivicDecision;
+    this.civicFeedback = '';
+    this.getQuestManager = getQuestManager;
+    this.onAssignQuest = onAssignQuest;
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
 
     this.dom = {};
     this.bound = false;
@@ -103,6 +119,9 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'civic-decision') {
+        const result=this.onCivicDecision?.(id);
+        this.civicFeedback=result?.message||'İşlem tamamlanamadı.';
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
         this.onDiplomacyAction?.({ ok, message: ok ? `Ateskes satin alindi: ${id}` : 'Ateskes alinmadi.' });
@@ -116,6 +135,24 @@ export default class CityServicesUI {
         this.onHeal?.(id);
       } else if (action === 'show-overview') {
         this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      } else if (action === 'open-npc') {
+        this.pendingNpcQuestId = null;
+        this.questAssignmentFeedback = '';
+        const isHere = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+          .some((person) => person.id === id);
+        if (isHere) this.currentView = { type: 'npc', npcId: id };
+      } else if (action === 'stage-npc-quest' && this.currentView?.type === 'npc') {
+        this.pendingNpcQuestId = id;
+        this.questAssignmentFeedback = '';
+      } else if (action === 'confirm-npc-quest'
+        && this.currentView?.type === 'npc' && this.pendingNpcQuestId === id) {
+        const reasonInput = btn.closest?.('[data-quest-row]')?.querySelector?.('[data-quest-reason]');
+        const reason = typeof reasonInput?.value === 'string' ? reasonInput.value.trim() : '';
+        const outcome = this.onAssignQuest?.(id, this.currentView.npcId, reason);
+        this.questAssignmentFeedback = outcome
+          ? 'Görevlendirme kaydedildi; görev ve karakter geçmişi güncellendi.'
+          : 'Görevlendirme reddedildi. Aktif görev, kişi, yer ve gerekçeyi kontrol et.';
+        if (outcome) this.pendingNpcQuestId = null;
       } else if (action === 'open-service') {
         this.currentView = { type: 'service', serviceId: id, parcelId: btn.dataset.parcelId || null, buildingId: null };
       } else if (action === 'open-area') {
@@ -155,12 +192,16 @@ export default class CityServicesUI {
     this.currentMarket = market || null;
     this.currentContracts = Array.isArray(contracts) ? contracts : [];
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
     this.dom.cityRoot?.classList.remove('hidden');
     this.render();
   }
 
   hide() {
     this.dom.cityRoot?.classList.add('hidden');
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
   }
 
@@ -280,6 +321,11 @@ export default class CityServicesUI {
     const target = this.getPanelBodyEl();
     if (!target || !cityState) return;
 
+    if (this.currentView?.type === 'npc') {
+      this.renderNpcProfile(this.currentView.npcId);
+      return;
+    }
+
     if (this.currentView?.type === 'service' && this.currentView.serviceId) {
       if (!canUseCityService(this.currentSettlement, this.currentView.serviceId)) {
         this.renderLockedService(this.currentView.serviceId);
@@ -337,6 +383,9 @@ export default class CityServicesUI {
     const availableServices = Object.values(cityState.services || {}).filter((service) => service.available);
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
+    const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+      .filter((person) => person.status === 'alive');
     this.setPanelChrome(
       'Sehir Sahnesi',
       `<div class="city-panel-meta-line">Tema: ${escapeHtml(cityState.sceneTheme || '-')}</div>
@@ -355,6 +404,18 @@ export default class CityServicesUI {
           </div>
         </div>
         <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir Meclisi — Günlük Karar</div>
+          <div class="text-sm opacity-80">Güvenlik: ${Math.floor(Number(this.currentSettlement?.security??50))}/100 · ${escapeHtml(civicGate.reason||'Bugün bir karar alabilirsin.')}</div>
+          <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
+          ${Object.entries(CIVIC_DECISIONS).map(([id,decision])=>`
+            <div class="city-overview-row">
+              <span><strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)} (${decision.cost>=0?'-':'+'}${Math.abs(decision.cost)} altın)</span>
+              <button type="button" class="action-btn text-xs" data-action="civic-decision" data-id="${id}"
+                ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
+            </div>
+          `).join('')}
+        </div>
+        <div class="city-overview-section">
           <div class="city-overview-section__title">Servis Kilitleri</div>
           ${Object.values(cityState.services || []).map((service) => `
             <div class="city-overview-row">
@@ -362,6 +423,17 @@ export default class CityServicesUI {
               <strong>${service.available ? 'Acilmis' : `Gerekli: ${escapeHtml(getCityServiceRequirementText(service.id))}`}</strong>
             </div>
           `).join('')}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Sehirdeki Kisiler (NPC)</div>
+          ${residents.length ? residents.map((person) => `
+            <button type="button" class="city-overview-row w-full text-left"
+                data-action="open-npc" data-id="${escapeHtml(person.id)}"
+                aria-label="${escapeHtml(person.name)} karakterini incele">
+              <span>${escapeHtml(person.name)}</span>
+              <strong>${escapeHtml(NPC_ROLE_LABELS[person.role] || person.role)} · ${getWorldCharacterAge(person, this.state?.day)}</strong>
+            </button>
+          `).join('') : '<div class="text-sm opacity-80">Bu sehir icin kayitli NPC yok.</div>'}
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Sehir Kethudasi</div>
@@ -374,6 +446,155 @@ export default class CityServicesUI {
           <div class="text-sm opacity-80">
             Bir alana tikla. Sag panelde o bolgenin binalari, servisleri ve gelisim secenekleri acilir.
           </div>
+        </div>
+      `,
+    );
+  }
+
+  renderNpcProfile(npcId) {
+    const profile = getWorldCharacterProfile(this.state?.worldCharacters, npcId, {
+      day: this.state?.day,
+    });
+    if (!profile || profile.person.location?.settlementId !== String(this.currentSettlement?.id)) {
+      this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      this.renderOverview();
+      return;
+    }
+
+    const { person, age, relations } = profile;
+    // GeneratedPerson keeps the existing profile; only permanent named actors
+    // gain the independent by-value mutable state projection.
+    const current = person.kind === 'named'
+      ? getNamedCharacterState(this.state?.worldCharacters, npcId) : null;
+    const visibleStats = current?.stats ?? person.stats;
+    const visibleTraits = current?.traits ?? person.traits;
+    const visibleHistory = current?.history ?? person.history;
+    const loyalty = current?.currentLoyalty ?? person.loyalty;
+    const satisfaction = current?.satisfaction ?? person.satisfaction;
+    const reputation = current?.currentReputation ?? person.reputation;
+    const standing = current?.currentStanding ?? person.standing;
+    const roleLabel = NPC_ROLE_LABELS[person.role] || person.role;
+    const statusLabel = person.status === 'alive' ? 'Hayatta' : 'Ölü';
+    const kindLabel = person.kind === 'named'
+      ? `Önemli karakter (${person.importance})` : 'Sıradan dünya karakteri';
+    const statRows = CHARACTER_STAT_KEYS.map((key) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(NPC_STAT_LABELS[key] || key)}</span>
+        <strong>${visibleStats[key]}/100</strong>
+      </div>`).join('');
+    const relationRows = relations.length ? relations.map((other) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(other.name)}</span>
+        <strong>${other.value > 0 ? '+' : ''}${other.value}</strong>
+      </div>`).join('')
+      : '<div class="text-sm opacity-70">Henüz kayıtlı kişisel ilişki yok.</div>';
+    const historyRows = visibleHistory.length ? [...visibleHistory].reverse().map((event) => {
+      const typeText = event.type === 'created' ? 'Oluşturuldu'
+        : event.type === 'promoted' ? 'Önem kazandı'
+          : event.type === 'moved' ? 'Şehir değiştirdi'
+            : event.type === 'importance' ? 'Önem sınıfı değişti'
+              : event.type === 'state-changed' ? 'Özellik değişti' : 'Olay';
+      const stateMetric = event.type === 'state-changed'
+        ? (event.metric.startsWith('stats.')
+          ? NPC_STAT_LABELS[event.metric.slice(6)] || event.metric.slice(6)
+          : ({ loyalty: 'Sadakat', satisfaction: 'Memnuniyet',
+            reputation: 'İtibar', standing: 'Konum' }[event.metric] || event.metric)) : '';
+      const target = event.type === 'moved' ? ` — ${escapeHtml(event.settlementId)}`
+        : event.type === 'importance' ? ` — ${escapeHtml(event.from)} → ${escapeHtml(event.to)}`
+          : event.type === 'state-changed'
+            ? ` — ${escapeHtml(stateMetric)} ${escapeHtml(event.from)} → ${escapeHtml(event.to)} (${escapeHtml(event.reason)})`
+            : '';
+      return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${escapeHtml(event.day)}</strong></div>`;
+    }).join('') : '<div class="text-sm opacity-70">Kayıt yok.</div>';
+
+    const questView = getCharacterQuestAssignmentView({
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      characterQuestBindings: this.state?.characterQuestBindings,
+      questManager: this.getQuestManager?.(),
+      settlements: this.state?.map?.settlements || [],
+      day: this.state?.day, characterId: npcId,
+      settlementId: this.currentSettlement?.id,
+    });
+    const questStatusLabel = {
+      not_named: 'Sıradan kişilere görev ataması yapılamaz.',
+      not_alive: 'Hayatta olmayan kişi görevlendirilemez.',
+      not_in_city: 'Karakter bu şehirde değil.',
+      no_active_duty: 'Önce var olan, aktif bir organizasyon görevi gereklidir. Bu ekran görev veya makam oluşturmaz.',
+      duty_elsewhere: 'Karakterin aktif görevi başka bir şehirde.',
+      ready: 'Gerçek ve aktif organizasyon görevi doğrulandı.',
+    }[questView.status] || 'Görev durumu doğrulanamadı.';
+    const questRows = questView.quests.length ? questView.quests.map((quest) => `
+      <div class="city-overview-section" data-quest-row>
+        <div class="city-overview-row"><span>${escapeHtml(quest.title)}</span><strong>${escapeHtml(quest.templateId)}</strong></div>
+        ${quest.eligible ? (this.pendingNpcQuestId === quest.id ? `
+          <label class="text-xs" for="npcQuestReason">Atama gerekçesi (3–120 karakter)</label>
+          <input id="npcQuestReason" data-quest-reason type="text" maxlength="120"
+            class="w-full text-sm" value="Oyuncu tarafından göreve atandı" />
+          <button type="button" class="action-btn btn-gold text-xs mt-2"
+            data-action="confirm-npc-quest" data-id="${escapeHtml(quest.id)}">Atamayı onayla</button>
+        ` : `
+          <button type="button" class="action-btn btn-dark text-xs mt-2"
+            data-action="stage-npc-quest" data-id="${escapeHtml(quest.id)}">Bu göreve ata</button>
+        `) : `<div class="text-xs opacity-70">${escapeHtml(quest.reason)}</div>`}
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Bu şehirle ilgili atanabilir aktif görev yok.</div>';
+    const questHistory = questView.history.length ? questView.history.map((record) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(record.templateId)} · ${escapeHtml(record.status)}</span>
+        <strong>Gün ${escapeHtml(record.endedDay ?? record.assignedDay)}</strong>
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Kayıtlı görev geçmişi yok.</div>';
+
+    this.setPanelChrome(
+      'Karakter: ' + person.name,
+      `<div class="city-panel-meta-line">${escapeHtml(kindLabel)} · ${escapeHtml(statusLabel)}</div>`,
+      `
+        <button type="button" class="action-btn btn-dark text-xs mb-3" data-action="show-overview">Şehre dön</button>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kimlik</div>
+          <div class="city-overview-row"><span>Adı</span><strong>${escapeHtml(person.name)}</strong></div>
+          <div class="city-overview-row"><span>Yaş</span><strong>${age}</strong></div>
+          <div class="city-overview-row"><span>Rol profili</span><strong>${escapeHtml(roleLabel)}</strong></div>
+          <div class="city-overview-row"><span>Karakter türü</span><strong>${escapeHtml(kindLabel)}</strong></div>
+          <div class="text-xs opacity-70 mt-2">Rol profili, resmî görev veya askerî rütbe değildir.</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kişilik</div>
+          <div class="text-sm">${visibleTraits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Yetenekler</div>
+          ${statRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Toplumsal durum</div>
+          <div class="city-overview-row"><span>Sadakat</span><strong>${loyalty}/100</strong></div>
+          <div class="city-overview-row"><span>Memnuniyet</span><strong>${satisfaction}/100</strong></div>
+          <div class="city-overview-row"><span>İtibar</span><strong>${reputation}/100</strong></div>
+          <div class="city-overview-row"><span>Konum</span><strong>${standing}/100</strong></div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Önemli kişi / görev ataması</div>
+          <div class="text-xs opacity-80">${escapeHtml(questStatusLabel)}</div>
+          ${questView.duty ? `<div class="city-overview-row">
+            <span>Aktif organizasyon görevi</span>
+            <strong>${escapeHtml(questView.duty.branch)} / ${escapeHtml(questView.duty.assignmentRole)}</strong>
+          </div>` : ''}
+          ${this.questAssignmentFeedback ? `<div role="status" class="text-xs mt-2">${escapeHtml(this.questAssignmentFeedback)}</div>` : ''}
+          ${questRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Görev geçmişi</div>
+          ${questHistory}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Bilinen ilişkiler</div>
+          ${relationRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Geçmiş</div>
+          ${historyRows}
         </div>
       `,
     );
@@ -680,11 +901,23 @@ export default class CityServicesUI {
     const activeContracts = Array.isArray(this.party?.contracts) ? this.party.contracts : [];
     const acceptedIds = new Set(activeContracts.map((contract) => contract.id));
 
+    const sourceSecurity=Math.max(0,Math.min(100,Number(this.currentSettlement?.security??50)));
+    const condition=sourceSecurity<30?'Tehlikeli: eşkıya ve erzak sıkıntısı'
+      :sourceSecurity<60?'Tedbirli: yol güvenliği ve ikmal ihtiyaçları'
+        :'İstikrarlı: ticaret ve vilayet haberleşmesi';
+    const destinations=new Map((this.state?.map?.settlements||[])
+      .filter(s=>s?.id!=null).map(s=>[String(s.id),s]));
+
     this.setPanelChrome(
       'Hanlar ve Kervan Alani',
       '<div class="city-panel-meta-line">Servis: Han Isleri</div>',
       `
-        <div class="text-xs opacity-75 mb-2">Pano Kontratlari</div>
+        <div class="frame-dark p-3 mb-3">
+          <div class="font-bold text-sm">${escapeHtml(this.currentSettlement?.name||'Şehir')} — Şehir İhtiyaçları</div>
+          <div class="text-xs opacity-80">Güvenlik: ${Math.floor(sourceSecurity)}/100 · ${escapeHtml(condition)}</div>
+          <div class="text-xs opacity-75">Haber ve erzak görevleri mevcut şehirler arasında gerçek yolculuk gerektirir. Ödüller yalnız tamamlanan işlerden alınır.</div>
+        </div>
+        <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci, erzak, vilayet ve meclis dilekçeleri</div>
         ${offers.map((contract) => {
           const accepted = acceptedIds.has(contract.id);
           const label = this.describeContract(contract);
@@ -693,6 +926,9 @@ export default class CityServicesUI {
               <div>
                 <div class="font-bold text-sm">${escapeHtml(label.title)}</div>
                 <div class="text-xs opacity-80">${escapeHtml(label.desc)}</div>
+                ${contract.targetCityId!=null&&destinations.has(String(contract.targetCityId))
+                  ? `<div class="text-[11px] opacity-75">Hedef: ${escapeHtml(destinations.get(String(contract.targetCityId)).name||String(contract.targetCityId))} · Güvenlik: ${Math.floor(Number(destinations.get(String(contract.targetCityId)).security??50))}/100</div>`
+                  : ''}
                 <div class="text-[11px] opacity-70">${this.contractTypeBadge(contract)}</div>
               </div>
               <button class="action-btn ${accepted ? 'btn-dark' : 'btn-gold'} text-xs" data-action="accept-contract" data-id="${contract.id}" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept'}</button>
@@ -823,6 +1059,10 @@ export default class CityServicesUI {
       DEFEND: 'Savun',
       ESCORT: 'Eskort',
       ASSASSINATE: 'Suikast',
+      COURIER: 'Haberci',
+      RELIEF: 'Erzak Yardimi',
+      DISPATCH: 'Vilayet Yazismasi',
+      CIVIC_FOLLOWUP: 'Meclis Dilekçesi',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -841,7 +1081,16 @@ export default class CityServicesUI {
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
     }
-    const goal = contract?.type === 'DELIVER' ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
+    if (contract?.type === 'CIVIC_FOLLOWUP') {
+      const goal=Math.max(1,Number(contract.requiredCount||1));
+      return `Meclis görevi: ${progress}/${goal}`;
+    }
+    if (contract?.type === 'DISPATCH') {
+      const stops=Array.isArray(contract.dispatchStopNames)?contract.dispatchStopNames:[];
+      return `Mühür: ${progress}/3 · Siradaki: ${stops[progress]??'Tamamlandı'}`;
+    }
+    if (contract?.type === 'COURIER') return `Hedef sehir: ${contract?.targetCityId ?? '?'} (${progress}/1)`;
+    const goal = (contract?.type === 'DELIVER' || contract?.type === 'RELIEF') ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
     return `Ilerleme: ${progress}/${Math.floor(goal)}`;
   }
 
@@ -849,6 +1098,10 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'CIVIC_FOLLOWUP') return {title:contract.title||'Meclis Dilekçesi',desc:contract.desc||'Önceki günkü kararı takip et.'};
+    if (contract.type === 'DISPATCH') return {title:contract.title||'Vilayet Yazışması',desc:contract.desc||'İki vilayete sırayla git, geri dön.'};
+    if (contract.type === 'COURIER') return {title:contract.title||'Mühürlü Ferman',desc:contract.desc||'Gerçek hedef şehre ulaş.'};
+    if (contract.type === 'RELIEF') return {title:contract.title||'Halka Erzak Yardımı',desc:contract.desc||'Hedef şehir pazarına buğday teslim et.'};
     if (contract.type === 'DEFEND') return { title: contract.title || 'Defend City', desc: contract.desc || `Sehri savun (${contract.requiredCount || 1} savas).` };
     if (contract.type === 'ESCORT') return { title: contract.title || 'Escort Caravan', desc: contract.desc || `Kervani ${contract.cityId || 'A'} -> ${contract.targetCityId || 'B'} koru.` };
     if (contract.type === 'ASSASSINATE') return { title: contract.title || 'Eliminate Target', desc: contract.desc || 'Bandit liderini ortadan kaldir.' };

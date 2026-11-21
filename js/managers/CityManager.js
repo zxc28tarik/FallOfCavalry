@@ -4,6 +4,7 @@
  */
 
 import CityServicesUI from '../ui/city-services.js';
+import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -49,6 +50,7 @@ export class CityManager {
     const city = this.findCityById(cityId);
     if (!city) return false;
     city.security = Math.max(0, Math.min(100, Math.floor(Number(city.security ?? 50) + Number(amount || 0))));
+    city.civicDirty=true;
     return true;
   }
 
@@ -186,12 +188,46 @@ export class CityManager {
             active: true,
           };
         }
-        if (accepted) g.gameFlowManager.setLastEventLog('Contract accepted.');
+        if (accepted) {
+          g.gameFlowManager.setLastEventLog('Contract accepted.');
+          g.saveManager?.runAutosave?.('contract-accepted');
+        }
       },
       onCompleteContract: (contractId) => {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onCivicFollowup: (contract) => {
+            const city=(this.state?.map?.settlements||[]).find(row=>
+              String(row.id)===String(contract.cityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.civicSecurityBonus??0),
+            )));
+            city.civicDirty=true;
+          },
+          onCivicDispatch: (contract) => {
+            const cities=this.state?.map?.settlements||[];
+            const ids=new Set((contract.dispatchStops||[]).map(String));
+            ids.add(String(contract.cityId));
+            for(const city of cities){
+              if(!ids.has(String(city.id)))continue;
+              city.civicDirty=true;
+              city.security=Math.max(0,Math.min(100,Math.floor(
+                Number(city.security??50)+Number(contract.civicSecurityBonus??1),
+              )));
+            }
+          },
+          onCivicRelief: (contract) => {
+            const beneficiary=(this.state?.map?.settlements||[]).find(city=>
+              String(city.id)===String(contract.targetCityId));
+            if (beneficiary) {
+              beneficiary.civicDirty=true;
+              beneficiary.security=Math.max(0,Math.min(100,
+              Math.floor(Number(beneficiary.security??50)
+                + Number(contract.civicSecurityBonus??3))));
+            }
+          },
           onRelationBonus: (contract) => {
             const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
             applyContractRelationBonus({
@@ -210,6 +246,7 @@ export class CityManager {
           if (extra > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + extra);
           const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
           g.gameFlowManager.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${boosted} renown${bonusText}${extra > 0 ? ' (pilgrimage bonus)' : ''}`);
+          g.saveManager?.runAutosave?.('contract-completed');
         }
       },
       onDiplomacyAction: (summary) => {
@@ -226,9 +263,28 @@ export class CityManager {
         const ok = g.economyManager.healCurrentUnit();
         if (ok) g.saveManager.runAutosave('healing');
       },
+      onCivicDecision: (decisionId) => {
+        const result=applyCivicDecision({
+          city:this.state?.city,party:g.playerParty,day:this.state?.day,decisionId,
+        });
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        if(result.ok)g.saveManager?.runAutosave?.('city-civic-decision');
+        return result;
+      },
       onConstruct: (result) => {
         g.gameFlowManager.setLastEventLog(result?.message || 'Insaat tamamlandi.');
         g.saveManager.runAutosave('city-build');
+      },
+      getQuestManager: () => g.questManager,
+      onAssignQuest: (questId, characterId, reason) => {
+        const ok = g.gameFlowManager.assignWorldCharacterToQuest(questId, characterId, {
+          reason,
+        });
+        g.gameFlowManager.setLastEventLog(ok
+          ? 'Önemli karakter gerçek göreve atandı.'
+          : 'Görevlendirme reddedildi; karakter görevi veya hedef uyuşmuyor.');
+        if (ok) g.saveManager.runAutosave('character-quest-assignment');
+        return ok;
       },
       getFactionContext: (settlement) => g.diplomacyManager.getCityFactionContext(settlement),
       onClose: () => g.economyManager.exitCityServices(),

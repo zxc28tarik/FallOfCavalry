@@ -42,7 +42,14 @@ export class QuestCompletionOverlay {
       if (!path.available && path.reasonIfLocked) button.title = path.reasonIfLocked;
       button.addEventListener('click', () => {
         if (!path.available) return;
-        this.questManager?.completeQuest?.(payload.questId, path.id);
+        const accepted = this.questManager?.completeQuest?.(payload.questId, path.id);
+        // The world can change between showing a choice and clicking it.
+        // Never dismiss a stale or rejected quest as if it succeeded.
+        if (accepted !== true) {
+          button.disabled = true;
+          button.title = 'Görev artık bu yoldan tamamlanamıyor.';
+          return;
+        }
         this.modeManager?.popOverlay?.();
         this.hide();
       });
