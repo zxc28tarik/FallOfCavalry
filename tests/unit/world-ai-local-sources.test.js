@@ -103,7 +103,7 @@ describe('V1.45 — local canonical road and real city sources of base world par
     expect(road?.city.id).toBe('b');
     expect(road.path).toEqual(roadWorldWaypoints(world,world.roads[0]));
     const p=spawnPartyCaravan(world,{},'ottoman',cfg,{playerParty});
-    expect(p.homeCityId).toBeOneOf(['a','b']);
+    expect(['a','b']).toContain(p.homeCityId);
     expect(p.factionId).toBe('ottoman');
     expect(within(p)).toBe(true);
     expect(world.settlements.some(s=>s.x===p.targetX&&s.y===p.targetY))
@@ -136,7 +136,8 @@ describe('V1.45 — local canonical road and real city sources of base world par
     const b=spawnPartyBandit(world,{},cfg,{tradeRoutes,playerParty});
     const start={x:b.x,y:b.y};
     const ai={parties:[b],lastRespawnDay:1};
-    const encounters=updateWorldParties({
+    let encounters=[];
+    for(let i=0;i<6;i++)encounters=updateWorldParties({
       aiState:ai,worldState:world,tradeRoutes,playerParty,
       cfg,factions:{},dtSec:0.1,
     });
