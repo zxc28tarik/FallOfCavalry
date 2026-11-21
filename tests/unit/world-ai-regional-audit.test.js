@@ -1,4 +1,5 @@
 import {describe,it,expect} from 'vitest';
+import {Buffer} from 'node:buffer';
 import {streamWorldAiRegion} from '../../js/systems/world-ai-regional-stream.js';
 import {auditWorldAiRegionalStorage} from '../../js/systems/world-ai-regional-audit.js';
 
@@ -68,10 +69,10 @@ describe('V1.47 — sustained region identity and storage diagnostics',()=>{
     }],regionHistory:[{x:1,y:2,lastDay:1}]};
     const a=auditWorldAiRegionalStorage(ai);
     expect(a.status).toBe('MEASURED');
-    expect(a.snapshotBytes).toBe(new TextEncoder().encode(
-      JSON.stringify({parties:ai.parties,dormantParties:ai.dormantParties,
-        regionHistory:ai.regionHistory}),
-    ).length);
+    expect(a.snapshotBytes).toBe(Buffer.byteLength(JSON.stringify({
+      parties:ai.parties,dormantParties:ai.dormantParties,
+      regionHistory:ai.regionHistory,
+    }), 'utf8'));
     expect(a.note).toContain('not compressed disk-save size');
   });
 });
