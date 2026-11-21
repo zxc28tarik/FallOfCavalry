@@ -148,7 +148,7 @@ export function findRoadPath(worldState, fromX, fromY, toX, toY) {
 }
 
 export function createInitialWorldAiState() {
-  return { parties: [], lastRespawnDay: 0 };
+  return { parties: [], lastRespawnDay: 0, lastVisibleRespawnDay: null };
 }
 
 export function spawnPartyBandit(worldState, factions, cfg = {}, { tradeRoutes = [], routeIndex = 0 } = {}) {
