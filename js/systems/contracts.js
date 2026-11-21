@@ -7,7 +7,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -265,6 +265,36 @@ function createCourierContract({cityId,day,rng,map,ownerFactionId,cityName}) {
     targetCityId:target.id,requiredCount:1,
   };
 }
+/**
+ * A multi-stage administrative dispatch. All legs resolve to actual cities,
+ * and a player must visit two different destinations before returning home.
+ */
+function createDispatchContract({cityId,day,rng,map,ownerFactionId,cityName}) {
+  const source=getSettlementById(map,cityId);
+  const choices=getSettlements(map)
+    .filter(city=>String(city.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(source,a)-distanceBetweenSettlements(source,b))
+    .slice(0,24);
+  if(choices.length<2)return null;
+  const first=pickOne(choices,rng);
+  const second=pickOne(choices.filter(s=>String(s.id)!==String(first.id)),rng);
+  if(!second)return null;
+  return {
+    ...buildContractBase({
+      id:`ct-dispatch-${cityId}-${day}-${Math.floor(rng()*10000)}`,
+      type:'DISPATCH',cityId,title:'Vilayetler Arası Mühürlü Yazışma',
+      desc:`${cityName} → ${settlementName(first)} → ${settlementName(second)} → ${cityName}: belgeleri sırayla teslim edip dön.`,
+      rewardGold:CONST.CONTRACTS.REWARD_GOLD_BASE*1.8,
+      rewardRenown:CONST.CONTRACTS.REWARD_RENOWN_BASE*1.5,
+      ownerFactionId,
+    }),
+    targetCityId:first.id,
+    dispatchStops:[first.id,second.id,cityId],
+    dispatchStopNames:[settlementName(first),settlementName(second),cityName],
+    requiredCount:3,progress:0,civicSecurityBonus:1,
+  };
+}
+
 /** Food relief is credited only by a real successful wheat sale at target. */
 function createReliefContract({cityId,day,rng,map,ownerFactionId,cityName}) {
   const source=getSettlementById(map,cityId);
@@ -325,9 +355,9 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     selected[replaceIndex] = warType;
   }
 
-  // Keep the original three offers, then add two separate civilian paths.
-  // During wartime, the existing DEFEND/ASSASSINATE slot remains intact.
-  const expanded = [...selected.slice(0,3),'COURIER','RELIEF'];
+  // Original military/commercial work plus three different civil missions.
+  // Never remove the wartime military slot.
+  const expanded = [...selected.slice(0,3),'COURIER','RELIEF','DISPATCH'];
   const contracts = expanded.map((type) => {
     if (!CONTRACT_TYPES.includes(type)) return null;
     if (type === 'BANDIT') return createBanditContract({ cityId, day, seed: worldSeed, rng, ownerFactionId, cityName });
@@ -338,6 +368,7 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     if (type === 'ASSASSINATE') return createAssassinateContract({ cityId, day, rng, seed: worldSeed, ownerFactionId });
     if (type === 'COURIER') return createCourierContract({cityId,day,rng,map:chosenMap,ownerFactionId,cityName});
     if (type === 'RELIEF') return createReliefContract({cityId,day,rng,map:chosenMap,ownerFactionId,cityName});
+    if (type === 'DISPATCH') return createDispatchContract({cityId,day,rng,map:chosenMap,ownerFactionId,cityName});
     return null;
   }).filter(Boolean);
 
@@ -394,6 +425,13 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = 1;
       }
     }
+    if (contract.type === 'DISPATCH' && event.type === 'CITY_VISITED') {
+      const stops=Array.isArray(contract.dispatchStops)?contract.dispatchStops:[];
+      const index=Math.max(0,Math.floor(Number(contract.progress)||0));
+      if(index<stops.length && event.cityId!=null
+        && String(event.cityId)===String(stops[index]))
+        contract.progress=index+1;
+    }
     if (contract.type === 'COURIER' && event.type === 'CITY_VISITED') {
       if (String(event.cityId) === String(contract.targetCityId)) contract.progress=1;
     }
@@ -449,6 +487,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   // unverified quest title or a synthetic regional economy location.
   if (contract.type === 'RELIEF' && typeof options?.onCivicRelief === 'function') {
     options.onCivicRelief(completed);
+  }
+  if (contract.type === 'DISPATCH' && typeof options?.onCivicDispatch === 'function') {
+    options.onCivicDispatch(completed);
   }
   party.contracts.splice(idx, 1);
 
