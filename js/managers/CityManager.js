@@ -50,6 +50,7 @@ export class CityManager {
     const city = this.findCityById(cityId);
     if (!city) return false;
     city.security = Math.max(0, Math.min(100, Math.floor(Number(city.security ?? 50) + Number(amount || 0))));
+    city.civicDirty=true;
     return true;
   }
 
@@ -202,6 +203,7 @@ export class CityManager {
             ids.add(String(contract.cityId));
             for(const city of cities){
               if(!ids.has(String(city.id)))continue;
+              city.civicDirty=true;
               city.security=Math.max(0,Math.min(100,Math.floor(
                 Number(city.security??50)+Number(contract.civicSecurityBonus??1),
               )));
@@ -210,9 +212,12 @@ export class CityManager {
           onCivicRelief: (contract) => {
             const beneficiary=(this.state?.map?.settlements||[]).find(city=>
               String(city.id)===String(contract.targetCityId));
-            if (beneficiary) beneficiary.security=Math.max(0,Math.min(100,
+            if (beneficiary) {
+              beneficiary.civicDirty=true;
+              beneficiary.security=Math.max(0,Math.min(100,
               Math.floor(Number(beneficiary.security??50)
                 + Number(contract.civicSecurityBonus??3))));
+            }
           },
           onRelationBonus: (contract) => {
             const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
