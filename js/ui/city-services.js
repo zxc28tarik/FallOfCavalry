@@ -881,10 +881,22 @@ export default class CityServicesUI {
     const activeContracts = Array.isArray(this.party?.contracts) ? this.party.contracts : [];
     const acceptedIds = new Set(activeContracts.map((contract) => contract.id));
 
+    const sourceSecurity=Math.max(0,Math.min(100,Number(this.currentSettlement?.security??50)));
+    const condition=sourceSecurity<30?'Tehlikeli: eşkıya ve erzak sıkıntısı'
+      :sourceSecurity<60?'Tedbirli: yol güvenliği ve ikmal ihtiyaçları'
+        :'İstikrarlı: ticaret ve vilayet haberleşmesi';
+    const destinations=new Map((this.state?.map?.settlements||[])
+      .filter(s=>s?.id!=null).map(s=>[String(s.id),s]));
+
     this.setPanelChrome(
       'Hanlar ve Kervan Alani',
       '<div class="city-panel-meta-line">Servis: Han Isleri</div>',
       `
+        <div class="frame-dark p-3 mb-3">
+          <div class="font-bold text-sm">${escapeHtml(this.currentSettlement?.name||'Şehir')} — Şehir İhtiyaçları</div>
+          <div class="text-xs opacity-80">Güvenlik: ${Math.floor(sourceSecurity)}/100 · ${escapeHtml(condition)}</div>
+          <div class="text-xs opacity-75">Haber ve erzak görevleri mevcut şehirler arasında gerçek yolculuk gerektirir. Ödüller yalnız tamamlanan işlerden alınır.</div>
+        </div>
         <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci, erzak ve vilayet yazışmaları</div>
         ${offers.map((contract) => {
           const accepted = acceptedIds.has(contract.id);
@@ -894,6 +906,9 @@ export default class CityServicesUI {
               <div>
                 <div class="font-bold text-sm">${escapeHtml(label.title)}</div>
                 <div class="text-xs opacity-80">${escapeHtml(label.desc)}</div>
+                ${contract.targetCityId!=null&&destinations.has(String(contract.targetCityId))
+                  ? `<div class="text-[11px] opacity-75">Hedef: ${escapeHtml(destinations.get(String(contract.targetCityId)).name||String(contract.targetCityId))} · Güvenlik: ${Math.floor(Number(destinations.get(String(contract.targetCityId)).security??50))}/100</div>`
+                  : ''}
                 <div class="text-[11px] opacity-70">${this.contractTypeBadge(contract)}</div>
               </div>
               <button class="action-btn ${accepted ? 'btn-dark' : 'btn-gold'} text-xs" data-action="accept-contract" data-id="${contract.id}" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept'}</button>
