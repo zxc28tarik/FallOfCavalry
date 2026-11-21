@@ -35,12 +35,14 @@ async function realPartyLifecycle(page,frames) {
       return {
         total:rows.length,live:rows.filter(p=>p?.alive!==false).length,
         ids,kinds,lastRespawnDay:ai?.lastRespawnDay??null,
+        lastVisibleRespawnDay:ai?.lastVisibleRespawnDay??null,
         stateRefMatches:world?.state?.worldAi===ai,
       };
     };
     const publicSnap=s=>({
       total:s.total,live:s.live,kinds:s.kinds,
       lastRespawnDay:s.lastRespawnDay,
+      lastVisibleRespawnDay:s.lastVisibleRespawnDay,
       stateRefMatches:s.stateRefMatches,
       // For initial diagnostic, preserve only tiny examples, not all IDs.
       exampleIds:s.ids.slice(0,5),
@@ -229,6 +231,39 @@ async function run() {
     if(report.scene.day===1&&report.summary.basePhaseCreatedIds>10)
       throw Error('V1.42 recurring base-party spawn/cull regression: '+
         report.summary.basePhaseCreatedIds+' base parties created in 32 frames');
+    // V1.43: extra civilians can receive their initial 9-party wave once,
+    // but must not refill again on the same in-game day after offscreen cull.
+    const extraCreated=report.summary.ensuredCreatedIds
+      - report.summary.basePhaseCreatedIds;
+    if(report.scene.day===1&&extraCreated>9)
+      throw Error('V1.43 recurring extra-party spawn/cull regression: '+
+        extraCreated+' extra party IDs created in 32 frames');
+    report.extraCreatedIds=extraCreated;
+    // Actual quick save -> quick load must preserve the cooldown. This
+    // disposable browser is never attached to the user's save files.
+    report.visibleCooldownRoundtrip=await page.evaluate(()=>{
+      const g=window.game,ai=g.worldManager.worldAi;
+      const before=ai.lastVisibleRespawnDay;
+      const beforeCount=ai.parties.filter(p=>[
+        'refugee','merchant','messenger','villagers','noble',
+      ].includes(p.kind)).length;
+      const saved=g.saveManager?.quickSave?.()===true;
+      const loaded=saved&&g.saveManager?.quickLoad?.()===true;
+      const after=g.worldManager.worldAi.lastVisibleRespawnDay;
+      const mgr=g.worldManager.simManager.worldPartyManager;
+      if(loaded)mgr.ensureWorldParties();
+      const afterCount=g.worldManager.worldAi.parties.filter(p=>[
+        'refugee','merchant','messenger','villagers','noble',
+      ].includes(p.kind)).length;
+      return {saved,loaded,before,after,beforeCount,afterCount,
+        sameStamp:before===after,noImmediateRefill:afterCount===beforeCount};
+    });
+    if(!report.visibleCooldownRoundtrip.saved
+      ||!report.visibleCooldownRoundtrip.loaded
+      ||!report.visibleCooldownRoundtrip.sameStamp
+      ||!report.visibleCooldownRoundtrip.noImmediateRefill)
+      throw Error('V1.43 world-visible-party save/load cooldown mismatch: '+
+        JSON.stringify(report.visibleCooldownRoundtrip));
     report.status='PASS_REGRESSION';
     const keySummary={
       ensureCalls:report.summary.ensureCalls,
