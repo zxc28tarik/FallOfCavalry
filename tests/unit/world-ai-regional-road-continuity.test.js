@@ -11,6 +11,7 @@ import {
 } from '../../js/systems/world-ai.js';
 import {validBanditRoute} from '../../js/systems/quest-world-party-links.js';
 import {SaveManager} from '../../js/managers/SaveManager.js';
+import WorldPartyManager from '../../js/managers/WorldPartyManager.js';
 
 const city=(id,tx,ty,owner='ottoman')=>({
   id,tx,ty,x:(tx+0.5)*32,y:(ty+0.5)*32,ownerFactionId:owner,
@@ -116,6 +117,39 @@ describe('V1.46 — real canonical multileg travel',()=>{
 });
 
 describe('V1.46 — reversible regional party streaming',()=>{
+  it('parks gradual out-of-range departures without route-bandit loot disposal',()=>{
+    const p=row('slow-leaving-bandit','bandit','a',a.x,a.y,
+      {targetX:b.x,targetY:b.y});
+    const ai=init([p]);
+    ai.dormantParties=[];
+    let disposal=0;
+    updateWorldParties({
+      aiState:ai,worldState:map,playerParty:nearD,cfg,dtSec:0.016,
+      onBanditRemoved:()=>{disposal++;},
+    });
+    expect(ai.parties).toHaveLength(0);
+    expect(ai.dormantParties).toHaveLength(1);
+    expect(ai.dormantParties[0]).toBe(p);
+    expect(p.alive).toBe(true);
+    expect(disposal).toBe(0);
+  });
+  it('never schedules surprise encounters while stationary inspecting markets',()=>{
+    const manager=new WorldPartyManager();
+    let triggered=0;
+    const world={
+      state:{mode:'map',encounter:null},
+      enemyParties:[],
+      getMovementContextAt:()=>({encounterMult:99}),
+      simManager:{triggerEncounter:()=>{triggered++;return true;}},
+    };
+    const game={playerParty:{
+      x:a.x,y:a.y,hasDestination:false,moveState:'idle',vx:0,vy:0,
+    }};
+    manager.init(world,game);
+    for(let i=0;i<200;i++)
+      expect(manager.checkSurpriseEncounters()).toBe(false);
+    expect(triggered).toBe(0);
+  });
   it('parks ordinary distant parties with their original objects instead of killing them',()=>{
     const near=row('old-patrol','patrol','a',a.x,a.y);
     const ai=init([near]);
