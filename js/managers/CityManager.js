@@ -4,6 +4,7 @@
  */
 
 import CityServicesUI from '../ui/city-services.js';
+import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -247,6 +248,14 @@ export class CityManager {
         g.economyManager.cityHealerCursor = Math.max(0, Math.floor(Number(index) || 0));
         const ok = g.economyManager.healCurrentUnit();
         if (ok) g.saveManager.runAutosave('healing');
+      },
+      onCivicDecision: (decisionId) => {
+        const result=applyCivicDecision({
+          city:this.state?.city,party:g.playerParty,day:this.state?.day,decisionId,
+        });
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        if(result.ok)g.saveManager?.runAutosave?.('city-civic-decision');
+        return result;
       },
       onConstruct: (result) => {
         g.gameFlowManager.setLastEventLog(result?.message || 'Insaat tamamlandi.');
