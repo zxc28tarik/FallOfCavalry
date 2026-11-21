@@ -40,6 +40,18 @@ const tally=ai=>Object.fromEntries(EXTRA_KINDS.map(k=>[
 ]));
 const extraCount=ai=>ai.parties.filter(p=>EXTRA_KINDS.includes(p.kind)).length;
 describe('V1.43 visible-party respawn contract',()=>{
+  it('does not spawn world parties or begin cooldown before the start menu finishes',()=>{
+    const {manager,world}=makeWorld();
+    world.state.mode='start';
+    manager.ensureWorldParties();
+    expect(world.worldAi.parties).toHaveLength(0);
+    expect(world.worldAi.lastRespawnDay).toBe(0);
+    expect(world.worldAi.lastVisibleRespawnDay).toBeNull();
+    world.state.mode='map';
+    manager.ensureWorldParties();
+    expect(tally(world.worldAi)).toEqual(EXTRA_COUNTS);
+    expect(world.worldAi.lastVisibleRespawnDay).toBe(1);
+  });
   it('creates all nine original visible parties immediately in a fresh world',()=>{
     const {manager,world}=makeWorld();
     manager.ensureWorldParties();
