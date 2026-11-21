@@ -60,6 +60,9 @@ jobs:
       - name: Compare independent Chrome graphics backends on the full game world
         run: node tools/browser-world-backend-compare.mjs --url http://127.0.0.1:4173 --seed 1337
 
+      - name: Diagnose cold-to-warm real world simulation and browser frame work
+        run: node tools/browser-world-warmup-profile.mjs --url http://127.0.0.1:4173 --seed 1337
+
       - name: Upload browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4
