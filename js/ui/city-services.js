@@ -885,7 +885,7 @@ export default class CityServicesUI {
       'Hanlar ve Kervan Alani',
       '<div class="city-panel-meta-line">Servis: Han Isleri</div>',
       `
-        <div class="text-xs opacity-75 mb-2">Pano Kontratlari</div>
+        <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci ve erzak işleri</div>
         ${offers.map((contract) => {
           const accepted = acceptedIds.has(contract.id);
           const label = this.describeContract(contract);
@@ -1024,6 +1024,8 @@ export default class CityServicesUI {
       DEFEND: 'Savun',
       ESCORT: 'Eskort',
       ASSASSINATE: 'Suikast',
+      COURIER: 'Haberci',
+      RELIEF: 'Erzak Yardimi',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1042,7 +1044,8 @@ export default class CityServicesUI {
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
     }
-    const goal = contract?.type === 'DELIVER' ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
+    if (contract?.type === 'COURIER') return `Hedef sehir: ${contract?.targetCityId ?? '?'} (${progress}/1)`;
+    const goal = (contract?.type === 'DELIVER' || contract?.type === 'RELIEF') ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
     return `Ilerleme: ${progress}/${Math.floor(goal)}`;
   }
 
@@ -1050,6 +1053,8 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'COURIER') return {title:contract.title||'Mühürlü Ferman',desc:contract.desc||'Gerçek hedef şehre ulaş.'};
+    if (contract.type === 'RELIEF') return {title:contract.title||'Halka Erzak Yardımı',desc:contract.desc||'Hedef şehir pazarına buğday teslim et.'};
     if (contract.type === 'DEFEND') return { title: contract.title || 'Defend City', desc: contract.desc || `Sehri savun (${contract.requiredCount || 1} savas).` };
     if (contract.type === 'ESCORT') return { title: contract.title || 'Escort Caravan', desc: contract.desc || `Kervani ${contract.cityId || 'A'} -> ${contract.targetCityId || 'B'} koru.` };
     if (contract.type === 'ASSASSINATE') return { title: contract.title || 'Eliminate Target', desc: contract.desc || 'Bandit liderini ortadan kaldir.' };
