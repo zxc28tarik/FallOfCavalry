@@ -6,6 +6,7 @@
 import {
   canonicalRoadForRoute, roadWorldWaypoints, patrolWaypointsOnRoad,
 } from './world-trade-road-topology.js';
+import {localBanditRouteAnchors} from './world-ai-local-sources.js';
 
 const ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/;
 const rec = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -67,21 +68,35 @@ export function validBanditRoute(party, worldState, tradeRoutes) {
  * Only called for a NEW engine-generated bandit. Spawn it on a real trade
  * route instead of labeling an unrelated bandit elsewhere as route-linked.
  */
-export function spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex = 0) {
+export function spawnBanditOnRegisteredRoute(worldState, tradeRoutes, routeIndex = 0,
+  { playerParty = null, cfg = {} } = {}) {
   const valid = (Array.isArray(tradeRoutes) ? tradeRoutes : [])
     .map((route) => registeredTradeRoute(worldState, tradeRoutes, route?.id))
     .filter(Boolean);
   if (!valid.length) return null;
-  const priority = valid.filter((v) => {
-    const route = tradeRoutes.find((r) => r?.id === v.routeId);
+  const inActiveRegion = Number.isFinite(playerParty?.x) && Number.isFinite(playerParty?.y);
+  // The player's active area is a streaming window; never relabel a random
+  // local bandit as a distant real-route threat. Instead use a waypoint on a
+  // physically registered road that is ACTUALLY in that active area.
+  const candidates = inActiveRegion
+    ? valid.map(link => ({
+      link, anchors: localBanditRouteAnchors(worldState, link, playerParty, cfg),
+    })).filter(row => row.anchors.length)
+    : valid.map(link => ({ link, anchors: [] }));
+  if (!candidates.length) return null;
+  const priority = candidates.filter(({ link }) => {
+    const route = tradeRoutes.find(r => r?.id === link.routeId);
     return Boolean(route?.recentLoss || Number(route?.damage ?? 0) > 0);
   });
-  const pool = priority.length ? priority : valid;
-  const link = pool[Math.abs(Math.floor(routeIndex)) % pool.length];
+  const pool = priority.length ? priority : candidates;
+  const row = pool[Math.abs(Math.floor(routeIndex)) % pool.length];
+  const link = row.link;
   const roadPoints = roadWorldWaypoints(worldState, link.road);
-  const middle = roadPoints.length
-    ? roadPoints[Math.floor(roadPoints.length / 2)]
-    : { x: (link.from.x + link.to.x) / 2, y: (link.from.y + link.to.y) / 2 };
+  const middle = inActiveRegion
+    ? row.anchors[Math.floor(row.anchors.length / 2)]
+    : roadPoints.length
+      ? roadPoints[Math.floor(roadPoints.length / 2)]
+      : { x: (link.from.x + link.to.x) / 2, y: (link.from.y + link.to.y) / 2 };
   return {
     routeId: link.routeId,
     x: middle.x,
