@@ -291,7 +291,7 @@ export function getBanditCap(worldEvents, defaultCap, eventsCfg = null) {
 
 export function ensureWorldParties({
   aiState, worldState, factions, cfg, currentDay, banditCapOverride,
-  tradeRoutes = [], playerParty = null,
+  tradeRoutes = [], playerParty = null, forceRegionPopulation = false,
 }) {
   if (!aiState || !Array.isArray(aiState.parties)) return;
   const respawnDays = Number(cfg?.RESPAWN_INTERVAL_DAYS ?? 3);
@@ -307,7 +307,7 @@ export function ensureWorldParties({
 
   const elapsed = dayNow - Number(aiState.lastRespawnDay ?? 0);
   const hasRoomByType = (kind, max) => aiState.parties.filter((p) => p?.alive !== false && p?.kind === kind).length < max;
-  if (!initialPopulation && elapsed < respawnDays) return;
+  if (!initialPopulation && elapsed < respawnDays && !forceRegionPopulation) return;
 
   const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
   while (hasRoomByType('bandit', banditCap)) {
@@ -323,7 +323,10 @@ export function ensureWorldParties({
     aiState.parties.push(spawnPartyCaravan(worldState, factions, null, cfg, { playerParty }));
   }
 
-  aiState.lastRespawnDay = dayNow;
+  // A new world region is NOT a new global game day. Keep the original
+  // 3-day respawn stamp untouched when filling a freshly visited region.
+  if (initialPopulation || elapsed >= respawnDays || !forceRegionPopulation)
+    aiState.lastRespawnDay = dayNow;
 }
 
 function pickNextTarget(party, worldState, tradeRoutes) {
@@ -365,7 +368,7 @@ function factionIsHostileToPlayer(partyFactionId, playerFactionId) {
 
 export function updateWorldParties({
   aiState, worldState, playerParty, factions: _factions, cfg, dtSec,
-  tradeRoutes = [], onBanditRemoved = null,
+  tradeRoutes = [], onBanditRemoved = null, protectedRouteIds = [],
 }) {
   if (!aiState || !Array.isArray(aiState.parties)) return [];
   const dt = Number(dtSec ?? 0);
@@ -429,7 +432,10 @@ export function updateWorldParties({
       if (aggro > 0 && playerDist <= aggro && factionIsHostileToPlayer(party.factionId, playerFactionId)) {
         encounters.push({ type: 'BANDIT_ENCOUNTER', partyId: party.id, factionId: party.factionId, x: party.x, y: party.y });
       }
-      if (playerDist > despawnDistance) {
+      const routePinned = party.kind === 'bandit' && party.routeId != null
+        && protectedRouteIds.includes(String(party.routeId))
+        && Boolean(validBanditRoute(party, worldState, tradeRoutes));
+      if (playerDist > despawnDistance && !routePinned) {
         party.alive = false;
         // Observational only: classify the actual removal of sourced loot.
         if (party.kind === 'bandit' && typeof onBanditRemoved === 'function')
