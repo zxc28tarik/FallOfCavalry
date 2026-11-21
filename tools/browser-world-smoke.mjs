@@ -1347,7 +1347,15 @@ async function main() {
     // bandit combat victories and imported ledger claims.
     const missingCaravanRecon = await page.evaluate(() => {
       const g = window.game;
-      if (g.state.mode !== 'map') return { ready: false, reason: 'not_on_map' };
+      if (g.state.mode !== 'map') return {
+        ready: false, reason: 'not_on_map', mode: g.state.mode,
+        encounter: g.state.encounter?.enemyId || null,
+        encounterType: g.state.encounter?.type || null,
+        player: { x: g.playerParty?.x, y: g.playerParty?.y },
+        activeParties: g.worldManager.worldAi.parties.length,
+        dormantParties: g.worldManager.worldAi.dormantParties?.length || 0,
+        regionalAnchor: g.worldManager.worldAi.regionAnchor || null,
+      };
       const roadRoutes = g.economyManager.ensureTradeRoutes().filter(r => r.roadBacked);
       const busy = new Set(g.questManager.activeQuests.map(q => q.targetRouteId));
       const route = roadRoutes.find(r => !busy.has(r.id));
