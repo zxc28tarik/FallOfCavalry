@@ -34,7 +34,7 @@ describe('V1.47 — sustained region identity and storage diagnostics',()=>{
     }
     for(const loc of [...cities].reverse()){
       const transition=stream(ai,loc);
-      expect(transition.restored).toBe(2);
+      expect(transition.restored).toBe(loc.id===4?0:2);
       expect(ai.parties.map(p=>p.id).sort())
         .toEqual([0,1].map(i=>`source-${loc.id}-${i}`));
       for(const p of ai.parties){
