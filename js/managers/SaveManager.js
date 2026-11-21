@@ -98,7 +98,13 @@ function storeWorldParty(party) {
 function restoreWorldParty(party) {
   // Save-supplied road paths are NOT an authority. The real road registry
   // reconstructs the next leg at the current coordinate when resuming.
-  return { ...storeWorldParty(party), path: null, pathIndex: 0 };
+  return {
+    ...storeWorldParty(party), path: null, pathIndex: 0,
+    // A loaded hostile patrol should not start a battle before the player
+    // regains control of the saved city, quest and market interface.
+    regionEntryGraceSeconds:
+      party?.kind==='patrol'||party?.kind==='bandit'?6:0,
+  };
 }
 const validRegionPoint=p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y);
 
