@@ -106,14 +106,19 @@ async function run(){
       ||!wave.player||errors.length)throw Error('No complete original full-world start wave, errors='+
         errors.slice(0,3).join('; '));
     const radius=40; // Actual default WORLD_AI DESPAWN_DISTANCE (tiles)
+    // A new campaign selects the faction start tile AFTER its initial world
+    // generation; compare every original spawn with the ACTUAL final player
+    // position, not an earlier constructor/menu fallback (often 320,320).
+    const actualPlayer=snapshot.after.player;
+    if(!actualPlayer)throw Error('Post-start real player location unavailable');
     const common=(snapshot,parties)=>({
-      player:snapshot.player,settlements:snapshot.settlements,
+      player:actualPlayer,settlements:snapshot.settlements,
       tileSize:snapshot.tileSize,despawnTiles:radius,parties,
     });
     const beforeProfile=inspectPartyGeography(common(wave,wave.parties));
     const afterProfile=inspectPartyGeography(common(snapshot.after,snapshot.after.parties));
     report.originalWave={
-      player:wave.player,width:wave.width,height:wave.height,
+      spawnTimePlayer:wave.player,player:actualPlayer,width:wave.width,height:wave.height,
       settlementCount:wave.mapSettlementCount,
       roads:wave.roads,day:wave.lastRespawnDay,
       lastVisibleRespawnDay:wave.lastVisibleRespawnDay,
@@ -135,7 +140,7 @@ async function run(){
       status:report.status,
       scene:{settlements:wave.mapSettlementCount,roads:wave.roads,
         worldSize:[wave.width,wave.height],tileSize:wave.tileSize},
-      player:wave.player,
+      spawnTimePlayer:wave.player,actualPlayer,
       firstWave:beforeProfile,
       after:{
         worldPartyCount:report.afterLive.worldPartyCount,
