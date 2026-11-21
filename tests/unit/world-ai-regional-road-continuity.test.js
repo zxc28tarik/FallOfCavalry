@@ -147,14 +147,15 @@ describe('V1.46 — reversible regional party streaming',()=>{
       path:[{x:nearD.x+20,y:nearD.y}],pathIndex:0,
       regionEntryGraceSeconds:6,
     }]);
+    const hostilePlayer={...nearD,factionId:'ottoman'};
     const first=updateWorldParties({
-      aiState:ai2,worldState:map,playerParty:nearD,
+      aiState:ai2,worldState:map,playerParty:hostilePlayer,
       cfg,dtSec:1,
     });
     expect(first).toHaveLength(0);
     expect(ai2.parties[0].regionEntryGraceSeconds).toBe(5);
     const later=updateWorldParties({
-      aiState:ai2,worldState:map,playerParty:nearD,
+      aiState:ai2,worldState:map,playerParty:hostilePlayer,
       cfg,dtSec:5.5,
     });
     expect(later.some(e=>e.partyId==='foreign-patrol')).toBe(true);
