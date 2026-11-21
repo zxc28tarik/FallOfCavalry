@@ -4,7 +4,14 @@
  * Use measured trends before considering any save format or aging changes.
  */
 const validId=p=>p?.id!=null&&String(p.id).length>0;
-const bytes=text=>new TextEncoder().encode(text).length;
+const bytes=text=>{
+  let total=0;
+  for(const character of text){
+    const cp=character.codePointAt(0);
+    total+=cp<=0x7f?1:cp<=0x7ff?2:cp<=0xffff?3:4;
+  }
+  return total;
+};
 const unique=(rows)=>new Set(rows.filter(validId).map(p=>String(p.id)));
 const safeArray=rows=>Array.isArray(rows)?rows:[];
 
