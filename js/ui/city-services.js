@@ -1,6 +1,7 @@
 import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
+import { getCharacterPetition } from '../systems/city-character-petitions.js';
 import {
   CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
@@ -50,6 +51,7 @@ export default class CityServicesUI {
     onHeal,
     onConstruct,
     onCivicDecision,
+    onCharacterPetition,
     getQuestManager,
     onAssignQuest,
   }) {
@@ -69,6 +71,8 @@ export default class CityServicesUI {
     this.onHeal = onHeal;
     this.onConstruct = onConstruct;
     this.onCivicDecision = onCivicDecision;
+    this.onCharacterPetition = onCharacterPetition;
+    this.petitionFeedback = '';
     this.civicFeedback = '';
     this.getQuestManager = getQuestManager;
     this.onAssignQuest = onAssignQuest;
@@ -120,6 +124,9 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'answer-character-petition' && this.currentView?.type==='npc') {
+        const result=this.onCharacterPetition?.(this.currentView.npcId,id);
+        this.petitionFeedback=result?.message||'Dilekçe yanıtlanamadı.';
       } else if (action === 'civic-decision') {
         const result=this.onCivicDecision?.(id);
         this.civicFeedback=result?.message||'İşlem tamamlanamadı.';
@@ -471,6 +478,10 @@ export default class CityServicesUI {
     }
 
     const { person, age, relations } = profile;
+    const petition=getCharacterPetition({
+      roster:this.state?.worldCharacters,cityId:this.currentSettlement?.id,
+      characterId:npcId,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+    });
     // GeneratedPerson keeps the existing profile; only permanent named actors
     // gain the independent by-value mutable state projection.
     const current = person.kind === 'named'
@@ -571,6 +582,22 @@ export default class CityServicesUI {
         <div class="city-overview-section">
           <div class="city-overview-section__title">Kişilik</div>
           <div class="text-sm">${visibleTraits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kişisel Dilekçe</div>
+          ${petition ? `
+            <div class="font-bold text-sm">${escapeHtml(petition.title)}</div>
+            <div class="text-xs opacity-80">${escapeHtml(petition.description)}</div>
+            <div class="text-xs opacity-80">Destek maliyeti: ${petition.cost} altın · Beklenen memnuniyet +${petition.gain}</div>
+            <div class="flex gap-2 mt-2">
+              <button class="action-btn btn-gold text-xs" data-action="answer-character-petition" data-id="support"
+                ${petition.answered||!petition.supportAvailable||Number(this.party?.gold??0)<petition.cost?'disabled':''}>Destekle</button>
+              <button class="action-btn btn-dark text-xs" data-action="answer-character-petition" data-id="decline"
+                ${petition.answered||!petition.declineAvailable?'disabled':''}>Reddet</button>
+            </div>
+            ${petition.answered?'<div class="text-xs opacity-70 mt-1">Bu kişi bugün dilekçesine yanıt aldı.</div>':''}
+          `:'<div class="text-xs opacity-70">Bu kişi için güncel dilekçe yok.</div>'}
+          <div class="text-xs mt-2">${escapeHtml(this.petitionFeedback)}</div>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yetenekler</div>
