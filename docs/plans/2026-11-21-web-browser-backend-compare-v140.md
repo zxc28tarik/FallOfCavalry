@@ -24,3 +24,18 @@ V1.39'daki 32 karelik gerçek Chromium CI profili, normal JavaScript çalışma 
 - Grafik kalitesi düşürülmez, haritadan ağaç/şehir çıkarılmaz, AI cadence / dünya simülasyonu / oyun kuralları değiştirilmez. Darboğaz delili olmadan optimizasyon yok.
 
 **Doğrulama:** CI tamamlanınca exact HEAD commit, her iki workflow linki, varsa grafik mod ayrım ve sınırlamalar burada raporlanır.
+
+
+## Gerçek sonuç — 21 Kasım 2026, CI #44843343232 (PASS)
+
+- [Web validation #44843343234](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44843343234): **PASS**, 810/810 unit, 1.222/1.222 genel + önceden var olan 1 skip, 881 yerleşim, 304 yol, 0 hata / 1 mevcut dünya uyarısı.
+- [Web Chromium #44843343232](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44843343232): **PASS**; önce bütün mevcut gerçek oyun kabul testleri PASS (0 console error), ardından üç bağımsız tarayıcı modunun gerçek dünya haritasında 32 rAF ölçümü tamamlandı.
+- **Zorunlu SwiftShader:** `MEASURED`; Chrome renderer `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device ...), SwiftShader driver-5.0.0)`; ortalama rAF aralığı **154,832 ms**, CDP `TaskDuration` toplamı **3.876 ms**, tracing `SwapBuffers` inclusive toplamı **4.867,077 ms**.
+- **Chrome varsayılan:** `MEASURED`; renderer aynı `ANGLE ... SwiftShader`; ortalama **88,710 ms** rAF, CDP `TaskDuration` toplamı **3.098 ms**; `SwapBuffers` trace top listesinde bulunmadığından **null/unavailable** (asla sıfır GPU maliyeti değildir).
+- **ANGLE/OpenGL istendi:** `MEASURED`; renderer kimliği `UNKNOWN`; ortalama **88,168 ms**, CDP `TaskDuration` **2.997 ms**, trace `SwapBuffers` top listesinde yok. Kimliği doğrulanmadığından gerçek OpenGL GPU performans kıyası kurulamaz.
+- Tüm modlar **881 şehir / 304 yol** ile aynı dünya yapı imzasını üretti. Karşılaştırma otoritesi: **`NO_VERIFIED_DISTINCT_BACKEND`**. Farklı launch argümanlarının aynı/kimliği belirsiz yazılım renderer'ına düşmesi ve CI koşul değişkenleri nedeniyle 88 ms'nin 154 ms'ye göre kanıtlanmış FPS kazancı olduğu **iddia edilmez**.
+- V1.40'da beklenmedik ilave ipucu: Yeni başlatılmış dünya sırasında **3.876 / 3.098 / 2.997 ms CDP main-thread `TaskDuration`** toplamları, önceki geç kabul V1.39'da 32 kareye denk gelen yaklaşık **323 ms** değerinden çok büyük. Bu ayrı süreç/harita durumu/ısınma farkı içerir, **doğrudan WorldAI suçu göstermez**.
+
+**V1.41 yönü:** Aynı çalışan Chromium/aynı backend içerisinde farklı gerçek oyun-zamanı pencerelerinde soğuk/ısınmış/kararlı `loop.updateMap`, `WorldAI`, `loop.renderMap`, CDP Task/Script, rAF ve `SwapBuffers` profilini yeniden kıyasla. Baştan tasarlanmış oyun haritasına, oyuncunun görsellerine veya dünya AI kurallarına müdahale etme. Tek seferlik/tekrarlı yük ayrılmadan oyun mantığını optimize etme.
+
+**Son durum:** V1.40 kod/test PASS, tanı verisi sınırlı; üst görev O00-06 devam ediyor; PR #68 taslak, `main` değişmedi.
