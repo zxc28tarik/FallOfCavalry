@@ -487,6 +487,12 @@ Esc close`,
             priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
           };
         }),
+        settlementsCivic: settlements.filter(st=>st?.id!=null).map(st=>({
+          settlementId:st.id,
+          security:Math.max(0,Math.min(100,Math.floor(Number(st.security??50)))),
+          civicDecision:st.civicDecision&&Number.isFinite(Number(st.civicDecision.day))
+            ? {day:Math.floor(Number(st.civicDecision.day)),id:String(st.civicDecision.id||'')} : null,
+        })),
         settlementsOwners: settlements.filter((st) => st?.id).map((st) => ({
           settlementId: st.id,
           ownerFactionId: st.ownerFactionId || null,
@@ -693,6 +699,19 @@ Esc close`,
       const owner = ownerBySettlement.get(s.id);
       if (!owner) return;
       s.ownerFactionId = typeof owner.ownerFactionId === 'string' ? owner.ownerFactionId : s.ownerFactionId;
+    });
+
+    // Real city security and player civic choices survive save/load.
+    // Older saves without this ledger retain generated world defaults.
+    const civicRows=Array.isArray(game.settlementsCivic)?game.settlementsCivic:[];
+    const civicByCity=new Map(civicRows.filter(row=>row?.settlementId!=null)
+      .map(row=>[String(row.settlementId),row]));
+    settlements.forEach(city=>{
+      const row=civicByCity.get(String(city.id));
+      if(!row)return;
+      if(Number.isFinite(row.security))city.security=Math.max(0,Math.min(100,Math.floor(row.security)));
+      if(row.civicDecision&&Number.isFinite(Number(row.civicDecision.day)))
+        city.civicDecision={day:Math.floor(Number(row.civicDecision.day)),id:String(row.civicDecision.id||'')};
     });
 
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
