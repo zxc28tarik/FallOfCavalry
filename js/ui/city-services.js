@@ -1,4 +1,5 @@
 import * as CONST from '../constants.js';
+import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
 import {
   CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
@@ -47,6 +48,7 @@ export default class CityServicesUI {
     onClose,
     onHeal,
     onConstruct,
+    onCivicDecision,
     getQuestManager,
     onAssignQuest,
   }) {
@@ -65,6 +67,8 @@ export default class CityServicesUI {
     this.onClose = onClose;
     this.onHeal = onHeal;
     this.onConstruct = onConstruct;
+    this.onCivicDecision = onCivicDecision;
+    this.civicFeedback = '';
     this.getQuestManager = getQuestManager;
     this.onAssignQuest = onAssignQuest;
     this.pendingNpcQuestId = null;
@@ -115,6 +119,9 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'civic-decision') {
+        const result=this.onCivicDecision?.(id);
+        this.civicFeedback=result?.message||'İşlem tamamlanamadı.';
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
         this.onDiplomacyAction?.({ ok, message: ok ? `Ateskes satin alindi: ${id}` : 'Ateskes alinmadi.' });
@@ -376,6 +383,7 @@ export default class CityServicesUI {
     const availableServices = Object.values(cityState.services || {}).filter((service) => service.available);
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
+    const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
     const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
       .filter((person) => person.status === 'alive');
     this.setPanelChrome(
@@ -394,6 +402,18 @@ export default class CityServicesUI {
             <div class="city-overview-card__value">${buildable}</div>
             <div class="city-overview-card__sub">${ownership ? 'Alanlara yeni bina eklenebilir.' : 'Sadece kendi sehrinde gelisim yapabilirsin.'}</div>
           </div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir Meclisi — Günlük Karar</div>
+          <div class="text-sm opacity-80">Güvenlik: ${Math.floor(Number(this.currentSettlement?.security??50))}/100 · ${escapeHtml(civicGate.reason||'Bugün bir karar alabilirsin.')}</div>
+          <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
+          ${Object.entries(CIVIC_DECISIONS).map(([id,decision])=>`
+            <div class="city-overview-row">
+              <span><strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)} (${decision.cost>=0?'-':'+'}${Math.abs(decision.cost)} altın)</span>
+              <button type="button" class="action-btn text-xs" data-action="civic-decision" data-id="${id}"
+                ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
+            </div>
+          `).join('')}
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Servis Kilitleri</div>
