@@ -885,7 +885,7 @@ export default class CityServicesUI {
       'Hanlar ve Kervan Alani',
       '<div class="city-panel-meta-line">Servis: Han Isleri</div>',
       `
-        <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci ve erzak işleri</div>
+        <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci, erzak ve vilayet yazışmaları</div>
         ${offers.map((contract) => {
           const accepted = acceptedIds.has(contract.id);
           const label = this.describeContract(contract);
@@ -1026,6 +1026,7 @@ export default class CityServicesUI {
       ASSASSINATE: 'Suikast',
       COURIER: 'Haberci',
       RELIEF: 'Erzak Yardimi',
+      DISPATCH: 'Vilayet Yazismasi',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1044,6 +1045,10 @@ export default class CityServicesUI {
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
     }
+    if (contract?.type === 'DISPATCH') {
+      const stops=Array.isArray(contract.dispatchStopNames)?contract.dispatchStopNames:[];
+      return `Mühür: ${progress}/3 · Siradaki: ${stops[progress]??'Tamamlandı'}`;
+    }
     if (contract?.type === 'COURIER') return `Hedef sehir: ${contract?.targetCityId ?? '?'} (${progress}/1)`;
     const goal = (contract?.type === 'DELIVER' || contract?.type === 'RELIEF') ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
     return `Ilerleme: ${progress}/${Math.floor(goal)}`;
@@ -1053,6 +1058,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'DISPATCH') return {title:contract.title||'Vilayet Yazışması',desc:contract.desc||'İki vilayete sırayla git, geri dön.'};
     if (contract.type === 'COURIER') return {title:contract.title||'Mühürlü Ferman',desc:contract.desc||'Gerçek hedef şehre ulaş.'};
     if (contract.type === 'RELIEF') return {title:contract.title||'Halka Erzak Yardımı',desc:contract.desc||'Hedef şehir pazarına buğday teslim et.'};
     if (contract.type === 'DEFEND') return { title: contract.title || 'Defend City', desc: contract.desc || `Sehri savun (${contract.requiredCount || 1} savas).` };
