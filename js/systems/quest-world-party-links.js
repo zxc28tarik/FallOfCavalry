@@ -32,8 +32,7 @@ export function registeredTradeRoute(worldState, tradeRoutes, routeId) {
   // Real EconomyManager road records use the canonical road's own route id.
   // Correct endpoint IDs alone must not make a forged route ID authoritative.
   // No-road legacy worlds retain their existing source-validation contract.
-  if (hasRoadNetwork && (!roadLink || roadLink.id !== routeId
-    || row.roadBacked === false)) return null;
+  if (hasRoadNetwork && (!roadLink || roadLink.id !== routeId)) return null;
   return { routeId, from, to, road: roadLink?.road || null };
 }
 
