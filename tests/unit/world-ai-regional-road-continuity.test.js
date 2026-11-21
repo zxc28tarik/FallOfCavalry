@@ -117,6 +117,48 @@ describe('V1.46 — real canonical multileg travel',()=>{
 });
 
 describe('V1.46 — reversible regional party streaming',()=>{
+  it('does not spawn an enemy patrol directly onto a player at a real town',()=>{
+    for(let i=0;i<12;i++){
+      const patrol=spawnPartyPatrol(map,{},'ottoman',cfg,{
+        playerParty:nearA,
+      });
+      const from=map.settlements.find(s=>s.id===patrol.homeCityId);
+      expect(from).toBeDefined();
+      expect(distance(patrol,nearA)).toBeGreaterThanOrEqual(8);
+      expect(patrol.factionId).toBe('ottoman');
+    }
+  });
+  it('regional hostile grace prevents immediate fights but expires during real simulation',()=>{
+    const party=row('foreign-patrol','patrol','d',nearD.x,nearD.y,{
+      factionId:'venice',speed:0.01,
+      targetX:nearD.x+20,targetY:nearD.y,
+      path:[{x:nearD.x+20,y:nearD.y}],pathIndex:0,
+      regionEntryGraceSeconds:6,
+    });
+    const ai=init([party]);
+    const before=updateWorldParties({
+      aiState:ai,worldState:map,playerParty:nearA,
+      cfg,dtSec:1,
+    });
+    // The party is far from nearA, so no false encounter is fabricated.
+    expect(before).toEqual([]);
+    const ai2=init([{
+      ...party,x:nearD.x,y:nearD.y,alive:true,
+      path:[{x:nearD.x+20,y:nearD.y}],pathIndex:0,
+      regionEntryGraceSeconds:6,
+    }]);
+    const first=updateWorldParties({
+      aiState:ai2,worldState:map,playerParty:nearD,
+      cfg,dtSec:1,
+    });
+    expect(first).toHaveLength(0);
+    expect(ai2.parties[0].regionEntryGraceSeconds).toBe(5);
+    const later=updateWorldParties({
+      aiState:ai2,worldState:map,playerParty:nearD,
+      cfg,dtSec:5.5,
+    });
+    expect(later.some(e=>e.partyId==='foreign-patrol')).toBe(true);
+  });
   it('parks gradual out-of-range departures without route-bandit loot disposal',()=>{
     const p=row('slow-leaving-bandit','bandit','a',a.x,a.y,
       {targetX:b.x,targetY:b.y});
@@ -284,5 +326,17 @@ describe('V1.46 — reversible regional party streaming',()=>{
       id:'historic-0',homeCityId:0,completedRoadLegs:4,
     });
     expect(game.worldManager.worldAi.regionHistory).toHaveLength(2);
+    const importedPatrol={
+      id:'imported-hostile',kind:'patrol',factionId:'venice',
+      x:d.x,y:d.y,targetX:e.x,targetY:e.y,homeCityId:'d',
+    };
+    expect(game.worldManager.worldAi.dormantParties[0].regionEntryGraceSeconds)
+      .toBe(0); // the saved caravan itself is non-hostile
+    // A hostile record is granted short safe handoff on load only.
+    game.worldManager.worldAi.parties.push(importedPatrol);
+    const payload2=saver.buildSavePayload();
+    saver.applySavePayload(JSON.parse(JSON.stringify(payload2)));
+    expect(game.worldManager.worldAi.parties.find(p=>
+      p.id==='imported-hostile').regionEntryGraceSeconds).toBe(6);
   });
 });
