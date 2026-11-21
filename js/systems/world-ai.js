@@ -205,8 +205,11 @@ export function spawnPartyBandit(worldState, factions, cfg = {},
 
 export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {},
   { playerParty = null } = {}) {
-  const localHome = selectLocalCity(worldState, playerParty, cfg,
-    ownerFactionId ? { factionId: ownerFactionId } : {});
+  const safePatrolTiles=Math.max(8,Number(cfg?.PATROL_AGGRO_RADIUS??4)+3);
+  const localHome = selectLocalCity(worldState, playerParty, cfg, {
+    ...(ownerFactionId ? { factionId: ownerFactionId } : {}),
+    minDistanceTiles: safePatrolTiles,
+  });
   const factionId = ownerFactionId
     || (localHome ? ownerFactionIdOf(localHome) : null)
     || chooseFactionForPatrol(worldState, factions);
@@ -312,12 +315,18 @@ export function ensureWorldParties({
   const banditCap = Number.isFinite(banditCapOverride) ? Number(banditCapOverride) : Number(cfg?.MAX_BANDIT_PARTIES ?? 0);
   while (hasRoomByType('bandit', banditCap)) {
     const routeIndex = aiState.parties.filter((p) => p?.kind === 'bandit').length;
-    aiState.parties.push(spawnPartyBandit(worldState, factions, cfg,
-      { tradeRoutes, routeIndex, playerParty }));
+    const party=spawnPartyBandit(worldState, factions, cfg,
+      { tradeRoutes, routeIndex, playerParty });
+    if (forceRegionPopulation && !initialPopulation)
+      party.regionEntryGraceSeconds=6;
+    aiState.parties.push(party);
   }
   const hasSettlements = getSettlements(worldState).length > 0;
   while (hasSettlements && hasRoomByType('patrol', Number(cfg?.MAX_PATROL_PARTIES ?? 0))) {
-    aiState.parties.push(spawnPartyPatrol(worldState, factions, null, cfg, { playerParty }));
+    const party=spawnPartyPatrol(worldState, factions, null, cfg, { playerParty });
+    if (forceRegionPopulation && !initialPopulation)
+      party.regionEntryGraceSeconds=6;
+    aiState.parties.push(party);
   }
   while (hasSettlements && hasRoomByType('caravan', Number(cfg?.MAX_CARAVAN_PARTIES ?? 0))) {
     aiState.parties.push(spawnPartyCaravan(worldState, factions, null, cfg, { playerParty }));
@@ -435,8 +444,11 @@ export function updateWorldParties({
 
     if (playerParty && Number.isFinite(playerParty.x) && Number.isFinite(playerParty.y)) {
       const playerDist = Math.hypot(playerParty.x - party.x, playerParty.y - party.y);
+      const grace=Math.max(0,Math.min(8,Number(party.regionEntryGraceSeconds)||0));
+      party.regionEntryGraceSeconds=Math.max(0,grace-dt);
       const aggro = getAggroRadius(party.kind, cfg) * tileSize;
-      if (aggro > 0 && playerDist <= aggro && factionIsHostileToPlayer(party.factionId, playerFactionId)) {
+      if (party.regionEntryGraceSeconds<=0 && aggro > 0
+        && playerDist <= aggro && factionIsHostileToPlayer(party.factionId, playerFactionId)) {
         encounters.push({ type: 'BANDIT_ENCOUNTER', partyId: party.id, factionId: party.factionId, x: party.x, y: party.y });
       }
       const routePinned = party.kind === 'bandit' && party.routeId != null
