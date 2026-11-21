@@ -472,6 +472,8 @@ export class EconomyManager {
       this.state.escortState.active = false;
       this.game?.setLastEventLog?.(escortSuccess ? 'Escort route completed successfully.' : 'Escort failed: too many bandit encounters.');
     }
+    // Actual city entry completes courier work only at its real destination.
+    emitContractEvent({type:'CITY_VISITED',cityId:activeSettlement.id},this.game?.playerParty);
     this.game?.gameFlowManager?.enterCity?.(activeSettlement.id);
     const cityUI = this.game?.cityUI || this.game?.cityManager?.cityUI;
     cityUI?.show?.(activeSettlement, { recruitPool, market, contracts });
