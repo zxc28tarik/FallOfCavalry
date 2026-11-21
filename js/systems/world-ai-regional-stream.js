@@ -41,7 +41,7 @@ export function streamWorldAiRegion({
   if(!Number.isFinite(tile)||tile<=0||!Number.isFinite(configured)||configured<=8)
     return noChange;
   const step=Math.max(8,configured-12)*tile;
-  const activeRadius=Math.max(4,configured-8)*tile;
+  const activeRadius=Math.max(4,configured-4)*tile;
   const revisitRadius=Math.max(4,configured-21)*tile;
   const day=Math.max(1,Math.floor(Number(currentDay)||1));
   if(!Array.isArray(aiState.dormantParties))aiState.dormantParties=[];
