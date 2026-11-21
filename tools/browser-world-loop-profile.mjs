@@ -50,7 +50,23 @@ export async function profileLiveWorldLoop(page, samples = PROFILE_WINDOW) {
     const wm = sim?.worldPartyManager;
     if (!g?.started || g?.state?.mode !== 'map' || !sim
       || !rm || !wm || !loop?.running)
-      return {ready:false,reason:'Real world loop/map not running'};
+      return {
+        ready:false,reason:'Real world loop/map not running',
+        gameStarted:Boolean(g?.started),
+        mode:g?.state?.mode||null,
+        encounter:g?.state?.encounter?.enemyId||null,
+        isSurprise:Boolean(g?.state?.encounter?.isSurprise),
+        loopRunning:Boolean(loop?.running),
+        hasSimulation:Boolean(sim),hasRenderer:Boolean(rm),
+        hasPartyManager:Boolean(wm),
+        playerMovement:{
+          hasDestination:Boolean(g?.playerParty?.hasDestination),
+          moveState:g?.playerParty?.moveState,
+          vx:g?.playerParty?.vx,vy:g?.playerParty?.vy,
+        },
+        activeParties:g?.worldManager?.worldAi?.parties?.length??null,
+        dormantParties:g?.worldManager?.worldAi?.dormantParties?.length??null,
+      };
     const readings = Object.fromEntries(names.map(name=>[name,[]]));
     const restores = [];
     const wrap = (holder,key,label) => {
