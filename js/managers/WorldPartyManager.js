@@ -687,6 +687,13 @@ export class WorldPartyManager {
 
   checkSurpriseEncounters({ forceType = null } = {}) {
     if (!this.world?.state || this.world.state.mode !== 'map' || this.world.state.encounter || !this.game?.playerParty) return false;
+    // Surprise events belong to real travel, not a stationary player's
+    // city-market inspection, quest completion popup or save/load sequence.
+    // Explicit forced/test/script encounters still bypass this movement gate.
+    const player = this.game.playerParty;
+    const activeTravel = Boolean(player.hasDestination || player.moveState === 'moving'
+      || Math.hypot(Number(player.vx)||0,Number(player.vy)||0) > 0.01);
+    if (!forceType && !activeTravel) return false;
     const now = Date.now();
     if (!forceType && now - this._lastSurpriseAt < this.surpriseCooldownMs) return false;
 
