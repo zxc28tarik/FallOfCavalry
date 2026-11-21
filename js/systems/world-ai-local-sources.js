@@ -73,3 +73,48 @@ export function localBanditRouteAnchors(worldState,link,playerParty,cfg={}){
     .filter(p=>distance(p,playerParty)<=max
       &&distance(p,playerParty)>=preferredMin);
 }
+
+/**
+ * A fresh road leg begins ONLY at a real city reached by this party.
+ * Prefer going forward when more than one genuine link exists. A dead end
+ * can legitimately reverse along its authentic last link.
+ */
+export function nextCanonicalCityLeg(worldState,cityId,previousCityId=null){
+  const cities=Array.isArray(worldState?.settlements)?worldState.settlements:[];
+  const city=cities.find(s=>id(s?.id)===id(cityId)&&real(s));
+  if(!city)return null;
+  const links=canonicalRoadLinks(worldState).flatMap(link=>{
+    const forward=id(link.fromCityId)===id(cityId);
+    const reverse=id(link.toCityId)===id(cityId);
+    if(!forward&&!reverse)return [];
+    const destination=forward?link.to:link.from;
+    if(!real(destination))return [];
+    const original=roadWorldWaypoints(worldState,link.road);
+    if(original.length<2)return [];
+    return [{
+      fromCityId:city.id,toCityId:destination.id,
+      city:destination,roadId:link.id,
+      path:forward?original:[...original].reverse(),
+    }];
+  });
+  if(!links.length)return null;
+  const beyond=links.filter(row=>id(row.toCityId)!==id(previousCityId));
+  return select(beyond.length?beyond:links);
+}
+/** Reconstruct a mid-leg path from the genuine road graph after save/load. */
+export function verifiedRoadLegPath(worldState,fromCityId,toCityId,currentPosition){
+  if(!real(currentPosition))return [];
+  const link=canonicalRoadLinks(worldState).find(r=>
+    (id(r.fromCityId)===id(fromCityId)&&id(r.toCityId)===id(toCityId))
+    || (id(r.toCityId)===id(fromCityId)&&id(r.fromCityId)===id(toCityId)));
+  if(!link)return [];
+  const path=roadWorldWaypoints(worldState,link.road);
+  const ordered=id(link.fromCityId)===id(fromCityId)?path:[...path].reverse();
+  if(ordered.length<2)return [];
+  let bestIndex=0,best=Infinity;
+  ordered.forEach((p,i)=>{
+    const dist=distance(currentPosition,p);
+    if(dist<best){best=dist;bestIndex=i;}
+  });
+  return ordered.slice(bestIndex);
+}
