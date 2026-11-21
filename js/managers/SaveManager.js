@@ -75,6 +75,33 @@ function cloneWhitelistedSaveArray(value) {
     : [];
 }
 
+// V1.46: preserve parked party identity and road-leg itinerary across an
+// explicit campaign save, but do not trust unverified saved waypoint arrays.
+function storeWorldParty(party) {
+  return {
+    id: party.id,
+    factionId: party.factionId,
+    kind: party.kind,
+    x: Number.isFinite(party.x) ? party.x : 0,
+    y: Number.isFinite(party.y) ? party.y : 0,
+    targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+    targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+    speed: Number.isFinite(party.speed) ? party.speed : 1,
+    alive: party.alive !== false,
+    homeCityId: party.homeCityId ?? null,
+    routeId: typeof party.routeId === 'string' ? party.routeId : null,
+    currentCityId: party.currentCityId ?? null,
+    previousCityId: party.previousCityId ?? null,
+    completedRoadLegs: Math.max(0, Math.floor(Number(party.completedRoadLegs) || 0)),
+  };
+}
+function restoreWorldParty(party) {
+  // Save-supplied road paths are NOT an authority. The real road registry
+  // reconstructs the next leg at the current coordinate when resuming.
+  return { ...storeWorldParty(party), path: null, pathIndex: 0 };
+}
+const validRegionPoint=p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y);
+
 export class SaveManager {
   constructor(gameState) {
     this.state = gameState;
@@ -424,21 +451,19 @@ Esc close`,
           parties: Array.isArray(worldAi?.parties) ? worldAi.parties
             .filter(party => !party?.escortQuestId
               && !String(party?.id || '').startsWith('quest-escort-'))
-            .map((party) => ({
-            id: party.id,
-            factionId: party.factionId,
-            kind: party.kind,
-            x: Number.isFinite(party.x) ? party.x : 0,
-            y: Number.isFinite(party.y) ? party.y : 0,
-            targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
-            targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
-            speed: Number.isFinite(party.speed) ? party.speed : 1,
-            alive: party.alive !== false,
-            homeCityId: party.homeCityId || null,
-            // Local-save party relationship is a claim; it is revalidated
-            // against the present route registry and physical corridor on load.
-            routeId: typeof party.routeId === 'string' ? party.routeId : null,
-          })) : [],
+            .map(storeWorldParty) : [],
+          // Offscreen parties are parked, not defeated. No new entitlement,
+          // quest credit, or route identity is created by saving them.
+          dormantParties: Array.isArray(worldAi?.dormantParties)
+            ? worldAi.dormantParties.filter(party => party?.alive !== false
+              && !party?.escortQuestId && !String(party?.id || '').startsWith('quest-escort-'))
+              .map(storeWorldParty) : [],
+          regionAnchor: validRegionPoint(worldAi?.regionAnchor)
+            ? { x: worldAi.regionAnchor.x, y: worldAi.regionAnchor.y } : null,
+          regionHistory: Array.isArray(worldAi?.regionHistory)
+            ? worldAi.regionHistory.filter(validRegionPoint).slice(-128)
+              .map(p=>({x:p.x,y:p.y,
+                lastDay:Math.max(1,Math.floor(Number(p.lastDay)||1))})) : [],
         },
         settlementsRecruit,
         settlementsMarkets: settlements.filter((st) => st?.id != null).map((st) => {
@@ -621,19 +646,18 @@ Esc close`,
       parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties
         .filter(party => !String(party?.id || '').startsWith('quest-escort-')
           && !party?.escortQuestId)
-        .map((party) => ({
-        id: party.id,
-        factionId: party.factionId,
-        kind: party.kind,
-        x: Number.isFinite(party.x) ? party.x : 0,
-        y: Number.isFinite(party.y) ? party.y : 0,
-        targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
-        targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
-        speed: Number.isFinite(party.speed) ? party.speed : 1,
-        alive: party.alive !== false,
-        homeCityId: party.homeCityId || null,
-        routeId: typeof party.routeId === 'string' ? party.routeId : null,
-      })) : [],
+        .map(restoreWorldParty) : [],
+      dormantParties: Array.isArray(savedWorldAi.dormantParties)
+        ? savedWorldAi.dormantParties.filter(party=>party?.alive !== false
+          && !party?.escortQuestId
+          && !String(party?.id || '').startsWith('quest-escort-'))
+          .map(restoreWorldParty) : [],
+      regionAnchor: validRegionPoint(savedWorldAi.regionAnchor)
+        ? { x: savedWorldAi.regionAnchor.x, y: savedWorldAi.regionAnchor.y } : null,
+      regionHistory: Array.isArray(savedWorldAi.regionHistory)
+        ? savedWorldAi.regionHistory.filter(validRegionPoint).slice(-128)
+          .map(p=>({x:p.x,y:p.y,
+            lastDay:Math.max(1,Math.floor(Number(p.lastDay)||1))})) : [],
     };
     this.game.worldManager.worldEncounterPartyByEnemyId = {};
     this.state.worldAi = this.game.worldManager.worldAi;
