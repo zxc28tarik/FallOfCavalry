@@ -222,10 +222,51 @@ async function run(){
     if(!owned.length)
       throw Error('V1.44 selected faction owns no real city in the full world: '+
         chosen);
+    // V1.45 — the real initial world wave must source its ten base combat,
+    // patrol and caravan parties inside the authentic local region, NOT a
+    // detached replay. The 3+3+4 quotas stay unchanged. Patrols may naturally
+    // defeat nearby bandits; the living end-state must retain all three kinds.
+    const baseKinds=['bandit','patrol','caravan'];
+    const originalBase=wave.parties.filter(p=>baseKinds.includes(p.kind));
+    const afterBase=snapshot.after.parties.filter(p=>baseKinds.includes(p.kind));
+    const radius=40*snapshot.after.tileSize;
+    const inside=p=>Math.hypot(
+      p.x-actualPlayer.x,p.y-actualPlayer.y)<=radius;
+    const validCity=p=>cityById.has(String(p.homeCityId));
+    const quotas=Object.fromEntries(baseKinds.map(kind=>[
+      kind,originalBase.filter(p=>p.kind===kind).length,
+    ]));
+    const surviving=Object.fromEntries(baseKinds.map(kind=>[
+      kind,afterBase.filter(p=>p.kind===kind).length,
+    ]));
+    report.basePopulationGate={
+      capturedLive:snapshot.source==='LIVE_PRE_CULL',
+      originalBaseCount:originalBase.length,
+      originalInsideRange:originalBase.filter(inside).length,
+      originalRealCitySources:originalBase.filter(validCity).length,
+      baseAfter32Frames:afterBase.length,
+      afterInsideRange:afterBase.filter(inside).length,
+      afterRealCitySources:afterBase.filter(validCity).length,
+      originalByKind:quotas,survivorsByKind:surviving,
+      routeLinkedBandits:originalBase.filter(p=>p.kind==='bandit'
+        &&p.routeId!=null).length,
+    };
+    if(!report.basePopulationGate.capturedLive
+      ||originalBase.length!==10
+      ||quotas.bandit!==4||quotas.patrol!==3||quotas.caravan!==3
+      ||report.basePopulationGate.originalInsideRange!==10
+      ||report.basePopulationGate.originalRealCitySources!==10
+      ||afterBase.length<6
+      ||report.basePopulationGate.afterInsideRange!==afterBase.length
+      ||report.basePopulationGate.afterRealCitySources!==afterBase.length
+      ||baseKinds.some(kind=>surviving[kind]<1))
+      throw Error('V1.45 real source-valid base world population failed: '+
+        JSON.stringify(report.basePopulationGate));
     report.status='PASS_REGRESSION';
     console.log('[V1.44] '+JSON.stringify({
       status:report.status,source:report.snapshotSource,
       localPopulationGate:report.localPopulationGate,
+      basePopulationGate:report.basePopulationGate,
       scene:{settlements:wave.mapSettlementCount,roads:wave.roads,
         worldSize:[wave.width,wave.height],tileSize:wave.tileSize},
       spawnTimePlayer:wave.player,actualPlayer,
