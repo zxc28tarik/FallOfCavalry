@@ -23,12 +23,13 @@ const setup=(day=2)=>{
 };
 
 describe('V1.48 — playable civil city job board',()=>{
-  it('offers five source-registered, distinct jobs instead of only three',()=>{
+  it('offers six source-registered, distinct jobs instead of only three',()=>{
     const {offers}=setup();
-    expect(offers).toHaveLength(5);
+    expect(offers).toHaveLength(6);
     expect(new Set(offers.map(o=>o.type)).size).toBe(5);
     expect(offers.map(o=>o.type)).toContain('COURIER');
     expect(offers.map(o=>o.type)).toContain('RELIEF');
+    expect(offers.map(o=>o.type)).toContain('DISPATCH');
     for(const job of offers.filter(o=>o.targetCityId!=null)){
       expect(world.settlements.some(city=>String(city.id)===String(job.targetCityId))).toBe(true);
     }
@@ -81,6 +82,49 @@ describe('V1.48 — playable civil city job board',()=>{
     expect(calls).toBe(1);
   });
 
+  it('requires three ordered real settlement visits, survives save, and credits once',()=>{
+    const {party,offers}=setup(8);
+    const offer=offers.find(o=>o.type==='DISPATCH');
+    expect(offer.dispatchStops).toHaveLength(3);
+    expect(new Set(offer.dispatchStops.map(String)).size).toBe(3);
+    expect(offer.dispatchStops[2]).toBe(0);
+    const job=acceptContract(offer.id,party);
+    const [first,second,home]=job.dispatchStops;
+    emitContractEvent({type:'CITY_VISITED',cityId:home},party);
+    emitContractEvent({type:'CITY_VISITED',cityId:second},party);
+    expect(job.progress).toBe(0);
+    emitContractEvent({type:'CITY_VISITED',cityId:first},party);
+    expect(job.progress).toBe(1);
+    emitContractEvent({type:'CITY_VISITED',cityId:first},party);
+    emitContractEvent({type:'CITY_VISITED',cityId:home},party);
+    expect(job.progress).toBe(1);
+    const resumed=JSON.parse(JSON.stringify(party));
+    emitContractEvent({type:'CITY_VISITED',cityId:second},resumed);
+    expect(resumed.contracts[0].progress).toBe(2);
+    emitContractEvent({type:'CITY_VISITED',cityId:home},resumed);
+    expect(resumed.contracts[0].completed).toBe(true);
+    let called=0;
+    const beforeGold=resumed.gold;
+    const result=completeContract(offer.id,resumed,{
+      onCivicDispatch:c=>{
+        expect(c.dispatchStops).toEqual([first,second,home]);
+        called++;
+      },
+    });
+    expect(result.type).toBe('DISPATCH');
+    expect(called).toBe(1);
+    expect(resumed.gold).toBeGreaterThan(beforeGold);
+    expect(completeContract(offer.id,resumed)).toBeNull();
+    expect(called).toBe(1);
+  });
+  it('does not invent a dispatch route when the world has fewer than three settlements',()=>{
+    const party={gold:0,contracts:[]};
+    const sparse={settlements:world.settlements.slice(0,2),pois:[]};
+    setContractsRuntimeContext({party,map:sparse,worldSeed:100});
+    const jobs=generateContractsForCity({cityId:0,day:5,seed:100,map:sparse});
+    expect(jobs.some(j=>j.type==='DISPATCH')).toBe(false);
+  });
+
   it('leaves wartime contracts available alongside civilian work',()=>{
     const {party}=setup(7);
     const offers=generateContractsForCity({
@@ -90,6 +134,7 @@ describe('V1.48 — playable civil city job board',()=>{
     expect(offers.some(o=>o.type==='DEFEND'||o.type==='ASSASSINATE')).toBe(true);
     expect(offers.some(o=>o.type==='COURIER')).toBe(true);
     expect(offers.some(o=>o.type==='RELIEF')).toBe(true);
+    expect(offers.some(o=>o.type==='DISPATCH')).toBe(true);
     expect(party.contracts).toEqual([]);
   });
 });
