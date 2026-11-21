@@ -378,6 +378,13 @@ export function updateWorldParties({
   const tileSize = getWorldBounds(worldState).tileSize;
   const despawnDistance = Number(cfg?.DESPAWN_DISTANCE ?? 40) * tileSize;
   const playerFactionId = playerParty?.factionId || playerParty?.ownerFactionId || null;
+  // When regional streaming is enabled, crossing the outer active boundary
+  // means SLEEP rather than death: preserve original ID and live quest/cargo
+  // provenance, including if a player slowly walks out without a region hop.
+  const streaming = Array.isArray(aiState.dormantParties);
+  const parkedIds = new Set();
+  const existingDormant = new Set(streaming
+    ? aiState.dormantParties.map(p=>String(p?.id)) : []);
 
   aiState.parties.forEach((party) => {
     if (!party || party.alive === false || party.escortQuestId) return;
@@ -436,10 +443,23 @@ export function updateWorldParties({
         && protectedRouteIds.includes(String(party.routeId))
         && Boolean(validBanditRoute(party, worldState, tradeRoutes));
       if (playerDist > despawnDistance && !routePinned) {
-        party.alive = false;
-        // Observational only: classify the actual removal of sourced loot.
-        if (party.kind === 'bandit' && typeof onBanditRemoved === 'function')
-          onBanditRemoved(party, 'out_of_range');
+        const canSleep = streaming && party?.id != null
+          && !party?.escortQuestId && !party?.questSpawned
+          && ['bandit','patrol','caravan','refugee','merchant',
+            'messenger','villagers','noble'].includes(party.kind);
+        if (canSleep) {
+          parkedIds.add(party.id);
+          if (!existingDormant.has(String(party.id))) {
+            aiState.dormantParties.push(party);
+            existingDormant.add(String(party.id));
+          }
+        } else {
+          party.alive = false;
+          // Only genuine removals dispose source-linked escrow; parking is
+          // not a battle defeat and must not claim or discard quest cargo.
+          if (party.kind === 'bandit' && typeof onBanditRemoved === 'function')
+            onBanditRemoved(party, 'out_of_range');
+        }
       }
     }
   });
@@ -458,7 +478,8 @@ export function updateWorldParties({
     });
   });
 
-  aiState.parties = aiState.parties.filter((p) => p?.alive !== false);
+  aiState.parties = aiState.parties.filter(p=>p?.alive !== false
+    && !parkedIds.has(p?.id));
   return encounters;
 }
 
