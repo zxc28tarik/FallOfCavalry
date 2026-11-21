@@ -13,6 +13,7 @@ import { EVENT_TYPES, getActiveEvents, getEventTypeLabel, createInitialEventStat
 import { showWinScreen, showLoseScreen } from '../ui/modals.js';
 import { applySettingsPatch, serializeSettings, deserializeSettings } from '../systems/settings.js';
 import { findFactionStartTile } from '../world/world-map-asset-loader.js';
+import { resolveFactionStartLocation } from '../systems/faction-start-location.js';
 import { ensureModeManager } from '../core/ModeManager.js';
 import { createWorldCharacterRoster } from '../systems/world-characters.js';
 import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
@@ -334,17 +335,21 @@ export class GameFlowManager {
     const factionId = this.state?.selectedFaction?.id;
     const map = g.worldManager?.state?.map;
     const mapData = map?.mapData || map?.__mapData || g.worldManager?.state?.mapData;
-    const startTile = findFactionStartTile(mapData, factionId);
     const tileSize = Number(CONST.WORLD?.TILE_SIZE) || 32;
-    if (startTile && g.playerParty) {
-      const startX = (startTile.tx + 0.5) * tileSize;
-      const startY = (startTile.ty + 0.5) * tileSize;
-      g.playerParty.x = startX;
-      g.playerParty.y = startY;
+    const location = resolveFactionStartLocation({
+      startTile: findFactionStartTile(mapData, factionId),
+      settlements: map?.settlements || [],
+      factionId, tileSize,
+    });
+    if (location && g.playerParty) {
+      // Generated maps need a real owned city as the fallback: otherwise
+      // the player stays at state.player's uninhabited (0, 0) placeholder.
+      g.playerParty.x = location.x;
+      g.playerParty.y = location.y;
       const cam = this.state?.camera;
       if (cam) {
-        cam.x = startX - CONST.GAME.VIEW_WIDTH / 2;
-        cam.y = startY - CONST.GAME.VIEW_HEIGHT / 2;
+        cam.x = location.x - CONST.GAME.VIEW_WIDTH / 2;
+        cam.y = location.y - CONST.GAME.VIEW_HEIGHT / 2;
       }
       g.worldManager?.updateFogFromPlayer?.();
     }
