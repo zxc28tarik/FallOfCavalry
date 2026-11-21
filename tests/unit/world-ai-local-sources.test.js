@@ -86,6 +86,30 @@ describe('V1.45 — local canonical road and real city sources of base world par
     expect(p.routeId).toBeUndefined();
     expect(p.homeCityId).not.toBeUndefined();
   });
+  it('does not force a route-bandit encounter beside the starting city',()=>{
+    const near=city('near',17,12,'ottoman');
+    const shortWorld={
+      ...world,settlements:[a,near],
+      roads:[{from:'a',to:'near',path:[
+        {x:12,y:12},{x:15,y:12},{x:17,y:12},
+      ]}],
+    };
+    const shortRoutes=[{
+      id:'route:a:near',fromCityId:'a',toCityId:'near',roadBacked:true,
+    }];
+    const route=spawnBanditOnRegisteredRoute(
+      shortWorld,shortRoutes,0,{playerParty,cfg});
+    expect(route).toBeNull(); // Every real road anchor falls inside 8 tiles.
+    const bandit=spawnPartyBandit(shortWorld,{},cfg,{
+      tradeRoutes:shortRoutes,playerParty,
+    });
+    expect(bandit.routeId).toBeUndefined();
+    expect(['a','near']).toContain(bandit.homeCityId);
+    const distanceTiles=Math.hypot(
+      bandit.x-playerParty.x,bandit.y-playerParty.y)/32;
+    expect(distanceTiles).toBeGreaterThanOrEqual(7.99);
+    expect(distanceTiles).toBeLessThan(40);
+  });
   it('keeps source city and patrol faction consistent with real local ownership',()=>{
     for(let i=0;i<10;i++){
       const p=spawnPartyPatrol(world,{},null,cfg,{playerParty});
