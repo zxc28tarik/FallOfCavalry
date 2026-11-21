@@ -52,6 +52,33 @@ describe('V1.43 visible-party respawn contract',()=>{
     expect(tally(world.worldAi)).toEqual(EXTRA_COUNTS);
     expect(world.worldAi.lastVisibleRespawnDay).toBe(1);
   });
+  it('uses real nearby city sources for extra parties in the active player region',()=>{
+    const {manager,world,game}=makeWorld();
+    game.playerParty.x=120;
+    game.playerParty.y=160;
+    manager.ensureWorldParties();
+    const ids=new Set(world.state.map.settlements.map(city=>city.id));
+    const extras=world.worldAi.parties.filter(p=>EXTRA_KINDS.includes(p.kind));
+    expect(extras).toHaveLength(9);
+    expect(extras.every(p=>ids.has(p.homeCityId))).toBe(true);
+    expect(extras.every(p=>
+      Math.hypot(p.x-game.playerParty.x,p.y-game.playerParty.y)
+        <= 40*world.state.map.tileSize)).toBe(true);
+    const before=extras.map(p=>p.id);
+    for(let frame=0;frame<32;frame++)manager.updateWorldParties(1/60);
+    expect(world.worldAi.parties.map(p=>p.id)).toEqual(before);
+    expect(world.enemyParties).toHaveLength(9);
+  });
+  it('never changes original extra-party kind and faction when choosing a local source',()=>{
+    const {manager,world,game}=makeWorld();
+    game.playerParty.x=120;
+    game.playerParty.y=160;
+    manager.ensureWorldParties();
+    expect(world.worldAi.parties.filter(p=>p.kind==='merchant')
+      .every(p=>p.factionId==='venice')).toBe(true);
+    expect(world.worldAi.parties.filter(p=>p.kind==='noble')
+      .every(p=>p.factionId==='player')).toBe(true);
+  });
   it('creates all nine original visible parties immediately in a fresh world',()=>{
     const {manager,world}=makeWorld();
     manager.ensureWorldParties();
