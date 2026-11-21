@@ -29,7 +29,11 @@ export function registeredTradeRoute(worldState, tradeRoutes, routeId) {
   if (!Number.isFinite(len) || len < 0.1) return null;
   const hasRoadNetwork = Array.isArray(worldState?.roads) && worldState.roads.length > 0;
   const roadLink = hasRoadNetwork ? canonicalRoadForRoute(worldState, row) : null;
-  if (hasRoadNetwork && !roadLink) return null;
+  // Real EconomyManager road records use the canonical road's own route id.
+  // Correct endpoint IDs alone must not make a forged route ID authoritative.
+  // No-road legacy worlds retain their existing source-validation contract.
+  if (hasRoadNetwork && (!roadLink || roadLink.id !== routeId
+    || row.roadBacked === false)) return null;
   return { routeId, from, to, road: roadLink?.road || null };
 }
 
