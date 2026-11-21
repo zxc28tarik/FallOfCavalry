@@ -1,5 +1,5 @@
 /**
- * WEB V1.47b: actual gameplay movement stress gate. Never assigns player.x/y.
+ * WEB V1.47b/c: actual gameplay movement stress gate. Never assigns player.x/y.
  * Uses canonical player destination + simulation movement on walkable tile
  * centers and leaves real NPC streaming, save and encounters untouched.
  */
@@ -10,7 +10,7 @@ const arg=(k,d)=>{const i=process.argv.indexOf(k);return i>=0&&process.argv[i+1]
 const url=arg('--url','http://127.0.0.1:4173');
 const output=resolve(arg('--report','output/browser-smoke/world-v147-travel.json'));
 const seed=Number(arg('--seed','1337'));
-const report={version:'V1.47b',seed,status:'RUNNING',method:'native destination + updatePlayerParty; no player position assignment'};
+const report={version:'V1.47c',seed,status:'RUNNING',method:'native destination + updatePlayerParty; no player position assignment'};
 let browser;
 try{
   mkdirSync(dirname(output),{recursive:true});
@@ -89,6 +89,45 @@ try{
       if(i%25===0)maxBytes=Math.max(maxBytes,saveBytes());
     }
     const afterBytes=saveBytes();
+    const savedIds=new Set([
+      ...(w.worldAi.parties||[]),...(w.worldAi.dormantParties||[]),
+    ].map(p=>String(p.id)));
+    const savedCargo=new Map([
+      ...(w.worldAi.parties||[]),...(w.worldAi.dormantParties||[]),
+    ].map(p=>[String(p.id),JSON.stringify(p.cargo??null)]));
+    const quickSaved=g.saveManager?.quickSave?.()===true;
+    const quickLoaded=quickSaved&&g.saveManager?.quickLoad?.()===true;
+    const loadedParties=[
+      ...(w.worldAi.parties||[]),...(w.worldAi.dormantParties||[]),
+    ];
+    const loadedIds=new Set(loadedParties.map(p=>String(p.id)));
+    const identityAfterLoad=[...savedIds].every(id=>loadedIds.has(id));
+    const cargoAfterLoad=loadedParties.every(p=>savedCargo.has(String(p.id))
+      &&savedCargo.get(String(p.id))===JSON.stringify(p.cargo??null));
+    let returnDistance=0,returnBlocked=0;
+    let returnPrev={x:pp.x,y:pp.y};
+    for(let i=route.length-2;i>=0;i--){
+      const point=coord(route[i].tx,route[i].ty);
+      if(!w.setPlayerDestination(point.x,point.y)){returnBlocked++;break;}
+      let reached=false;
+      for(let j=0;j<40;j++){
+        sim.updatePlayerParty(0.12);
+        const now={x:pp.x,y:pp.y};
+        returnDistance+=Math.hypot(now.x-returnPrev.x,now.y-returnPrev.y)/tile;
+        returnPrev=now;
+        if(!pp.hasDestination){reached=pp.moveState==='arrived';break;}
+      }
+      if(!reached){returnBlocked++;break;}
+      sim.worldPartyManager.ensureWorldParties();
+      sim.worldPartyManager.updateWorldParties(0.12);
+    }
+    const finalParties=[
+      ...(w.worldAi.parties||[]),...(w.worldAi.dormantParties||[]),
+    ];
+    const finalIds=new Set(finalParties.map(p=>String(p.id)));
+    const restoredInitial=[...firstIds].filter(id=>finalIds.has(id)).length;
+    const finalCargoIntact=finalParties.filter(p=>savedCargo.has(String(p.id)))
+      .every(p=>savedCargo.get(String(p.id))===JSON.stringify(p.cargo??null));
     const active=new Set((w.worldAi.parties||[]).map(x=>String(x.id)));
     const dormant=new Set((w.worldAi.dormantParties||[]).map(x=>String(x.id)));
     const retained=[...firstIds].filter(id=>active.has(id)||dormant.has(id)).length;
@@ -97,7 +136,11 @@ try{
       netTiles:Math.hypot(pp.x-start.x,pp.y-start.y)/tile,
       actualDistanceTiles:distance,steps,blocked,
       regionAnchors:regions,dormantCount:w.worldAi.dormantParties?.length||0,
-      maxDormant,savePayloadJsonCharsBefore:beforeBytes,
+      maxDormant,quickSaved,quickLoaded,identityAfterLoad,cargoAfterLoad,
+      returnDistanceTiles:returnDistance,returnBlocked,
+      restoredInitial,finalCargoIntact,
+      savePayloadJsonCharsAfterReturn:saveBytes(),
+      savePayloadJsonCharsBefore:beforeBytes,
       savePayloadJsonCharsAfter:afterBytes,maxSampledSaveChars:maxBytes,
       initialPartyIds:firstIds.size,initialIdsStillActiveOrDormant:retained,
       caveat:'Synchronous native movement stepping, not real-time hours played, not actual JS heap bytes',
@@ -109,12 +152,17 @@ try{
     ||report.travel.netTiles<100
     ||report.travel.blocked!==0
     ||report.travel.regionAnchors<2
+    ||!report.travel.quickSaved||!report.travel.quickLoaded
+    ||!report.travel.identityAfterLoad||!report.travel.cargoAfterLoad
+    ||report.travel.returnDistanceTiles<100||report.travel.returnBlocked!==0
+    ||report.travel.restoredInitial!==report.travel.initialPartyIds
+    ||!report.travel.finalCargoIntact
     ||errors.length)throw Error('Real movement gate: '+JSON.stringify(report.travel));
   report.status='PASS';
-  console.log('[V1.47b] '+JSON.stringify(report.travel));
+  console.log('[V1.47c] '+JSON.stringify(report.travel));
 }catch(error){
   report.status='FAIL';report.error=String(error);
-  console.error('[V1.47b] '+String(error));process.exitCode=1;
+  console.error('[V1.47c] '+String(error));process.exitCode=1;
 }finally{
   writeFileSync(output,JSON.stringify(report,null,2)+'\n');
   await browser?.close().catch(()=>{});
