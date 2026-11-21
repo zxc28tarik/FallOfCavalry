@@ -133,6 +133,12 @@ export class WorldPartyManager {
     if (!this.world.worldAi || typeof this.world.worldAi !== 'object') this.world.worldAi = createInitialWorldAiState();
     if (!Array.isArray(this.world.worldAi.parties)) this.world.worldAi.parties = [];
 
+    // A new GameState begins in the start menu with no actual settlement
+    // layer. initPlayerParty() can call this manager during bootstrap; never
+    // consume the first in-game spawn or its 3-day cooldown before the
+    // player has chosen a faction and the genuine world has been generated.
+    if (this.world.state.mode === 'start') return this.world.worldAi.parties;
+
     const worldState = this.world.state?.map || {};
     const tradeRoutes = this.game?.economyManager?.ensureTradeRoutes?.() || [];
     const cfg = this.getWorldAiCfg();
