@@ -6,6 +6,7 @@ import {
 } from './quest-world-party-links.js';
 import {
   selectLocalCity, localRoadFromCity, localWorldRadius,
+  nextCanonicalCityLeg, verifiedRoadLegPath,
 } from './world-ai-local-sources.js';
 
 const DEFAULT_FACTION_IDS = ['ottoman', 'hre', 'polish', 'spanish', 'venice'];
@@ -232,6 +233,9 @@ export function spawnPartyPatrol(worldState, factions, ownerFactionId, cfg = {},
     speed: getSpeedByKind('patrol', cfg),
     alive: true,
     homeCityId: home?.id,
+    currentCityId: home?.id ?? null,
+    previousCityId: null,
+    completedRoadLegs: 0,
     path: realRoad?.path || null,
     pathIndex: 0,
   };
@@ -268,6 +272,9 @@ export function spawnPartyCaravan(worldState, factions, ownerFactionId, cfg = {}
     speed: getSpeedByKind('caravan', cfg),
     alive: true,
     homeCityId: fromCity?.id,
+    currentCityId: fromCity?.id ?? null,
+    previousCityId: null,
+    completedRoadLegs: 0,
     path: realRoad?.path || null,
     pathIndex: 0,
   };
@@ -324,7 +331,27 @@ function pickNextTarget(party, worldState, tradeRoutes) {
     return nextBanditRouteTarget(party, worldState, tradeRoutes)
       || pickRoamTarget(worldState, party.x, party.y);
   }
-  const destination = pickOtherSettlement(worldState, party.homeCityId, party.kind === 'patrol' ? party.factionId : null);
+  const city = getSettlements(worldState).find(s =>
+    Number.isFinite(s?.x) && Number.isFinite(s?.y)
+      && Math.hypot(s.x - party.x, s.y - party.y) <= 1);
+  if ((party.kind === 'patrol' || party.kind === 'caravan') && city) {
+    const priorCityId = party.currentCityId ?? party.homeCityId;
+    const next = nextCanonicalCityLeg(worldState, city.id, priorCityId);
+    if (next) {
+      party.previousCityId = priorCityId ?? null;
+      party.currentCityId = city.id;
+      party.completedRoadLegs = Math.max(0, Number(party.completedRoadLegs) || 0) + 1;
+      return {
+        x: next.city.x, y: next.city.y,
+        // The next path consists solely of verified existing road waypoints.
+        verifiedRoadPath: next.path,
+      };
+    }
+  }
+  // Older worlds without an actual road graph retain their legacy destination
+  // choice, but are NEVER assigned a made-up road or routeId.
+  const destination = pickOtherSettlement(worldState, party.homeCityId,
+    party.kind === 'patrol' ? party.factionId : null);
   if (destination) return { x: Number(destination.x), y: Number(destination.y) };
   return pickRoamTarget(worldState, party.x, party.y);
 }
@@ -357,8 +384,17 @@ export function updateWorldParties({
       const linkedBandit = validBanditRoute(party, worldState, tradeRoutes);
       const roadPath = linkedBandit
         ? getBanditRoadPatrolWaypoints(party, worldState, tradeRoutes) : [];
+      const targetCity = (party.kind==='patrol'||party.kind==='caravan')
+        ? getSettlements(worldState).find(city=>
+          Number.isFinite(city?.x)&&Number.isFinite(city?.y)
+          && Math.hypot(city.x-party.targetX,city.y-party.targetY)<=1)
+        : null;
+      const actualRoadPath = targetCity
+        ? verifiedRoadLegPath(worldState,party.currentCityId??party.homeCityId,
+          targetCity.id,party) : [];
       const path = linkedBandit
         ? (roadPath.length ? roadPath : [{ x: Number(party.targetX), y: Number(party.targetY) }])
+        : actualRoadPath.length ? actualRoadPath
         : findRoadPath(worldState, party.x, party.y, party.targetX, party.targetY);
       party.path = path.length ? path : [{ x: Number(party.targetX ?? party.x), y: Number(party.targetY ?? party.y) }];
       party.pathIndex = 0;
@@ -379,7 +415,7 @@ export function updateWorldParties({
         const next = pickNextTarget(party, worldState, tradeRoutes);
         party.targetX = next.x;
         party.targetY = next.y;
-        party.path = null;
+        party.path = next.verifiedRoadPath || null;
         party.pathIndex = 0;
       }
     } else {
