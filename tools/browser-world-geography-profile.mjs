@@ -187,9 +187,45 @@ async function run(){
       lastRespawnDay:snapshot.after.lastRespawnDay,
       lastVisibleRespawnDay:snapshot.after.lastVisibleRespawnDay,
     };
-    report.status='PASS_DIAGNOSTIC';
+    // Gameplay regression: the chosen faction must start on a valid world
+    // location, not the empty (0,0) corner. Noncombat local civilians must
+    // survive a real 32-frame map update with real sourced home-city IDs.
+    const chosen=actualPlayer.factionId;
+    const owned=(snapshot.after.settlements||[]).filter(city=>
+      (city.ownerFactionId===chosen)
+      &&Number.isFinite(city.x)&&Number.isFinite(city.y));
+    report.ownedCityCount=owned.length;
+    const localExtraKinds=new Set([
+      'refugee','merchant','messenger','villagers','noble',
+    ]);
+    const extras=snapshot.after.parties.filter(p=>localExtraKinds.has(p.kind));
+    const cityById=new Map(snapshot.after.settlements.map(city=>[
+      String(city.id),city,
+    ]));
+    const sourcedExtras=extras.filter(p=>{
+      const home=cityById.get(String(p.homeCityId));
+      return home&&Math.hypot(home.x-actualPlayer.x,home.y-actualPlayer.y)
+        <= 40*snapshot.after.tileSize;
+    });
+    report.localPopulationGate={
+      chosenFaction:chosen,ownedCityCount:owned.length,
+      extraParties:extras.length,
+      extraWithGenuineLocalCity:sourcedExtras.length,
+      playerIsMapOrigin:actualPlayer.x===0&&actualPlayer.y===0,
+      nearestSettlementTiles:afterProfile.nearestSettlementTiles,
+    };
+    if(owned.length>0 && (actualPlayer.x===0&&actualPlayer.y===0
+      || afterProfile.settlementsWithinDespawn<1
+      || extras.length<7 || sourcedExtras.length!==extras.length))
+      throw Error('V1.44 real start/world population regression: '+
+        JSON.stringify(report.localPopulationGate));
+    if(!owned.length)
+      throw Error('V1.44 selected faction owns no real city in the full world: '+
+        chosen);
+    report.status='PASS_REGRESSION';
     console.log('[V1.44] '+JSON.stringify({
       status:report.status,source:report.snapshotSource,
+      localPopulationGate:report.localPopulationGate,
       scene:{settlements:wave.mapSettlementCount,roads:wave.roads,
         worldSize:[wave.width,wave.height],tileSize:wave.tileSize},
       spawnTimePlayer:wave.player,actualPlayer,
