@@ -64,9 +64,12 @@ export function localRoadFromCity(worldState,home,playerParty,cfg={}){
 export function localBanditRouteAnchors(worldState,link,playerParty,cfg={}){
   if(!real(playerParty)||!link?.road)return [];
   const max=localWorldRadius(worldState,cfg);
-  const preferredMin=8*tileSize(worldState);
-  const pts=roadWorldWaypoints(worldState,link.road)
-    .filter(p=>distance(p,playerParty)<=max);
-  const safe=pts.filter(p=>distance(p,playerParty)>=preferredMin);
-  return safe.length?safe:pts;
+  const preferredMin=Math.max(8,Number(cfg?.BANDIT_AGGRO_RADIUS??4)+3)
+    *tileSize(worldState);
+  // A real road can pass directly through the player's starting town. If it
+  // has no safe visible point, return no linked spawn: the ordinary unlinked
+  // city-outskirts fallback prevents a forced immediate combat on game boot.
+  return roadWorldWaypoints(worldState,link.road)
+    .filter(p=>distance(p,playerParty)<=max
+      &&distance(p,playerParty)>=preferredMin);
 }
