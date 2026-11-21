@@ -70,10 +70,21 @@ function clampToBounds(x, y, bounds) {
   };
 }
 
-function pickSettlement(worldState, fallback = null) {
+function pickSettlement(worldState, fallback = null, playerParty = null, despawnTiles = 40) {
   const settlements = getSettlements(worldState);
   if (!settlements.length) return fallback;
-  return settlements[Math.floor(Math.random() * settlements.length)];
+  const tile = getWorldBounds(worldState).tileSize;
+  const range = (Number(despawnTiles) - 4) * tile;
+  // Use only actual nearby settlement sources, within the existing AI's
+  // 40-tile active range. Preserve the original all-world fallback when no
+  // real city is local; never fabricate a city or relocate an existing party.
+  const nearby = playerParty && Number.isFinite(playerParty.x) && Number.isFinite(playerParty.y)
+    && Number.isFinite(range) && range > 0
+    ? settlements.filter(s => Number.isFinite(s?.x) && Number.isFinite(s?.y)
+      && Math.hypot(s.x - playerParty.x, s.y - playerParty.y) <= range)
+    : [];
+  const pool = nearby.length ? nearby : settlements;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function pickRoamTarget(worldState, x, y) {
@@ -82,9 +93,9 @@ function pickRoamTarget(worldState, x, y) {
   return clampToBounds(x + randomInRange(-radius, radius), y + randomInRange(-radius, radius), bounds);
 }
 
-function createVisibleParty(spec, worldState) {
+function createVisibleParty(spec, worldState, playerParty = null, despawnTiles = 40) {
   const bounds = getWorldBounds(worldState);
-  const home = pickSettlement(worldState);
+  const home = pickSettlement(worldState, null, playerParty, despawnTiles);
   const sx = Number(home?.x ?? randomInRange(bounds.minX, bounds.maxX));
   const sy = Number(home?.y ?? randomInRange(bounds.minY, bounds.maxY));
   const clamped = clampToBounds(sx + randomInRange(-bounds.tileSize, bounds.tileSize), sy + randomInRange(-bounds.tileSize, bounds.tileSize), bounds);
@@ -170,7 +181,9 @@ export class WorldPartyManager {
       EXTRA_VISIBLE_PARTY_SPECS.forEach((spec) => {
         const max = Math.max(0, Math.floor(Number(cfg?.[spec.maxKey] ?? spec.fallbackMax)));
         while (this.world.worldAi.parties.filter((p) => p?.alive !== false && p?.kind === spec.kind).length < max) {
-          this.world.worldAi.parties.push(createVisibleParty(spec, worldState));
+          this.world.worldAi.parties.push(createVisibleParty(
+            spec, worldState, this.game?.playerParty, cfg?.DESPAWN_DISTANCE ?? 40,
+          ));
           added++;
         }
       });
