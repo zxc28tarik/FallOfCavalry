@@ -5,6 +5,7 @@
 
 import CityServicesUI from '../ui/city-services.js';
 import { applyCivicDecision } from '../systems/city-civic-decisions.js';
+import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -267,8 +268,15 @@ export class CityManager {
         const result=applyCivicDecision({
           city:this.state?.city,party:g.playerParty,day:this.state?.day,decisionId,
         });
+        if(result.ok){
+          const reactions=applyCouncilReactions({
+            roster:this.state?.worldCharacters,
+            cityId:this.state?.city?.id,decisionId,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+          });
+          result.characterReactions=reactions;
+          g.saveManager?.runAutosave?.('city-civic-decision');
+        }
         g.gameFlowManager?.setLastEventLog?.(result.message);
-        if(result.ok)g.saveManager?.runAutosave?.('city-civic-decision');
         return result;
       },
       onConstruct: (result) => {
