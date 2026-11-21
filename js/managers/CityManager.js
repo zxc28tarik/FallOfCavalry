@@ -7,6 +7,7 @@ import CityServicesUI from '../ui/city-services.js';
 import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
+import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -199,6 +200,18 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onCharacterCommission: (contract) => {
+            const character=(this.state?.worldCharacters?.characters||[])
+              .find(p=>p.id===contract.characterId && p.kind==='named'
+                && p.status==='alive' && p.role===contract.characterRole);
+            if(!character)return;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            changeNamedCharacterMetric(this.state.worldCharacters,character.id,{
+              metric:'satisfaction',
+              value:Math.min(100,Number(character.satisfaction??50)+4),day,
+              reason:'Kişisel görev tamamlandı: şehir hizmeti',
+            });
+          },
           onCivicFollowup: (contract) => {
             const city=(this.state?.map?.settlements||[]).find(row=>
               String(row.id)===String(contract.cityId));
