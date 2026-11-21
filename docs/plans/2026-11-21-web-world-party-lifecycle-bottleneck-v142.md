@@ -44,3 +44,31 @@ Gerçek CI çıktısı ile en maliyetli **etkisiz** adım saptanırsa, daha sonr
 - **Yeni oyun davranışı için gerçek CI sonucu ayrıca zorunlu:** Kod doğrulama ve Chromium PASS olmadan performans iyileşti iddiası yok.
 
 **O00-06 açık, PR #68 taslak/merge yok; Unity ve main değişmedi.**
+
+
+## Düzeltme sonrası gerçek CI: V1.42 PASS
+
+Düzeltme ve 6 yeni doğrudan oyun AI regresyon testini içeren **kod başlığı**, [Web validation #44847331423](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44847331423) ve [tam Chromium #44847331419](https://github.com/zxc28tarik/FallOfCavalry/actions/runs/44847331419), ikisi de **PASS**.
+
+- Birim: **824/824**, genel test: **1.236/1.236** + 1 eski skip, lint/derleme ve gerçek dünya yapısı PASS (881 yerleşim, 304 yol, 3 nehir, 4 geçit, 0 hata / 1 mevcut uyarı).
+- Tam Chromium mevcut bütün görev, eskort, ticaret, loot, save/load, encounter ve önceki V1.40/V1.41 kontrollerini geçiyor, 0 oyun konsol hatası.
+- Gerçek dünya, aynı seed1337, aynı yazılım Chrome, gerçek 32 rAF örnekleme; aşağıdaki **farklı CI çalıştırmaları** karşılaştırılır. Ayrı runner koşulları nedeniyle birebir kontrollü donanım/oyuncu FPS benchmark'ı değildir.
+
+| V1.42 gözlemi | Düzeltme öncesi CI #44846765600 | Düzeltme sonrası CI #44847331419 |
+|---|---:|---:|
+| Dünya parti ensure çağrısı | 64 | 64 |
+| Dünya parti AI update | 32 | 32 |
+| Temel parti üretimi, 32 karede | 320 | **0** |
+| AI update sırasında silinen toplam parti | 608 | **288** |
+| `ensureWorldParties` toplam (64 çağrı) | 3.400,9 ms | **6,6 ms** |
+| Temel ensure safhası toplam | 3.395,5 ms | **3,7 ms** |
+| `mapSimulation` toplam (32 kare) | 3.704,2 ms | **273,1 ms** |
+| `mapSimulation` ort. ms/kare | 115,756 | **8,534** |
+| 32 kare `early` V1.41 `loop.updateMap` | 112,453 ms/kare | **9,331 ms/kare** |
+| `early` V1.41 rAF aralığı | 155,371 ms | 143,006 ms |
+
+Bu gözlemler temel parti üretim döngüsünün **ortadan kaldırıldığını** ve aynı oyun fonksiyonu ölçümünde harita güncellemesinin yaklaşık **13,6 kat daha az CPU süresi** tükettiğini gösteriyor. Önceki 3 günlük kuralı izleyen `lastRespawnDay` korunuyor; ilk açılış üretimi ve 0-gün override testle garanti altında. Her güncellemede bulunan **ikinci ensure çağrısı hâlâ devam ediyor**, ancak base fase no-op olduğu için ~0,1 ms/çağrı; gereksiz refactor'a gidilmedi.
+
+**Açık sonraki V1.43 sorunu:** 9 ek görünür parti (refugee, merchant, messenger, villagers, noble) **her karede oluşturulup hemen siliniyor** (32 kare / 288 kimlik). Bu döngünün çalışma maliyeti küçük kalmış (`worldPartyUpdate` ~7,275 ms), ama davranış doğru değil. NPC/quest/encounter sistemini koruyacak şekilde, ayrı kararla ve regresyon testleriyle ekstra havuz ömrünü, sayısını, spawn yerini / despawn politikasını incele. Özellikle oyuncuya yakın dünya parti varlığını ve kaynak bağını doğrulamadan sadece FPS uğruna AI'yı seyrekleştirme.
+
+**Durum:** V1.42 tanı + en küçük gerçek düzeltme + CI PASS; PR #68 DRAFT/UNMERGED, O00-06 açık, main/Unity dokunulmadı. Başsız SwiftShader'ın ~140ms rAF süresi oyuncu FPS tahmini için kullanılamaz.
