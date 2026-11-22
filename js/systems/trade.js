@@ -139,7 +139,9 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
   // V1.60 local accord premium is applied only to successful wheat SALES.
   // The city manager resolves eligibility from actual saved NPC relationships.
   if(side==='sell'&&normalizedId==='wheat'){
-    const bonus=Math.max(0,Math.min(8,Number(options?.accordTradeBonusPct)||0));
+    const bonus=Math.max(0,Math.min(11,
+      Math.max(0,Math.min(8,Number(options?.accordTradeBonusPct)||0))
+      +Math.max(0,Math.min(3,Number(options?.regionalTradeBonusPct)||0))));
     if(bonus>0){
       const current=Math.max(1,Math.round(price));
       price=Math.max(current+1,Math.round(price*(1+bonus/100)));
