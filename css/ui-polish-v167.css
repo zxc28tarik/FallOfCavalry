@@ -1,0 +1,171 @@
+/*
+ * Fall of Cavalry — V1.67 screen legibility pass.
+ * Changes based on actual 1366x768 Chromium screenshots from the V1.66 build.
+ * All existing service/hotspot controls remain clickable and named.
+ */
+
+/* World HUD: reduce obstruction while preserving every live stat. */
+.hud-left{
+  width:min(536px,calc(100vw - 28px));
+  padding:11px 15px 10px;
+}
+.hud-left>.flex:first-child{align-items:center}
+.hud-heading{font-size:19px}
+.hud-overline{margin-bottom:3px;font-size:9px}
+.hud-resource-grid{
+  grid-template-columns:minmax(152px,1.85fr) repeat(4,minmax(58px,1fr));
+  margin-top:8px;
+  padding-top:8px;
+}
+.hud-resource{padding:0 8px;gap:2px}
+.hud-resource__label{font-size:9px}
+.hud-resource__value{font-size:16px;line-height:1.2}
+#hudFaction{
+  font-size:14px;
+  line-height:1.2;
+  white-space:normal;
+  overflow-wrap:break-word;
+  overflow:visible;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  max-height:2.4em;
+}
+.hud-encounter-status{margin-top:7px;padding-top:6px}
+.hud-details{font-size:12px}
+.hud-details__summary{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:max-content;
+  max-width:100%;
+  color:#cfc9b7;
+  cursor:pointer;
+  padding:4px 0;
+  font:600 11px/1.3 system-ui,sans-serif;
+  list-style:none;
+}
+.hud-details__summary::-webkit-details-marker{display:none}
+.hud-details__summary span{font-size:15px;transition:transform .15s ease}
+.hud-details[open] .hud-details__summary span{transform:rotate(180deg)}
+.hud-details .hud-stats{
+  max-width:480px;
+  border-left:2px solid rgba(190,162,109,.32);
+  padding:7px 9px;
+  margin:3px 0 6px;
+  background:rgba(9,18,23,.44);
+  font-size:11px;
+  line-height:1.5;
+}
+.hud-event{margin-top:5px;padding:5px 8px;font-size:11px}
+.hud-event:empty{display:none}
+.hud-left .action-btn{min-height:29px}
+.hud-left :is(#hudOptionsToggle,#settingsBtn,#helpBtn){white-space:nowrap}
+.quest-panel{
+  width:min(292px,calc(100vw - 28px));
+  padding:10px 12px;
+  max-height:116px;
+  bottom:51px;
+  background:linear-gradient(180deg,rgba(20,33,39,.94),rgba(9,19,26,.95));
+}
+.quest-panel:has(#questText:empty){display:none !important}
+#questText{font-size:13px;line-height:1.42}
+#worldMapToggleBtn{bottom:14px}
+
+/* Actual city screenshot: overlapping parcels currently make labels run into
+   neighbors. Clamp each parcel's OWN label; native title keeps the full text. */
+.city-scene-hotspot{
+  padding:8px 9px;
+  gap:5px;
+  overflow:hidden;
+  min-width:0;
+  min-height:0;
+  justify-content:space-between;
+  border-radius:5px;
+  box-shadow:0 3px 10px rgba(0,0,0,.16);
+  background:linear-gradient(180deg,rgba(9,20,24,.31),rgba(11,17,20,.55));
+}
+.city-scene-hotspot__label{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  max-width:100%;
+  max-height:2.4em;
+  overflow:hidden;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  font:700 10px/1.22 "Cinzel",Georgia,serif;
+  color:#fff1d5;
+  text-shadow:0 1px 3px rgba(0,0,0,.76);
+}
+.city-scene-hotspot__meta{
+  max-width:100%;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  font:500 10px/1.2 "Crimson Text",Georgia,serif;
+  color:#dfd9c6;
+  opacity:.96;
+}
+.city-scene-hotspot.is-selected{
+  z-index:3;
+  border-color:#f0d095;
+  box-shadow:0 0 0 2px rgba(226,184,112,.32),0 6px 15px rgba(0,0,0,.28);
+}
+.city-scene-hotspot:hover,.city-scene-hotspot:focus-visible{
+  z-index:5;
+  border-color:#f0d095;
+  background:linear-gradient(180deg,rgba(43,49,43,.8),rgba(23,31,30,.91));
+}
+/* More space for service controls. Entire row is scrollable, not clipped. */
+.city-scene-stage-footer{
+  min-height:36px;
+  flex:0 0 auto;
+}
+.city-scene-service-chips{
+  gap:6px;
+  max-height:92px;
+  overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(194,165,115,.7) transparent;
+}
+.city-service-chip{
+  min-height:31px;
+  white-space:nowrap;
+  font-size:12px;
+  padding:6px 10px;
+}
+.city-scene-stage-wrap{min-height:0}
+.city-scene-stage{min-height: min(46vh,440px)}
+.city-scene-panel__body{scrollbar-width:thin;scrollbar-color:rgba(194,165,115,.65) transparent}
+.city-overview-row{line-height:1.35}
+/* The fixed market diagnostic launcher from V1.35 was physically covering
+   the city service chips in the V1.66 Chromium capture. */
+body:has(#citySceneModal:not(.hidden)) #cargoMarketReportToggle,
+body:has(#citySceneModal:not(.hidden)) #cargoMarketReportPanel,
+body:has(#battleHud:not(.hidden)) #cargoMarketReportToggle,
+body:has(#battleHud:not(.hidden)) #cargoMarketReportPanel{
+  display:none !important;
+}
+@media(max-width:800px){
+  .hud-left{top:8px;left:8px;width:calc(100vw - 16px);padding:9px 10px}
+  .hud-resource-grid{grid-template-columns:minmax(100px,1.55fr) repeat(4,minmax(38px,1fr))}
+  .hud-resource{padding:0 4px}
+  #hudFaction{font-size:12px}
+  .hud-heading{font-size:16px}
+  .quest-panel{left:8px;bottom:49px;max-height:105px}
+  .city-scene-hotspot__label{font-size:9px}
+  .city-scene-hotspot__meta{font-size:9px}
+  .city-scene-stage{min-height:350px}
+}
+@media(max-width:520px){
+  .hud-left>.flex:first-child{align-items:flex-start}
+  .hud-overline{font-size:8px}
+  .hud-heading{font-size:14px}
+  .hud-resource-grid{grid-template-columns:minmax(86px,1.6fr) repeat(4,minmax(35px,1fr))}
+  .hud-resource__label{font-size:8px;letter-spacing:.03em}
+  .hud-resource__value{font-size:12px}
+  #hudFaction{font-size:11px}
+  .city-scene-hotspot{padding:5px}
+  .city-scene-hotspot__label{font-size:8px}
+}
