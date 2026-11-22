@@ -2,6 +2,7 @@ import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability, getEffectiveCivicDecision } from '../systems/city-civic-decisions.js';
 import {getCityAccordLegacy,getAccordTradeBonus} from '../systems/city-accord-legacy.js';
 import {getRegionalAidLegacy} from '../systems/regional-aid-legacy.js';
+import {getRegionalCooperation} from '../systems/regional-cooperation.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { getCharacterPetition } from '../systems/city-character-petitions.js';
 import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
@@ -926,6 +927,9 @@ export default class CityServicesUI {
     const day = Number(this.state?.day ?? 1);
     const settlementKey = this.currentSettlement?.id || `${this.currentSettlement?.tx},${this.currentSettlement?.ty}`;
     const activeOpportunity = this.state?.marketOpportunities?.[settlementKey];
+    const regionalTrade=getRegionalCooperation({party:this.party,
+      roster:this.state?.worldCharacters,cityId:this.currentSettlement?.id,
+      day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const accordTrade=getAccordTradeBonus({party:this.party,roster:this.state?.worldCharacters,
       cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const opportunityDaysLeft = activeOpportunity
@@ -942,6 +946,7 @@ export default class CityServicesUI {
           settlementKey,
           marketOpportunities: this.state?.marketOpportunities,
           accordTradeBonusPct: accordTrade.bonusPct,
+          regionalTradeBonusPct: regionalTrade?.sellBonusPct||0,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -963,6 +968,7 @@ export default class CityServicesUI {
                 <div class="text-xs opacity-80">Stok: ${stock} - Envanter: ${invQty} - Al: ${buyPrice}g - Sat: ${sellPrice}g</div>
                 ${hasOpportunity ? `<div class="text-xs text-amber-300">Firsat: +%${Math.round(activeOpportunity.bonusPct)} (${opportunityDaysLeft} gun)</div>` : ''}
                 ${item.id==='wheat'&&accordTrade.bonusPct>0?`<div class="text-xs text-amber-300">Uzlaşmış esnaf ve tüccar: buğday satışında +%${accordTrade.bonusPct} (${accordTrade.legacy.remainingDays} gün)</div>`:''}
+                ${item.id==='wheat'&&regionalTrade?`<div class="text-xs text-amber-300">Şehirler arası işbirliği: buğday satışında +%3 (${regionalTrade.remainingDays} gün)</div>`:''}
               </div>
               <div class="flex items-center gap-2">
                 <input data-qty-for="${item.id}" type="number" value="1" min="1" class="select-dark text-xs w-16" />
@@ -1148,6 +1154,7 @@ export default class CityServicesUI {
       DISPUTE_ACCORD: 'Uzlaşma Heyeti',
       REGIONAL_AID: 'Komşu Şehir Yardımı',
       REGIONAL_RECOVERY: 'Bölgesel İyileşme',
+      INTERCITY_TRADE: 'Şehirler Arası Ticaret',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1165,6 +1172,13 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if(contract?.type==='INTERCITY_TRADE'){
+      const stage=Number(contract.tradeStage||0);
+      const note=stage===0?'Hedef şehre git':stage===1
+        ?`Hedef pazarda buğday: ${Number(contract.tradeDelivered||0)}/5`
+        :stage===2?'Kaynak şehre geri dön':'Tamamlandı';
+      return `Ticaret heyeti ${progress}/3 — ${note}`;
     }
     if (contract?.type === 'REGIONAL_RECOVERY') {
       const stage=Number(contract.recoveryStage||0);
@@ -1207,6 +1221,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'INTERCITY_TRADE') return {title:contract.title||'Ticaret Heyeti',desc:contract.desc||'İki şehir arasındaki ikmali tamamla.'};
     if (contract.type === 'REGIONAL_RECOVERY') return {title:contract.title||'Bölgesel İyileşme',desc:contract.desc||'Şehirlerin ilişkisini güçlendir.'};
     if (contract.type === 'REGIONAL_AID') return {title:contract.title||'Komşu Şehre Yardım',desc:contract.desc||'Gerçek şehre yardım et.'};
     if (contract.type === 'DISPUTE_ACCORD') return {title:contract.title||'Şehir Uzlaşması',desc:contract.desc||'Üç aşamalı görevi tamamla.'};
