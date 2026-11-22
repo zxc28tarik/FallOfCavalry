@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
-import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
+import { CIVIC_DECISIONS, getCivicDecisionAvailability, getEffectiveCivicDecision } from '../systems/city-civic-decisions.js';
+import {getCityAccordLegacy} from '../systems/city-accord-legacy.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { getCharacterPetition } from '../systems/city-character-petitions.js';
 import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
@@ -399,6 +400,8 @@ export default class CityServicesUI {
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const accordLegacy=getCityAccordLegacy({party:this.party,roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const dispute=getCityDispute({roster:this.state?.worldCharacters,
       cityId:this.currentSettlement?.id,city:this.currentSettlement,
       day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
@@ -429,7 +432,11 @@ export default class CityServicesUI {
           <div class="city-overview-section__title">Şehir Meclisi — Günlük Karar</div>
           <div class="text-sm opacity-80">Güvenlik: ${Math.floor(Number(this.currentSettlement?.security??50))}/100 · ${escapeHtml(civicGate.reason||'Bugün bir karar alabilirsin.')}</div>
           <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
-          ${Object.entries(CIVIC_DECISIONS).map(([id,decision])=>`
+          ${accordLegacy?`<div class="text-xs opacity-80">Uzlaşma mirası etkin: ${accordLegacy.remainingDays} gün kaldı. Mahalle nöbeti ve imaret yardımı 20 altın ucuz; olağanüstü vergi +3 güvenlik kaybına yol açar.</div>`:''}
+          ${Object.entries(CIVIC_DECISIONS).map(([id,baseDecision])=>{
+            const decision=getEffectiveCivicDecision({city:this.currentSettlement,party:this.party,
+              roster:this.state?.worldCharacters,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),decisionId:id})||baseDecision;
+            return `
             <div class="city-overview-row">
               <span>
                 <strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)}
@@ -439,7 +446,7 @@ export default class CityServicesUI {
               <button type="button" class="action-btn text-xs" data-action="civic-decision" data-id="${id}"
                 ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
             </div>
-          `).join('')}
+          `;}).join('')}
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Şehirli Anlaşmazlığı</div>
