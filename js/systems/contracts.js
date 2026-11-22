@@ -8,7 +8,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -406,6 +406,51 @@ function createCharacterCommission({cityId,day,seed,map,ownerFactionId,roster}){
   };
 }
 
+/**
+ * Follow-up to an actual previous-day dispute. Cause comes from persisted
+ * named-character state history, NOT current conditions or an invented event.
+ * No battle spawn or new quest authority: these are normal city contracts.
+ */
+function createDisputeRemedy({cityId,day,seed,map,ownerFactionId,roster,cityName}){
+  if(cityId==null||!Number.isSafeInteger(day)||day<2)return null;
+  const actors=getSettlementCharacters(roster,cityId)
+    .filter(p=>p.kind==='named'&&p.status==='alive'&&Array.isArray(p.history))
+    .sort((a,b)=>a.id.localeCompare(b.id,'en'));
+  const record=actors.flatMap(person=>person.history
+    .filter(h=>h.day===day-1&&h.type==='state-changed'
+      &&h.metric==='satisfaction'&&/^Şehir ihtilafı: (first|second|mediate):(security|scarcity|trade|civic)$/.test(h.reason||''))
+    .map(h=>({person,h}))).sort((a,b)=>a.person.id.localeCompare(b.person.id,'en'))[0];
+  if(!record)return null;
+  const cause=record.h.reason.split(':').at(-1);
+  const home=getSettlementById(map,cityId);
+  if(!home)return null;
+  const destinations=getSettlements(map).filter(c=>String(c.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(home,a)-distanceBetweenSettlements(home,b))
+    .slice(0,20);
+  const supply=cause==='scarcity';
+  if(!supply&&!destinations.length)return null;
+  const target=supply?home:destinations[hashString(`${seed}:${cityId}:${day}:${cause}`)%destinations.length];
+  const kind={
+    security:{title:'Mahalle Asayiş Raporu',action:`${settlementName(target)} şehrindeki nöbetleri denetle ve ${cityName} şehrine dön.`,bonus:5},
+    scarcity:{title:'Erzak Krizi Yardımı',action:`${cityName} pazarına 8 buğday sat.`,bonus:4},
+    trade:{title:'Pazar Müzakeresi',action:`${settlementName(target)} şehrinde tüccarlarla görüş ve ${cityName} şehrine geri dön.`,bonus:2},
+    civic:{title:'Şehir İdaresi Uzlaşması',action:`${settlementName(target)} şehrinin idare usullerini öğrenip ${cityName} şehrine dön.`,bonus:3},
+  }[cause];
+  return {
+    ...buildContractBase({
+      id:`ct-dispute-${cityId}-${day}-${cause}`,type:'DISPUTE_REMEDY',cityId,
+      title:kind.title,desc:kind.action,
+      rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*0.85),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE)),
+      ownerFactionId,
+    }),
+    disputeCause:cause,disputeCharacterId:record.person.id,
+    targetCityId:target.id,disputeSecurityBonus:kind.bonus,
+    disputeStops:supply?[]:[target.id,cityId],
+    requiredCount:supply?8:2,requiredAmount:supply?8:null,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -467,6 +512,11 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     ownerFactionId,roster:worldState?.worldCharacters,
   });
   if(commission)contracts.push(commission);
+  const remedy=createDisputeRemedy({
+    cityId,day:Math.floor(Number(day)||0),seed:worldSeed,map:chosenMap,
+    ownerFactionId,roster:worldState?.worldCharacters,cityName,
+  });
+  if(remedy)contracts.push(remedy);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -520,6 +570,18 @@ export function updateContractProgress(event, party = runtime.party) {
         contract.progress = 1;
       }
     }
+    if (contract.type === 'DISPUTE_REMEDY') {
+      if(contract.disputeCause==='scarcity' && event.type==='DELIVERED'
+        && event.itemId==='food'&&event.cityId!=null
+        && String(event.cityId)===String(contract.cityId))
+        contract.progress=prev+Math.max(0,Number(event.qty??0));
+      if(contract.disputeCause!=='scarcity' && event.type==='CITY_VISITED'){
+        const stops=Array.isArray(contract.disputeStops)?contract.disputeStops:[];
+        const next=Math.max(0,Math.floor(Number(contract.progress)||0));
+        if(next<stops.length&&event.cityId!=null
+          &&String(event.cityId)===String(stops[next]))contract.progress=next+1;
+      }
+    }
     if (contract.type === 'CHARACTER_COMMISSION') {
       if(contract.commissionKind==='supply' && event.type==='DELIVERED'
         && event.itemId==='food' && event.cityId!=null
@@ -569,7 +631,7 @@ export function updateContractProgress(event, party = runtime.party) {
       }
     }
 
-    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF' || contract.type === 'CIVIC_FOLLOWUP' || contract.type === 'CHARACTER_COMMISSION')
+    const required = (contract.type === 'DELIVER' || contract.type === 'RELIEF' || contract.type === 'CIVIC_FOLLOWUP' || contract.type === 'CHARACTER_COMMISSION' || contract.type === 'DISPUTE_REMEDY')
       ? Math.max(1, Number(contract.requiredAmount ?? contract.requiredCount ?? 1))
       : Math.max(1, Number(contract.requiredCount ?? 1));
 
@@ -604,6 +666,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'DISPUTE_REMEDY' && typeof options?.onDisputeRemedy === 'function') {
+    options.onDisputeRemedy(completed);
+  }
   if (contract.type === 'CHARACTER_COMMISSION' && typeof options?.onCharacterCommission === 'function') {
     options.onCharacterCommission(completed);
   }
