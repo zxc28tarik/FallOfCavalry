@@ -1,6 +1,7 @@
 import * as CONST from '../constants.js';
 import { mirrorMarketStockChange } from './market-stock-bridge.js';
 import { observeMarketMovement } from './market-cargo-report.js';
+import { advanceCityMarketCycle } from './city-market-cycle.js';
 import { getStance } from './factions.js';
 import { getWarTradeTariffMultiplier } from './events.js';
 
@@ -289,6 +290,11 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
     const momentum = Number(market.momentum[itemId] ?? 0) * Number(cfg.MOMENTUM_DECAY);
     market.momentum[itemId] = clampMomentum(momentum, cfg);
   }
+
+  // V1.70: operate only real placed mills and bakeries on the real market
+  // ledger, then consume the population's existing food stocks. Keep the
+  // established daily market drift and all trade pricing behavior intact.
+  return advanceCityMarketCycle(settlement, market, { day: Math.floor(day) });
 }
 
 export default {
