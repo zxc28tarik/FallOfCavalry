@@ -11,6 +11,7 @@ import {
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
 } from '../systems/world-characters.js';
 import { getNamedCharacterState } from '../systems/named-character-state.js';
+import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '../systems/city-kethuda.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -81,6 +82,7 @@ export default class CityServicesUI {
     this.disputeFeedback = '';
     this.petitionFeedback = '';
     this.civicFeedback = '';
+    this.kethudaFeedback = '';
     this.getQuestManager = getQuestManager;
     this.onAssignQuest = onAssignQuest;
     this.pendingNpcQuestId = null;
@@ -140,6 +142,12 @@ export default class CityServicesUI {
       } else if (action === 'civic-decision') {
         const result=this.onCivicDecision?.(id);
         this.civicFeedback=result?.message||'İşlem tamamlanamadı.';
+      } else if (action === 'kethuda-project') {
+        const result=executeKethudaProject({
+          city:this.currentSettlement,party:this.party,day:this.state?.day,buildingId:id,
+        });
+        this.kethudaFeedback=result.message;
+        if(result.ok)this.onConstruct?.(result);
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
         this.onDiplomacyAction?.({ ok, message: ok ? `Ateskes satin alindi: ${id}` : 'Ateskes alinmadi.' });
@@ -402,6 +410,10 @@ export default class CityServicesUI {
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const kethuda=getKethudaStatus(this.currentSettlement);
+    const kethudaProjects=listKethudaProjects({
+      city:this.currentSettlement,party:this.party,day:this.state?.day,
+    });
     const accordLegacy=getCityAccordLegacy({party:this.party,roster:this.state?.worldCharacters,
       cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const regionalLegacy=getRegionalAidLegacy({party:this.party,
@@ -493,10 +505,29 @@ export default class CityServicesUI {
           `).join('') : '<div class="text-sm opacity-80">Bu sehir icin kayitli NPC yok.</div>'}
         </div>
         <div class="city-overview-section">
-          <div class="city-overview-section__title">Sehir Kethudasi</div>
+          <div class="city-overview-section__title">Şehir Kethüdası — Altyapı</div>
           <div class="text-sm opacity-80">
-            ${escapeHtml(cityState.infrastructure?.managerLabel || 'Sehir Kethudasi')} altyapi ve sehir hizmetlerini yonetir. Bu grup buyuk bina olarak cizilmez.
+            Görünmez şehir hizmetleri · Nüfus: ${kethuda?.population ?? 0} ·
+            Kapasite: ${kethuda?.capacity ?? 0}/${kethuda?.need ?? 0} ·
+            Açık ihtiyaç: ${kethuda?.unmet ?? 0}.
           </div>
+          <div class="text-xs opacity-80">Su, yol ve atık altyapısı geliştirildikçe ilgili şehir meclisi kararlarının gerçek hazine maliyeti azalır. Bugün en fazla bir proje yapılır.</div>
+          ${this.kethudaFeedback ? `<div class="text-xs mt-2">${escapeHtml(this.kethudaFeedback)}</div>` : ''}
+          <details class="mt-2">
+            <summary class="cursor-pointer font-bold">Altyapı projeleri (${kethudaProjects.length})</summary>
+            ${kethudaProjects.map((project) => `
+              <div class="city-overview-row">
+                <span>
+                  <strong>${escapeHtml(project.name)}</strong> · ${project.installed ? `İyileştirme ${project.level}/2` : 'Henüz kurulmadı'}
+                  <small class="block opacity-80">${project.finished ? 'Tamamlandı' : `${project.cost} altın · ${project.action}`}${project.reason ? ` · ${escapeHtml(project.reason)}` : ''}</small>
+                </span>
+                <button type="button" class="action-btn text-xs" data-action="kethuda-project"
+                  data-id="${escapeHtml(project.id)}" ${project.available ? '' : 'disabled'}>
+                  ${project.finished ? 'Tamam' : escapeHtml(project.action)}
+                </button>
+              </div>
+            `).join('')}
+          </details>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yapman gereken</div>
