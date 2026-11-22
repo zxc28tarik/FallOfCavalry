@@ -117,7 +117,11 @@ describe('V1.68 Kethuda real infrastructure', () => {
     const status = getKethudaStatus(city);
     expect(status.installedIds).not.toContain('fake-bridge');
     expect(status.improvementLevels['fake-bridge']).toBeUndefined();
-    expect(status.improvementLevels.paved_main_road).toBeGreaterThanOrEqual(0);
+    expect(Object.values(status.improvementLevels).every(value =>
+      Number.isSafeInteger(value) && value >= 0 && value <= 2)).toBe(true);
+    expect(status.improvementLevels.paved_main_road).toBe(
+      status.installedIds.includes('paved_main_road') ? 0 : undefined,
+    );
     expect(status.lastWorkDay).toBe(0);
     expect(getKethudaCivicDiscount(city, 'levy')).toBe(0);
   });
