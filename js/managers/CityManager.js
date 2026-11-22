@@ -9,6 +9,7 @@ import { applyCouncilReactions } from '../systems/city-civic-character-reactions
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
 import { appendAccordLegacy, getAccordTradeBonus, getCityAccordLegacy } from '../systems/city-accord-legacy.js';
+import { recordRegionalAidOutcome } from '../systems/regional-aid-legacy.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import { setWorldCharacterRelation, getSettlementCharacters } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -209,6 +210,28 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onRegionalRecovery: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(row=>String(row.id)===String(contract.cityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.recoverySecurityBonus??0))));
+            city.civicDirty=true;
+            // Follow-up rewards cooperation of real local named residents.
+            const residents=getSettlementCharacters(this.state?.worldCharacters,city.id)
+              .filter(p=>p.kind==='named'&&p.status==='alive')
+              .sort((a,b)=>a.id.localeCompare(b.id,'en')).slice(0,2);
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of residents)
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Bölgesel yardım takibi tamamlandı',
+              });
+          },
+          onRegionalAidOutcome: (contract) => {
+            recordRegionalAidOutcome({party:g.playerParty,contract,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+          },
           onRegionalAid: (contract) => {
             const city=(this.state?.map?.settlements||[])
               .find(row=>String(row.id)===String(contract.targetCityId));
