@@ -9,6 +9,7 @@ import { applyCouncilReactions } from '../systems/city-civic-character-reactions
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
+import { setWorldCharacterRelation } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -201,6 +202,31 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onDisputeAccord: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(c=>String(c.id)===String(contract.cityId));
+            if(!city)return;
+            const people=Array.isArray(contract.accordCharacters)
+              ? contract.accordCharacters.map(id=>(this.state?.worldCharacters?.characters||[])
+                .find(p=>p.id===id&&p.kind==='named'&&p.status==='alive'
+                  &&p.location?.settlementId===String(contract.cityId))) : [];
+            if(people.length!==2||people.some(p=>!p))return;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of people){
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',
+                value:Math.min(100,Number(person.satisfaction??50)+4),
+                day,reason:'Şehir uzlaşma heyeti görevi tamamlandı',
+              });
+            }
+            const relation=(this.state?.worldCharacters?.relations||[])
+              .find(r=>[r.firstId,r.secondId].includes(people[0].id)
+                &&[r.firstId,r.secondId].includes(people[1].id));
+            setWorldCharacterRelation(this.state.worldCharacters,people[0].id,
+              people[1].id,Math.max(-100,Math.min(100,Number(relation?.value??0)+8)));
+            city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+4)));
+            city.civicDirty=true;
+          },
           onDisputeRemedy: (contract) => {
             const city=(this.state?.map?.settlements||[])
               .find(c=>String(c.id)===String(contract.cityId));
