@@ -22,7 +22,9 @@ describe('V1.51 real council consequences',()=>{
     expect(make('patrol',3,3).job).toBeUndefined();
     expect(make('patrol',3,6).job).toBeUndefined();
     expect(make('unknown',3,4).job).toBeUndefined();
-    expect(make('patrol',3,4).offers).toHaveLength(7);
+    const offers=make('patrol',3,4).offers;
+    expect(offers.filter(o=>o.type!=='REGIONAL_AID')).toHaveLength(7);
+    expect(offers.some(o=>o.type==='REGIONAL_AID')).toBe(true);
   });
   for(const policy of ['patrol','levy']){
     it(`${policy} sends player to actual destination then back with no shortcut`,()=>{
