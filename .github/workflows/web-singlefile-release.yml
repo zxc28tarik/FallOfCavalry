@@ -1,0 +1,44 @@
+name: Downloadable current single-HTML game
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: single-html-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  create:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout latest PR source
+        uses: actions/checkout@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Restore locked dependencies
+        run: npm ci
+      - name: Build fully inlined game from actual source
+        run: npx vite build --config vite.singlefile.config.mjs
+      - name: Package one HTML file and verify no external build assets
+        run: node tools/build-single-html.mjs
+      - name: Install pinned browser check
+        run: npm install --no-save --package-lock=false --ignore-scripts playwright@1.56.1
+      - name: Smoke test downloaded HTML directly from file URL
+        run: node tools/smoke-single-html.mjs
+      - name: Upload latest playable standalone HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FallOfCavalry-V1_66-Guncel-TekDosya-HTML
+          path: release/FallOfCavalry_V1_66_Guncel_TekDosya.html
+          retention-days: 30
+          if-no-files-found: warn
