@@ -404,6 +404,9 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          completedProductionCaravans: Array.isArray(playerParty?.completedProductionCaravans)
+            ? playerParty.completedProductionCaravans.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-production-')).slice(-128) : [],
           regionalCooperation: Array.isArray(playerParty?.regionalCooperation)
             ? playerParty.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
               &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
@@ -624,6 +627,9 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.completedProductionCaravans = Array.isArray(p.completedProductionCaravans)
+      ? p.completedProductionCaravans.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-production-')).slice(-128) : [];
     playerParty.regionalCooperation = Array.isArray(p.regionalCooperation)
       ? p.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
         &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
