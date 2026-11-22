@@ -12,6 +12,7 @@ import {
 } from '../systems/world-characters.js';
 import { getNamedCharacterState } from '../systems/named-character-state.js';
 import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '../systems/city-kethuda.js';
+import { getKethudaConstructionQuote } from '../systems/city-infrastructure-benefits.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -521,7 +522,16 @@ export default class CityServicesUI {
             Kapasite: ${kethuda?.capacity ?? 0}/${kethuda?.need ?? 0} ·
             Açık ihtiyaç: ${kethuda?.unmet ?? 0}.
           </div>
-          <div class="text-xs opacity-80">Su, yol ve atık altyapısı geliştirildikçe ilgili şehir meclisi kararlarının gerçek hazine maliyeti azalır. Bugün en fazla bir proje yapılır.</div>
+          <div class="text-xs opacity-80">Su, yol ve atık altyapısı geliştirildikçe ilgili şehir meclisi kararlarının gerçek hazine maliyeti azalır. Yol iyileştirmeleri ayrıca gerçek bina inşaatında malzeme taşıma tasarrufu sağlar. Bugün en fazla bir proje yapılır.</div>
+          <div class="city-overview-grid">
+            ${Object.entries(kethuda?.serviceCoverage || {}).map(([id, group]) => `
+              <div class="city-overview-card" data-kethuda-service="${escapeHtml(id)}">
+                <div class="city-overview-card__label">${escapeHtml(group.label)}</div>
+                <div class="city-overview-card__value">${group.coveragePct}%</div>
+                <div class="city-overview-card__sub">Hizmet: ${group.capacity}/${group.need} · Açık: ${group.deficit} · İyileştirme: ${group.improvedLevels}</div>
+              </div>
+            `).join('')}
+          </div>
           ${this.kethudaFeedback ? `<div class="text-xs mt-2">${escapeHtml(this.kethudaFeedback)}</div>` : ''}
           <details class="mt-2" data-kethuda-projects ${this.kethudaExpanded ? 'open' : ''}>
             <summary class="cursor-pointer font-bold">Altyapı projeleri (${kethudaProjects.length})</summary>
@@ -763,12 +773,13 @@ export default class CityServicesUI {
         <div class="city-overview-section">
           <div class="city-overview-section__title">Gelistirme Secenekleri</div>
           ${options.map((option) => {
-            const affordable = Number(this.party?.gold ?? 0) >= Number(option.buildCostGold || 0);
+            const quote = getKethudaConstructionQuote(this.currentSettlement, option.id);
+            const affordable = Number(this.party?.gold ?? 0) >= Number(quote?.cost ?? option.buildCostGold ?? 0);
             return `
               <div class="frame-dark p-3 mb-2 flex items-start justify-between gap-3">
                 <div>
                   <div class="font-bold text-sm">${escapeHtml(option.name)}</div>
-                  <div class="text-xs opacity-75">Maliyet: ${Number(option.buildCostGold || 0)}g</div>
+                  <div class="text-xs opacity-75">Maliyet: ${Number(quote?.cost ?? option.buildCostGold ?? 0)}g${quote?.discount ? ` · Yol tasarrufu: ${quote.discount}g (asıl ${quote.baseCost}g)` : ""}</div>
                   <div class="text-xs opacity-70">+ ${(option.bonuses || []).join(', ') || '-'}</div>
                   <div class="text-xs opacity-70">- ${(option.penalties || []).join(', ') || '-'}</div>
                 </div>
@@ -889,13 +900,14 @@ export default class CityServicesUI {
           </div>
         `
         : options.map((option) => {
-          const affordable = Number(this.party?.gold ?? 0) >= Number(option.buildCostGold || 0);
+          const quote = getKethudaConstructionQuote(this.currentSettlement, option.id);
+          const affordable = Number(this.party?.gold ?? 0) >= Number(quote?.cost ?? option.buildCostGold ?? 0);
           return `
             <div class="frame-dark p-3 mb-2">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="font-bold text-sm">${escapeHtml(option.name)}</div>
-                  <div class="text-xs opacity-80">Maliyet: ${Number(option.buildCostGold || 0)}g · Min tier: ${Number(option.minTier || 1)}</div>
+                  <div class="text-xs opacity-80">Maliyet: ${Number(quote?.cost ?? option.buildCostGold ?? 0)}g${quote?.discount ? ` (yol indirimi ${quote.discount}g)` : ""} · Min tier: ${Number(option.minTier || 1)}</div>
                   <div class="text-xs opacity-70 mt-1">+ ${(option.bonuses || []).join(', ') || '-'}</div>
                   <div class="text-xs opacity-70">- ${(option.penalties || []).join(', ') || '-'}</div>
                 </div>
