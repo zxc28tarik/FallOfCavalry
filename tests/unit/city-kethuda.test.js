@@ -30,6 +30,9 @@ const party = () => ({
 describe('V1.68 Kethuda real infrastructure', () => {
   it('provides nine actual catalog projects and dynamic population need', () => {
     const city = make();
+    const untouchedSave = serializeSettlementCityState(city).infrastructure;
+    expect(untouchedSave.improvementLevels).toBeUndefined();
+    expect(untouchedSave.lastWorkDay).toBeUndefined();
     const projects = listKethudaProjects({ city, party: party(), day: 4 });
     expect(projects).toHaveLength(9);
     expect(projects.map(p => p.id)).toContain('sewer_canal');
