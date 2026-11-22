@@ -8,7 +8,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -451,6 +451,61 @@ function createDisputeRemedy({cityId,day,seed,map,ownerFactionId,roster,cityName
   };
 }
 
+/**
+ * Chapter 2 exists only after the REAL remedy was claimed and both named
+ * disputants still reside in the issuing settlement. The claim ledger is the
+ * provenance; reloading or revisiting a contract board cannot forge it.
+ */
+function createDisputeAccord({cityId,day,seed,map,roster,party,ownerFactionId}){
+  if(cityId==null||!Number.isSafeInteger(day)||day<2)return null;
+  const claims=Array.isArray(party?.completedDisputeRemedies)?party.completedDisputeRemedies:[];
+  if(!claims.length)return null;
+  const residents=getSettlementCharacters(roster,cityId).filter(person=>
+    person.kind==='named'&&person.status==='alive'&&Array.isArray(person.history));
+  const sources=[];
+  for(const person of residents){
+    for(const h of person.history){
+      if(h.type!=='state-changed'||h.metric!=='satisfaction'
+        ||!Number.isSafeInteger(h.day)||h.day>=day
+        ||!/^Şehir ihtilafı: (first|second|mediate):(security|scarcity|trade|civic)$/.test(h.reason||''))continue;
+      const cause=h.reason.split(':').at(-1);
+      const remedyId=`ct-dispute-${cityId}-${h.day+1}-${cause}`;
+      const accordId=`ct-accord-${cityId}-${h.day+1}-${cause}`;
+      if(!claims.includes(remedyId))continue;
+      if(party.completedDisputeAccords?.includes(accordId))continue;
+      sources.push({personId:person.id,h,cause,accordId,remedyId});
+    }
+  }
+  sources.sort((a,b)=>b.h.day-a.h.day||a.personId.localeCompare(b.personId,'en'));
+  const origin=sources.find(item=>sources.filter(s=>
+    s.h.day===item.h.day&&s.h.reason===item.h.reason).length>=2);
+  if(!origin)return null;
+  const people=sources.filter(item=>
+    item.h.day===origin.h.day&&item.h.reason===origin.h.reason).slice(0,2);
+  if(people.length!==2||people[0].personId===people[1].personId)return null;
+  const home=getSettlementById(map,cityId);
+  if(!home)return null;
+  const nearby=getSettlements(map).filter(c=>String(c.id)!==String(cityId))
+    .sort((a,b)=>distanceBetweenSettlements(home,a)-distanceBetweenSettlements(home,b))
+    .slice(0,20);
+  if(!nearby.length)return null;
+  const target=nearby[hashString(`${seed}:${origin.accordId}`)%nearby.length];
+  const targetName=settlementName(target);
+  return {
+    ...buildContractBase({
+      id:origin.accordId,type:'DISPUTE_ACCORD',cityId,
+      title:'Şehir Uzlaşma Heyeti',
+      desc:`1) ${targetName} şehrinde görüş. 2) Orada 4 buğday sat. 3) ${settlementName(home)} şehrine geri dön ve iki önemli kişiyle uzlaşmayı tamamla.`,
+      rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*1.2),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE*1.2)),
+      ownerFactionId,
+    }),
+    accordCause:origin.cause,accordCharacters:people.map(x=>x.personId),
+    sourceRemedyId:origin.remedyId,targetCityId:target.id,
+    accordStage:0,accordDelivered:0,requiredCount:3,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -517,6 +572,12 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     ownerFactionId,roster:worldState?.worldCharacters,cityName,
   });
   if(remedy)contracts.push(remedy);
+  const accord=createDisputeAccord({
+    cityId,day:Math.floor(Number(day)||0),seed:worldSeed,map:chosenMap,
+    roster:worldState?.worldCharacters,party:worldState?.playerParty||runtime.party,
+    ownerFactionId,
+  });
+  if(accord)contracts.push(accord);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -526,6 +587,8 @@ export function acceptContract(contractId, party = runtime.party) {
   if (!Array.isArray(party.contracts)) party.contracts = [];
   if(Array.isArray(party.completedDisputeRemedies)
     &&party.completedDisputeRemedies.includes(contractId))return null;
+  if(Array.isArray(party.completedDisputeAccords)
+    &&party.completedDisputeAccords.includes(contractId))return null;
   const already = party.contracts.find((c) => c?.id === contractId);
   if (already) return already;
 
@@ -570,6 +633,28 @@ export function updateContractProgress(event, party = runtime.party) {
       const success = Boolean(event.success);
       if (event.fromCityId === contract.cityId && event.toCityId === contract.targetCityId && success) {
         contract.progress = 1;
+      }
+    }
+    if(contract.type==='DISPUTE_ACCORD'){
+      const stage=Math.max(0,Math.floor(Number(contract.accordStage)||0));
+      if(stage===0 && event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.targetCityId)){
+        contract.accordStage=1;
+        contract.progress=1;
+      }else if(stage===1 && event.type==='DELIVERED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.targetCityId)
+        &&event.itemId==='food'&&Number.isFinite(Number(event.qty))
+        &&Number(event.qty)>0){
+        const quantity=Math.max(0,Number(contract.accordDelivered)||0);
+        contract.accordDelivered=Math.min(4,quantity+Math.floor(Number(event.qty)));
+        if(contract.accordDelivered>=4){
+          contract.accordStage=2;
+          contract.progress=2;
+        }
+      }else if(stage===2 && event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.cityId)){
+        contract.accordStage=3;
+        contract.progress=3;
       }
     }
     if (contract.type === 'DISPUTE_REMEDY') {
@@ -656,6 +741,8 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if (!contract.completed) return null;
   if(contract.type==='DISPUTE_REMEDY'&&Array.isArray(party.completedDisputeRemedies)
     &&party.completedDisputeRemedies.includes(contract.id))return null;
+  if(contract.type==='DISPUTE_ACCORD'&&Array.isArray(party.completedDisputeAccords)
+    &&party.completedDisputeAccords.includes(contract.id))return null;
 
   const resolvedWarState = options?.warState || null;
   const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
@@ -670,6 +757,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'DISPUTE_ACCORD' && typeof options?.onDisputeAccord === 'function') {
+    options.onDisputeAccord(completed);
+  }
   if (contract.type === 'DISPUTE_REMEDY' && typeof options?.onDisputeRemedy === 'function') {
     options.onDisputeRemedy(completed);
   }
@@ -689,6 +779,10 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if(contract.type==='DISPUTE_REMEDY'){
     const previous=Array.isArray(party.completedDisputeRemedies)?party.completedDisputeRemedies:[];
     party.completedDisputeRemedies=[...new Set([...previous,contract.id])].slice(-128);
+  }
+  if(contract.type==='DISPUTE_ACCORD'){
+    const previous=Array.isArray(party.completedDisputeAccords)?party.completedDisputeAccords:[];
+    party.completedDisputeAccords=[...new Set([...previous,contract.id])].slice(-128);
   }
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
