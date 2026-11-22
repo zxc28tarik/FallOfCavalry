@@ -38,7 +38,7 @@ describe('V1.66 campaign HUD visual system and interaction contract',()=>{
   it('preserves the existing scene and battle HUD containers with no duplicate IDs',()=>{
     for(const id of ['mainMenuOverlay','citySceneModal','cityScenePanelBody',
       'battleHud','battleCommandBar','worldMapOverlay','rosterPanel']){
-      expect((html.match(new RegExp(`id="${id}"`,'g'))||[]).toHaveLength(1);
+      expect((html.match(new RegExp(`id="${id}"`,'g'))||[])).toHaveLength(1);
     }
     expect(legacy).toContain('.city-scene-panel');
     expect(css).toContain('.city-scene-panel');
