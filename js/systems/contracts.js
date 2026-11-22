@@ -8,7 +8,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID', 'REGIONAL_RECOVERY']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID', 'REGIONAL_RECOVERY', 'INTERCITY_TRADE']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -588,6 +588,46 @@ function createRegionalRecovery({cityId,day,map,party,ownerFactionId}){
   };
 }
 
+/**
+ * Next-day merchant exchange between two actual towns whose named merchant/
+ * artisan contacts were linked by a redeemed recovery. No synthetic markets.
+ */
+function createIntercityTrade({cityId,day,map,party,roster,ownerFactionId}){
+  if(cityId==null||!Number.isSafeInteger(day)||day<2)return null;
+  const records=Array.isArray(party?.regionalCooperation)?party.regionalCooperation:[];
+  const recordsForDay=records.filter(x=>x?.day===day-1
+    &&String(x.sourceCityId)===String(cityId)
+    &&party?.completedRegionalRecovery?.includes(x.sourceRecoveryId)
+    &&party?.completedRegionalAid?.includes(x.sourceAidId))
+    .sort((a,b)=>a.sourceRecoveryId.localeCompare(b.sourceRecoveryId,'en'));
+  for(const record of recordsForDay){
+    const source=getSettlements(map).find(s=>String(s.id)===String(record.sourceCityId));
+    const target=getSettlements(map).find(s=>String(s.id)===String(record.targetCityId));
+    if(!source||!target||String(source.id)===String(target.id))continue;
+    const people=Array.isArray(record.characterIds)?record.characterIds.map((id,index)=>
+      getSettlementCharacters(roster,index===0?source.id:target.id)
+        .find(p=>p.id===id&&p.kind==='named'&&p.status==='alive'
+          &&['merchant','artisan'].includes(p.role))):[];
+    if(people.length!==2||people.some(p=>!p))continue;
+    const id=`ct-intercity-${record.sourceRecoveryId}`;
+    if(party?.completedIntercityTrade?.includes(id))continue;
+    return {
+      ...buildContractBase({id,type:'INTERCITY_TRADE',cityId,
+        title:'Şehirler Arası Ticaret Heyeti',
+        desc:`${settlementName(target)} şehrindeki ticaret temsilcisine git, oranın pazarına 5 buğday sat ve ${settlementName(source)} şehrine dön.`,
+        rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*1.1),
+        rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE*1.2)),
+        ownerFactionId,
+      }),
+      sourceRecoveryId:record.sourceRecoveryId,sourceAidId:record.sourceAidId,
+      linkedCharacters:[...record.characterIds],targetCityId:target.id,
+      tradeStage:0,tradeDelivered:0,requiredCount:3,
+      requiredAmount:null,
+    };
+  }
+  return null;
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -666,6 +706,10 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
   const recovery=createRegionalRecovery({cityId,day:Math.floor(Number(day)||0),
     map:chosenMap,party:worldState?.playerParty||runtime.party,ownerFactionId});
   if(recovery)contracts.push(recovery);
+  const intercity=createIntercityTrade({cityId,day:Math.floor(Number(day)||0),
+    map:chosenMap,party:worldState?.playerParty||runtime.party,
+    roster:worldState?.worldCharacters,ownerFactionId});
+  if(intercity)contracts.push(intercity);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -681,6 +725,8 @@ export function acceptContract(contractId, party = runtime.party) {
     &&party.completedRegionalAid.includes(contractId))return null;
   if(Array.isArray(party.completedRegionalRecovery)
     &&party.completedRegionalRecovery.includes(contractId))return null;
+  if(Array.isArray(party.completedIntercityTrade)
+    &&party.completedIntercityTrade.includes(contractId))return null;
   const already = party.contracts.find((c) => c?.id === contractId);
   if (already) return already;
 
@@ -725,6 +771,27 @@ export function updateContractProgress(event, party = runtime.party) {
       const success = Boolean(event.success);
       if (event.fromCityId === contract.cityId && event.toCityId === contract.targetCityId && success) {
         contract.progress = 1;
+      }
+    }
+    if(contract.type==='INTERCITY_TRADE'){
+      const stage=Math.max(0,Math.floor(Number(contract.tradeStage)||0));
+      if(stage===0&&event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.targetCityId)){
+        contract.tradeStage=1;
+        contract.progress=1;
+      }else if(stage===1&&event.type==='DELIVERED'&&event.itemId==='food'
+        &&event.cityId!=null&&String(event.cityId)===String(contract.targetCityId)
+        &&Number.isFinite(Number(event.qty))&&Number(event.qty)>0){
+        contract.tradeDelivered=Math.min(5,Math.max(0,Number(contract.tradeDelivered)||0)
+          +Math.floor(Number(event.qty)));
+        if(contract.tradeDelivered>=5){
+          contract.tradeStage=2;
+          contract.progress=2;
+        }
+      }else if(stage===2&&event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.cityId)){
+        contract.tradeStage=3;
+        contract.progress=3;
       }
     }
     if(contract.type==='REGIONAL_RECOVERY'){
@@ -876,6 +943,8 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if(contract.type==='REGIONAL_RECOVERY'&&Array.isArray(party.completedRegionalRecovery)
     &&party.completedRegionalRecovery.includes(contract.id))return null;
 
+  if(contract.type==='INTERCITY_TRADE'&&Array.isArray(party.completedIntercityTrade)
+    &&party.completedIntercityTrade.includes(contract.id))return null;
   const resolvedWarState = options?.warState || null;
   const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
   const warContractTypes = new Set(['DEFEND', 'ASSASSINATE']);
@@ -889,6 +958,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'INTERCITY_TRADE' && typeof options?.onIntercityTrade === 'function') {
+    options.onIntercityTrade(completed);
+  }
   if (contract.type === 'REGIONAL_RECOVERY' && typeof options?.onRegionalRecovery === 'function') {
     options.onRegionalRecovery(completed);
   }
@@ -930,6 +1002,11 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if(contract.type==='REGIONAL_RECOVERY'){
     const previous=Array.isArray(party.completedRegionalRecovery)?party.completedRegionalRecovery:[];
     party.completedRegionalRecovery=[...new Set([...previous,contract.id])].slice(-128);
+    if(typeof options?.onRegionalCooperation==='function')options.onRegionalCooperation(completed);
+  }
+  if(contract.type==='INTERCITY_TRADE'){
+    const previous=Array.isArray(party.completedIntercityTrade)?party.completedIntercityTrade:[];
+    party.completedIntercityTrade=[...new Set([...previous,contract.id])].slice(-128);
   }
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
