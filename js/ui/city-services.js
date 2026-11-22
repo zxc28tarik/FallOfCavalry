@@ -1128,6 +1128,7 @@ export default class CityServicesUI {
       DISPATCH: 'Vilayet Yazismasi',
       CIVIC_FOLLOWUP: 'Meclis Dilekçesi',
       CHARACTER_COMMISSION: 'Kişisel Görev',
+      DISPUTE_REMEDY: 'Anlaşmazlık Sonrası',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1145,6 +1146,9 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if (contract?.type === 'DISPUTE_REMEDY') {
+      return `Anlaşmazlık takibi: ${progress}/${Math.max(1,Number(contract.requiredCount||1))}`;
     }
     if (contract?.type === 'CHARACTER_COMMISSION') {
       const goal=Math.max(1,Number(contract.requiredCount||1));
@@ -1167,6 +1171,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'DISPUTE_REMEDY') return {title:contract.title||'Anlaşmazlık Sonrası',desc:contract.desc||'Şehir sorununa çözüm getir.'};
     if (contract.type === 'CHARACTER_COMMISSION') return {title:contract.title||'Kişisel Görev',desc:contract.desc||'Karakterin talebini yerine getir.'};
     if (contract.type === 'CIVIC_FOLLOWUP') return {title:contract.title||'Meclis Dilekçesi',desc:contract.desc||'Önceki günkü kararı takip et.'};
     if (contract.type === 'DISPATCH') return {title:contract.title||'Vilayet Yazışması',desc:contract.desc||'İki vilayete sırayla git, geri dön.'};
