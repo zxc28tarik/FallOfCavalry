@@ -1142,6 +1142,7 @@ export default class CityServicesUI {
       CHARACTER_COMMISSION: 'Kişisel Görev',
       DISPUTE_REMEDY: 'Anlaşmazlık Sonrası',
       DISPUTE_ACCORD: 'Uzlaşma Heyeti',
+      REGIONAL_AID: 'Komşu Şehir Yardımı',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1159,6 +1160,9 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if (contract?.type === 'REGIONAL_AID') {
+      return `Komşu şehir yardımı: ${progress}/${Math.max(1,Number(contract.requiredCount||1))} · ${contract.regionalAidKind==='food'?'Erzak':'Asayiş'}`;
     }
     if (contract?.type === 'DISPUTE_ACCORD') {
       const step=Number(contract.accordStage||0);
@@ -1191,6 +1195,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'REGIONAL_AID') return {title:contract.title||'Komşu Şehre Yardım',desc:contract.desc||'Gerçek şehre yardım et.'};
     if (contract.type === 'DISPUTE_ACCORD') return {title:contract.title||'Şehir Uzlaşması',desc:contract.desc||'Üç aşamalı görevi tamamla.'};
     if (contract.type === 'DISPUTE_REMEDY') return {title:contract.title||'Anlaşmazlık Sonrası',desc:contract.desc||'Şehir sorununa çözüm getir.'};
     if (contract.type === 'CHARACTER_COMMISSION') return {title:contract.title||'Kişisel Görev',desc:contract.desc||'Karakterin talebini yerine getir.'};
