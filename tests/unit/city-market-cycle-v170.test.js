@@ -138,9 +138,9 @@ describe('WEB V1.70 — actual city-market production and civilian consumption',
     const result = trade.advanceMarketOneDay(city, market, {
       seed: 1337, day: 10, biomeKey: 'PLAINS',
     });
-    expect(result.ok).toBe(true);
-    expect(result.day).toBe(10);
-    expect(result.dailyFoodNeed).toBe(2);
+    // Backward-compatible return contract: daily trade tick returns undefined.
+    expect(result).toBeUndefined();
+    expect(getCityMarketCyclePreview(city).dailyFoodNeed).toBe(2);
     expect(market.mcDay).toBe(10);
     expect(auditMarketStockBridge(city, market, CONST.TRADE_ITEMS).status).toBe('equal');
     expect(inspectMarketMovements().some(m => m.kind === 'day_drift')).toBe(true);
