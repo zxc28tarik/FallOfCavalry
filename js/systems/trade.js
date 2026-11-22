@@ -294,7 +294,7 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
   // V1.70: operate only real placed mills and bakeries on the real market
   // ledger, then consume the population's existing food stocks. Keep the
   // established daily market drift and all trade pricing behavior intact.
-  return advanceCityMarketCycle(settlement, market, { day: Math.floor(day) });
+  advanceCityMarketCycle(settlement, market, { day: Math.floor(day) });
 }
 
 export default {
