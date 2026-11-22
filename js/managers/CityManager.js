@@ -201,6 +201,20 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onDisputeRemedy: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(c=>String(c.id)===String(contract.cityId));
+            if(!city)return;
+            const bonus=Number(contract.disputeSecurityBonus??0);
+            city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+bonus)));
+            city.civicDirty=true;
+            if(contract.disputeCause==='trade'||contract.disputeCause==='scarcity'){
+              if(!city.priceMultiplier||typeof city.priceMultiplier!=='object')city.priceMultiplier={};
+              const wheat=Number(city.priceMultiplier.wheat??1);
+              if(Number.isFinite(wheat))
+                city.priceMultiplier.wheat=Math.max(0.8,Math.min(1.3,Math.round((wheat-0.04)*100)/100));
+            }
+          },
           onCharacterCommission: (contract) => {
             const character=(this.state?.worldCharacters?.characters||[])
               .find(p=>p.id===contract.characterId && p.kind==='named'
