@@ -1155,6 +1155,7 @@ export default class CityServicesUI {
       REGIONAL_AID: 'Komşu Şehir Yardımı',
       REGIONAL_RECOVERY: 'Bölgesel İyileşme',
       INTERCITY_TRADE: 'Şehirler Arası Ticaret',
+      PRODUCTION_CARAVAN: 'Üretim Kervanı',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1172,6 +1173,14 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if(contract?.type==='PRODUCTION_CARAVAN'){
+      const stage=Number(contract.caravanStage||0);
+      const note=stage===0?`Kaynak pazarından ${contract.cargoItemId}: ${Number(contract.caravanBought||0)}/3 satın al`
+        :stage===1?'Hedef şehri ziyaret et'
+          :stage===2?`Hedef pazarında ${contract.cargoItemId}: ${Number(contract.caravanSold||0)}/3 sat`
+          :'Tamamlandı';
+      return `Üretim kervanı ${progress}/3 — ${note}`;
     }
     if(contract?.type==='INTERCITY_TRADE'){
       const stage=Number(contract.tradeStage||0);
@@ -1221,6 +1230,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'PRODUCTION_CARAVAN') return {title:contract.title||'Üretim Kervanı',desc:contract.desc||'Gerçek ticaret rotasında ürün taşı.'};
     if (contract.type === 'INTERCITY_TRADE') return {title:contract.title||'Ticaret Heyeti',desc:contract.desc||'İki şehir arasındaki ikmali tamamla.'};
     if (contract.type === 'REGIONAL_RECOVERY') return {title:contract.title||'Bölgesel İyileşme',desc:contract.desc||'Şehirlerin ilişkisini güçlendir.'};
     if (contract.type === 'REGIONAL_AID') return {title:contract.title||'Komşu Şehre Yardım',desc:contract.desc||'Gerçek şehre yardım et.'};
