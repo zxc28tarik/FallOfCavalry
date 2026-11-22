@@ -1129,6 +1129,7 @@ export default class CityServicesUI {
       CIVIC_FOLLOWUP: 'Meclis Dilekçesi',
       CHARACTER_COMMISSION: 'Kişisel Görev',
       DISPUTE_REMEDY: 'Anlaşmazlık Sonrası',
+      DISPUTE_ACCORD: 'Uzlaşma Heyeti',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1146,6 +1147,13 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if (contract?.type === 'DISPUTE_ACCORD') {
+      const step=Number(contract.accordStage||0);
+      const note=step===0?'Başka şehirde görüşme'
+        :step===1?`Hedef pazarda buğday: ${Number(contract.accordDelivered||0)}/4`
+          :step===2?'Kaynak şehre dön':'Tamamlandı';
+      return `Uzlaşma ${progress}/3 — ${note}`;
     }
     if (contract?.type === 'DISPUTE_REMEDY') {
       return `Anlaşmazlık takibi: ${progress}/${Math.max(1,Number(contract.requiredCount||1))}`;
@@ -1171,6 +1179,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'DISPUTE_ACCORD') return {title:contract.title||'Şehir Uzlaşması',desc:contract.desc||'Üç aşamalı görevi tamamla.'};
     if (contract.type === 'DISPUTE_REMEDY') return {title:contract.title||'Anlaşmazlık Sonrası',desc:contract.desc||'Şehir sorununa çözüm getir.'};
     if (contract.type === 'CHARACTER_COMMISSION') return {title:contract.title||'Kişisel Görev',desc:contract.desc||'Karakterin talebini yerine getir.'};
     if (contract.type === 'CIVIC_FOLLOWUP') return {title:contract.title||'Meclis Dilekçesi',desc:contract.desc||'Önceki günkü kararı takip et.'};
