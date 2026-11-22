@@ -17,7 +17,18 @@ export function selectCooperationCaravan({map,party,roster,cityId,day}={}){
     [String(link.fromCityId),String(link.toCityId)].includes(String(source.id))
     &&[String(link.fromCityId),String(link.toCityId)].includes(String(target.id)));
   if(!road)return null;
-  const biome=String(source.biome||source.biomeId||'').toUpperCase();
+  // Procedural world settlements usually have no per-city biome field.
+  // Read the authoritative typed biome layer by the city's actual tile.
+  const tx=Number(source.tx),ty=Number(source.ty),width=Number(map.width);
+  const layer=map.biomes;
+  const index=Number.isInteger(tx)&&Number.isInteger(ty)&&Number.isInteger(width)
+    &&tx>=0&&ty>=0&&width>0&&tx<width&&ty<Number(map.height)
+    ?ty*width+tx:-1;
+  const stored=source.biome??source.biomeId
+    ??(index>=0&&layer?.length===width*Number(map.height)?layer[index]:null);
+  const biome=Number.isInteger(stored)
+    ?Object.keys(CONST.BIOME).find(key=>CONST.BIOME[key]===stored)||''
+    :String(stored||'').toUpperCase();
   const production=CONST.MARKET_BIOME_PRODUCTION?.[biome];
   if(!production)return null;
   const cargo=Object.entries(production)
