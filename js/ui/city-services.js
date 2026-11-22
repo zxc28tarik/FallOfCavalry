@@ -1,6 +1,7 @@
 import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability, getEffectiveCivicDecision } from '../systems/city-civic-decisions.js';
 import {getCityAccordLegacy,getAccordTradeBonus} from '../systems/city-accord-legacy.js';
+import {getRegionalAidLegacy} from '../systems/regional-aid-legacy.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { getCharacterPetition } from '../systems/city-character-petitions.js';
 import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
@@ -402,6 +403,8 @@ export default class CityServicesUI {
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
     const accordLegacy=getCityAccordLegacy({party:this.party,roster:this.state?.worldCharacters,
       cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+    const regionalLegacy=getRegionalAidLegacy({party:this.party,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const dispute=getCityDispute({roster:this.state?.worldCharacters,
       cityId:this.currentSettlement?.id,city:this.currentSettlement,
       day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
@@ -434,6 +437,7 @@ export default class CityServicesUI {
           <div class="text-sm opacity-80">Güvenlik: ${Math.floor(Number(this.currentSettlement?.security??50))}/100 · ${escapeHtml(civicGate.reason||'Bugün bir karar alabilirsin.')}</div>
           <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
           ${accordLegacy?`<div class="text-xs opacity-80">Uzlaşma mirası etkin: ${accordLegacy.remainingDays} gün kaldı. Mahalle nöbeti ve imaret yardımı 20 altın ucuz; olağanüstü vergi +3 güvenlik kaybına yol açar.</div>`:''}
+          ${regionalLegacy?`<div class="text-xs opacity-80">Komşu şehir yardımı etkisi: ${regionalLegacy.remainingDays} gün. ${regionalLegacy.kind==='food'?'İmarete Erzak':'Mahalle Nöbeti'} 10 altın indirimli.</div>`:''}
           ${Object.entries(CIVIC_DECISIONS).map(([id,baseDecision])=>{
             const decision=getEffectiveCivicDecision({city:this.currentSettlement,party:this.party,
               roster:this.state?.worldCharacters,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),decisionId:id})||baseDecision;
@@ -1143,6 +1147,7 @@ export default class CityServicesUI {
       DISPUTE_REMEDY: 'Anlaşmazlık Sonrası',
       DISPUTE_ACCORD: 'Uzlaşma Heyeti',
       REGIONAL_AID: 'Komşu Şehir Yardımı',
+      REGIONAL_RECOVERY: 'Bölgesel İyileşme',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -1160,6 +1165,13 @@ export default class CityServicesUI {
     }
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
+    }
+    if (contract?.type === 'REGIONAL_RECOVERY') {
+      const stage=Number(contract.recoveryStage||0);
+      const task=stage===0?'Yardım eden şehre git':stage===1
+        ?contract.regionalRecoveryKind==='food'?`Buğday: ${Number(contract.recoveryDelivered||0)}/4`:'Yardım alan şehre dön'
+        :'Tamamlandı';
+      return `Bölgesel takip ${progress}/2 — ${task}`;
     }
     if (contract?.type === 'REGIONAL_AID') {
       return `Komşu şehir yardımı: ${progress}/${Math.max(1,Number(contract.requiredCount||1))} · ${contract.regionalAidKind==='food'?'Erzak':'Asayiş'}`;
@@ -1195,6 +1207,7 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'REGIONAL_RECOVERY') return {title:contract.title||'Bölgesel İyileşme',desc:contract.desc||'Şehirlerin ilişkisini güçlendir.'};
     if (contract.type === 'REGIONAL_AID') return {title:contract.title||'Komşu Şehre Yardım',desc:contract.desc||'Gerçek şehre yardım et.'};
     if (contract.type === 'DISPUTE_ACCORD') return {title:contract.title||'Şehir Uzlaşması',desc:contract.desc||'Üç aşamalı görevi tamamla.'};
     if (contract.type === 'DISPUTE_REMEDY') return {title:contract.title||'Anlaşmazlık Sonrası',desc:contract.desc||'Şehir sorununa çözüm getir.'};
