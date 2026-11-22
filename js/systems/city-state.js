@@ -322,12 +322,15 @@ function cloneInfrastructure(infrastructure) {
     needScore: Math.max(0, Number(source.needScore ?? 0)),
     installedBuildingIds: installed,
     availableBuildingIds: [...approved],
-    improvementLevels: Object.fromEntries(installed.map((id) => [
-      id, Number.isSafeInteger(improvements[id])
-        ? Math.max(0, Math.min(2, improvements[id])) : 0,
-    ])),
-    lastWorkDay: Number.isSafeInteger(source.lastWorkDay)
-      ? Math.max(0, source.lastWorkDay) : 0,
+    // Sparse-delta: 881 real settlements must not serialize default 0 fields.
+    // The full campaign already approaches the browser's per-origin quota.
+    ...(installed.some((id) => Number.isSafeInteger(improvements[id]) && improvements[id] > 0)
+      ? { improvementLevels: Object.fromEntries(installed
+        .filter((id) => Number.isSafeInteger(improvements[id]) && improvements[id] > 0)
+        .map((id) => [id, Math.min(2, improvements[id])])) }
+      : {}),
+    ...(Number.isSafeInteger(source.lastWorkDay) && source.lastWorkDay > 0
+      ? { lastWorkDay: source.lastWorkDay } : {}),
     notes: Array.isArray(source.notes) ? source.notes.map((entry) => String(entry)) : [],
   };
 }
