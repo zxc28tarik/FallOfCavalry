@@ -83,6 +83,7 @@ export default class CityServicesUI {
     this.petitionFeedback = '';
     this.civicFeedback = '';
     this.kethudaFeedback = '';
+    this.kethudaExpanded = false;
     this.getQuestManager = getQuestManager;
     this.onAssignQuest = onAssignQuest;
     this.pendingNpcQuestId = null;
@@ -113,6 +114,12 @@ export default class CityServicesUI {
       if (!btn) return;
       this.openService(btn.dataset.id);
     });
+
+    this.getPanelBodyEl()?.addEventListener('toggle', (event) => {
+      if (event.target?.matches?.('[data-kethuda-projects]')) {
+        this.kethudaExpanded = Boolean(event.target.open);
+      }
+    }, true);
 
     this.getPanelBodyEl()?.addEventListener('click', (event) => {
       const btn = event.target?.closest?.('button[data-action]');
@@ -147,6 +154,7 @@ export default class CityServicesUI {
           city:this.currentSettlement,party:this.party,day:this.state?.day,buildingId:id,
         });
         this.kethudaFeedback=result.message;
+        this.kethudaExpanded=true;
         if(result.ok)this.onConstruct?.(result);
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
@@ -220,6 +228,8 @@ export default class CityServicesUI {
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
     this.pendingNpcQuestId = null;
     this.questAssignmentFeedback = '';
+    this.kethudaExpanded = false;
+    this.kethudaFeedback = '';
     this.dom.cityRoot?.classList.remove('hidden');
     this.render();
   }
@@ -513,7 +523,7 @@ export default class CityServicesUI {
           </div>
           <div class="text-xs opacity-80">Su, yol ve atık altyapısı geliştirildikçe ilgili şehir meclisi kararlarının gerçek hazine maliyeti azalır. Bugün en fazla bir proje yapılır.</div>
           ${this.kethudaFeedback ? `<div class="text-xs mt-2">${escapeHtml(this.kethudaFeedback)}</div>` : ''}
-          <details class="mt-2">
+          <details class="mt-2" data-kethuda-projects ${this.kethudaExpanded ? 'open' : ''}>
             <summary class="cursor-pointer font-bold">Altyapı projeleri (${kethudaProjects.length})</summary>
             ${kethudaProjects.map((project) => `
               <div class="city-overview-row">
