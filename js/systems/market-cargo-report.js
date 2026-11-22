@@ -12,7 +12,8 @@ const validId = id => typeof id === 'string' && /^[a-z0-9_:-]{1,64}$/i.test(id);
 const validQty = x => Number.isSafeInteger(x) && x >= 0;
 const kinds = new Set([
   'legacy_buy', 'legacy_sell', 'modern_buy', 'modern_sell',
-  'day_drift', 'escort_reserved', 'escort_delivered',
+  'day_drift', 'workshop_input', 'workshop_output', 'population_consumption',
+  'escort_reserved', 'escort_delivered',
 ]);
 const sources = new Set(['city', 'market']);
 const cityQty = (city, id) => {
