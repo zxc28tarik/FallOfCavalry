@@ -404,6 +404,8 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          completedDisputeRemedies: Array.isArray(playerParty?.completedDisputeRemedies)
+            ? playerParty.completedDisputeRemedies.filter(x=>typeof x==='string'&&x.startsWith('ct-dispute-')).slice(-128) : [],
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
         },
         roster,
@@ -598,6 +600,8 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.completedDisputeRemedies = Array.isArray(p.completedDisputeRemedies)
+      ? p.completedDisputeRemedies.filter(x=>typeof x==='string'&&x.startsWith('ct-dispute-')).slice(-128) : [];
     playerParty.factionId = typeof p.factionId === 'string' ? p.factionId : CONST.FACTION.ID.PLAYER;
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
 
