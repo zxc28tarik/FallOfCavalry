@@ -8,7 +8,7 @@ import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
-import { appendAccordLegacy } from '../systems/city-accord-legacy.js';
+import { appendAccordLegacy, getAccordTradeBonus } from '../systems/city-accord-legacy.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import { setWorldCharacterRelation } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -133,6 +133,9 @@ export class CityManager {
           day: this.state?.day,
           settlementKey: g.economyManager.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          accordTradeBonusPct: getAccordTradeBonus({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))}).bonusPct,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -160,6 +163,9 @@ export class CityManager {
           day: this.state?.day,
           settlementKey: g.economyManager.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          accordTradeBonusPct: getAccordTradeBonus({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))}).bonusPct,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
