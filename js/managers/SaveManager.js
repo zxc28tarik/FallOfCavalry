@@ -404,6 +404,14 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          regionalCooperation: Array.isArray(playerParty?.regionalCooperation)
+            ? playerParty.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
+              &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
+              &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+              &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [],
+          completedIntercityTrade: Array.isArray(playerParty?.completedIntercityTrade)
+            ? playerParty.completedIntercityTrade.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-intercity-')).slice(-128) : [],
           regionalAidOutcomes: Array.isArray(playerParty?.regionalAidOutcomes)
             ? playerParty.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
               &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
@@ -616,6 +624,14 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.regionalCooperation = Array.isArray(p.regionalCooperation)
+      ? p.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
+        &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
+        &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+        &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [];
+    playerParty.completedIntercityTrade = Array.isArray(p.completedIntercityTrade)
+      ? p.completedIntercityTrade.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-intercity-')).slice(-128) : [];
     playerParty.regionalAidOutcomes = Array.isArray(p.regionalAidOutcomes)
       ? p.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
         &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
