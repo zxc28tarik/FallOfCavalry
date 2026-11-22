@@ -4,6 +4,7 @@
  * The canonical city and player-party objects are the only beneficiaries.
  */
 import {getCityAccordLegacy,getLegacyCivicImpact} from './city-accord-legacy.js';
+import {getRegionalAidLegacy} from './regional-aid-legacy.js';
 
 export const CIVIC_DECISIONS=Object.freeze({
   patrol:{label:'Mahalle Nöbeti',cost:120,security:8,renown:1,
@@ -27,8 +28,15 @@ export function getEffectiveCivicDecision({city,party,roster,day,decisionId}={})
   if(!base)return null;
   const legacy=getCityAccordLegacy({party,roster,cityId:city?.id,day:Math.max(1,Math.floor(Number(day)||1))});
   const {goldDiscount,securityPenalty}=getLegacyCivicImpact(legacy,decisionId);
-  return {...base,cost:base.cost-goldDiscount,
-    security:base.security-securityPenalty,legacy,discount:goldDiscount,penalty:securityPenalty};
+  const regionalLegacy=getRegionalAidLegacy({party,cityId:city?.id,
+    day:Math.max(1,Math.floor(Number(day)||1))});
+  const regionalDiscount=regionalLegacy&&(
+    (regionalLegacy.kind==='food'&&decisionId==='granary')
+    ||(regionalLegacy.kind==='security'&&decisionId==='patrol')
+  )?regionalLegacy.discount:0;
+  return {...base,cost:base.cost-goldDiscount-regionalDiscount,
+    security:base.security-securityPenalty,legacy,regionalLegacy,
+    regionalDiscount,discount:goldDiscount+regionalDiscount,penalty:securityPenalty};
 }
 
 export function applyCivicDecision({city,party,roster,day,decisionId}={}){
@@ -52,6 +60,7 @@ export function applyCivicDecision({city,party,roster,day,decisionId}={}){
     ok:true,
     message:`${definition.label}: şehir güvenliği ${newSecurity}/100, altın ${definition.cost>0?'-':'+'}${Math.abs(definition.cost)}.`,
     cityId:city.id,decisionId,security:newSecurity,gold:party.gold,
-    legacyApplied:Boolean(definition.legacy),discount:definition.discount,penalty:definition.penalty,
+    legacyApplied:Boolean(definition.legacy),regionalLegacyApplied:definition.regionalDiscount>0,
+    discount:definition.discount,penalty:definition.penalty,
   };
 }
