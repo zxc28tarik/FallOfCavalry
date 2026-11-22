@@ -202,7 +202,7 @@ export class CityManager {
             qty:result.qty},g.playerParty);
         }
         if (result?.ok && (CONST.normalizeTradeGoodId?.(itemId) || itemId) === 'wheat') {
-          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, g.playerParty);
+          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty: result.qty, cityId: settlement.id }, g.playerParty);
         }
         if (result?.ok) g.saveManager.runAutosave('trade');
       },
