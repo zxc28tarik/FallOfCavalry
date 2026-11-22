@@ -15,9 +15,9 @@ function npc(id,role,kind='named',city=0){
 }
 const scenario=()=>({
   roster:{version:1,relations:[],characters:[
-    npc('npc:v161:artisan','artisan'),npc('npc:v161:commander','commander'),
-    npc('npc:v161:merchant','merchant'),npc('npc:v161:administrator','administrator'),
-    npc('npc:v161:other','artisan','generated'),npc('npc:v161:away','merchant','named',4),
+    npc('npc:v161:1','artisan'),npc('npc:v161:2','commander'),
+    npc('npc:v161:3','merchant'),npc('npc:v161:4','administrator'),
+    npc('npc:v161:5','artisan','generated'),npc('npc:v161:6','merchant','named',4),
   ]},
   party:{gold:500,renown:5},
   city:{id:0,security:30,marketStock:[{id:'wheat',qty:3}],
@@ -48,7 +48,7 @@ describe('V1.61 authentic city-interest reactions',()=>{
     expect(roster.characters[2].satisfaction).toBe(53);
     expect(roster.characters[4].satisfaction).toBe(50);
     const saved=normalizeWorldCharacters(JSON.parse(JSON.stringify(roster)));
-    expect(saved.characters.find(p=>p.id==='npc:v161:artisan')?.satisfaction).toBe(55);
+    expect(saved.characters.find(p=>p.id==='npc:v161:1')?.satisfaction).toBe(55);
   });
   it('uses verified accord legacy only as a modifier to actual named citizens',()=>{
     const {city,roster}=scenario();
