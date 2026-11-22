@@ -14,6 +14,7 @@
 
     <!-- ✅ yeni klasör yapısı -->
     <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/ui-theme-v166.css" />
 
     <!-- ✅ yeni entry point -->
     <script type="module" defer src="js/main.js"></script>
@@ -56,7 +57,9 @@
 
         <div id="mainMenuOverlay" class="menu-overlay" aria-live="polite">
             <div class="menu-card frame-dark">
+                <div class="menu-eyebrow">1650 · Tarihî Strateji</div>
                 <div class="menu-title royal-font">Fall Of Cavalry</div>
+                <div class="menu-subtitle">Bir hanedanın, bir ordunun ve bir çağın kaderi.</div>
                 <div class="menu-actions">
                     <button id="menuBtnStart" class="action-btn btn-gold">Start Game</button>
                     <button id="menuBtnContinue" class="action-btn btn-dark" disabled>Continue</button>
@@ -74,33 +77,29 @@
         <!-- HUD -->
         <div id="hud" class="hud">
             <!-- Sol üst: bilgi paneli -->
-            <div class="hud-left frame-dark">
+            <div class="hud-left frame-dark" aria-label="Sefer durumu">
                 <div class="flex items-center justify-between gap-4">
                     <div>
-                        <div class="royal-font text-lg font-extrabold tracking-wide">FallOfCavalry</div>
-                        <div class="text-xs opacity-70">Grand Strategy</div>
+                        <div class="hud-overline">Sefer Defteri <span class="hud-overline__rule"></span> 1650</div>
+                        <div class="royal-font hud-heading">Fall of Cavalry</div>
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="helpBtn" class="action-btn btn-dark text-xs">Yardım</button>
                         <button id="settingsBtn" class="action-btn btn-dark text-xs">Ayar</button>
+                        <button id="hudOptionsToggle" class="action-btn btn-dark text-xs" type="button" aria-controls="hudSettings" aria-expanded="false">Araçlar</button>
                     </div>
                 </div>
 
-                <div class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-                    <div class="opacity-75">Sancak</div>
-                    <div class="font-bold text-right"><span id="hudFaction">-</span></div>
+                <div class="hud-resource-grid">
+                    <div class="hud-resource"><span class="hud-resource__label">Sancak</span><strong class="hud-resource__value" id="hudFaction">-</strong></div>
 
-                    <div class="opacity-75">Altın</div>
-                    <div class="font-bold text-right"><span id="hudGold">0</span></div>
+                    <div class="hud-resource"><span class="hud-resource__label">Altın</span><strong class="hud-resource__value" id="hudGold">0</strong></div>
 
-                    <div class="opacity-75">Ordu</div>
-                    <div class="font-bold text-right"><span id="hudArmy">0</span></div>
+                    <div class="hud-resource"><span class="hud-resource__label">Ordu</span><strong class="hud-resource__value" id="hudArmy">0</strong></div>
 
-                    <div class="opacity-75">Şöhret</div>
-                    <div class="font-bold text-right"><span id="hudRenown">0</span></div>
+                    <div class="hud-resource"><span class="hud-resource__label">Şöhret</span><strong class="hud-resource__value" id="hudRenown">0</strong></div>
 
-                    <div class="opacity-75">Gün</div>
-                    <div class="font-bold text-right"><span id="hudDay">1</span></div>
+                    <div class="hud-resource"><span class="hud-resource__label">Gün</span><strong class="hud-resource__value" id="hudDay">1</strong></div>
                 </div>
 
                 <div class="hud-encounter-status mt-3">
@@ -110,10 +109,10 @@
             </div>
 
             <!-- Sağ üst: ayarlar paneli -->
-            <div id="hudSettings" class="hud-settings frame-dark">
+            <div id="hudSettings" class="hud-settings frame-dark" aria-label="Sefer araçları">
                 <div class="flex items-center justify-between">
-                    <div class="text-xs font-bold">Ayarlar</div>
-                    <div class="text-xs opacity-70">Offline</div>
+                    <div class="text-xs font-bold royal-font">Sefer Araçları</div>
+                    <button id="hudOptionsClose" class="action-btn btn-dark text-xs" type="button" aria-label="Araçları kapat">Kapat</button>
                 </div>
 
                 <div class="mt-2 flex flex-col gap-2">
@@ -166,7 +165,7 @@
             </div>
 
             <!-- Görev paneli -->
-            <div id="questPanel" class="quest-panel frame-dark">
+            <div id="questPanel" class="quest-panel frame-dark" aria-label="Aktif görev">
                 <div class="flex items-center justify-between">
                     <div class="text-xs font-bold">Görev</div>
                     <div class="text-[11px] opacity-70">Aktif</div>
