@@ -64,3 +64,18 @@ export function getLegacyCivicImpact(legacy,decisionId){
     return {goldDiscount:0,securityPenalty:legacy.levyPenalty};
   return {goldDiscount:0,securityPenalty:0};
 }
+
+/**
+ * Merchant and craft cooperation improves the player's wheat sale price only
+ * in the city where both named citizens remain. This is derived on demand
+ * from the same saved legacy and never alters global market prices.
+ */
+export function getAccordTradeBonus({party,roster,cityId,day}={}){
+  const legacy=getCityAccordLegacy({party,roster,cityId,day});
+  if(!legacy)return {bonusPct:0,legacy:null};
+  const residents=legacy.characterIds.map(id=>(roster?.characters||[]).find(p=>p.id===id));
+  const roles=new Set(residents.map(p=>p?.role));
+  const bonusPct=roles.has('merchant')&&roles.has('artisan')?8
+    :roles.has('merchant')||roles.has('artisan')?4:0;
+  return {bonusPct,legacy:bonusPct>0?legacy:null};
+}
