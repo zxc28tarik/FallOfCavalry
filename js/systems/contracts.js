@@ -8,7 +8,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID', 'REGIONAL_RECOVERY']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -551,6 +551,43 @@ function createRegionalAid({cityId,day,map,ownerFactionId,party}){
   };
 }
 
+/**
+ * One follow-up chapter for a real redeemed aid mission. Offer only on
+ * the following day in the beneficiary settlement and verify live geography.
+ */
+function createRegionalRecovery({cityId,day,map,party,ownerFactionId}){
+  if(cityId==null||!Number.isSafeInteger(day)||day<2)return null;
+  const records=Array.isArray(party?.regionalAidOutcomes)?party.regionalAidOutcomes:[];
+  const claims=Array.isArray(party?.completedRegionalAid)?party.completedRegionalAid:[];
+  const candidate=records.filter(record=>record&&record.day===day-1
+    &&String(record.targetCityId)===String(cityId)&&claims.includes(record.id)
+    &&['food','security'].includes(record.kind))
+    .sort((a,b)=>a.id.localeCompare(b.id,'en'))[0];
+  if(!candidate)return null;
+  const home=getSettlementById(map,cityId);
+  const source=getSettlementById(map,candidate.sourceCityId);
+  if(!home||!source||String(home.id)===String(source.id))return null;
+  const id=`ct-regional-recovery-${candidate.id}`;
+  if(party?.completedRegionalRecovery?.includes(id))return null;
+  const food=candidate.kind==='food';
+  return {
+    ...buildContractBase({
+      id,type:'REGIONAL_RECOVERY',cityId,
+      title:food?'Erzak Takip Heyeti':'Asayiş Takip Heyeti',
+      desc:food
+        ?`Yardım eden ${settlementName(source)} şehrine git, sonra ${settlementName(home)} pazarına 4 buğday sat.`
+        :`Yardım eden ${settlementName(source)} şehrine git, sonra ${settlementName(home)} şehrine dön.`,
+      ownerFactionId,
+      rewardGold:Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE*0.75),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE)),
+    }),
+    sourceAidId:candidate.id,regionalRecoveryKind:candidate.kind,
+    sourceCityId:source.id,targetCityId:home.id,recoveryStage:0,
+    recoveryDelivered:0,requiredCount:2,requiredAmount:null,
+    recoverySecurityBonus:food?3:4,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -626,6 +663,9 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
   const regional=createRegionalAid({cityId,day:Math.floor(Number(day)||0),map:chosenMap,
     ownerFactionId,party:worldState?.playerParty||runtime.party});
   if(regional)contracts.push(regional);
+  const recovery=createRegionalRecovery({cityId,day:Math.floor(Number(day)||0),
+    map:chosenMap,party:worldState?.playerParty||runtime.party,ownerFactionId});
+  if(recovery)contracts.push(recovery);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -639,6 +679,8 @@ export function acceptContract(contractId, party = runtime.party) {
     &&party.completedDisputeAccords.includes(contractId))return null;
   if(Array.isArray(party.completedRegionalAid)
     &&party.completedRegionalAid.includes(contractId))return null;
+  if(Array.isArray(party.completedRegionalRecovery)
+    &&party.completedRegionalRecovery.includes(contractId))return null;
   const already = party.contracts.find((c) => c?.id === contractId);
   if (already) return already;
 
@@ -683,6 +725,29 @@ export function updateContractProgress(event, party = runtime.party) {
       const success = Boolean(event.success);
       if (event.fromCityId === contract.cityId && event.toCityId === contract.targetCityId && success) {
         contract.progress = 1;
+      }
+    }
+    if(contract.type==='REGIONAL_RECOVERY'){
+      const stage=Math.max(0,Math.floor(Number(contract.recoveryStage)||0));
+      if(stage===0&&event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.sourceCityId)){
+        contract.recoveryStage=1;
+        contract.progress=1;
+      }else if(stage===1&&contract.regionalRecoveryKind==='security'
+        &&event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.cityId)){
+        contract.recoveryStage=2;
+        contract.progress=2;
+      }else if(stage===1&&contract.regionalRecoveryKind==='food'
+        &&event.type==='DELIVERED'&&event.itemId==='food'
+        &&event.cityId!=null&&String(event.cityId)===String(contract.cityId)
+        &&Number.isFinite(Number(event.qty))&&Number(event.qty)>0){
+        contract.recoveryDelivered=Math.min(4,Math.max(0,Number(contract.recoveryDelivered)||0)
+          +Math.floor(Number(event.qty)));
+        if(contract.recoveryDelivered>=4){
+          contract.recoveryStage=2;
+          contract.progress=2;
+        }
       }
     }
     if(contract.type==='REGIONAL_AID'){
@@ -808,6 +873,8 @@ export function completeContract(contractId, party = runtime.party, options = {}
     &&party.completedDisputeAccords.includes(contract.id))return null;
   if(contract.type==='REGIONAL_AID'&&Array.isArray(party.completedRegionalAid)
     &&party.completedRegionalAid.includes(contract.id))return null;
+  if(contract.type==='REGIONAL_RECOVERY'&&Array.isArray(party.completedRegionalRecovery)
+    &&party.completedRegionalRecovery.includes(contract.id))return null;
 
   const resolvedWarState = options?.warState || null;
   const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
@@ -822,6 +889,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'REGIONAL_RECOVERY' && typeof options?.onRegionalRecovery === 'function') {
+    options.onRegionalRecovery(completed);
+  }
   if (contract.type === 'REGIONAL_AID' && typeof options?.onRegionalAid === 'function') {
     options.onRegionalAid(completed);
   }
@@ -855,6 +925,11 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if(contract.type==='REGIONAL_AID'){
     const previous=Array.isArray(party.completedRegionalAid)?party.completedRegionalAid:[];
     party.completedRegionalAid=[...new Set([...previous,contract.id])].slice(-128);
+    if(typeof options?.onRegionalAidOutcome==='function')options.onRegionalAidOutcome(completed);
+  }
+  if(contract.type==='REGIONAL_RECOVERY'){
+    const previous=Array.isArray(party.completedRegionalRecovery)?party.completedRegionalRecovery:[];
+    party.completedRegionalRecovery=[...new Set([...previous,contract.id])].slice(-128);
   }
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
