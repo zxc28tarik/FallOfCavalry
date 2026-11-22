@@ -5,6 +5,7 @@
  */
 import {getCityAccordLegacy,getLegacyCivicImpact} from './city-accord-legacy.js';
 import {getRegionalAidLegacy} from './regional-aid-legacy.js';
+import {getKethudaCivicDiscount} from './city-kethuda.js';
 
 export const CIVIC_DECISIONS=Object.freeze({
   patrol:{label:'Mahalle Nöbeti',cost:120,security:8,renown:1,
@@ -34,9 +35,11 @@ export function getEffectiveCivicDecision({city,party,roster,day,decisionId}={})
     (regionalLegacy.kind==='food'&&decisionId==='granary')
     ||(regionalLegacy.kind==='security'&&decisionId==='patrol')
   )?regionalLegacy.discount:0;
-  return {...base,cost:base.cost-goldDiscount-regionalDiscount,
+  const kethudaDiscount=getKethudaCivicDiscount(city,decisionId);
+  return {...base,cost:base.cost-goldDiscount-regionalDiscount-kethudaDiscount,
     security:base.security-securityPenalty,legacy,regionalLegacy,
-    regionalDiscount,discount:goldDiscount+regionalDiscount,penalty:securityPenalty};
+    regionalDiscount,kethudaDiscount,
+    discount:goldDiscount+regionalDiscount+kethudaDiscount,penalty:securityPenalty};
 }
 
 export function applyCivicDecision({city,party,roster,day,decisionId}={}){
