@@ -7,6 +7,7 @@ import CityServicesUI from '../ui/city-services.js';
 import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
+import { resolveCityDispute } from '../systems/city-character-disputes.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
@@ -277,6 +278,16 @@ export class CityManager {
         g.economyManager.cityHealerCursor = Math.max(0, Math.floor(Number(index) || 0));
         const ok = g.economyManager.healCurrentUnit();
         if (ok) g.saveManager.runAutosave('healing');
+      },
+      onCityDispute: (choice) => {
+        const result=resolveCityDispute({
+          roster:this.state?.worldCharacters,cityId:this.state?.city?.id,
+          day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+          party:g.playerParty,choice,
+        });
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        if(result.ok)g.saveManager?.runAutosave?.('city-character-dispute');
+        return result;
       },
       onCharacterPetition: (characterId,decision) => {
         const result=answerCharacterPetition({
