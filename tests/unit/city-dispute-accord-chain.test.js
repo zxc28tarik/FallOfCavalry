@@ -21,7 +21,7 @@ function create({claimed=true,worldCityCount=3}={}){
   const party={gold:500,renown:0,contracts:[],
     completedDisputeRemedies:claimed?['ct-dispute-0-5-security']:[],
     completedDisputeAccords:[]};
-  expect(resolveCityDispute({roster,cityId:0,day:4,party,choice:'mediate'}).ok).toBe(true);
+  expect(resolveCityDispute({roster,cityId:0,day:4,city,party,choice:'mediate'}).ok).toBe(true);
   const savedRoster=normalizeWorldCharacters(JSON.parse(JSON.stringify(roster)));
   expect(savedRoster.characters).toHaveLength(2);
   expect(savedRoster.characters.map(p=>p.history[0]?.reason)).toEqual([
