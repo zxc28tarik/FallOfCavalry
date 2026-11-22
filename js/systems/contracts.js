@@ -565,7 +565,7 @@ function createRegionalRecovery({cityId,day,map,party,ownerFactionId}){
     .sort((a,b)=>a.id.localeCompare(b.id,'en'))[0];
   if(!candidate)return null;
   const home=getSettlementById(map,cityId);
-  const source=getSettlementById(map,candidate.sourceCityId);
+  const source=getSettlements(map).find(s=>String(s.id)===String(candidate.sourceCityId));
   if(!home||!source||String(home.id)===String(source.id))return null;
   const id=`ct-regional-recovery-${candidate.id}`;
   if(party?.completedRegionalRecovery?.includes(id))return null;
