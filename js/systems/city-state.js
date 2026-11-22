@@ -309,13 +309,25 @@ function cloneParcel(parcel) {
 
 function cloneInfrastructure(infrastructure) {
   const source = asObject(infrastructure) || {};
+  // V1.68: only canonical IDs may survive a save migration; unknown projects
+  // must never grant infrastructure capacity or discounts.
+  const approved = new Set(listInfrastructureBuildingIds());
+  const installed = dedupeStrings(source.installedBuildingIds || [])
+    .filter((id) => approved.has(id));
+  const improvements = asObject(source.improvementLevels) || {};
   return {
     managerLabel: String(source.managerLabel || 'Sehir Kethudasi'),
     visibleInScene: false,
     population: Math.max(0, Number(source.population ?? 0)),
     needScore: Math.max(0, Number(source.needScore ?? 0)),
-    installedBuildingIds: dedupeStrings(source.installedBuildingIds || []),
-    availableBuildingIds: dedupeStrings(source.availableBuildingIds || []),
+    installedBuildingIds: installed,
+    availableBuildingIds: [...approved],
+    improvementLevels: Object.fromEntries(installed.map((id) => [
+      id, Number.isSafeInteger(improvements[id])
+        ? Math.max(0, Math.min(2, improvements[id])) : 0,
+    ])),
+    lastWorkDay: Number.isSafeInteger(source.lastWorkDay)
+      ? Math.max(0, source.lastWorkDay) : 0,
     notes: Array.isArray(source.notes) ? source.notes.map((entry) => String(entry)) : [],
   };
 }
