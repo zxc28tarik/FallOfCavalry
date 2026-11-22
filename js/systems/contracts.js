@@ -1,5 +1,6 @@
 import * as CONST from '../constants.js';
 import { getSettlementCharacters } from './world-characters.js';
+import {selectCooperationCaravan} from './route-production-cooperation.js';
 
 const runtime = {
   party: null,
@@ -8,7 +9,7 @@ const runtime = {
   offersByCity: new Map(),
 };
 
-const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID', 'REGIONAL_RECOVERY', 'INTERCITY_TRADE']);
+const CONTRACT_TYPES = Object.freeze(['BANDIT', 'DELIVER', 'SCOUT', 'DEFEND', 'ESCORT', 'ASSASSINATE', 'COURIER', 'RELIEF', 'DISPATCH', 'CIVIC_FOLLOWUP', 'CHARACTER_COMMISSION', 'DISPUTE_REMEDY', 'DISPUTE_ACCORD', 'REGIONAL_AID', 'REGIONAL_RECOVERY', 'INTERCITY_TRADE', 'PRODUCTION_CARAVAN']);
 
 function hashString(input) {
   const text = String(input || '');
@@ -628,6 +629,27 @@ function createIntercityTrade({cityId,day,map,party,roster,ownerFactionId}){
   return null;
 }
 
+function createProductionCaravan({cityId,day,map,party,roster,ownerFactionId}){
+  const route=selectCooperationCaravan({map,party,roster,cityId,day});
+  if(!route)return null;
+  const id=`ct-production-${route.sourceRecoveryId}-${route.itemId}`;
+  if(party?.completedProductionCaravans?.includes(id))return null;
+  const cargo=(CONST.TRADE_ITEMS||[]).find(x=>x.id===route.itemId);
+  return {
+    ...buildContractBase({id,type:'PRODUCTION_CARAVAN',cityId,
+      title:'Üretim Kervanı — Gerçek Ticaret Yolu',
+      desc:`${settlementName(route.source)} pazarından 3 ${cargo?.name||route.itemId} satın al, ${settlementName(route.target)} şehrine git ve aynı maldan 3 adet orada sat.`,
+      rewardGold:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_GOLD_BASE)),
+      rewardRenown:Math.max(1,Math.floor(CONST.CONTRACTS.REWARD_RENOWN_BASE)),
+      ownerFactionId,
+    }),
+    sourceRecoveryId:route.sourceRecoveryId,sourceCityId:route.source.id,
+    targetCityId:route.target.id,routeId:route.routeId,
+    cargoItemId:route.itemId,productionBiome:route.biome,
+    caravanStage:0,caravanBought:0,caravanSold:0,requiredCount:3,
+  };
+}
+
 export function generateContractsForCity({ cityId, day, seed, map, worldState, factions, warState } = {}) {
   const chosenMap = map || worldState?.map || runtime.map || { settlements: [], pois: [] };
   const worldSeed = Number.isFinite(seed)
@@ -710,6 +732,10 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
     map:chosenMap,party:worldState?.playerParty||runtime.party,
     roster:worldState?.worldCharacters,ownerFactionId});
   if(intercity)contracts.push(intercity);
+  const caravan=createProductionCaravan({cityId,day:Math.floor(Number(day)||0),
+    map:chosenMap,party:worldState?.playerParty||runtime.party,
+    roster:worldState?.worldCharacters,ownerFactionId});
+  if(caravan)contracts.push(caravan);
   runtime.offersByCity.set(String(cityId ?? ''), contracts.map((c) => ({ ...c })));
   return contracts;
 }
@@ -727,6 +753,8 @@ export function acceptContract(contractId, party = runtime.party) {
     &&party.completedRegionalRecovery.includes(contractId))return null;
   if(Array.isArray(party.completedIntercityTrade)
     &&party.completedIntercityTrade.includes(contractId))return null;
+  if(Array.isArray(party.completedProductionCaravans)
+    &&party.completedProductionCaravans.includes(contractId))return null;
   const already = party.contracts.find((c) => c?.id === contractId);
   if (already) return already;
 
@@ -771,6 +799,25 @@ export function updateContractProgress(event, party = runtime.party) {
       const success = Boolean(event.success);
       if (event.fromCityId === contract.cityId && event.toCityId === contract.targetCityId && success) {
         contract.progress = 1;
+      }
+    }
+    if(contract.type==='PRODUCTION_CARAVAN'){
+      const stage=Math.max(0,Math.floor(Number(contract.caravanStage)||0));
+      const validCount=Number.isFinite(Number(event.qty))&&Number(event.qty)>0
+        ?Math.floor(Number(event.qty)):0;
+      if(stage===0&&event.type==='TRADE_GOOD_BOUGHT'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.sourceCityId)
+        &&event.itemId===contract.cargoItemId&&validCount>0){
+        contract.caravanBought=Math.min(3,Math.max(0,Number(contract.caravanBought)||0)+validCount);
+        if(contract.caravanBought===3){contract.caravanStage=1;contract.progress=1;}
+      }else if(stage===1&&event.type==='CITY_VISITED'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.targetCityId)){
+        contract.caravanStage=2;contract.progress=2;
+      }else if(stage===2&&event.type==='TRADE_GOOD_SOLD'&&event.cityId!=null
+        &&String(event.cityId)===String(contract.targetCityId)
+        &&event.itemId===contract.cargoItemId&&validCount>0){
+        contract.caravanSold=Math.min(3,Math.max(0,Number(contract.caravanSold)||0)+validCount);
+        if(contract.caravanSold===3){contract.caravanStage=3;contract.progress=3;}
       }
     }
     if(contract.type==='INTERCITY_TRADE'){
@@ -945,6 +992,8 @@ export function completeContract(contractId, party = runtime.party, options = {}
 
   if(contract.type==='INTERCITY_TRADE'&&Array.isArray(party.completedIntercityTrade)
     &&party.completedIntercityTrade.includes(contract.id))return null;
+  if(contract.type==='PRODUCTION_CARAVAN'&&Array.isArray(party.completedProductionCaravans)
+    &&party.completedProductionCaravans.includes(contract.id))return null;
   const resolvedWarState = options?.warState || null;
   const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
   const warContractTypes = new Set(['DEFEND', 'ASSASSINATE']);
@@ -958,6 +1007,9 @@ export function completeContract(contractId, party = runtime.party, options = {}
   const completed = { ...contract, bonusRenown: warBonus };
   // Civilian relief improves the actual beneficiary settlement, not an
   // unverified quest title or a synthetic regional economy location.
+  if (contract.type === 'PRODUCTION_CARAVAN' && typeof options?.onProductionCaravan === 'function') {
+    options.onProductionCaravan(completed);
+  }
   if (contract.type === 'INTERCITY_TRADE' && typeof options?.onIntercityTrade === 'function') {
     options.onIntercityTrade(completed);
   }
@@ -1007,6 +1059,10 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if(contract.type==='INTERCITY_TRADE'){
     const previous=Array.isArray(party.completedIntercityTrade)?party.completedIntercityTrade:[];
     party.completedIntercityTrade=[...new Set([...previous,contract.id])].slice(-128);
+  }
+  if(contract.type==='PRODUCTION_CARAVAN'){
+    const previous=Array.isArray(party.completedProductionCaravans)?party.completedProductionCaravans:[];
+    party.completedProductionCaravans=[...new Set([...previous,contract.id])].slice(-128);
   }
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
