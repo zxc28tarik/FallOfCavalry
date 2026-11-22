@@ -404,6 +404,10 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          accordLegacies: Array.isArray(playerParty?.accordLegacies)
+            ? playerParty.accordLegacies.filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('ct-accord-')
+              &&typeof x.cityId==='string'&&Number.isSafeInteger(x.day)
+              &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [],
           completedDisputeAccords: Array.isArray(playerParty?.completedDisputeAccords)
             ? playerParty.completedDisputeAccords.filter(x=>typeof x==='string'&&x.startsWith('ct-accord-')).slice(-128) : [],
           completedDisputeRemedies: Array.isArray(playerParty?.completedDisputeRemedies)
@@ -602,6 +606,10 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.accordLegacies = Array.isArray(p.accordLegacies)
+      ? p.accordLegacies.filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('ct-accord-')
+        &&typeof x.cityId==='string'&&Number.isSafeInteger(x.day)
+        &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [];
     playerParty.completedDisputeAccords = Array.isArray(p.completedDisputeAccords)
       ? p.completedDisputeAccords.filter(x=>typeof x==='string'&&x.startsWith('ct-accord-')).slice(-128) : [];
     playerParty.completedDisputeRemedies = Array.isArray(p.completedDisputeRemedies)
