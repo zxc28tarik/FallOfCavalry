@@ -400,7 +400,7 @@ export default class CityServicesUI {
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
     const dispute=getCityDispute({roster:this.state?.worldCharacters,
-      cityId:this.currentSettlement?.id,
+      cityId:this.currentSettlement?.id,city:this.currentSettlement,
       day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const residentReactions=Object.fromEntries(Object.keys(CIVIC_DECISIONS).map(id=>[
       id,previewCouncilReactions({roster:this.state?.worldCharacters,
@@ -444,7 +444,7 @@ export default class CityServicesUI {
         <div class="city-overview-section">
           <div class="city-overview-section__title">Şehirli Anlaşmazlığı</div>
           ${dispute ? `
-            <div class="text-sm">Şehirdeki iki önemli kişi talepleri nedeniyle karşı karşıya.</div>
+            <div class="text-sm"><strong>${escapeHtml(dispute.causeTitle)}</strong> — ${escapeHtml(dispute.causeDescription)}</div>
             <div class="text-xs opacity-80">${escapeHtml(dispute.first.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.first.role]||dispute.first.role)})
             · ${escapeHtml(dispute.second.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.second.role]||dispute.second.role)})</div>
             <div class="text-xs opacity-80">Aralarındaki ilişki: ${dispute.relation}</div>
