@@ -158,7 +158,12 @@ export class CityManager {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) - Number(result?.spentGold ?? 0);
         }
         g.gameFlowManager.setLastEventLog(result?.message || 'İşlem tamamlandı.');
-        if (result?.ok) g.saveManager.runAutosave('trade');
+        if (result?.ok) {
+          emitContractEvent({type:'TRADE_GOOD_BOUGHT',
+            cityId:settlement.id,itemId:CONST.normalizeTradeGoodId?.(itemId)||itemId,
+            qty:result.qty},g.playerParty);
+          g.saveManager.runAutosave('trade');
+        }
       },
       onSell: (itemId, qty) => {
         const settlement = this.state?.city;
@@ -191,6 +196,11 @@ export class CityManager {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
         }
         g.gameFlowManager.setLastEventLog(result?.message || 'İşlem tamamlandı.');
+        if (result?.ok) {
+          emitContractEvent({type:'TRADE_GOOD_SOLD',
+            cityId:settlement.id,itemId:CONST.normalizeTradeGoodId?.(itemId)||itemId,
+            qty:result.qty},g.playerParty);
+        }
         if (result?.ok && (CONST.normalizeTradeGoodId?.(itemId) || itemId) === 'wheat') {
           emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, g.playerParty);
         }
@@ -217,6 +227,18 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onProductionCaravan: (contract) => {
+            // Real roads only. The existing route service applies persistent
+            // quality/damage updates without inventing a replacement route.
+            const improved=g.economyManager?.improveTradeRoute?.(contract.routeId,1);
+            if(!improved)return;
+            const city=(this.state?.map?.settlements||[]).find(x=>
+              String(x.id)===String(contract.targetCityId));
+            if(city){
+              city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+2)));
+              city.civicDirty=true;
+            }
+          },
           onIntercityTrade: (contract) => {
             const city=(this.state?.map?.settlements||[])
               .find(x=>String(x.id)===String(contract.targetCityId));
