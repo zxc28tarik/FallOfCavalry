@@ -11,6 +11,7 @@ import {
   listInfrastructureBuildingIds,
 } from '../data/city-building-catalog.js';
 import { getCitySceneDef, getDefaultCitySceneIdForFaction } from '../data/city-scene-defs.js';
+import { getKethudaConstructionQuote } from './city-infrastructure-benefits.js';
 
 export const CITY_PARCEL_STATE = Object.freeze({
   EMPTY: 'empty',
@@ -743,7 +744,9 @@ export function constructBuildingOnParcel(settlement, parcelId, buildingId, {
   if (!listBuildOptionsForParcel(settlement, parcelId).some((option) => option.id === def.id)) {
     return { ok: false, message: 'Bu bina bu alana kurulamiyor.' };
   }
-  if (Number(availableGold) < Number(def.buildCostGold || 0)) {
+  const price = getKethudaConstructionQuote(settlement, def.id);
+  if (!price || !Number.isFinite(Number(availableGold))
+    || Number(availableGold) < price.cost) {
     return { ok: false, message: 'Altin yetersiz.' };
   }
 
@@ -770,7 +773,9 @@ export function constructBuildingOnParcel(settlement, parcelId, buildingId, {
   return {
     ok: true,
     message: `${getCityBuildingLabel(def.id)} kuruldu.`,
-    cost: Number(def.buildCostGold || 0),
+    cost: price.cost,
+    baseCost: price.baseCost,
+    kethudaDiscount: price.discount,
     buildingId: def.id,
   };
 }
