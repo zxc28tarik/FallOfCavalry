@@ -13,6 +13,7 @@ import {
 import { getNamedCharacterState } from '../systems/named-character-state.js';
 import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '../systems/city-kethuda.js';
 import { getKethudaConstructionQuote } from '../systems/city-infrastructure-benefits.js';
+import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -422,6 +423,7 @@ export default class CityServicesUI {
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
     const kethuda=getKethudaStatus(this.currentSettlement);
+    const foodCycle=getCityMarketCyclePreview(this.currentSettlement);
     const kethudaProjects=listKethudaProjects({
       city:this.currentSettlement,party:this.party,day:this.state?.day,
     });
@@ -548,6 +550,19 @@ export default class CityServicesUI {
               </div>
             `).join('')}
           </details>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir İaşesi — Günlük Pazar Döngüsü</div>
+          <div class="text-sm opacity-80">Nüfusun pazardan günlük ihtiyacı: ${foodCycle.dailyFoodNeed} gıda birimi. Yalnız gerçek pazar stoku tüketilir; kıtlıkta stok eksiye düşmez, talep yükselir.</div>
+          ${foodCycle.recipes.map(recipe => `
+            <div class="city-overview-row">
+              <span><strong>${escapeHtml(recipe.name)}</strong> — ${recipe.buildingCount} bina, en fazla ${recipe.maxBatches} parti/gün
+                <small class="block opacity-80">Girdi: ${Object.entries(recipe.inputs).map(([id,qty]) => `${qty} ${escapeHtml(id)}`).join(' + ')} · Çıktı: ${recipe.outputQty} ${escapeHtml(recipe.outputId)} / parti</small>
+              </span>
+              <strong>${recipe.buildingCount > 0 ? 'Gerçek stokla üretir' : 'Şehirde kurulmamış'}</strong>
+            </div>
+          `).join('')}
+          <div class="text-xs opacity-75">Su ve atık altyapısının gerçek iyileştirmeleri uygun üretim kapasitesini artırabilir. Malzeme yoksa üretim gerçekleşmez; stok ve para yaratılmaz.</div>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yapman gereken</div>
