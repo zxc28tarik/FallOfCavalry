@@ -23,6 +23,10 @@ function create({claimed=true,worldCityCount=3}={}){
     completedDisputeAccords:[]};
   expect(resolveCityDispute({roster,cityId:0,day:4,party,choice:'mediate'}).ok).toBe(true);
   const savedRoster=normalizeWorldCharacters(JSON.parse(JSON.stringify(roster)));
+  expect(savedRoster.characters).toHaveLength(2);
+  expect(savedRoster.characters.map(p=>p.history[0]?.reason)).toEqual([
+    'Şehir ihtilafı: mediate:security','Şehir ihtilafı: mediate:security',
+  ]);
   setContractsRuntimeContext({party,map,worldSeed:6060});
   const generate=day=>generateContractsForCity({
     cityId:0,day,seed:6060,map,worldState:{worldCharacters:savedRoster,playerParty:party},
