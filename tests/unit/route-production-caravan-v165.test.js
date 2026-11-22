@@ -33,7 +33,7 @@ describe('WEB V1.65 authenticated production-road caravan',()=>{
     expect(selectCooperationCaravan({map,party,roster,cityId:0,day:9}))
       .toMatchObject({itemId:'wheat',biome:'PLAINS',routeId:'route:0:1'});
     expect(selectCooperationCaravan({map,party,roster,cityId:1,day:9})).toBeNull();
-    map.roads[0].path=[{x:40,y:40},{x:90,y:90}];
+    map.roads=[{from:0,to:1,path:[{x:40,y:40},{x:90,y:90}]}];
     expect(selectCooperationCaravan({map,party,roster,cityId:0,day:9})).toBeNull();
   });
   it('does not generate imaginary production goods or goods with no real stock',()=>{
