@@ -2,6 +2,7 @@ import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability } from '../systems/city-civic-decisions.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { getCharacterPetition } from '../systems/city-character-petitions.js';
+import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
 import {
   CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
   getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
@@ -52,6 +53,7 @@ export default class CityServicesUI {
     onConstruct,
     onCivicDecision,
     onCharacterPetition,
+    onCityDispute,
     getQuestManager,
     onAssignQuest,
   }) {
@@ -72,6 +74,8 @@ export default class CityServicesUI {
     this.onConstruct = onConstruct;
     this.onCivicDecision = onCivicDecision;
     this.onCharacterPetition = onCharacterPetition;
+    this.onCityDispute = onCityDispute;
+    this.disputeFeedback = '';
     this.petitionFeedback = '';
     this.civicFeedback = '';
     this.getQuestManager = getQuestManager;
@@ -124,6 +128,9 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'resolve-city-dispute') {
+        const result=this.onCityDispute?.(id);
+        this.disputeFeedback=result?.message||'Anlaşmazlık çözülemedi.';
       } else if (action === 'answer-character-petition' && this.currentView?.type==='npc') {
         const result=this.onCharacterPetition?.(this.currentView.npcId,id);
         this.petitionFeedback=result?.message||'Dilekçe yanıtlanamadı.';
@@ -392,6 +399,9 @@ export default class CityServicesUI {
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const dispute=getCityDispute({roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,
+      day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const residentReactions=Object.fromEntries(Object.keys(CIVIC_DECISIONS).map(id=>[
       id,previewCouncilReactions({roster:this.state?.worldCharacters,
         cityId:this.currentSettlement?.id,decisionId:id}),
@@ -430,6 +440,24 @@ export default class CityServicesUI {
                 ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
             </div>
           `).join('')}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehirli Anlaşmazlığı</div>
+          ${dispute ? `
+            <div class="text-sm">Şehirdeki iki önemli kişi talepleri nedeniyle karşı karşıya.</div>
+            <div class="text-xs opacity-80">${escapeHtml(dispute.first.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.first.role]||dispute.first.role)})
+            · ${escapeHtml(dispute.second.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.second.role]||dispute.second.role)})</div>
+            <div class="text-xs opacity-80">Aralarındaki ilişki: ${dispute.relation}</div>
+            <div class="flex flex-wrap gap-2 mt-2">
+              ${Object.entries(DISPUTE_CHOICES).map(([choice,rule])=>`
+                <button type="button" class="action-btn text-xs" data-action="resolve-city-dispute" data-id="${choice}"
+                  ${dispute.resolved||(rule.cost>0&&Number(this.party?.gold??0)<rule.cost)?'disabled':''}>
+                  ${escapeHtml(rule.label)}${rule.cost?` (−${rule.cost} altın)`:''}
+                </button>`).join('')}
+            </div>
+            ${dispute.resolved?'<div class="text-xs opacity-70">Bu anlaşmazlık bugün karara bağlandı.</div>':''}
+          `:'<div class="text-xs opacity-70">Bugün karar bekleyen iki önemli kişi bulunmuyor.</div>'}
+          <div class="text-xs mt-2">${escapeHtml(this.disputeFeedback)}</div>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Servis Kilitleri</div>
