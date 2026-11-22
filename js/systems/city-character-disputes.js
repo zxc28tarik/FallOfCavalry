@@ -81,7 +81,7 @@ export function resolveCityDispute({roster,cityId,day,party,choice,city}={}){
   const [first,second]=[dispute.first,dispute.second];
   const a=first.satisfaction+rule.first;
   const b=second.satisfaction+rule.second;
-  const reason=`${REASON}${choice}`;
+  const reason=`${REASON}${choice}:${dispute.cause}`;
   // Existing NamedCharacterState validates identity, day and authorized metric.
   const changedFirst=changeNamedCharacterMetric(roster,first.id,{
     metric:'satisfaction',value:a,day,reason,
