@@ -8,6 +8,7 @@ import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
+import { appendAccordLegacy } from '../systems/city-accord-legacy.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import { setWorldCharacterRelation } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -226,6 +227,8 @@ export class CityManager {
               people[1].id,Math.max(-100,Math.min(100,Number(relation?.value??0)+8)));
             city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+4)));
             city.civicDirty=true;
+            appendAccordLegacy({party:g.playerParty,contract,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
           },
           onDisputeRemedy: (contract) => {
             const city=(this.state?.map?.settlements||[])
@@ -342,7 +345,8 @@ export class CityManager {
       },
       onCivicDecision: (decisionId) => {
         const result=applyCivicDecision({
-          city:this.state?.city,party:g.playerParty,day:this.state?.day,decisionId,
+          city:this.state?.city,party:g.playerParty,roster:this.state?.worldCharacters,
+          day:this.state?.day,decisionId,
         });
         if(result.ok){
           const reactions=applyCouncilReactions({
