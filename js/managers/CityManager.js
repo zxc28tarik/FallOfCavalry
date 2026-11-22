@@ -10,6 +10,7 @@ import { answerCharacterPetition } from '../systems/city-character-petitions.js'
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
 import { appendAccordLegacy, getAccordTradeBonus, getCityAccordLegacy } from '../systems/city-accord-legacy.js';
 import { recordRegionalAidOutcome } from '../systems/regional-aid-legacy.js';
+import {recordRegionalCooperation,getRegionalCooperation} from '../systems/regional-cooperation.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
 import { setWorldCharacterRelation, getSettlementCharacters } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -134,6 +135,9 @@ export class CityManager {
           day: this.state?.day,
           settlementKey: g.economyManager.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          regionalTradeBonusPct: getRegionalCooperation({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))})?.sellBonusPct||0,
           accordTradeBonusPct: getAccordTradeBonus({party:g.playerParty,
             roster:this.state?.worldCharacters,cityId:settlement.id,
             day:Math.max(1,Math.floor(Number(this.state?.day)||1))}).bonusPct,
@@ -210,6 +214,27 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onIntercityTrade: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(x=>String(x.id)===String(contract.targetCityId));
+            if(!city)return;
+            city.security=Math.min(100,Math.max(0,Math.floor(Number(city.security??50)+3)));
+            city.civicDirty=true;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const id of contract.linkedCharacters||[]){
+              const person=this.state?.worldCharacters?.characters?.find(p=>
+                p.id===id&&p.kind==='named'&&p.status==='alive');
+              if(person)changeNamedCharacterMetric(this.state.worldCharacters,id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Şehirler arası ticaret heyeti tamamlandı',
+              });
+            }
+          },
+          onRegionalCooperation: (contract) => {
+            recordRegionalCooperation({party:g.playerParty,contract,
+              roster:this.state?.worldCharacters,map:this.state?.map,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+          },
           onRegionalRecovery: (contract) => {
             const city=(this.state?.map?.settlements||[])
               .find(row=>String(row.id)===String(contract.cityId));
