@@ -65,6 +65,10 @@ describe('V1.57 aftermath from real city disputes',()=>{
       expect(completed.type).toBe('DISPUTE_REMEDY');
       expect(callbackCount).toBe(1);
       expect(completeContract(offer.id,restored)).toBeNull();
+      expect(restored.completedDisputeRemedies).toContain(offer.id);
+      expect(acceptContract(offer.id,restored)).toBeNull();
+      const savedAgain=JSON.parse(JSON.stringify(restored));
+      expect(acceptContract(offer.id,savedAgain)).toBeNull();
     });
   }
   it('scarcity needs real wheat sale in the issuing settlement, not a menu click',()=>{
