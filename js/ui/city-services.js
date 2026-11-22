@@ -1,6 +1,6 @@
 import * as CONST from '../constants.js';
 import { CIVIC_DECISIONS, getCivicDecisionAvailability, getEffectiveCivicDecision } from '../systems/city-civic-decisions.js';
-import {getCityAccordLegacy} from '../systems/city-accord-legacy.js';
+import {getCityAccordLegacy,getAccordTradeBonus} from '../systems/city-accord-legacy.js';
 import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { getCharacterPetition } from '../systems/city-character-petitions.js';
 import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
@@ -921,6 +921,8 @@ export default class CityServicesUI {
     const day = Number(this.state?.day ?? 1);
     const settlementKey = this.currentSettlement?.id || `${this.currentSettlement?.tx},${this.currentSettlement?.ty}`;
     const activeOpportunity = this.state?.marketOpportunities?.[settlementKey];
+    const accordTrade=getAccordTradeBonus({party:this.party,roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const opportunityDaysLeft = activeOpportunity
       ? Math.max(0, Number(activeOpportunity.expiresDay ?? day) - day)
       : 0;
@@ -934,6 +936,7 @@ export default class CityServicesUI {
           day,
           settlementKey,
           marketOpportunities: this.state?.marketOpportunities,
+          accordTradeBonusPct: accordTrade.bonusPct,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -954,6 +957,7 @@ export default class CityServicesUI {
                 <div class="font-bold text-sm">${escapeHtml(item.name)}</div>
                 <div class="text-xs opacity-80">Stok: ${stock} - Envanter: ${invQty} - Al: ${buyPrice}g - Sat: ${sellPrice}g</div>
                 ${hasOpportunity ? `<div class="text-xs text-amber-300">Firsat: +%${Math.round(activeOpportunity.bonusPct)} (${opportunityDaysLeft} gun)</div>` : ''}
+                ${item.id==='wheat'&&accordTrade.bonusPct>0?`<div class="text-xs text-amber-300">Uzlaşmış esnaf ve tüccar: buğday satışında +%${accordTrade.bonusPct} (${accordTrade.legacy.remainingDays} gün)</div>`:''}
               </div>
               <div class="flex items-center gap-2">
                 <input data-qty-for="${item.id}" type="number" value="1" min="1" class="select-dark text-xs w-16" />
