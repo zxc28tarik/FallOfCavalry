@@ -36,6 +36,14 @@ describe('WEB V1.65 authenticated production-road caravan',()=>{
     map.roads=[{from:0,to:1,path:[{x:40,y:40},{x:90,y:90}]}];
     expect(selectCooperationCaravan({map,party,roster,cityId:0,day:9})).toBeNull();
   });
+  it('reads procedural typed biome grid even when cities have no direct biome tag',()=>{
+    const {map,party,roster}=scenario();
+    delete map.settlements[0].biome;
+    map.width=12;map.height=2;map.biomes=new Uint8Array(24);
+    map.biomes[0]=2; // CONST.BIOME.PLAINS
+    expect(selectCooperationCaravan({map,party,roster,cityId:0,day:9}))
+      .toMatchObject({biome:'PLAINS',itemId:'wheat'});
+  });
   it('does not generate imaginary production goods or goods with no real stock',()=>{
     const {map,party,roster}=scenario();
     map.settlements[0].biome='UNKNOWN';
