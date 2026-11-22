@@ -10,7 +10,7 @@ import { answerCharacterPetition } from '../systems/city-character-petitions.js'
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
 import { appendAccordLegacy, getAccordTradeBonus, getCityAccordLegacy } from '../systems/city-accord-legacy.js';
 import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
-import { setWorldCharacterRelation } from '../systems/world-characters.js';
+import { setWorldCharacterRelation, getSettlementCharacters } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -209,6 +209,26 @@ export class CityManager {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onRegionalAid: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(row=>String(row.id)===String(contract.targetCityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.regionalSecurityBonus??0))));
+            city.civicDirty=true;
+            // Existing local named people remember assistance; never invent a
+            // beneficiary or alter an unrelated city's social state.
+            const residents=getSettlementCharacters(this.state?.worldCharacters,city.id)
+              .filter(p=>p.kind==='named'&&p.status==='alive')
+              .sort((a,b)=>a.id.localeCompare(b.id,'en')).slice(0,3);
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of residents){
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Komşu şehir yardımı tamamlandı',
+              });
+            }
+          },
           onDisputeAccord: (contract) => {
             const city=(this.state?.map?.settlements||[])
               .find(c=>String(c.id)===String(contract.cityId));
