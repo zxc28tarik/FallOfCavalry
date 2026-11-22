@@ -6,7 +6,8 @@
  * Catalog costs are balance placeholders, not historical price assertions.
  */
 import * as CONST from '../constants.js';
-import { getCityBuildingDef, listInfrastructureBuildingIds } from '../data/city-building-catalog.js';
+import { getCityBuildingDef, isCityBuildingAllowedForFaction, listInfrastructureBuildingIds } from '../data/city-building-catalog.js';
+import { getKethudaServiceCoverage } from './city-infrastructure-benefits.js';
 import { canPlayerManageSettlement, ensureSettlementCityState } from './city-state.js';
 
 const MAX_IMPROVEMENT = 2;
@@ -54,6 +55,7 @@ export function getKethudaStatus(settlement) {
     installedIds: installed,
     improvementLevels: levels,
     lastWorkDay: Math.max(0, Math.floor(Number(infrastructure.lastWorkDay) || 0)),
+    serviceCoverage: getKethudaServiceCoverage(settlement),
   };
 }
 
@@ -67,15 +69,18 @@ export function listKethudaProjects({ city, party, day } = {}) {
   const today = Number(day);
   const validDay = Number.isSafeInteger(today) && today >= 1;
   const owner = canPlayerManageSettlement(city, party?.factionId || CONST.FACTION.ID.PLAYER);
+  const cityState = city.cityState;
   const hasGold = Number.isSafeInteger(party?.gold) && party.gold >= 0;
   return allowedIds().map(id => {
     const def = getCityBuildingDef(id);
+    const canHost = Boolean(def) && Number(cityState?.tier || 1) >= Number(def.minTier || 1)
+      && isCityBuildingAllowedForFaction(def, cityState?.historicalFactionId || '');
     const installed = status.installedIds.includes(id);
     const current = status.improvementLevels[id] || 0;
     const finished = installed && current >= MAX_IMPROVEMENT;
     const baseCost = Math.max(1, Math.floor(Number(def?.buildCostGold) || 1));
     const cost = baseCost * (installed ? current + 1 : 1);
-    const available = Boolean(def) && !finished && owner && validDay && hasGold
+    const available = canHost && !finished && owner && validDay && hasGold
       && status.lastWorkDay < today && party.gold >= cost;
     return {
       id, name: def?.name || id, installed, level: current, cost,
@@ -83,6 +88,7 @@ export function listKethudaProjects({ city, party, day } = {}) {
       action: installed ? 'İyileştir' : 'Kur',
       available,
       reason: !owner ? 'Bu şehir sana ait değil.'
+        : !canHost ? 'Bu altyapı için şehir seviyesi veya tarihsel yapı izni uygun değil.'
         : !validDay ? 'Oyun günü geçersiz.'
           : status.lastWorkDay >= today ? 'Kethüda bugün bir altyapı işi yaptı.'
             : finished ? 'Bu hizmet en yüksek düzeyde.'
