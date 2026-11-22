@@ -407,7 +407,8 @@ export default class CityServicesUI {
       day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const residentReactions=Object.fromEntries(Object.keys(CIVIC_DECISIONS).map(id=>[
       id,previewCouncilReactions({roster:this.state?.worldCharacters,
-        cityId:this.currentSettlement?.id,decisionId:id}),
+        cityId:this.currentSettlement?.id,city:this.currentSettlement,
+        legacy:accordLegacy,decisionId:id}),
     ]));
     const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
       .filter((person) => person.status === 'alive');
