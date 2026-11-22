@@ -524,6 +524,8 @@ export function generateContractsForCity({ cityId, day, seed, map, worldState, f
 export function acceptContract(contractId, party = runtime.party) {
   if (!party || !contractId) return null;
   if (!Array.isArray(party.contracts)) party.contracts = [];
+  if(Array.isArray(party.completedDisputeRemedies)
+    &&party.completedDisputeRemedies.includes(contractId))return null;
   const already = party.contracts.find((c) => c?.id === contractId);
   if (already) return already;
 
@@ -652,6 +654,8 @@ export function completeContract(contractId, party = runtime.party, options = {}
   if (idx < 0) return null;
   const contract = party.contracts[idx];
   if (!contract.completed) return null;
+  if(contract.type==='DISPUTE_REMEDY'&&Array.isArray(party.completedDisputeRemedies)
+    &&party.completedDisputeRemedies.includes(contract.id))return null;
 
   const resolvedWarState = options?.warState || null;
   const isWarNow = isAtWarForFaction({ ownerFactionId: contract.ownerFactionId || contract.factionId, warState: resolvedWarState, factions: options?.factions });
@@ -682,6 +686,10 @@ export function completeContract(contractId, party = runtime.party, options = {}
     options.onCivicDispatch(completed);
   }
   party.contracts.splice(idx, 1);
+  if(contract.type==='DISPUTE_REMEDY'){
+    const previous=Array.isArray(party.completedDisputeRemedies)?party.completedDisputeRemedies:[];
+    party.completedDisputeRemedies=[...new Set([...previous,contract.id])].slice(-128);
+  }
 
   if (warBonus > 0 && typeof options?.onRelationBonus === 'function') {
     options.onRelationBonus(completed);
