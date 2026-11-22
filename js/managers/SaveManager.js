@@ -404,6 +404,14 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          regionalAidOutcomes: Array.isArray(playerParty?.regionalAidOutcomes)
+            ? playerParty.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
+              &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
+              &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+              &&['food','security'].includes(x.kind)).slice(-64) : [],
+          completedRegionalRecovery: Array.isArray(playerParty?.completedRegionalRecovery)
+            ? playerParty.completedRegionalRecovery.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-regional-recovery-')).slice(-128) : [],
           completedRegionalAid: Array.isArray(playerParty?.completedRegionalAid)
             ? playerParty.completedRegionalAid.filter(x=>typeof x==='string'&&x.startsWith('ct-regional-')).slice(-128) : [],
           accordLegacies: Array.isArray(playerParty?.accordLegacies)
@@ -608,6 +616,14 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.regionalAidOutcomes = Array.isArray(p.regionalAidOutcomes)
+      ? p.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
+        &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
+        &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+        &&['food','security'].includes(x.kind)).slice(-64) : [];
+    playerParty.completedRegionalRecovery = Array.isArray(p.completedRegionalRecovery)
+      ? p.completedRegionalRecovery.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-regional-recovery-')).slice(-128) : [];
     playerParty.completedRegionalAid = Array.isArray(p.completedRegionalAid)
       ? p.completedRegionalAid.filter(x=>typeof x==='string'&&x.startsWith('ct-regional-')).slice(-128) : [];
     playerParty.accordLegacies = Array.isArray(p.accordLegacies)
