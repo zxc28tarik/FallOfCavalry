@@ -112,18 +112,24 @@ function changeStock(city, market, itemId, delta, kind, day) {
  * then local population consumes only available food. Market shortage is not
  * secretly funded and never reduces party food or player inventory.
  *
- * market.lastGoodsCycleDay is the only new saved runtime marker, scoped to
- * opened real markets; no 881-city per-day state inflation.
+ * market.mcDay is a compact, saved per-market once-per-day guard.
+ * It is created only for real markets that have residents or workshops,
+ * avoiding global save inflation for unvisited / empty settlements.
  */
 export function advanceCityMarketCycle(city, market, { day } = {}) {
   const today = Number(day);
   if (!city || !market?.stocks || !market?.demand
     || !Number.isSafeInteger(today) || today < 1)
     return { ok: false, reason: 'invalid' };
-  if (Number.isSafeInteger(market.lastGoodsCycleDay)
-    && today <= market.lastGoodsCycleDay) return { ok: false, reason: 'already_processed' };
+  if (Number.isSafeInteger(market.mcDay)
+    && today <= market.mcDay) return { ok: false, reason: 'already_processed' };
 
   const preview = getCityMarketCyclePreview(city);
+  // Do not append save-state fields to markets with no population and no
+  // actual workshops; this matters in the full 881-settlement campaign.
+  if (!preview.dailyFoodNeed && preview.recipes.every(recipe => !recipe.maxBatches))
+    return { ok: true, day: today, produced: [], consumed: [],
+      dailyFoodNeed: 0, shortageUnits: 0 };
   const produced = [];
   const consumed = [];
   for (const recipe of preview.recipes) {
@@ -173,7 +179,7 @@ export function advanceCityMarketCycle(city, market, { day } = {}) {
     }
   }
 
-  market.lastGoodsCycleDay = today;
+  market.mcDay = today;
   return {
     ok: true, day: today, produced, consumed,
     dailyFoodNeed: preview.dailyFoodNeed, shortageUnits: remaining,
