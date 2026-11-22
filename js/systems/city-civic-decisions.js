@@ -3,6 +3,8 @@
  * atomically, once per settlement per campaign day, with no NPC spawn.
  * The canonical city and player-party objects are the only beneficiaries.
  */
+import {getCityAccordLegacy,getLegacyCivicImpact} from './city-accord-legacy.js';
+
 export const CIVIC_DECISIONS=Object.freeze({
   patrol:{label:'Mahalle Nöbeti',cost:120,security:8,renown:1,
     desc:'Devriye ve mahalle bekçilerini destekle. Güvenliği artırır.'},
@@ -20,8 +22,17 @@ export function getCivicDecisionAvailability(city,party,day){
   return {available:true,reason:null};
 }
 
-export function applyCivicDecision({city,party,day,decisionId}={}){
-  const definition=CIVIC_DECISIONS[decisionId];
+export function getEffectiveCivicDecision({city,party,roster,day,decisionId}={}){
+  const base=CIVIC_DECISIONS[decisionId];
+  if(!base)return null;
+  const legacy=getCityAccordLegacy({party,roster,cityId:city?.id,day:Math.max(1,Math.floor(Number(day)||1))});
+  const {goldDiscount,securityPenalty}=getLegacyCivicImpact(legacy,decisionId);
+  return {...base,cost:base.cost-goldDiscount,
+    security:base.security-securityPenalty,legacy,discount:goldDiscount,penalty:securityPenalty};
+}
+
+export function applyCivicDecision({city,party,roster,day,decisionId}={}){
+  const definition=getEffectiveCivicDecision({city,party,roster,day,decisionId});
   if(!definition)return {ok:false,message:'Bilinmeyen şehir kararı.'};
   const gate=getCivicDecisionAvailability(city,party,day);
   if(!gate.available)return {ok:false,message:gate.reason};
@@ -41,5 +52,6 @@ export function applyCivicDecision({city,party,day,decisionId}={}){
     ok:true,
     message:`${definition.label}: şehir güvenliği ${newSecurity}/100, altın ${definition.cost>0?'-':'+'}${Math.abs(definition.cost)}.`,
     cityId:city.id,decisionId,security:newSecurity,gold:party.gold,
+    legacyApplied:Boolean(definition.legacy),discount:definition.discount,penalty:definition.penalty,
   };
 }
