@@ -282,6 +282,7 @@ export class CityManager {
       onCityDispute: (choice) => {
         const result=resolveCityDispute({
           roster:this.state?.worldCharacters,cityId:this.state?.city?.id,
+          city:this.state?.city,
           day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
           party:g.playerParty,choice,
         });
