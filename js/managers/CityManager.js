@@ -350,6 +350,12 @@ export class CityManager {
         return result;
       },
       onCivicDecision: (decisionId) => {
+        // Preview/reaction values must use the SAME pre-vote conditions.
+        const cityBefore={
+          security:this.state?.city?.security,
+          marketStock:this.state?.city?.marketStock,
+          priceMultiplier:this.state?.city?.priceMultiplier,
+        };
         const result=applyCivicDecision({
           city:this.state?.city,party:g.playerParty,roster:this.state?.worldCharacters,
           day:this.state?.day,decisionId,
@@ -357,7 +363,7 @@ export class CityManager {
         if(result.ok){
           const activeDay=Math.max(1,Math.floor(Number(this.state?.day)||1));
           const reactions=applyCouncilReactions({
-            roster:this.state?.worldCharacters,city:this.state?.city,
+            roster:this.state?.worldCharacters,city:cityBefore,
             legacy:getCityAccordLegacy({party:g.playerParty,roster:this.state?.worldCharacters,
               cityId:this.state?.city?.id,day:activeDay}),
             cityId:this.state?.city?.id,decisionId,day:activeDay,
