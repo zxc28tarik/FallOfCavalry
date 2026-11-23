@@ -17,6 +17,7 @@ Bu kayıt **onaylanmış (BEST)** ve yalnızca önerilen **aday (CANDIDATE)** ko
 | `js/systems/world-*` + harita | V1.75 baseline SHA | 881 şehir / 304 gerçek yol ve dünya kimliği (kanıt gerektirir) |
 | City V2 / NPC / pazar / görev / kayıt | V1.75 baseline SHA | Şehir arazisi, gerçek üretim/stoğu, NPC/kervan ve save kaybı yok |
 | 3D aktif sektör verisi adaptörü | **G3D-01 BEST: `c0e91e86873e2e680d1eb40c8fc9abd49d9f4224`**; test `cd02a59d72d41c1ece7ff9acdb5469bc64d862de`; **ChatGPT koruma dalı:** `archive/3d-g3d01-verified-20261123` @ `cbe3a1383c63f145010bec2b99d372832e2c2249` | Aktif sektör, 150+150, gerçek ID/equipment/formation; CI PASS `cbe3a1383c63f145010bec2b99d372832e2c2249` |
+| G3D-02A 3D zemin + kamera (yalnız Gemini HTML adayı) | **CANDIDATE, BEST DEĞİL**: `archive/gemini-g3d02a-html-candidate-20261123` @ `03a024f711c3b433b79043873a662c821420c52b`; yükleme SHA-256 `da5c1ff7fbba87df9c43843667c55aa3a5940bc4ed81d89ef24a1093ecf0815e` | Geçici arazi, kamera ve lifecycle kodu yararlı; G3D-01 ile gerçek bağlantı yok, CDN ve sahte test grupları var. Önce **G3D-02A-R1**; ChatGPT QA: `checkpoints/G3D-02A-INCOMING-20261123.md`. |
 | Gerçek Three.js 3D savaş renderer'ı | YOK — G3D-02 BEKLEMEDE | 2D yol korunarak geliştirilecek |
 | 3D dünya / 3D şehir | YOK — G3D-06/07 BEKLEMEDE | Önce gerçek kaynak, sonra çizim |
 
