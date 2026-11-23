@@ -17,6 +17,7 @@ import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
 import { getCityWorkshopOperatingReport } from '../systems/city-workshop-accounts.js';
 import { getCityWorkshopContacts } from '../systems/city-workshop-contacts.js';
 import { listCityWorkshopStewards } from '../systems/city-workshop-assignments.js';
+import { getCityWorkshopStewardAudits } from '../systems/city-workshop-supervision.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -457,6 +458,12 @@ export default class CityServicesUI {
       roster:this.state?.worldCharacters,organization:this.state?.characterOrganization,
     });
     const stewardBySource=new Map(stewardRoster.sources.map(row=>[row.sourceId,row]));
+    const supervision=getCityWorkshopStewardAudits({
+      city:this.currentSettlement,party:this.party,
+      roster:this.state?.worldCharacters,organization:this.state?.characterOrganization,
+      market:this.currentMarket,day:this.state?.day,
+    });
+    const auditsBySource=new Map(supervision.audits.map(report=>[report.sourceId,report]));
     const workshopBlockLabels={
       not_built:'Şehirde kurulmamış',
       missing_input:'Hammadde yetersiz',
@@ -652,6 +659,7 @@ export default class CityServicesUI {
             ${stewardRoster.sources.length ? stewardRoster.sources.map(source=>{
               const origin=workshopContacts.sources.find(row=>row.sourceId===source.sourceId);
               const steward=stewardBySource.get(source.sourceId);
+              const audit=auditsBySource.get(source.sourceId);
               return `
                 <div class="city-overview-row">
                   <span><strong>${escapeHtml(getCityBuildingDef(origin?.buildingId)?.name||origin?.buildingId||'Zanaat atölyesi')}</strong>
@@ -659,6 +667,13 @@ export default class CityServicesUI {
                       ? `Nezaretçi: ${escapeHtml(steward.steward.name)} (gün ${steward.steward.startDay})`
                       : steward?.occupied ? 'Bu atölye için kayıtlı görev mevcut, karakter burada değil'
                         : 'Nezaretçi atanmamış'}</small>
+                    ${audit ? `
+                      <small class="block opacity-85 mt-1">Denetim: ${escapeHtml(audit.summary)}
+                        ${audit.plannedBatches !== null ? ` · ${audit.plannedBatches}/${audit.maxBatches} parti (şehirdeki aynı tür ${audit.buildingCount} bina toplamı)` : ''}
+                        ${audit.processedToday ? ' · Bugünkü döngü tamamlandı; sonraki çevrim tahmini' : ''}
+                      </small>
+                      ${audit.inputs.length ? `<small class="block opacity-70">Gerçek girdi stoku: ${audit.inputs.map(input=>`${escapeHtml(input.itemId)} ${input.available === null ? '?' : input.available} (parti başına ${input.perBatch})`).join(' · ')}</small>` : ''}
+                    ` : ''}
                     ${stewardRoster.canManage && !steward?.occupied && stewardRoster.eligible.length ? `
                       <select class="text-xs mt-1" data-workshop-chooser data-source-id="${escapeHtml(source.sourceId)}" aria-label="Atölye nezaretçisi seç">
                         ${stewardRoster.eligible.map(person=>`
