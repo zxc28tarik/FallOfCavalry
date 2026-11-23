@@ -16,6 +16,7 @@ import { getKethudaConstructionQuote } from '../systems/city-infrastructure-bene
 import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
 import { getCityWorkshopOperatingReport } from '../systems/city-workshop-accounts.js';
 import { getCityWorkshopContacts } from '../systems/city-workshop-contacts.js';
+import { listCityWorkshopStewards } from '../systems/city-workshop-assignments.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -64,6 +65,7 @@ export default class CityServicesUI {
     onCityDispute,
     getQuestManager,
     onAssignQuest,
+    onWorkshopAssignment,
   }) {
     this.state = state;
     this.party = party;
@@ -90,6 +92,9 @@ export default class CityServicesUI {
     this.kethudaExpanded = false;
     this.getQuestManager = getQuestManager;
     this.onAssignQuest = onAssignQuest;
+    this.onWorkshopAssignment = onWorkshopAssignment;
+    this.workshopFeedback = '';
+    this.workshopExpanded = false;
     this.pendingNpcQuestId = null;
     this.questAssignmentFeedback = '';
 
@@ -122,6 +127,9 @@ export default class CityServicesUI {
     this.getPanelBodyEl()?.addEventListener('toggle', (event) => {
       if (event.target?.matches?.('[data-kethuda-projects]')) {
         this.kethudaExpanded = Boolean(event.target.open);
+      }
+      if (event.target?.matches?.('[data-workshop-stewards]')) {
+        this.workshopExpanded = Boolean(event.target.open);
       }
     }, true);
 
@@ -160,6 +168,18 @@ export default class CityServicesUI {
         this.kethudaFeedback=result.message;
         this.kethudaExpanded=true;
         if(result.ok)this.onConstruct?.(result);
+      } else if (action === 'workshop-appoint' || action === 'workshop-release') {
+        const sourceId = id;
+        const characterId = action === 'workshop-release'
+          ? btn.dataset.characterId
+          : [...this.getPanelBodyEl().querySelectorAll('select[data-workshop-chooser]')]
+            .find(element => element.dataset.sourceId === sourceId)?.value;
+        const result = this.onWorkshopAssignment?.(
+          action === 'workshop-appoint' ? 'appoint' : 'release',
+          sourceId, characterId,
+        );
+        this.workshopFeedback = result?.message || 'Görevlendirme gerçekleştirilemedi.';
+        this.workshopExpanded = true;
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
         this.onDiplomacyAction?.({ ok, message: ok ? `Ateskes satin alindi: ${id}` : 'Ateskes alinmadi.' });
@@ -432,6 +452,11 @@ export default class CityServicesUI {
     const workshopById=new Map(workshopAccounts.rows.map(row=>[row.buildingId,row]));
     const workshopContacts=getCityWorkshopContacts(this.currentSettlement,this.state?.worldCharacters);
     const knownWorkshopContacts=workshopContacts.sources.filter(source=>source.contacts.length>0);
+    const stewardRoster=listCityWorkshopStewards({
+      city:this.currentSettlement,party:this.party,
+      roster:this.state?.worldCharacters,organization:this.state?.characterOrganization,
+    });
+    const stewardBySource=new Map(stewardRoster.sources.map(row=>[row.sourceId,row]));
     const workshopBlockLabels={
       not_built:'Şehirde kurulmamış',
       missing_input:'Hammadde yetersiz',
@@ -619,6 +644,42 @@ export default class CityServicesUI {
                 </span>
               </div>
             `).join('') : '<div class="text-xs opacity-75">Bu şehirde açık zanaat kaynağına bağlı, hâlen burada yaşayan kayıtlı önemli karakter bulunmuyor.</div>'}
+          </details>
+          <details class="mt-2" data-workshop-stewards ${this.workshopExpanded ? 'open' : ''}>
+            <summary class="cursor-pointer font-bold">Atölye Nezaretçileri — Açık Görevlendirme</summary>
+            <div class="text-xs opacity-75">Yalnız mevcut şehirde yaşayan boşta bir önemli karakter, gerçek sanayi binasına oyuncu kararıyla atanabilir. Bu ticari mülkiyet, personel ücreti, lonca üyeliği veya otomatik üretim artışı değildir.</div>
+            ${this.workshopFeedback ? `<div class="text-xs mt-2" role="status">${escapeHtml(this.workshopFeedback)}</div>` : ''}
+            ${stewardRoster.sources.length ? stewardRoster.sources.map(source=>{
+              const origin=workshopContacts.sources.find(row=>row.sourceId===source.sourceId);
+              const steward=stewardBySource.get(source.sourceId);
+              return `
+                <div class="city-overview-row">
+                  <span><strong>${escapeHtml(getCityBuildingDef(origin?.buildingId)?.name||origin?.buildingId||'Zanaat atölyesi')}</strong>
+                    <small class="block opacity-75">Parsel: ${escapeHtml(origin?.parcelId||'—')} · ${steward?.steward
+                      ? `Nezaretçi: ${escapeHtml(steward.steward.name)} (gün ${steward.steward.startDay})`
+                      : steward?.occupied ? 'Bu atölye için kayıtlı görev mevcut, karakter burada değil'
+                        : 'Nezaretçi atanmamış'}</small>
+                    ${stewardRoster.canManage && !steward?.occupied && stewardRoster.eligible.length ? `
+                      <select class="text-xs mt-1" data-workshop-chooser data-source-id="${escapeHtml(source.sourceId)}" aria-label="Atölye nezaretçisi seç">
+                        ${stewardRoster.eligible.map(person=>`
+                          <option value="${escapeHtml(person.characterId)}">${escapeHtml(person.name)}</option>
+                        `).join('')}
+                      </select>
+                    ` : ''}
+                  </span>
+                  ${stewardRoster.canManage ? steward?.steward
+                    ? `<button type="button" class="action-btn btn-dark text-xs"
+                       data-action="workshop-release" data-id="${escapeHtml(source.sourceId)}"
+                       data-character-id="${escapeHtml(steward.steward.characterId)}">Görevi bitir</button>`
+                    : !steward?.occupied && stewardRoster.eligible.length
+                      ? `<button type="button" class="action-btn btn-gold text-xs"
+                         data-action="workshop-appoint" data-id="${escapeHtml(source.sourceId)}">Görevlendir</button>`
+                      : '' : ''}
+                </div>
+              `;
+            }).join('') : '<div class="text-xs opacity-75">Bu şehirde atama yapılabilecek aktif sanayi binası yok.</div>'}
+            ${!stewardRoster.canManage ? '<div class="text-xs opacity-75">Bu şehir oyuncu yönetiminde değil; atama ve görevden alma kapalı.</div>'
+              : !stewardRoster.eligible.length ? '<div class="text-xs opacity-75">Boşta ve şehirde yaşayan önemli karakter bulunmuyor.</div>' : ''}
           </details>
         </div>
         <div class="city-overview-section">
