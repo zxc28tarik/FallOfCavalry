@@ -14,6 +14,14 @@
 
 **Mevcut 3D çalışma dalı:** `codex/web-3d-protected-battle-20261123`; 3D savaş işleri ayrı G3D kodlarıyla ve bağımsız commit'lerle ilerler. `main`, eski PR #68 veya Unity projesi açık kullanıcı onayı olmadan değiştirilmez.
 
+## GEMINI TESLİM BİÇİMİ — KULLANICININ TEK DOSYA KARARI (23.11.2026)
+
+**Her Gemini promptunda zorunlu:** Gemini işini tamamladığında kullanıcıya **yalnızca TEK indirilebilir, kendi başına açılabilir .html** verir. JS ve CSS uygulama kodunu HTML içine gömer. Kullanıcıdan 4-5 ayrı kod dosyası, asset, test dosyası, klasör ya da ZIP indirmesini isteme. Aynı teslim için birden fazla indirilebilir dosya çıkarma.
+
+Bu **kullanıcıya teslim biçimi** kuralıdır. ChatGPT'nin bağımsız olarak arşiv tutmasına, commit/branch yedeklerini almasına ve ileride proje içi modüler kodu işlemesine engel değildir. Gemini'nin dosyayı tek dosya yapmak için eski onaylı özellikleri silmesi veya oyunu sahte farklı bir demo ile değiştirmesi YASAK. Tek HTML'nin dış modül/CDN gerektirmesi halinde internet veya proje sunucusu gereksinimini açıkça bildir; dosya bağımsız değilse bağımsız deme.
+
+Gemini, kullanıcıdan dosyaları manuel birleştirmesini isteyemez. ChatGPT'ye sonraki aşamada incelenmesi için kullanıcı yalnız tek HTML gönderir. Nihai GitHub kaynak entegrasyonunu ve sürüm kayıtlarını **ChatGPT** yönetir.
+
 ## ÜÇ AŞAMALI GELİŞTİRME PROTOKOLÜ — 23.11.2026 KULLANICI KARARI
 
 **ŞU ANKİ AŞAMA: AŞAMA 1 — GEMINI İLE GELİŞTİRME.** Aşama geçişini yalnız kullanıcı bildirir.
