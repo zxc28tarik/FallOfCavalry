@@ -29,7 +29,7 @@ export function getCityWorkshopContacts(city, roster) {
     .filter(actor => actor?.kind === 'named' && actor.status === 'alive');
   const rows = [];
   for (const parcel of city.cityState.parcels) {
-    if (!parcel?.id || parcel.state === 'locked' || !Array.isArray(parcel.buildingIds)) continue;
+    if (parcel?.id == null || parcel.state === 'locked' || !Array.isArray(parcel.buildingIds)) continue;
     for (const buildingId of new Set(parcel.buildingIds)) {
       if (typeof buildingId !== 'string') continue;
       const sourceId = 'built-' + encode(cityId) + '~' + encode(parcel.id)
