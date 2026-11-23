@@ -1,5 +1,7 @@
 # GEMINI GÖREV PAKETİ — G3D-02: FOC 3D AKTİF SEKTÖR SAVAŞ GÖRSELİ
 
+**GÖREV AYRIMI: Gemini yalnızca kod adayı üretir. Yedek/önceki BEST kıyası/checkpoint/test doğrulaması/kabul yalnız ChatGPT'ye aittir.**
+
 > BU GÖREVİ UYGULAMADAN ÖNCE `docs/3d-migration/00_KORUMA_SISTEMI.md` ve `01_EN_IYI_PARCA_KAYITLARI.md` dosyalarını **eksiksiz oku**. Kullanıcının en önemli kuralı: yeni bir gelişmede önceki en iyi parçayı asla silme; her adımı ayrı commit'te kaydet ve eski+yeniyi kontrol et. Kullanıcının chat eki `3d_age_of_empires_rts_sava_oyunu.html` yalnız HTML/Three.js ile gerçek 3D RTS yapma yöntemini örnekler; o örneğin sahte ordularını, istatistiklerini, müziğini veya savaş motorunu taşımak yasaktır.
 
 ## Bağlam ve mevcut proje
@@ -32,7 +34,7 @@
 
 ## DOSYA KAPSAMI
 
-**Tercih edilen izinli:** `js/battle3d/**`, `tests/unit/battle3d-*.test.js`, ayrı kapalı 3D giriş adapter'ı, `package.json` / `package-lock.json` (yalnız dependency), `docs/3d-migration/checkpoints/**`.
+**Tercih edilen izinli:** `js/battle3d/**`, `tests/unit/battle3d-*.test.js`, ayrı kapalı 3D giriş adapter'ı, `package.json` / `package-lock.json` (yalnız dependency), `docs/3d-migration/checkpoints/**` (YALNIZ CHATGPT; Gemini bu dosyalara dokunamaz).
 
 **Varsayılan dokunma:** `js/battle/core/**`, `js/battle/sector/**`, `js/battle/unit/**`, `js/systems/**`, `js/managers/**`, `js/ui/**`, `assets/world-map/**`, save ve quest. Zorunlu küçük edit için önce dosya/fonksiyon sınırını ve geri dönüş kanıtını sun; korunan kodu silme.
 
@@ -41,8 +43,8 @@
 - Commit A: 3D renderer yalnız sahne/zemin/kamera + gerçek proje bağı.
 - Commit B: canlı 3D asker instancing/pool ve yük profilini modelleme.
 - Commit C: testler, fallback ve gerçek aktif sektör geçişi.
-- Her commit sonrası: `git diff` ile eski kabul edilen bileşenlere regresyon kontrolü; `npm run validate` + `npm test` + `npm run audit:world` + gerçek Chromium WebGL smoke.
-- `checkpoints/G3D-02.md`: exact commit SHA, hangi parçanın en iyi hâli, korunan önceki parça, PASS/FAIL kanıtı, gerçek ölçülmüş FPS veya `ÖLÇÜLMEDİ`.
-- Test geçmeden BEST statüsüne yükseltme. `main`e birleştirme ve koruma dalını silme YASAK.
+- Her **Gemini aday commit'i** sonrası değişikliği **ChatGPT** ayrı kaydeder, `git diff` ile önceki BEST parçaları tek tek karşılaştırır ve `npm run validate` + `npm test` + `npm run audit:world` + gerçek Chromium WebGL smoke sonuçlarını bağımsız doğrular.
+- `checkpoints/G3D-02.md` dosyasını **YALNIZ CHATGPT** yazar: teslimin exact SHA'sı, önceki en iyi parça, PASS/FAIL kanıtı, gerçek ölçülmüş FPS veya `ÖLÇÜLMEDİ`. Gemini kendi kabul kaydını tutamaz.
+- BEST statüsüne yükseltme yetkisi **yalnız CHATGPT'de**; Gemini kendi kodunu BEST ilan edemez. `main`e birleştirme ve koruma dalını silme YASAK.
 
 **Tamamlandı kıstası:** gerçek FOC savaş verisi ile geçerli 3D savaş sahnesi, 2D fallback sağlam, aktif sektör dışında 3D asker yok, 150/150 limitleri, gerçek savaş sonucu sahipliği korunmuş, regresyon testleri PASS ve checkpoint kaydı mevcut.
