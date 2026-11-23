@@ -76,7 +76,9 @@ function installedWorkshopCounts(city) {
   const parcels = city?.cityState?.parcels;
   if (!Array.isArray(parcels)) return counts;
   for (const parcel of parcels) {
-    if (!parcel || !Array.isArray(parcel.buildingIds)) continue;
+    // City V2 locked parcels must not produce real goods, just as locked
+    // parcels cannot register character-production sources.
+    if (!parcel || parcel.state === 'locked' || !Array.isArray(parcel.buildingIds)) continue;
     // A building can be listed only once per actual plot. Missing, unknown and
     // unregistered IDs cannot spawn production actors.
     for (const recipe of CITY_MARKET_RECIPES) {
