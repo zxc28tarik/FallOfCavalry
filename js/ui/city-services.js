@@ -14,6 +14,7 @@ import { getNamedCharacterState } from '../systems/named-character-state.js';
 import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '../systems/city-kethuda.js';
 import { getKethudaConstructionQuote } from '../systems/city-infrastructure-benefits.js';
 import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
+import { getCityWorkshopOperatingReport } from '../systems/city-workshop-accounts.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -424,6 +425,16 @@ export default class CityServicesUI {
     const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
     const kethuda=getKethudaStatus(this.currentSettlement);
     const foodCycle=getCityMarketCyclePreview(this.currentSettlement);
+    const workshopAccounts=getCityWorkshopOperatingReport(this.currentSettlement,this.currentMarket,{
+      day:Number.isSafeInteger(this.state?.day)?this.state.day:null,
+    });
+    const workshopById=new Map(workshopAccounts.rows.map(row=>[row.buildingId,row]));
+    const workshopBlockLabels={
+      not_built:'Şehirde kurulmamış',
+      missing_input:'Hammadde yetersiz',
+      missing_output_stock:'Ürün stoku geçersiz',
+      storage_full:'Depo kapasitesi dolu',
+    };
     const kethudaProjects=listKethudaProjects({
       city:this.currentSettlement,party:this.party,day:this.state?.day,
     });
@@ -555,14 +566,28 @@ export default class CityServicesUI {
           <div class="city-overview-section__title">Şehir İaşesi — Günlük Pazar Döngüsü</div>
           <div class="text-sm opacity-80">Nüfusun pazardan günlük ihtiyacı: ${foodCycle.dailyFoodNeed} gıda birimi. Yalnız gerçek pazar stoku tüketilir; kıtlıkta stok eksiye düşmez, talep yükselir.</div>
           <div class="text-xs opacity-80">Çalışabilir tesis türü: ${foodCycle.recipes.filter(recipe => recipe.buildingCount > 0).length}/${foodCycle.recipes.length} · Tarifler mevcut binaların ve gerçek mal stoklarının üzerine kuruludur.</div>
+          ${workshopAccounts.ok ? `
+            <div class="text-xs opacity-80">
+              Mevcut pazar stoklarına göre tahmini ${workshopAccounts.totalBatches} üretim partisi ·
+              Hammadde piyasa alış karşılığı ${workshopAccounts.inputValueGold} altın ·
+              Ürün pazar satış karşılığı ${workshopAccounts.outputValueGold} altın ·
+              Brüt fiyat farkı ${workshopAccounts.grossTradeSpreadGold >= 0 ? '+' : ''}${workshopAccounts.grossTradeSpreadGold} altın.
+            </div>
+            <div class="text-xs opacity-75">Bu yalnız karşılaştırma hesabıdır: gelir veya altın aktarımı değildir. İşçi maaşı ve bakım bedeli henüz hesaplanmaz; şahsi atölye sahipliği doğrulanmamıştır. Günlük piyasa değişimi gerçekleşen üretimi değiştirebilir.${workshopAccounts.processedToday ? ' Bugünkü pazar döngüsü tamamlandı; rakamlar sonraki olası çevrim içindir.' : ''}</div>
+          ` : '<div class="text-xs opacity-70">Gerçek pazar açılmadan atölye girdi maliyeti ve yapılabilir üretim doğrulanamaz.</div>'}
           <details class="mt-2" data-city-production-recipes>
             <summary class="cursor-pointer font-bold">Atölyeler, girdiler ve günlük üretim sınırları</summary>
             ${[...foodCycle.recipes].sort((a, b) => Number(b.buildingCount > 0) - Number(a.buildingCount > 0)).map(recipe => `
               <div class="city-overview-row">
                 <span><strong>${escapeHtml(recipe.name)}</strong> — ${recipe.buildingCount} bina, üst sınır ${recipe.maxBatches} parti/gün
                   <small class="block opacity-80">Girdi: ${Object.entries(recipe.inputs).map(([id,qty]) => `${qty} ${escapeHtml(id)}`).join(' + ')} · Çıktı: ${recipe.outputQty} ${escapeHtml(recipe.outputId)} / parti</small>
+                  ${workshopById.has(recipe.buildingId) ? `<small class="block opacity-75">Mevcut stokla planlanan: ${workshopById.get(recipe.buildingId).plannedBatches}/${recipe.maxBatches} · Girdi karşılığı: ${workshopById.get(recipe.buildingId).inputValueGold}g · Ürün karşılığı: ${workshopById.get(recipe.buildingId).outputValueGold}g</small>` : ''}
                 </span>
-                <strong>${recipe.buildingCount > 0 ? 'Malzeme varsa işler' : 'Şehirde kurulmamış'}</strong>
+                <strong>${workshopById.has(recipe.buildingId)
+                  ? workshopById.get(recipe.buildingId).plannedBatches > 0
+                    ? `${workshopById.get(recipe.buildingId).plannedBatches} parti mümkün`
+                    : escapeHtml(workshopBlockLabels[workshopById.get(recipe.buildingId).blockedReason] || 'Henüz üretilemiyor')
+                  : recipe.buildingCount > 0 ? 'Pazar bekleniyor' : 'Şehirde kurulmamış'}</strong>
               </div>
             `).join('')}
           </details>
