@@ -821,6 +821,15 @@ Esc close`,
     this.game?.ensureFactionState?.();
     assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
     applySavedCityStateCollection(settlements, game.cityState);
+    // V1.74: physical workshop assignments are only authoritative AFTER the
+    // saved City V2 parcels have been restored. The earlier roster-normalizer
+    // runs before cityState hydration and cannot verify newly built workshops.
+    this.state.characterOrganization = normalizeCharacterOrganizationState(
+      game.characterOrganization, {
+        roster: this.state.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+      },
+    );
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
