@@ -1,0 +1,2881 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fall of Cavalry — G3D-02A-R2 Tek Dosya 3D Savaş Altyapısı</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            background-color: #141714;
+            color: #e7e5e4;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .foc-title {
+            font-family: Georgia, 'Times New Roman', serif;
+            letter-spacing: 0.04em;
+        }
+
+        .foc-mount {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .foc-mount canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        .foc-mount canvas:active {
+            cursor: grabbing;
+        }
+
+        .foc-panel {
+            background: rgba(22, 25, 21, 0.91);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(180, 168, 138, 0.28);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.52);
+            border-radius: 12px;
+        }
+
+        .foc-btn {
+            background: rgba(41, 45, 39, 0.95);
+            color: #e7e5e4;
+            border: 1px solid rgba(168, 162, 158, 0.34);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.08s ease;
+        }
+
+        .foc-btn:hover:not(:disabled) {
+            background: rgba(63, 69, 60, 0.98);
+            border-color: #d6c38b;
+        }
+
+        .foc-btn:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+
+        .foc-btn.active {
+            background: rgba(87, 74, 42, 0.95);
+            border-color: #e5c97b;
+            color: #fef3c7;
+        }
+
+        .foc-btn-danger {
+            color: #fecdd3;
+            border-color: rgba(244, 63, 94, 0.45);
+        }
+
+        .foc-btn-accent {
+            color: #fde68a;
+        }
+
+        /* Top Developer Header */
+        .foc-header {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            z-index: 20;
+            padding: 10px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .foc-header-title-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .foc-header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-header-sub {
+            font-size: 11px;
+            color: #a8a29e;
+            margin-top: 2px;
+        }
+
+        .foc-header-sub strong {
+            color: #fcd34d;
+            font-weight: 500;
+        }
+
+        .foc-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+
+        .badge-warn {
+            background: rgba(120, 53, 15, 0.85);
+            border-color: rgba(245, 158, 11, 0.45);
+            color: #fde68a;
+        }
+
+        .badge-info {
+            background: rgba(12, 74, 110, 0.85);
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #bae6fd;
+        }
+
+        .badge-ok {
+            background: rgba(6, 78, 59, 0.85);
+            border-color: rgba(52, 211, 153, 0.45);
+            color: #a7f3d0;
+        }
+
+        .badge-muted {
+            background: rgba(41, 37, 36, 0.9);
+            border-color: rgba(120, 113, 108, 0.45);
+            color: #d6d3d1;
+        }
+
+        /* Left Telemetry Card */
+        .foc-sidebar {
+            position: fixed;
+            top: 82px;
+            left: 12px;
+            width: 332px;
+            max-width: calc(100vw - 24px);
+            max-height: calc(100vh - 150px);
+            overflow-y: auto;
+            z-index: 20;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .foc-sidebar-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(68, 64, 60, 0.8);
+            padding-bottom: 8px;
+        }
+
+        .foc-sidebar-head span:first-child {
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-notice {
+            background: rgba(12, 10, 9, 0.68);
+            border: 1px solid #292524;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 11px;
+            color: #d6d3d1;
+            line-height: 1.45;
+        }
+
+        .foc-notice code {
+            color: #fde68a;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .foc-sector-tabs {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .foc-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .foc-stat-box {
+            background: rgba(28, 25, 23, 0.88);
+            border: 1px solid #292524;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .foc-stat-box.span-2 {
+            grid-column: span 2;
+        }
+
+        .foc-stat-label {
+            color: #a8a29e;
+        }
+
+        .foc-stat-value {
+            color: #f5f5f4;
+            font-weight: 600;
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .foc-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #a8a29e;
+        }
+
+        .foc-meta-row.bordered {
+            border-top: 1px solid rgba(68, 64, 60, 0.8);
+            padding-top: 8px;
+        }
+
+        .status-val {
+            font-weight: 600;
+        }
+
+        .status-ok {
+            color: #6ee7b7;
+        }
+
+        .status-warn {
+            color: #fcd34d;
+        }
+
+        .status-danger {
+            color: #fda4af;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: #e7e5e4;
+        }
+
+        /* Unit Test Modal / Drawer */
+        .foc-test-panel {
+            position: fixed;
+            top: 82px;
+            right: 12px;
+            width: 370px;
+            max-width: calc(100vw - 24px);
+            max-height: calc(100vh - 154px);
+            overflow-y: auto;
+            z-index: 25;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .test-item {
+            background: rgba(15, 17, 15, 0.85);
+            border: 1px solid #292524;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+
+        .test-item.pass {
+            border-left: 3px solid #34d399;
+        }
+
+        .test-item.fail {
+            border-left: 3px solid #fb7185;
+        }
+
+        /* Bottom Camera Controls */
+        .foc-footer {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            left: 12px;
+            z-index: 20;
+            padding: 10px 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 11px;
+            color: #d6d3d1;
+        }
+
+        @media (min-width: 720px) {
+            .foc-footer {
+                left: auto;
+                width: auto;
+            }
+        }
+
+        .foc-hints strong {
+            color: #fde68a;
+        }
+
+        .foc-cam-btns {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Fallback Overlay */
+        .foc-fallback {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(12, 10, 9, 0.94);
+        }
+
+        .foc-fallback-card {
+            max-width: 440px;
+            width: 100%;
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .foc-fallback-icon {
+            font-size: 36px;
+        }
+
+        .foc-fallback-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-fallback-msg {
+            font-size: 13px;
+            color: #d6d3d1;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- 3D WEBGL MOUNT CONTAINER -->
+    <div id="battle3dMount" class="foc-mount"></div>
+
+    <!-- GRACEFUL WEBGL / DISPOSED FALLBACK OVERLAY -->
+    <div id="fallbackScreen" class="foc-fallback hidden">
+        <div class="foc-panel foc-fallback-card">
+            <div id="fallbackIcon" class="foc-fallback-icon">🛡️</div>
+            <h2 id="fallbackTitle" class="foc-title foc-fallback-title">
+                3D Savaş Sahnesi Kapalı
+            </h2>
+            <p id="fallbackMessage" class="foc-fallback-msg">
+                WebGL kaynakları, olay dinleyicileri ve animasyon döngüsü güvenli şekilde temizlendi.
+            </p>
+            <div>
+                <button id="btnReinit" type="button" class="foc-btn foc-btn-accent">
+                    🔄 3D Sahneyi Yeniden Başlat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP DEVELOPER HEADER -->
+    <header class="foc-panel foc-header">
+        <div>
+            <div class="foc-header-title-row">
+                <span class="foc-title foc-header-title">FALL OF CAVALRY — G3D-02A-R2</span>
+                <span class="badge badge-warn">TEK DOSYA 3D ALTYAPI</span>
+                <span class="badge badge-ok">OFFLINE / FILE:// HAZIR</span>
+            </div>
+            <p class="foc-header-sub">
+                1650 Meydan Muharebesi • <strong>Geçici 3D Zemin (Gerçek arazi verisi henüz bağlı değil; 3D askerler G3D-02B aşamasındadır)</strong>
+            </p>
+        </div>
+
+        <div class="foc-toolbar">
+            <button id="btnModeTest" type="button" class="foc-btn active">📊 Gerçek Test Sektörü</button>
+            <button id="btnModeEmpty" type="button" class="foc-btn">∅ Boş Veri Testi</button>
+            <button id="btnRunTests" type="button" class="foc-btn foc-btn-accent">🧪 Birim Testleri</button>
+            <button id="btnModeNoWebGL" type="button" class="foc-btn">⚠️ WebGL Yok Testi</button>
+            <button id="btnDispose" type="button" class="foc-btn foc-btn-danger">⏹️ Sahneyi Kapat</button>
+        </div>
+    </header>
+
+    <!-- LEFT TELEMETRY CARD: READ-ONLY ActiveSector3DViewModel INSPECTOR -->
+    <aside class="foc-panel foc-sidebar">
+        <div class="foc-sidebar-head">
+            <span class="foc-title">Aktif Sektör Görünüm Modeli</span>
+            <span id="dataSourceBadge" class="badge badge-info">GERÇEK PROJEKSİYON</span>
+        </div>
+
+        <div class="foc-notice">
+            <strong>Modül Zinciri:</strong> <code>createTestBattleData()</code> → <code>SectorManager.initSectors(3, playerGroups, enemyGroups)</code> → G3D-01 <code>projectActiveSector3D(sectorManager)</code> (salt-okunur).
+        </div>
+
+        <!-- Active Sector Switcher (SectorManager.setActiveSector) -->
+        <div>
+            <div class="foc-stat-label" style="font-size:11px; margin-bottom:5px;">Aktif Sektör Seçimi (SectorManager):</div>
+            <div class="foc-sector-tabs">
+                <button id="btnSector0" type="button" class="foc-btn active">Sektör 0 (Merkez)</button>
+                <button id="btnSector1" type="button" class="foc-btn">Sektör 1 (Batı)</button>
+                <button id="btnSector2" type="button" class="foc-btn">Sektör 2 (Doğu)</button>
+            </div>
+        </div>
+
+        <div class="foc-grid">
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Aktif Sektör Kimliği</div>
+                <div id="vmSectorId" class="foc-stat-value">—</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Türetilen Kamera Sınırı</div>
+                <div id="vmSectorBounds" class="foc-stat-value">—</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Benzersiz Grup (groupId)</div>
+                <div id="vmGroupCount" class="foc-stat-value">0</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Görünür Asker (Oyuncu/Düşman)</div>
+                <div id="vmSoldierCount" class="foc-stat-value">0 / 0</div>
+            </div>
+            <div class="foc-stat-box span-2">
+                <div class="foc-stat-label">G3D-01 Görünürlük Limiti (150/150) &amp; Gizli Canlı</div>
+                <div id="vmLimits" class="foc-stat-value">150/150 (Gizli: 0/0)</div>
+            </div>
+            <div class="foc-stat-box span-2">
+                <div class="foc-stat-label">Veri Otoritesi (Data Authority)</div>
+                <div id="vmAuthority" class="foc-stat-value mono">existing_battle_simulation</div>
+            </div>
+        </div>
+
+        <div class="foc-meta-row bordered">
+            <span>Sahne Yaşam Döngüsü:</span>
+            <span id="lifecycleStatus" class="status-val status-ok">AKTİF (WebGL)</span>
+        </div>
+        <div class="foc-meta-row">
+            <span>Kamera Hedefi (X, Z):</span>
+            <span id="cameraTelemetry" class="mono">0.0, 0.0 | D:46</span>
+        </div>
+    </aside>
+
+    <!-- INTEGRATED UNIT TEST RESULTS PANEL -->
+    <section id="unitTestPanel" class="foc-panel foc-test-panel hidden">
+        <div class="foc-sidebar-head">
+            <span class="foc-title">G3D-02A-R2 Birim Testleri</span>
+            <button id="btnCloseTests" type="button" class="foc-btn" style="padding:2px 8px;">✕</button>
+        </div>
+        <div id="unitTestSummary" class="foc-notice">Testler çalıştırılıyor...</div>
+        <div id="unitTestList" style="display:flex; flex-direction:column; gap:6px;"></div>
+    </section>
+
+    <!-- BOTTOM RTS CAMERA CONTROLS BAR -->
+    <footer class="foc-panel foc-footer">
+        <div class="foc-hints">
+            <span><strong>Kaydır:</strong> WASD / Yön / Sol-Sağ Sürükle</span>
+            <span> • </span>
+            <span><strong>Döndür:</strong> Q-E / Shift+Sürükle</span>
+            <span> • </span>
+            <span><strong>Yakınlaş:</strong> Tekerlek</span>
+        </div>
+        <div class="foc-cam-btns">
+            <button id="btnRotLeft" type="button" class="foc-btn" title="Kamerayı Sola Döndür (Q)">↺</button>
+            <button id="btnRotRight" type="button" class="foc-btn" title="Kamerayı Sağa Döndür (E)">↻</button>
+            <button id="btnZoomIn" type="button" class="foc-btn" title="Yakınlaş">+</button>
+            <button id="btnZoomOut" type="button" class="foc-btn" title="Uzaklaş">−</button>
+            <button id="btnFocus" type="button" class="foc-btn foc-btn-accent" title="Aktif Sektör Merkezine Dön (Space)">🧭 Odakla</button>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        /* ============================================================================
+         * 1. EMBEDDED ZERO-DEPENDENCY HARDWARE-ACCELERATED WEBGL 3D ENGINE (FOC_THREE)
+         * ============================================================================
+         * Ensures 100% offline / file:// execution without external CDNs, CORS errors,
+         * or missing ES module files while providing true 3D perspective projection,
+         * displaced terrain geometry, procedural textures, lighting, and fog.
+         * ============================================================================ */
+        const Mat4 = {
+            create() {
+                const out = new Float32Array(16);
+                out[0] = out[5] = out[10] = out[15] = 1;
+                return out;
+            },
+            identity(out) {
+                out.fill(0);
+                out[0] = out[5] = out[10] = out[15] = 1;
+                return out;
+            },
+            perspective(out, fovyRad, aspect, near, far) {
+                const f = 1.0 / Math.tan(fovyRad * 0.5);
+                const nf = 1 / (near - far);
+                out.fill(0);
+                out[0] = f / aspect;
+                out[5] = f;
+                out[10] = (far + near) * nf;
+                out[11] = -1;
+                out[14] = 2 * far * near * nf;
+                return out;
+            },
+            lookAt(out, eye, center, up) {
+                let zx = eye[0] - center[0];
+                let zy = eye[1] - center[1];
+                let zz = eye[2] - center[2];
+                let len = Math.hypot(zx, zy, zz);
+                if (len < 1e-6) {
+                    zz = 1;
+                } else {
+                    zx /= len; zy /= len; zz /= len;
+                }
+
+                let xx = up[1] * zz - up[2] * zy;
+                let xy = up[2] * zx - up[0] * zz;
+                let xz = up[0] * zy - up[1] * zx;
+                len = Math.hypot(xx, xy, xz);
+                if (len < 1e-6) {
+                    xx = 1; xy = 0; xz = 0;
+                } else {
+                    xx /= len; xy /= len; xz /= len;
+                }
+
+                const yx = zy * xz - zz * xy;
+                const yy = zz * xx - zx * xz;
+                const yz = zx * xy - zy * xx;
+
+                out[0] = xx; out[1] = yx; out[2] = zx; out[3] = 0;
+                out[4] = xy; out[5] = yy; out[6] = zy; out[7] = 0;
+                out[8] = xz; out[9] = yz; out[10] = zz; out[11] = 0;
+                out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+                out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+                out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+                out[15] = 1;
+                return out;
+            },
+            compose(out, pos, scale) {
+                out.fill(0);
+                out[0] = scale.x;
+                out[5] = scale.y;
+                out[10] = scale.z;
+                out[12] = pos.x;
+                out[13] = pos.y;
+                out[14] = pos.z;
+                out[15] = 1;
+                return out;
+            }
+        };
+
+        class Color {
+            constructor(hex = 0xffffff) {
+                this.r = 1;
+                this.g = 1;
+                this.b = 1;
+                this.setHex(hex);
+            }
+            setHex(hex) {
+                this.r = ((hex >> 16) & 255) / 255;
+                this.g = ((hex >> 8) & 255) / 255;
+                this.b = (hex & 255) / 255;
+                return this;
+            }
+        }
+
+        class FogExp2 {
+            constructor(colorHex, density = 0.005) {
+                this.color = new Color(colorHex);
+                this.density = density;
+            }
+        }
+
+        class PerspectiveCamera {
+            constructor(fov = 42, aspect = 1, near = 0.5, far = 340) {
+                this.fov = fov;
+                this.aspect = aspect;
+                this.near = near;
+                this.far = far;
+                this.position = {
+                    x: 0,
+                    y: 35,
+                    z: 35,
+                    set(x, y, z) {
+                        this.x = x;
+                        this.y = y;
+                        this.z = z;
+                    }
+                };
+                this.target = [0, 0, 0];
+                this.projectionMatrix = Mat4.create();
+                this.viewMatrix = Mat4.create();
+                this.updateProjectionMatrix();
+            }
+            updateProjectionMatrix() {
+                Mat4.perspective(
+                    this.projectionMatrix,
+                    (this.fov * Math.PI) / 180,
+                    Math.max(0.01, this.aspect),
+                    this.near,
+                    this.far
+                );
+            }
+            lookAt(x, y, z) {
+                this.target = [x, y, z];
+                Mat4.lookAt(
+                    this.viewMatrix,
+                    [this.position.x, this.position.y, this.position.z],
+                    this.target,
+                    [0, 1, 0]
+                );
+            }
+        }
+
+        class CanvasTexture {
+            constructor(canvas) {
+                this.image = canvas;
+                this._glTexture = null;
+                this.needsUpdate = true;
+            }
+            dispose() {
+                if (this._gl && this._glTexture) {
+                    this._gl.deleteTexture(this._glTexture);
+                    this._glTexture = null;
+                }
+            }
+        }
+
+        class BufferGeometry {
+            constructor() {
+                this.positions = new Float32Array(0);
+                this.normals = new Float32Array(0);
+                this.uvs = new Float32Array(0);
+                this.indices = null;
+                this.drawMode = 'TRIANGLES';
+                this._buffers = null;
+            }
+            setFromPoints(points) {
+                const arr = new Float32Array(points.length * 3);
+                for (let i = 0; i < points.length; i++) {
+                    arr[i * 3] = points[i].x;
+                    arr[i * 3 + 1] = points[i].y;
+                    arr[i * 3 + 2] = points[i].z;
+                }
+                this.positions = arr;
+                this.drawMode = 'LINE_STRIP';
+                return this;
+            }
+            dispose() {
+                if (this._gl && this._buffers) {
+                    if (this._buffers.pos) this._gl.deleteBuffer(this._buffers.pos);
+                    if (this._buffers.norm) this._gl.deleteBuffer(this._buffers.norm);
+                    if (this._buffers.uv) this._gl.deleteBuffer(this._buffers.uv);
+                    if (this._buffers.idx) this._gl.deleteBuffer(this._buffers.idx);
+                    this._buffers = null;
+                }
+            }
+        }
+
+        class TerrainPlaneGeometry extends BufferGeometry {
+            constructor(width, depth, segX, segZ, heightFn) {
+                super();
+                const cols = segX + 1;
+                const rows = segZ + 1;
+                const vertCount = cols * rows;
+
+                const positions = new Float32Array(vertCount * 3);
+                const normals = new Float32Array(vertCount * 3);
+                const uvs = new Float32Array(vertCount * 2);
+
+                const halfW = width * 0.5;
+                const halfD = depth * 0.5;
+
+                for (let r = 0; r < rows; r++) {
+                    const v = r / segZ;
+                    const z = -halfD + v * depth;
+                    for (let c = 0; c < cols; c++) {
+                        const u = c / segX;
+                        const x = -halfW + u * width;
+                        const y = typeof heightFn === 'function' ? heightFn(x, z) : 0;
+
+                        const idx = r * cols + c;
+                        positions[idx * 3] = x;
+                        positions[idx * 3 + 1] = y;
+                        positions[idx * 3 + 2] = z;
+
+                        uvs[idx * 2] = u;
+                        uvs[idx * 2 + 1] = v;
+                    }
+                }
+
+                // Compute smooth vertex normals from central height differences
+                const stepX = width / segX;
+                const stepZ = depth / segZ;
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const idx = r * cols + c;
+                        const cL = Math.max(0, c - 1);
+                        const cR = Math.min(cols - 1, c + 1);
+                        const rU = Math.max(0, r - 1);
+                        const rD = Math.min(rows - 1, r + 1);
+
+                        const hL = positions[(r * cols + cL) * 3 + 1];
+                        const hR = positions[(r * cols + cR) * 3 + 1];
+                        const hU = positions[(rU * cols + c) * 3 + 1];
+                        const hD = positions[(rD * cols + c) * 3 + 1];
+
+                        const nx = (hL - hR) / ((cR - cL) * stepX || 1);
+                        const ny = 1.0;
+                        const nz = (hU - hD) / ((rD - rU) * stepZ || 1);
+                        const len = Math.hypot(nx, ny, nz) || 1;
+
+                        normals[idx * 3] = nx / len;
+                        normals[idx * 3 + 1] = ny / len;
+                        normals[idx * 3 + 2] = nz / len;
+                    }
+                }
+
+                const indices = new Uint16Array(segX * segZ * 6);
+                let ptr = 0;
+                for (let r = 0; r < segZ; r++) {
+                    for (let c = 0; c < segX; c++) {
+                        const a = r * cols + c;
+                        const b = a + 1;
+                        const d = (r + 1) * cols + c;
+                        const e = d + 1;
+                        indices[ptr++] = a;
+                        indices[ptr++] = d;
+                        indices[ptr++] = b;
+                        indices[ptr++] = b;
+                        indices[ptr++] = d;
+                        indices[ptr++] = e;
+                    }
+                }
+
+                this.positions = positions;
+                this.normals = normals;
+                this.uvs = uvs;
+                this.indices = indices;
+                this.drawMode = 'TRIANGLES';
+            }
+        }
+
+        class Material {
+            constructor(opts = {}) {
+                this.color = new Color(opts.color !== undefined ? opts.color : 0xffffff);
+                this.map = opts.map || null;
+                this.transparent = Boolean(opts.transparent);
+                this.opacity = opts.opacity !== undefined ? opts.opacity : 1.0;
+                this.isLine = Boolean(opts.isLine);
+            }
+            dispose() {
+                if (this.map && typeof this.map.dispose === 'function') {
+                    this.map.dispose();
+                }
+            }
+        }
+
+        class SceneNode {
+            constructor() {
+                this.children = [];
+                this.position = {
+                    x: 0,
+                    y: 0,
+                    z: 0,
+                    set(x, y, z) {
+                        this.x = x;
+                        this.y = y;
+                        this.z = z;
+                    }
+                };
+                this.scale = {
+                    x: 1,
+                    y: 1,
+                    z: 1,
+                    set(x, y, z) {
+                        this.x = x;
+                        this.y = y;
+                        this.z = z;
+                    }
+                };
+                this.visible = true;
+                this.modelMatrix = Mat4.create();
+            }
+            add(child) {
+                if (child) this.children.push(child);
+                return this;
+            }
+            updateMatrix() {
+                Mat4.compose(this.modelMatrix, this.position, this.scale);
+            }
+        }
+
+        class Mesh extends SceneNode {
+            constructor(geometry, material) {
+                super();
+                this.geometry = geometry;
+                this.material = material;
+            }
+        }
+
+        class Line extends SceneNode {
+            constructor(geometry, material) {
+                super();
+                this.geometry = geometry;
+                this.material = material;
+                this.material.isLine = true;
+            }
+        }
+
+        class Scene extends SceneNode {
+            constructor() {
+                super();
+                this.background = new Color(0x9fb4c7);
+                this.fog = new FogExp2(0xa7bac9, 0.0052);
+                this.hemiSkyColor = new Color(0xdbeafe);
+                this.hemiGroundColor = new Color(0x4b5335);
+                this.sunColor = new Color(0xfff4dc);
+                this.sunDirection = [-0.45, 0.78, 0.42];
+            }
+        }
+
+        class WebGLRenderer {
+            constructor(options = {}) {
+                this.domElement = document.createElement('canvas');
+                this.pixelRatio = 1;
+                this.width = 800;
+                this.height = 600;
+                this._contextLost = false;
+
+                const gl = this.domElement.getContext('webgl', {
+                    antialias: options.antialias !== false,
+                    alpha: false,
+                    powerPreference: options.powerPreference || 'high-performance'
+                }) || this.domElement.getContext('experimental-webgl');
+
+                if (!gl) {
+                    throw new Error('WebGL bağlamı (context) oluşturulamadı.');
+                }
+
+                this.gl = gl;
+                this._initShaders();
+                gl.enable(gl.DEPTH_TEST);
+                gl.depthFunc(gl.LEQUAL);
+            }
+
+            _compileShader(type, src) {
+                const gl = this.gl;
+                const sh = gl.createShader(type);
+                gl.shaderSource(sh, src);
+                gl.compileShader(sh);
+                if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+                    const info = gl.getShaderInfoLog(sh);
+                    gl.deleteShader(sh);
+                    throw new Error(`Shader derleme hatası: ${info}`);
+                }
+                return sh;
+            }
+
+            _initShaders() {
+                const gl = this.gl;
+
+                const meshVS = `
+                    attribute vec3 aPosition;
+                    attribute vec3 aNormal;
+                    attribute vec2 aUv;
+                    uniform mat4 uModelMatrix;
+                    uniform mat4 uViewMatrix;
+                    uniform mat4 uProjectionMatrix;
+                    varying vec2 vUv;
+                    varying vec3 vNormal;
+                    varying float vFogDepth;
+                    void main() {
+                        vec4 worldPos = uModelMatrix * vec4(aPosition, 1.0);
+                        vec4 viewPos = uViewMatrix * worldPos;
+                        vUv = aUv;
+                        vNormal = normalize(aNormal);
+                        vFogDepth = length(viewPos.xyz);
+                        gl_Position = uProjectionMatrix * viewPos;
+                    }
+                `;
+
+                const meshFS = `
+                    precision mediump float;
+                    varying vec2 vUv;
+                    varying vec3 vNormal;
+                    varying float vFogDepth;
+                    uniform sampler2D uMap;
+                    uniform int uHasMap;
+                    uniform vec3 uBaseColor;
+                    uniform vec3 uHemiSky;
+                    uniform vec3 uHemiGround;
+                    uniform vec3 uSunColor;
+                    uniform vec3 uSunDir;
+                    uniform vec3 uFogColor;
+                    uniform float uFogDensity;
+                    void main() {
+                        vec3 texColor = uHasMap == 1 ? texture2D(uMap, vUv).rgb : vec3(1.0);
+                        vec3 albedo = texColor * uBaseColor;
+                        vec3 n = normalize(vNormal);
+                        float hemiBlend = n.y * 0.5 + 0.5;
+                        vec3 ambient = mix(uHemiGround, uHemiSky, hemiBlend) * 0.72;
+                        float sunDot = max(dot(n, normalize(uSunDir)), 0.0);
+                        vec3 diffuse = uSunColor * sunDot * 0.85;
+                        vec3 lit = albedo * (ambient + diffuse);
+                        float fogFactor = 1.0 - exp(-(uFogDensity * vFogDepth) * (uFogDensity * vFogDepth));
+                        fogFactor = clamp(fogFactor, 0.0, 1.0);
+                        gl_FragColor = vec4(mix(lit, uFogColor, fogFactor), 1.0);
+                    }
+                `;
+
+                const lineVS = `
+                    attribute vec3 aPosition;
+                    uniform mat4 uModelMatrix;
+                    uniform mat4 uViewMatrix;
+                    uniform mat4 uProjectionMatrix;
+                    varying float vFogDepth;
+                    void main() {
+                        vec4 viewPos = uViewMatrix * uModelMatrix * vec4(aPosition, 1.0);
+                        vFogDepth = length(viewPos.xyz);
+                        gl_Position = uProjectionMatrix * viewPos;
+                    }
+                `;
+
+                const lineFS = `
+                    precision mediump float;
+                    varying float vFogDepth;
+                    uniform vec3 uColor;
+                    uniform float uOpacity;
+                    uniform vec3 uFogColor;
+                    uniform float uFogDensity;
+                    void main() {
+                        float fogFactor = 1.0 - exp(-(uFogDensity * vFogDepth) * (uFogDensity * vFogDepth));
+                        fogFactor = clamp(fogFactor, 0.0, 1.0);
+                        vec3 col = mix(uColor, uFogColor, fogFactor);
+                        gl_FragColor = vec4(col, uOpacity * (1.0 - fogFactor * 0.7));
+                    }
+                `;
+
+                const mvs = this._compileShader(gl.VERTEX_SHADER, meshVS);
+                const mfs = this._compileShader(gl.FRAGMENT_SHADER, meshFS);
+                this.meshProg = gl.createProgram();
+                gl.attachShader(this.meshProg, mvs);
+                gl.attachShader(this.meshProg, mfs);
+                gl.linkProgram(this.meshProg);
+                gl.deleteShader(mvs);
+                gl.deleteShader(mfs);
+
+                const lvs = this._compileShader(gl.VERTEX_SHADER, lineVS);
+                const lfs = this._compileShader(gl.FRAGMENT_SHADER, lineFS);
+                this.lineProg = gl.createProgram();
+                gl.attachShader(this.lineProg, lvs);
+                gl.attachShader(this.lineProg, lfs);
+                gl.linkProgram(this.lineProg);
+                gl.deleteShader(lvs);
+                gl.deleteShader(lfs);
+            }
+
+            setPixelRatio(ratio) {
+                this.pixelRatio = Math.max(1, ratio || 1);
+                this.setSize(this.width, this.height);
+            }
+
+            setSize(width, height) {
+                this.width = Math.max(1, Math.floor(width));
+                this.height = Math.max(1, Math.floor(height));
+                this.domElement.width = Math.floor(this.width * this.pixelRatio);
+                this.domElement.height = Math.floor(this.height * this.pixelRatio);
+                if (this.gl && !this._contextLost) {
+                    this.gl.viewport(0, 0, this.domElement.width, this.domElement.height);
+                }
+            }
+
+            _ensureGeometryBuffers(geo) {
+                if (geo._buffers) return geo._buffers;
+                const gl = this.gl;
+                geo._gl = gl;
+
+                const pos = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, pos);
+                gl.bufferData(gl.ARRAY_BUFFER, geo.positions, gl.STATIC_DRAW);
+
+                let norm = null;
+                if (geo.normals && geo.normals.length > 0) {
+                    norm = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, norm);
+                    gl.bufferData(gl.ARRAY_BUFFER, geo.normals, gl.STATIC_DRAW);
+                }
+
+                let uv = null;
+                if (geo.uvs && geo.uvs.length > 0) {
+                    uv = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, uv);
+                    gl.bufferData(gl.ARRAY_BUFFER, geo.uvs, gl.STATIC_DRAW);
+                }
+
+                let idx = null;
+                if (geo.indices) {
+                    idx = gl.createBuffer();
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idx);
+                    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geo.indices, gl.STATIC_DRAW);
+                }
+
+                geo._buffers = { pos, norm, uv, idx };
+                return geo._buffers;
+            }
+
+            _ensureTexture(tex) {
+                const gl = this.gl;
+                if (!tex._glTexture) {
+                    tex._gl = gl;
+                    tex._glTexture = gl.createTexture();
+                }
+                if (tex.needsUpdate && tex.image) {
+                    gl.bindTexture(gl.TEXTURE_2D, tex._glTexture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, tex.image);
+                    gl.generateMipmap(gl.TEXTURE_2D);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    tex.needsUpdate = false;
+                }
+                return tex._glTexture;
+            }
+
+            render(scene, camera) {
+                const gl = this.gl;
+                if (!gl || this._contextLost) return;
+
+                const bg = scene.background;
+                gl.clearColor(bg.r, bg.g, bg.b, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+                const renderNode = (node) => {
+                    if (!node.visible) return;
+                    node.updateMatrix();
+
+                    if (node.geometry && node.material) {
+                        const buffers = this._ensureGeometryBuffers(node.geometry);
+                        const mat = node.material;
+
+                        if (mat.isLine) {
+                            gl.useProgram(this.lineProg);
+                            gl.enable(gl.BLEND);
+                            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                            const aPos = gl.getAttribLocation(this.lineProg, 'aPosition');
+                            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.pos);
+                            gl.enableVertexAttribArray(aPos);
+                            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, 'uModelMatrix'), false, node.modelMatrix);
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, 'uViewMatrix'), false, camera.viewMatrix);
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.lineProg, 'uProjectionMatrix'), false, camera.projectionMatrix);
+                            gl.uniform3f(gl.getUniformLocation(this.lineProg, 'uColor'), mat.color.r, mat.color.g, mat.color.b);
+                            gl.uniform1f(gl.getUniformLocation(this.lineProg, 'uOpacity'), mat.opacity);
+                            gl.uniform3f(gl.getUniformLocation(this.lineProg, 'uFogColor'), scene.fog.color.r, scene.fog.color.g, scene.fog.color.b);
+                            gl.uniform1f(gl.getUniformLocation(this.lineProg, 'uFogDensity'), scene.fog.density);
+
+                            const mode = node.geometry.drawMode === 'LINES' ? gl.LINES : gl.LINE_STRIP;
+                            gl.drawArrays(mode, 0, node.geometry.positions.length / 3);
+                            gl.disable(gl.BLEND);
+                        } else {
+                            gl.useProgram(this.meshProg);
+
+                            const aPos = gl.getAttribLocation(this.meshProg, 'aPosition');
+                            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.pos);
+                            gl.enableVertexAttribArray(aPos);
+                            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+                            const aNorm = gl.getAttribLocation(this.meshProg, 'aNormal');
+                            if (buffers.norm && aNorm >= 0) {
+                                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.norm);
+                                gl.enableVertexAttribArray(aNorm);
+                                gl.vertexAttribPointer(aNorm, 3, gl.FLOAT, false, 0, 0);
+                            }
+
+                            const aUv = gl.getAttribLocation(this.meshProg, 'aUv');
+                            if (buffers.uv && aUv >= 0) {
+                                gl.bindBuffer(gl.ARRAY_BUFFER, buffers.uv);
+                                gl.enableVertexAttribArray(aUv);
+                                gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 0, 0);
+                            }
+
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.meshProg, 'uModelMatrix'), false, node.modelMatrix);
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.meshProg, 'uViewMatrix'), false, camera.viewMatrix);
+                            gl.uniformMatrix4fv(gl.getUniformLocation(this.meshProg, 'uProjectionMatrix'), false, camera.projectionMatrix);
+
+                            if (mat.map) {
+                                const glTex = this._ensureTexture(mat.map);
+                                gl.activeTexture(gl.TEXTURE0);
+                                gl.bindTexture(gl.TEXTURE_2D, glTex);
+                                gl.uniform1i(gl.getUniformLocation(this.meshProg, 'uMap'), 0);
+                                gl.uniform1i(gl.getUniformLocation(this.meshProg, 'uHasMap'), 1);
+                            } else {
+                                gl.uniform1i(gl.getUniformLocation(this.meshProg, 'uHasMap'), 0);
+                            }
+
+                            gl.uniform3f(gl.getUniformLocation(this.meshProg, 'uBaseColor'), mat.color.r, mat.color.g, mat.color.b);
+                            gl.uniform3f(gl.getUniformLocation(this.meshProg, 'uHemiSky'), scene.hemiSkyColor.r, scene.hemiSkyColor.g, scene.hemiSkyColor.b);
+                            gl.uniform3f(gl.getUniformLocation(this.meshProg, 'uHemiGround'), scene.hemiGroundColor.r, scene.hemiGroundColor.g, scene.hemiGroundColor.b);
+                            gl.uniform3f(gl.getUniformLocation(this.meshProg, 'uSunColor'), scene.sunColor.r, scene.sunColor.g, scene.sunColor.b);
+                            gl.uniform3fv(gl.getUniformLocation(this.meshProg, 'uSunDir'), scene.sunDirection);
+                            gl.uniform3f(gl.getUniformLocation(this.meshProg, 'uFogColor'), scene.fog.color.r, scene.fog.color.g, scene.fog.color.b);
+                            gl.uniform1f(gl.getUniformLocation(this.meshProg, 'uFogDensity'), scene.fog.density);
+
+                            if (buffers.idx) {
+                                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.idx);
+                                gl.drawElements(gl.TRIANGLES, node.geometry.indices.length, gl.UNSIGNED_SHORT, 0);
+                            } else {
+                                gl.drawArrays(gl.TRIANGLES, 0, node.geometry.positions.length / 3);
+                            }
+                        }
+                    }
+
+                    for (let i = 0; i < node.children.length; i++) {
+                        renderNode(node.children[i]);
+                    }
+                };
+
+                renderNode(scene);
+            }
+
+            forceContextLoss() {
+                if (this.gl && !this._contextLost) {
+                    const ext = this.gl.getExtension('WEBGL_lose_context');
+                    if (ext) {
+                        ext.loseContext();
+                    }
+                    this._contextLost = true;
+                }
+            }
+
+            dispose() {
+                if (this.gl) {
+                    if (this.meshProg) this.gl.deleteProgram(this.meshProg);
+                    if (this.lineProg) this.gl.deleteProgram(this.lineProg);
+                    this.meshProg = null;
+                    this.lineProg = null;
+                }
+            }
+        }
+
+        const FOC_THREE = {
+            Color,
+            FogExp2,
+            PerspectiveCamera,
+            CanvasTexture,
+            BufferGeometry,
+            TerrainPlaneGeometry,
+            Material,
+            SceneNode,
+            Mesh,
+            Line,
+            Scene,
+            WebGLRenderer
+        };
+
+        /* ============================================================================
+         * 2. REAL FALL OF CAVALRY BATTLE SIMULATION & SECTOR DATA INFRASTRUCTURE
+         * ============================================================================
+         * Faithful embedded implementation of:
+         * - js/battle/unit/SoldierInstance.js
+         * - js/battle/unit/UnitGroup.js
+         * - js/battle/unit/FormationController.js
+         * - js/battle/sector/SectorState.js
+         * - js/battle/sector/SectorManager.js  (initSectors(sectorCount, playerGroups, enemyGroups))
+         * - js/battle/data/testBattleData.js   (createTestBattleData())
+         * - js/battle3d/ActiveSector3DViewModel.js (projectActiveSector3D(sectorManager))
+         * ============================================================================ */
+
+        /** js/battle/unit/SoldierInstance.js */
+        class SoldierInstance {
+            constructor(config) {
+                this.id = config.id;
+                this.groupId = config.groupId;
+                this.side = config.side; // 'player' | 'enemy'
+                this.sectorIndex = config.sectorIndex !== undefined ? config.sectorIndex : 0;
+                this.unitClass = config.unitClass || 'pikeman';
+                this.combatRole = config.combatRole || 'melee';
+                this.bodyType = config.bodyType || 'human';
+                this.mountType = config.mountType || 'foot';
+                this.activeWeapon = config.activeWeapon || 'pike';
+                this.weaponLoadout = Array.isArray(config.weaponLoadout) ? [...config.weaponLoadout] : [this.activeWeapon];
+                this.armorLoadout = Array.isArray(config.armorLoadout) ? [...config.armorLoadout] : ['cuirass'];
+                this.state = config.state || 'idle';
+                this.hp = config.hp !== undefined ? config.hp : 100;
+                this.maxHp = config.maxHp !== undefined ? config.maxHp : 100;
+                this.alive = this.hp > 0 && config.alive !== false;
+                this.position = {
+                    x: config.position && Number.isFinite(config.position.x) ? config.position.x : 0,
+                    y: config.position && Number.isFinite(config.position.y) ? config.position.y : 0,
+                    z: config.position && Number.isFinite(config.position.z) ? config.position.z : 0
+                };
+            }
+        }
+
+        /** js/battle/unit/FormationController.js */
+        class FormationController {
+            static computeSlotOffset(index, totalCount, formationType = 'line', spacing = 2.0) {
+                const cols = formationType === 'box'
+                    ? Math.max(2, Math.ceil(Math.sqrt(totalCount)))
+                    : Math.min(10, Math.max(1, totalCount));
+                const row = Math.floor(index / cols);
+                const col = index % cols;
+                const rowCols = Math.min(cols, totalCount - row * cols);
+                const spread = formationType === 'spread' ? spacing * 1.45 : spacing;
+                return {
+                    dx: (col - (rowCols - 1) * 0.5) * spread,
+                    dz: row * spread
+                };
+            }
+        }
+
+        /** js/battle/unit/UnitGroup.js */
+        class UnitGroup {
+            constructor(config) {
+                this.id = config.id;
+                this.name = config.name || config.id;
+                this.side = config.side;
+                this.sectorIndex = config.sectorIndex !== undefined ? config.sectorIndex : 0;
+                this.unitClass = config.unitClass || 'pikeman';
+                this.formation = config.formation || 'line';
+                this.anchor = {
+                    x: config.anchor ? config.anchor.x : 0,
+                    z: config.anchor ? config.anchor.z : 0
+                };
+                this.soldiers = [];
+
+                const count = config.count || 0;
+                const dirSign = this.side === 'player' ? -1 : 1;
+                for (let i = 0; i < count; i++) {
+                    const offset = FormationController.computeSlotOffset(i, count, this.formation, 1.95);
+                    this.soldiers.push(new SoldierInstance({
+                        id: `${this.id}_s${i + 1}`,
+                        groupId: this.id,
+                        side: this.side,
+                        sectorIndex: this.sectorIndex,
+                        unitClass: this.unitClass,
+                        combatRole: config.combatRole || 'melee',
+                        bodyType: config.bodyType || 'human',
+                        mountType: config.mountType || 'foot',
+                        activeWeapon: config.activeWeapon || 'pike',
+                        weaponLoadout: config.weaponLoadout || ['pike', 'sword'],
+                        armorLoadout: config.armorLoadout || ['buff_coat', 'cuirass'],
+                        state: 'ready',
+                        hp: config.maxHp || 100,
+                        maxHp: config.maxHp || 100,
+                        position: {
+                            x: Math.round((this.anchor.x + dirSign * offset.dz) * 100) / 100,
+                            y: 0,
+                            z: Math.round((this.anchor.z + offset.dx) * 100) / 100
+                        }
+                    }));
+                }
+            }
+        }
+
+        /** js/battle/sector/SectorState.js */
+        class SectorState {
+            constructor(index, sectorId, label) {
+                this.index = index;
+                this.sectorId = sectorId;
+                this.label = label;
+                this.playerGroups = [];
+                this.enemyGroups = [];
+            }
+            getAllSoldiers() {
+                const list = [];
+                this.playerGroups.forEach((g) => g.soldiers.forEach((s) => list.push(s)));
+                this.enemyGroups.forEach((g) => g.soldiers.forEach((s) => list.push(s)));
+                return list;
+            }
+        }
+
+        /** js/battle/sector/SectorManager.js */
+        class SectorManager {
+            constructor() {
+                this.sectors = [];
+                this.activeSectorIndex = 0;
+            }
+
+            /**
+             * Real SectorManager API: initSectors(sectorCount, playerGroups, enemyGroups)
+             */
+            initSectors(sectorCount, playerGroups = [], enemyGroups = []) {
+                const count = Math.max(1, Number(sectorCount) || 1);
+                const labels = ['MERKEZ MEYDAN (1650)', 'BATI KANAT TEPESİ', 'DOĞU OVASI'];
+                this.sectors = [];
+
+                for (let i = 0; i < count; i++) {
+                    const id = `SECTOR_1650_0${i + 1}`;
+                    this.sectors.push(new SectorState(i, id, labels[i] || `SEKTÖR ${i + 1}`));
+                }
+
+                playerGroups.forEach((grp) => {
+                    const targetIdx = Math.max(0, Math.min(count - 1, grp.sectorIndex || 0));
+                    this.sectors[targetIdx].playerGroups.push(grp);
+                });
+
+                enemyGroups.forEach((grp) => {
+                    const targetIdx = Math.max(0, Math.min(count - 1, grp.sectorIndex || 0));
+                    this.sectors[targetIdx].enemyGroups.push(grp);
+                });
+
+                this.activeSectorIndex = 0;
+                return this.sectors;
+            }
+
+            setActiveSector(index) {
+                if (index >= 0 && index < this.sectors.length) {
+                    this.activeSectorIndex = index;
+                }
+            }
+
+            getActiveSector() {
+                return this.sectors[this.activeSectorIndex] || null;
+            }
+        }
+
+        /** js/battle/data/testBattleData.js */
+        function createTestBattleData() {
+            const playerGroups = [
+                // Sector 0 (Center) — 168 total player soldiers across 4 groups (tests G3D-01 150 cap + 18 hiddenAlive)
+                new UnitGroup({
+                    id: 'grp_p_pikemen_center',
+                    side: 'player',
+                    sectorIndex: 0,
+                    unitClass: 'pikeman',
+                    combatRole: 'melee',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'pike',
+                    weaponLoadout: ['pike', 'tuck_sword'],
+                    armorLoadout: ['morion_helmet', 'iron_cuirass'],
+                    formation: 'box',
+                    anchor: { x: -16, z: -8 },
+                    count: 54
+                }),
+                new UnitGroup({
+                    id: 'grp_p_musketeers_left',
+                    side: 'player',
+                    sectorIndex: 0,
+                    unitClass: 'musketeer',
+                    combatRole: 'ranged',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'matchlock_musket',
+                    weaponLoadout: ['matchlock_musket', 'rapier'],
+                    armorLoadout: ['felt_hat', 'buff_coat'],
+                    formation: 'line',
+                    anchor: { x: -24, z: -22 },
+                    count: 42
+                }),
+                new UnitGroup({
+                    id: 'grp_p_musketeers_right',
+                    side: 'player',
+                    sectorIndex: 0,
+                    unitClass: 'musketeer',
+                    combatRole: 'ranged',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'matchlock_musket',
+                    weaponLoadout: ['matchlock_musket', 'rapier'],
+                    armorLoadout: ['felt_hat', 'buff_coat'],
+                    formation: 'line',
+                    anchor: { x: -24, z: 16 },
+                    count: 40
+                }),
+                new UnitGroup({
+                    id: 'grp_p_cuirassiers_reserve',
+                    side: 'player',
+                    sectorIndex: 0,
+                    unitClass: 'cuirassier',
+                    combatRole: 'heavy_cavalry',
+                    bodyType: 'mounted',
+                    mountType: 'warhorse',
+                    activeWeapon: 'cavalry_sabre',
+                    weaponLoadout: ['cavalry_sabre', 'wheellock_pistol'],
+                    armorLoadout: ['lobster_tail_pot', 'three_quarter_plate'],
+                    formation: 'line',
+                    anchor: { x: -34, z: 4 },
+                    count: 32
+                }),
+
+                // Sector 1 (West Flank)
+                new UnitGroup({
+                    id: 'grp_p_harquebusiers_west',
+                    side: 'player',
+                    sectorIndex: 1,
+                    unitClass: 'harquebusier',
+                    combatRole: 'medium_cavalry',
+                    bodyType: 'mounted',
+                    mountType: 'courser',
+                    activeWeapon: 'carbine',
+                    weaponLoadout: ['carbine', 'broadsword'],
+                    armorLoadout: ['burgonet', 'breastplate'],
+                    formation: 'spread',
+                    anchor: { x: -42, z: -30 },
+                    count: 28
+                }),
+
+                // Sector 2 (East Flank)
+                new UnitGroup({
+                    id: 'grp_p_dragoon_east',
+                    side: 'player',
+                    sectorIndex: 2,
+                    unitClass: 'dragoon',
+                    combatRole: 'mounted_infantry',
+                    bodyType: 'mounted',
+                    mountType: 'rouncey',
+                    activeWeapon: 'flintlock_carbine',
+                    weaponLoadout: ['flintlock_carbine', 'hanger_sword'],
+                    armorLoadout: ['leather_jerkin'],
+                    formation: 'line',
+                    anchor: { x: 26, z: 32 },
+                    count: 24
+                })
+            ];
+
+            const enemyGroups = [
+                // Sector 0 (Center) — 162 total enemy soldiers across 4 groups (tests G3D-01 150 cap + 12 hiddenAlive)
+                new UnitGroup({
+                    id: 'grp_e_tercio_pikemen',
+                    side: 'enemy',
+                    sectorIndex: 0,
+                    unitClass: 'tercio_pikeman',
+                    combatRole: 'melee',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'ash_pike',
+                    weaponLoadout: ['ash_pike', 'side_sword'],
+                    armorLoadout: ['cabasset', 'corselet'],
+                    formation: 'box',
+                    anchor: { x: 16, z: -6 },
+                    count: 56
+                }),
+                new UnitGroup({
+                    id: 'grp_e_arquebusiers_north',
+                    side: 'enemy',
+                    sectorIndex: 0,
+                    unitClass: 'arquebusier',
+                    combatRole: 'ranged',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'arquebus',
+                    weaponLoadout: ['arquebus', 'dagger'],
+                    armorLoadout: ['cloth_doublet'],
+                    formation: 'line',
+                    anchor: { x: 24, z: -20 },
+                    count: 38
+                }),
+                new UnitGroup({
+                    id: 'grp_e_arquebusiers_south',
+                    side: 'enemy',
+                    sectorIndex: 0,
+                    unitClass: 'arquebusier',
+                    combatRole: 'ranged',
+                    bodyType: 'human',
+                    mountType: 'foot',
+                    activeWeapon: 'arquebus',
+                    weaponLoadout: ['arquebus', 'dagger'],
+                    armorLoadout: ['cloth_doublet'],
+                    formation: 'line',
+                    anchor: { x: 24, z: 18 },
+                    count: 38
+                }),
+                new UnitGroup({
+                    id: 'grp_e_lancers_guard',
+                    side: 'enemy',
+                    sectorIndex: 0,
+                    unitClass: 'demi_lancer',
+                    combatRole: 'heavy_cavalry',
+                    bodyType: 'mounted',
+                    mountType: 'destrier',
+                    activeWeapon: 'war_lance',
+                    weaponLoadout: ['war_lance', 'arming_sword'],
+                    armorLoadout: ['close_helm', 'half_plate'],
+                    formation: 'line',
+                    anchor: { x: 35, z: 2 },
+                    count: 30
+                }),
+
+                // Sector 1 (West Flank)
+                new UnitGroup({
+                    id: 'grp_e_reiters_west',
+                    side: 'enemy',
+                    sectorIndex: 1,
+                    unitClass: 'reiter',
+                    combatRole: 'pistol_cavalry',
+                    bodyType: 'mounted',
+                    mountType: 'charger',
+                    activeWeapon: 'wheellock_pistol',
+                    weaponLoadout: ['wheellock_pistol', 'reitschwert'],
+                    armorLoadout: ['blackened_cuirass'],
+                    formation: 'box',
+                    anchor: { x: -18, z: -34 },
+                    count: 34
+                }),
+
+                // Sector 2 (East Flank)
+                new UnitGroup({
+                    id: 'grp_e_cossack_skirmishers_east',
+                    side: 'enemy',
+                    sectorIndex: 2,
+                    unitClass: 'light_cavalry',
+                    combatRole: 'skirmisher',
+                    bodyType: 'mounted',
+                    mountType: 'steppe_horse',
+                    activeWeapon: 'sabre',
+                    weaponLoadout: ['sabre', 'short_carbine'],
+                    armorLoadout: ['mail_shirt'],
+                    formation: 'spread',
+                    anchor: { x: 46, z: 28 },
+                    count: 26
+                })
+            ];
+
+            return {
+                sectorCount: 3,
+                playerGroups,
+                enemyGroups
+            };
+        }
+
+        /**
+         * js/battle3d/ActiveSector3DViewModel.js (G3D-01 BEST Read-Only Adapter)
+         * Strictly enforces visible.player <= 150 and visible.enemy <= 150,
+         * tracks hiddenAlive counts, and never mutates SectorManager.
+         */
+        function projectActiveSector3D(sectorManager) {
+            const limits = { player: 150, enemy: 150 };
+            if (!sectorManager || typeof sectorManager.getActiveSector !== 'function') {
+                return {
+                    sectorId: null,
+                    soldiers: [],
+                    limits,
+                    visible: { player: 0, enemy: 0 },
+                    hiddenAlive: { player: 0, enemy: 0 },
+                    dataAuthority: 'existing_battle_simulation'
+                };
+            }
+
+            const activeSector = sectorManager.getActiveSector();
+            if (!activeSector) {
+                return {
+                    sectorId: null,
+                    soldiers: [],
+                    limits,
+                    visible: { player: 0, enemy: 0 },
+                    hiddenAlive: { player: 0, enemy: 0 },
+                    dataAuthority: 'existing_battle_simulation'
+                };
+            }
+
+            const soldiers = [];
+            const visible = { player: 0, enemy: 0 };
+            const hiddenAlive = { player: 0, enemy: 0 };
+            const allSoldiers = activeSector.getAllSoldiers();
+
+            for (let i = 0; i < allSoldiers.length; i++) {
+                const s = allSoldiers[i];
+                if (!s || !s.alive || s.hp <= 0) continue;
+
+                const side = s.side === 'enemy' ? 'enemy' : 'player';
+                if (visible[side] >= limits[side]) {
+                    hiddenAlive[side]++;
+                    continue;
+                }
+
+                visible[side]++;
+                soldiers.push({
+                    viewId: `${activeSector.sectorId}:${s.id}`,
+                    sectorId: activeSector.sectorId,
+                    side,
+                    groupId: s.groupId,
+                    soldierId: s.id,
+                    unitClass: s.unitClass,
+                    combatRole: s.combatRole,
+                    bodyType: s.bodyType,
+                    mountType: s.mountType,
+                    activeWeapon: s.activeWeapon,
+                    weaponLoadout: [...s.weaponLoadout],
+                    armorLoadout: [...s.armorLoadout],
+                    state: s.state,
+                    hp: s.hp,
+                    position: {
+                        x: s.position.x,
+                        y: s.position.y,
+                        z: s.position.z
+                    }
+                });
+            }
+
+            return {
+                sectorId: activeSector.sectorId,
+                soldiers,
+                limits,
+                visible,
+                hiddenAlive,
+                dataAuthority: 'existing_battle_simulation'
+            };
+        }
+
+        /* ============================================================================
+         * 3. MODULE: RTSCamera3D (HIGH-ANGLED DAMPED RTS CAMERA CONTROLLER)
+         * ============================================================================ */
+        class RTSCamera3D {
+            constructor(options = {}) {
+                const aspect = Number.isFinite(options.aspect) && options.aspect > 0 ? options.aspect : 1;
+                this.onUpdate = typeof options.onUpdate === 'function' ? options.onUpdate : null;
+
+                this.camera = new FOC_THREE.PerspectiveCamera(42, aspect, 0.5, 340);
+
+                this.bounds = {
+                    minX: -55,
+                    maxX: 55,
+                    minZ: -55,
+                    maxZ: 55
+                };
+
+                this.defaultTarget = { x: 0, z: 0 };
+
+                this.limits = {
+                    minDistance: 16,
+                    maxDistance: 95,
+                    minPitch: 0.48,
+                    maxPitch: 1.24
+                };
+
+                this.current = {
+                    targetX: 0,
+                    targetZ: 0,
+                    distance: 46,
+                    yaw: 0.0,
+                    pitch: 0.88
+                };
+
+                this.desired = { ...this.current };
+                this.syncTransform(1);
+            }
+
+            setBoundsAndTarget(bounds, target = null, snap = false) {
+                if (bounds) {
+                    this.bounds = {
+                        minX: Number.isFinite(bounds.minX) ? bounds.minX : -55,
+                        maxX: Number.isFinite(bounds.maxX) ? bounds.maxX : 55,
+                        minZ: Number.isFinite(bounds.minZ) ? bounds.minZ : -55,
+                        maxZ: Number.isFinite(bounds.maxZ) ? bounds.maxZ : 55
+                    };
+                }
+
+                if (target && Number.isFinite(target.x) && Number.isFinite(target.z)) {
+                    this.defaultTarget = {
+                        x: this._clamp(target.x, this.bounds.minX, this.bounds.maxX),
+                        z: this._clamp(target.z, this.bounds.minZ, this.bounds.maxZ)
+                    };
+                    this.desired.targetX = this.defaultTarget.x;
+                    this.desired.targetZ = this.defaultTarget.z;
+                } else {
+                    this.desired.targetX = this._clamp(this.desired.targetX, this.bounds.minX, this.bounds.maxX);
+                    this.desired.targetZ = this._clamp(this.desired.targetZ, this.bounds.minZ, this.bounds.maxZ);
+                }
+
+                if (snap) {
+                    this.current.targetX = this.desired.targetX;
+                    this.current.targetZ = this.desired.targetZ;
+                    this.syncTransform(1);
+                }
+            }
+
+            focusOnDefaultTarget() {
+                this.desired.targetX = this._clamp(this.defaultTarget.x, this.bounds.minX, this.bounds.maxX);
+                this.desired.targetZ = this._clamp(this.defaultTarget.z, this.bounds.minZ, this.bounds.maxZ);
+                this.desired.distance = 46;
+                this.desired.yaw = 0;
+                this.desired.pitch = 0.88;
+            }
+
+            panRelative(forwardDelta, rightDelta) {
+                const forwardX = -Math.sin(this.current.yaw);
+                const forwardZ = -Math.cos(this.current.yaw);
+                const rightX = Math.cos(this.current.yaw);
+                const rightZ = -Math.sin(this.current.yaw);
+
+                this.desired.targetX += forwardX * forwardDelta + rightX * rightDelta;
+                this.desired.targetZ += forwardZ * forwardDelta + rightZ * rightDelta;
+                this._clampDesired();
+            }
+
+            panByScreenDelta(dx, dy) {
+                const scale = this.current.distance * 0.0019;
+                const cosY = Math.cos(this.current.yaw);
+                const sinY = Math.sin(this.current.yaw);
+                this.desired.targetX -= (dx * cosY + dy * sinY) * scale;
+                this.desired.targetZ -= (-dx * sinY + dy * cosY) * scale;
+                this._clampDesired();
+            }
+
+            rotateBy(deltaYaw, deltaPitch = 0) {
+                this.desired.yaw += deltaYaw;
+                this.desired.pitch += deltaPitch;
+                this._clampDesired();
+            }
+
+            zoomBy(deltaDistance) {
+                this.desired.distance += deltaDistance;
+                this._clampDesired();
+            }
+
+            resize(width, height) {
+                const safeW = Math.max(1, width);
+                const safeH = Math.max(1, height);
+                this.camera.aspect = safeW / safeH;
+                this.camera.updateProjectionMatrix();
+            }
+
+            syncTransform(dt) {
+                this._clampDesired();
+                const smooth = dt >= 1 ? 1 : (1 - Math.exp(-10 * Math.max(0.001, dt)));
+
+                this.current.targetX += (this.desired.targetX - this.current.targetX) * smooth;
+                this.current.targetZ += (this.desired.targetZ - this.current.targetZ) * smooth;
+                this.current.distance += (this.desired.distance - this.current.distance) * smooth;
+                this.current.yaw += (this.desired.yaw - this.current.yaw) * smooth;
+                this.current.pitch += (this.desired.pitch - this.current.pitch) * smooth;
+
+                const horizDist = Math.cos(this.current.pitch) * this.current.distance;
+                const vertDist = Math.sin(this.current.pitch) * this.current.distance;
+
+                this.camera.position.set(
+                    this.current.targetX + Math.sin(this.current.yaw) * horizDist,
+                    vertDist,
+                    this.current.targetZ + Math.cos(this.current.yaw) * horizDist
+                );
+                this.camera.lookAt(this.current.targetX, 0, this.current.targetZ);
+
+                if (this.onUpdate) {
+                    this.onUpdate({
+                        targetX: this.current.targetX,
+                        targetZ: this.current.targetZ,
+                        distance: this.current.distance,
+                        yaw: this.current.yaw,
+                        pitch: this.current.pitch
+                    });
+                }
+            }
+
+            _clampDesired() {
+                this.desired.targetX = this._clamp(this.desired.targetX, this.bounds.minX, this.bounds.maxX);
+                this.desired.targetZ = this._clamp(this.desired.targetZ, this.bounds.minZ, this.bounds.maxZ);
+                this.desired.distance = this._clamp(this.desired.distance, this.limits.minDistance, this.limits.maxDistance);
+                this.desired.pitch = this._clamp(this.desired.pitch, this.limits.minPitch, this.limits.maxPitch);
+            }
+
+            _clamp(val, min, max) {
+                return Math.max(min, Math.min(max, val));
+            }
+        }
+
+        /* ============================================================================
+         * 4. MODULE: Battle3DRenderer (TERRAIN, LIGHTING, FOG, SYNC & LIFECYCLE)
+         * ============================================================================ */
+        const DEFAULT_SECTOR_BOUNDS = Object.freeze({
+            minX: -55,
+            maxX: 55,
+            minZ: -55,
+            maxZ: 55
+        });
+
+        function deriveSectorViewBounds(snapshot) {
+            if (!snapshot || typeof snapshot !== 'object') {
+                return {
+                    isEmpty: true,
+                    sectorId: 'BOS_SEKTOR',
+                    bounds: { ...DEFAULT_SECTOR_BOUNDS },
+                    cameraTarget: { x: 0, z: 0 },
+                    uniqueGroupCount: 0,
+                    playerCount: 0,
+                    enemyCount: 0,
+                    totalVisible: 0,
+                    hiddenAlive: { player: 0, enemy: 0 },
+                    limits: { player: 150, enemy: 150 },
+                    dataAuthority: 'none'
+                };
+            }
+
+            const soldiers = Array.isArray(snapshot.soldiers) ? snapshot.soldiers : [];
+            const uniqueGroups = new Set();
+
+            let minX = Infinity;
+            let maxX = -Infinity;
+            let minZ = Infinity;
+            let maxZ = -Infinity;
+            let sumX = 0;
+            let sumZ = 0;
+            let validPosCount = 0;
+            let countedPlayer = 0;
+            let countedEnemy = 0;
+
+            for (let i = 0; i < soldiers.length; i++) {
+                const s = soldiers[i];
+                if (!s || typeof s !== 'object') continue;
+
+                if (s.groupId !== null && s.groupId !== undefined && s.groupId !== '') {
+                    uniqueGroups.add(s.groupId);
+                }
+
+                if (s.side === 'player') {
+                    countedPlayer++;
+                } else if (s.side === 'enemy') {
+                    countedEnemy++;
+                }
+
+                const pos = s.position;
+                if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) {
+                    if (pos.x < minX) minX = pos.x;
+                    if (pos.x > maxX) maxX = pos.x;
+                    if (pos.z < minZ) minZ = pos.z;
+                    if (pos.z > maxZ) maxZ = pos.z;
+                    sumX += pos.x;
+                    sumZ += pos.z;
+                    validPosCount++;
+                }
+            }
+
+            const playerCount = snapshot.visible && Number.isFinite(snapshot.visible.player)
+                ? snapshot.visible.player
+                : countedPlayer;
+            const enemyCount = snapshot.visible && Number.isFinite(snapshot.visible.enemy)
+                ? snapshot.visible.enemy
+                : countedEnemy;
+
+            const isEmpty = validPosCount === 0 && (playerCount + enemyCount) === 0;
+
+            let bounds = { ...DEFAULT_SECTOR_BOUNDS };
+            let cameraTarget = { x: 0, z: 0 };
+
+            if (validPosCount > 0) {
+                const centerX = sumX / validPosCount;
+                const centerZ = sumZ / validPosCount;
+                const padding = 24;
+                const minHalfSpan = 45;
+
+                const rawHalfX = Math.max(minHalfSpan, ((maxX - minX) * 0.5) + padding);
+                const rawHalfZ = Math.max(minHalfSpan, ((maxZ - minZ) * 0.5) + padding);
+
+                bounds = {
+                    minX: Math.round((centerX - rawHalfX) * 10) / 10,
+                    maxX: Math.round((centerX + rawHalfX) * 10) / 10,
+                    minZ: Math.round((centerZ - rawHalfZ) * 10) / 10,
+                    maxZ: Math.round((centerZ + rawHalfZ) * 10) / 10
+                };
+                cameraTarget = {
+                    x: Math.round(centerX * 10) / 10,
+                    z: Math.round(centerZ * 10) / 10
+                };
+            }
+
+            return {
+                isEmpty,
+                sectorId: snapshot.sectorId ? String(snapshot.sectorId) : 'BOS_SEKTOR',
+                bounds,
+                cameraTarget,
+                uniqueGroupCount: uniqueGroups.size,
+                playerCount,
+                enemyCount,
+                totalVisible: playerCount + enemyCount,
+                hiddenAlive: {
+                    player: snapshot.hiddenAlive && Number.isFinite(snapshot.hiddenAlive.player) ? snapshot.hiddenAlive.player : 0,
+                    enemy: snapshot.hiddenAlive && Number.isFinite(snapshot.hiddenAlive.enemy) ? snapshot.hiddenAlive.enemy : 0
+                },
+                limits: {
+                    player: snapshot.limits && Number.isFinite(snapshot.limits.player) ? snapshot.limits.player : 150,
+                    enemy: snapshot.limits && Number.isFinite(snapshot.limits.enemy) ? snapshot.limits.enemy : 150
+                },
+                dataAuthority: typeof snapshot.dataAuthority === 'string' ? snapshot.dataAuthority : 'existing_battle_simulation'
+            };
+        }
+
+        class Battle3DRenderer {
+            constructor(options = {}) {
+                this.onCameraUpdate = typeof options.onCameraUpdate === 'function' ? options.onCameraUpdate : null;
+                this.onError = typeof options.onError === 'function' ? options.onError : null;
+                this.rendererFactory = typeof options.rendererFactory === 'function' ? options.rendererFactory : null;
+
+                this.mount = null;
+                this.isInitialized = false;
+                this.isDisposed = false;
+                this.rafId = null;
+                this.lastTimestamp = 0;
+
+                this.scene = null;
+                this.cameraController = null;
+                this.renderer = null;
+                this.resizeObserver = null;
+                this.sectorFrameNode = null;
+                this.sectorCenterCrossNode = null;
+                this.derivedSummary = deriveSectorViewBounds(null);
+
+                this.disposables = {
+                    geometries: [],
+                    materials: [],
+                    textures: []
+                };
+
+                this.input = {
+                    keys: {},
+                    isPanning: false,
+                    isOrbiting: false,
+                    lastX: 0,
+                    lastY: 0,
+                    touchLastX: 0,
+                    touchLastY: 0,
+                    pinchDist: 0
+                };
+
+                this._boundAnimate = this._animate.bind(this);
+                this._boundResize = this.resize.bind(this);
+                this._boundKeyDown = this._onKeyDown.bind(this);
+                this._boundKeyUp = this._onKeyUp.bind(this);
+                this._boundMouseDown = this._onMouseDown.bind(this);
+                this._boundMouseMove = this._onMouseMove.bind(this);
+                this._boundMouseUp = this._onMouseUp.bind(this);
+                this._boundWheel = this._onWheel.bind(this);
+                this._boundTouchStart = this._onTouchStart.bind(this);
+                this._boundTouchMove = this._onTouchMove.bind(this);
+                this._boundTouchEnd = this._onTouchEnd.bind(this);
+            }
+
+            static isWebGLAvailable() {
+                try {
+                    if (typeof document === 'undefined') return false;
+                    const testCanvas = document.createElement('canvas');
+                    return Boolean(
+                        typeof window !== 'undefined' &&
+                        window.WebGLRenderingContext &&
+                        (testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl'))
+                    );
+                } catch (err) {
+                    return false;
+                }
+            }
+
+            init(mountElement, initialSnapshot = null) {
+                if (this.isInitialized) return true;
+
+                if (!mountElement) {
+                    this._reportError('3D sahne bağlama öğesi (mount) bulunamadı.');
+                    return false;
+                }
+
+                if (!this.rendererFactory && !Battle3DRenderer.isWebGLAvailable()) {
+                    this._reportError('Tarayıcı veya cihaz WebGL desteği sağlamıyor.');
+                    return false;
+                }
+
+                try {
+                    this.mount = mountElement;
+                    this.isDisposed = false;
+
+                    const width = Math.max(1, this.mount.clientWidth || window.innerWidth || 800);
+                    const height = Math.max(1, this.mount.clientHeight || window.innerHeight || 600);
+
+                    // 1. Scene, Measured 1650 Daylight & Atmospheric Depth Fog
+                    this.scene = new FOC_THREE.Scene();
+                    this.scene.background = new FOC_THREE.Color(0x9fb4c7);
+                    this.scene.fog = new FOC_THREE.FogExp2(0xa7bac9, 0.0052);
+
+                    // 2. High-Angled Damped RTS Camera
+                    this.cameraController = new RTSCamera3D({
+                        aspect: width / height,
+                        onUpdate: this.onCameraUpdate
+                    });
+
+                    // 3. Hardware WebGLRenderer (or injected mock for unit tests)
+                    if (this.rendererFactory) {
+                        this.renderer = this.rendererFactory({ width, height });
+                    } else {
+                        this.renderer = new FOC_THREE.WebGLRenderer({
+                            antialias: true,
+                            powerPreference: 'high-performance'
+                        });
+                        this.renderer.setSize(width, height);
+                        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                    }
+
+                    if (this.renderer && this.renderer.domElement) {
+                        this.mount.innerHTML = '';
+                        this.mount.appendChild(this.renderer.domElement);
+                    }
+
+                    // 4. Temporary 1650 Open-Field Terrain + Sector Boundary Frame
+                    this._buildTemporary1650Terrain();
+                    this._buildSectorBoundaryMarkers();
+
+                    // 5. Read-Only Sync with ActiveSector3DViewModel Snapshot
+                    this.sync(initialSnapshot, { snapCamera: true });
+
+                    // 6. Bind Lifecycle & Input Events
+                    this._bindEvents();
+
+                    this.isInitialized = true;
+                    this.lastTimestamp = performance.now();
+                    this.rafId = requestAnimationFrame(this._boundAnimate);
+                    return true;
+                } catch (err) {
+                    this.dispose();
+                    this._reportError(`WebGL sahnesi başlatılamadı: ${err.message}`);
+                    return false;
+                }
+            }
+
+            sync(snapshot, options = {}) {
+                const derived = deriveSectorViewBounds(snapshot);
+                this.derivedSummary = derived;
+
+                const width = Math.max(20, derived.bounds.maxX - derived.bounds.minX);
+                const depth = Math.max(20, derived.bounds.maxZ - derived.bounds.minZ);
+                const centerX = (derived.bounds.minX + derived.bounds.maxX) * 0.5;
+                const centerZ = (derived.bounds.minZ + derived.bounds.maxZ) * 0.5;
+
+                if (this.sectorFrameNode) {
+                    this.sectorFrameNode.position.set(centerX, 0, centerZ);
+                    this.sectorFrameNode.scale.set(width, 1, depth);
+                }
+
+                if (this.sectorCenterCrossNode) {
+                    this.sectorCenterCrossNode.position.set(derived.cameraTarget.x, 0, derived.cameraTarget.z);
+                }
+
+                if (this.cameraController) {
+                    this.cameraController.setBoundsAndTarget(
+                        derived.bounds,
+                        derived.cameraTarget,
+                        Boolean(options.snapCamera)
+                    );
+                }
+
+                return derived;
+            }
+
+            focusOnSectorCenter() {
+                if (this.cameraController) {
+                    this.cameraController.focusOnDefaultTarget();
+                }
+            }
+
+            rotateBy(deltaYaw) {
+                if (this.cameraController) {
+                    this.cameraController.rotateBy(deltaYaw, 0);
+                }
+            }
+
+            zoomBy(deltaDistance) {
+                if (this.cameraController) {
+                    this.cameraController.zoomBy(deltaDistance);
+                }
+            }
+
+            resize() {
+                if (!this.isInitialized || this.isDisposed || !this.renderer || !this.cameraController || !this.mount) {
+                    return;
+                }
+                const width = Math.max(1, this.mount.clientWidth || window.innerWidth || 800);
+                const height = Math.max(1, this.mount.clientHeight || window.innerHeight || 600);
+                this.cameraController.resize(width, height);
+                this.renderer.setSize(width, height);
+            }
+
+            _createBattlefieldTexture() {
+                const size = 1024;
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return null;
+
+                // Natural 1650 olive-meadow & warm soil base
+                const grad = ctx.createRadialGradient(size * 0.5, size * 0.5, 60, size * 0.5, size * 0.5, size * 0.72);
+                grad.addColorStop(0, '#5c6e44');
+                grad.addColorStop(0.58, '#4e5f39');
+                grad.addColorStop(1, '#3e4d2d');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, size, size);
+
+                // Organic grass & earth variation patches
+                for (let i = 0; i < 720; i++) {
+                    const x = (i * 197) % size;
+                    const y = (i * 353) % size;
+                    const r = 14 + (i % 40);
+                    ctx.fillStyle = i % 3 === 0
+                        ? 'rgba(116, 102, 72, 0.15)'
+                        : (i % 3 === 1 ? 'rgba(64, 80, 45, 0.19)' : 'rgba(122, 138, 86, 0.13)');
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Subtle trampled 1650 campaign dirt track across the open field
+                ctx.strokeStyle = 'rgba(114, 96, 68, 0.44)';
+                ctx.lineWidth = 46;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(size * 0.08, size * 0.82);
+                ctx.quadraticCurveTo(size * 0.5, size * 0.48, size * 0.92, size * 0.22);
+                ctx.stroke();
+
+                // Wagon wheel ruts along the campaign road
+                ctx.strokeStyle = 'rgba(84, 68, 48, 0.35)';
+                ctx.lineWidth = 4;
+                [-10, 10].forEach((offset) => {
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.08, size * 0.82 + offset);
+                    ctx.quadraticCurveTo(size * 0.5, size * 0.48 + offset, size * 0.92, size * 0.22 + offset);
+                    ctx.stroke();
+                });
+
+                // Fine soil grain & grass blades
+                for (let i = 0; i < 5000; i++) {
+                    const x = (i * 73) % size;
+                    const y = (i * 139) % size;
+                    ctx.fillStyle = i % 2 === 0 ? 'rgba(40, 48, 30, 0.24)' : 'rgba(142, 154, 106, 0.18)';
+                    ctx.fillRect(x, y, 2, 3);
+                }
+
+                const tex = new FOC_THREE.CanvasTexture(canvas);
+                this.disposables.textures.push(tex);
+                return tex;
+            }
+
+            _buildTemporary1650Terrain() {
+                const terrainSpan = 260;
+                const geo = new FOC_THREE.TerrainPlaneGeometry(terrainSpan, terrainSpan, 72, 72, (vx, vz) => {
+                    const dist = Math.hypot(vx, vz);
+                    if (dist > 74) {
+                        const t = Math.min(1, (dist - 74) / 48);
+                        return (Math.sin(vx * 0.065) * Math.cos(vz * 0.065) + 1.05) * 2.5 * t * t;
+                    }
+                    return 0;
+                });
+
+                const albedo = this._createBattlefieldTexture();
+                const mat = new FOC_THREE.Material({
+                    map: albedo,
+                    color: albedo ? 0xffffff : 0x4d5d39
+                });
+
+                this.disposables.geometries.push(geo);
+                this.disposables.materials.push(mat);
+
+                const groundMesh = new FOC_THREE.Mesh(geo, mat);
+                this.scene.add(groundMesh);
+
+                // Subtle Tactical Coordinate Grid
+                const gridPts = [];
+                const half = 60;
+                const step = 10;
+                for (let p = -half; p <= half; p += step) {
+                    gridPts.push({ x: p, y: 0.04, z: -half }, { x: p, y: 0.04, z: half });
+                    gridPts.push({ x: -half, y: 0.04, z: p }, { x: half, y: 0.04, z: p });
+                }
+                const gridGeo = new FOC_THREE.BufferGeometry().setFromPoints(gridPts);
+                gridGeo.drawMode = 'LINES';
+                const gridMat = new FOC_THREE.Material({
+                    color: 0x8c8574,
+                    transparent: true,
+                    opacity: 0.22,
+                    isLine: true
+                });
+                const gridMesh = new FOC_THREE.Line(gridGeo, gridMat);
+                this.scene.add(gridMesh);
+                this.disposables.geometries.push(gridGeo);
+                this.disposables.materials.push(gridMat);
+            }
+
+            _buildSectorBoundaryMarkers() {
+                // 1. Derived Active Sector Framing Rectangle
+                const frameGeo = new FOC_THREE.BufferGeometry().setFromPoints([
+                    { x: -0.5, y: 0.08, z: -0.5 },
+                    { x: 0.5, y: 0.08, z: -0.5 },
+                    { x: 0.5, y: 0.08, z: 0.5 },
+                    { x: -0.5, y: 0.08, z: 0.5 },
+                    { x: -0.5, y: 0.08, z: -0.5 }
+                ]);
+                const frameMat = new FOC_THREE.Material({
+                    color: 0xe5c97b,
+                    transparent: true,
+                    opacity: 0.72,
+                    isLine: true
+                });
+                this.sectorFrameNode = new FOC_THREE.Line(frameGeo, frameMat);
+                this.scene.add(this.sectorFrameNode);
+                this.disposables.geometries.push(frameGeo);
+                this.disposables.materials.push(frameMat);
+
+                // 2. Derived Sector Camera Focus Crosshair (Future Soldier Centroid)
+                const crossGeo = new FOC_THREE.BufferGeometry().setFromPoints([
+                    { x: -2.2, y: 0.1, z: 0 },
+                    { x: 2.2, y: 0.1, z: 0 },
+                    { x: 0, y: 0.1, z: -2.2 },
+                    { x: 0, y: 0.1, z: 2.2 }
+                ]);
+                crossGeo.drawMode = 'LINES';
+                const crossMat = new FOC_THREE.Material({
+                    color: 0x38bdf8,
+                    transparent: true,
+                    opacity: 0.85,
+                    isLine: true
+                });
+                this.sectorCenterCrossNode = new FOC_THREE.Line(crossGeo, crossMat);
+                this.scene.add(this.sectorCenterCrossNode);
+                this.disposables.geometries.push(crossGeo);
+                this.disposables.materials.push(crossMat);
+            }
+
+            _animate(now) {
+                if (!this.isInitialized || this.isDisposed) return;
+                this.rafId = requestAnimationFrame(this._boundAnimate);
+
+                const dt = Math.min(0.05, Math.max(0.001, (now - this.lastTimestamp) / 1000));
+                this.lastTimestamp = now;
+
+                this._updateKeyboardNavigation(dt);
+                if (this.cameraController) {
+                    this.cameraController.syncTransform(dt);
+                }
+
+                if (this.renderer && this.scene && this.cameraController) {
+                    this.renderer.render(this.scene, this.cameraController.camera);
+                }
+            }
+
+            _updateKeyboardNavigation(dt) {
+                if (!this.cameraController) return;
+
+                const panSpeed = (22 + this.cameraController.current.distance * 0.55) * dt;
+                let forward = 0;
+                let right = 0;
+
+                if (this.input.keys['KeyW'] || this.input.keys['ArrowUp']) forward += panSpeed;
+                if (this.input.keys['KeyS'] || this.input.keys['ArrowDown']) forward -= panSpeed;
+                if (this.input.keys['KeyA'] || this.input.keys['ArrowLeft']) right -= panSpeed;
+                if (this.input.keys['KeyD'] || this.input.keys['ArrowRight']) right += panSpeed;
+
+                if (forward !== 0 || right !== 0) {
+                    this.cameraController.panRelative(forward, right);
+                }
+
+                if (this.input.keys['KeyQ']) {
+                    this.cameraController.rotateBy(-1.35 * dt, 0);
+                }
+                if (this.input.keys['KeyE']) {
+                    this.cameraController.rotateBy(1.35 * dt, 0);
+                }
+            }
+
+            _isFocusInUIControl() {
+                if (!document.activeElement) return false;
+                const tag = document.activeElement.tagName;
+                return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON';
+            }
+
+            _bindEvents() {
+                window.addEventListener('resize', this._boundResize);
+                window.addEventListener('keydown', this._boundKeyDown);
+                window.addEventListener('keyup', this._boundKeyUp);
+                window.addEventListener('mousemove', this._boundMouseMove);
+                window.addEventListener('mouseup', this._boundMouseUp);
+
+                if (this.renderer && this.renderer.domElement && typeof this.renderer.domElement.addEventListener === 'function') {
+                    const dom = this.renderer.domElement;
+                    dom.addEventListener('mousedown', this._boundMouseDown);
+                    dom.addEventListener('wheel', this._boundWheel, { passive: false });
+                    dom.addEventListener('touchstart', this._boundTouchStart, { passive: true });
+                    dom.addEventListener('touchmove', this._boundTouchMove, { passive: false });
+                    dom.addEventListener('touchend', this._boundTouchEnd);
+                }
+
+                if (typeof ResizeObserver !== 'undefined' && this.mount) {
+                    this.resizeObserver = new ResizeObserver(() => this.resize());
+                    this.resizeObserver.observe(this.mount);
+                }
+            }
+
+            _unbindEvents() {
+                window.removeEventListener('resize', this._boundResize);
+                window.removeEventListener('keydown', this._boundKeyDown);
+                window.removeEventListener('keyup', this._boundKeyUp);
+                window.removeEventListener('mousemove', this._boundMouseMove);
+                window.removeEventListener('mouseup', this._boundMouseUp);
+
+                if (this.renderer && this.renderer.domElement && typeof this.renderer.domElement.removeEventListener === 'function') {
+                    const dom = this.renderer.domElement;
+                    dom.removeEventListener('mousedown', this._boundMouseDown);
+                    dom.removeEventListener('wheel', this._boundWheel);
+                    dom.removeEventListener('touchstart', this._boundTouchStart);
+                    dom.removeEventListener('touchmove', this._boundTouchMove);
+                    dom.removeEventListener('touchend', this._boundTouchEnd);
+                }
+
+                if (this.resizeObserver) {
+                    this.resizeObserver.disconnect();
+                    this.resizeObserver = null;
+                }
+            }
+
+            _onKeyDown(e) {
+                if (this._isFocusInUIControl()) return;
+                this.input.keys[e.code] = true;
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    this.focusOnSectorCenter();
+                }
+            }
+
+            _onKeyUp(e) {
+                this.input.keys[e.code] = false;
+            }
+
+            _onMouseDown(e) {
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+                if (e.button === 2 || (e.button === 0 && !e.shiftKey)) {
+                    this.input.isPanning = true;
+                    this.input.lastX = e.clientX;
+                    this.input.lastY = e.clientY;
+                } else if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+                    this.input.isOrbiting = true;
+                    this.input.lastX = e.clientX;
+                    this.input.lastY = e.clientY;
+                }
+            }
+
+            _onMouseMove(e) {
+                if ((!this.input.isPanning && !this.input.isOrbiting) || !this.cameraController) return;
+                const dx = e.clientX - this.input.lastX;
+                const dy = e.clientY - this.input.lastY;
+                this.input.lastX = e.clientX;
+                this.input.lastY = e.clientY;
+
+                if (this.input.isPanning) {
+                    this.cameraController.panByScreenDelta(dx, dy);
+                } else if (this.input.isOrbiting) {
+                    this.cameraController.rotateBy(-dx * 0.0065, dy * 0.0045);
+                }
+            }
+
+            _onMouseUp() {
+                this.input.isPanning = false;
+                this.input.isOrbiting = false;
+            }
+
+            _onWheel(e) {
+                e.preventDefault();
+                this.zoomBy(e.deltaY * 0.025);
+            }
+
+            _onTouchStart(e) {
+                if (e.touches.length === 1) {
+                    this.input.touchLastX = e.touches[0].clientX;
+                    this.input.touchLastY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    this.input.pinchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }
+
+            _onTouchMove(e) {
+                if (!this.cameraController) return;
+                if (e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - this.input.touchLastX;
+                    const dy = e.touches[0].clientY - this.input.touchLastY;
+                    this.input.touchLastX = e.touches[0].clientX;
+                    this.input.touchLastY = e.touches[0].clientY;
+                    this.cameraController.panByScreenDelta(dx, dy);
+                } else if (e.touches.length === 2) {
+                    e.preventDefault();
+                    const newDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const delta = this.input.pinchDist - newDist;
+                    this.input.pinchDist = newDist;
+                    this.zoomBy(delta * 0.08);
+                }
+            }
+
+            _onTouchEnd() {
+                this.input.pinchDist = 0;
+            }
+
+            _reportError(message) {
+                if (this.onError) {
+                    this.onError(message);
+                }
+            }
+
+            dispose() {
+                if (this.isDisposed && !this.isInitialized) return;
+
+                if (this.rafId !== null) {
+                    cancelAnimationFrame(this.rafId);
+                    this.rafId = null;
+                }
+
+                this._unbindEvents();
+                this.input.keys = {};
+                this.input.isPanning = false;
+                this.input.isOrbiting = false;
+
+                this.disposables.geometries.forEach((g) => {
+                    if (g && typeof g.dispose === 'function') g.dispose();
+                });
+                this.disposables.materials.forEach((m) => {
+                    if (m && typeof m.dispose === 'function') m.dispose();
+                });
+                this.disposables.textures.forEach((t) => {
+                    if (t && typeof t.dispose === 'function') t.dispose();
+                });
+                this.disposables = { geometries: [], materials: [], textures: [] };
+
+                if (this.renderer) {
+                    if (typeof this.renderer.dispose === 'function') {
+                        this.renderer.dispose();
+                    }
+                    if (typeof this.renderer.forceContextLoss === 'function') {
+                        try {
+                            this.renderer.forceContextLoss();
+                        } catch (err) {
+                            // Ignore if already lost
+                        }
+                    }
+                    if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+                        this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+                    }
+                    this.renderer = null;
+                }
+
+                this.scene = null;
+                this.cameraController = null;
+                this.sectorFrameNode = null;
+                this.sectorCenterCrossNode = null;
+                this.mount = null;
+                this.isInitialized = false;
+                this.isDisposed = true;
+            }
+        }
+
+        /* ============================================================================
+         * 5. INTEGRATED G3D-02A-R1 / R2 UNIT TEST SUITE (EXECUTABLE IN BROWSER)
+         * ============================================================================ */
+        function deepFreeze(obj) {
+            if (!obj || typeof obj !== 'object') return obj;
+            Object.freeze(obj);
+            Object.keys(obj).forEach((k) => deepFreeze(obj[k]));
+            return obj;
+        }
+
+        function runBattle3DUnitTests() {
+            const results = [];
+            function assert(cond, msg) {
+                if (!cond) throw new Error(msg);
+            }
+
+            function runCase(name, fn) {
+                try {
+                    fn();
+                    results.push({ name, passed: true, detail: 'Doğrulandı' });
+                } catch (err) {
+                    results.push({ name, passed: false, detail: err.message });
+                }
+            }
+
+            runCase('1. SectorManager.initSectors + projectActiveSector3D (150/150 Limit & Gizli Canlı)', () => {
+                const battleData = createTestBattleData();
+                const sm = new SectorManager();
+                sm.initSectors(battleData.sectorCount, battleData.playerGroups, battleData.enemyGroups);
+                const snap = projectActiveSector3D(sm);
+
+                assert(snap.sectorId === 'SECTOR_1650_01', `Beklenen SECTOR_1650_01, gelen: ${snap.sectorId}`);
+                assert(snap.visible.player === 150, `Oyuncu görünür limiti 150 olmalı: ${snap.visible.player}`);
+                assert(snap.visible.enemy === 150, `Düşman görünür limiti 150 olmalı: ${snap.visible.enemy}`);
+                assert(snap.hiddenAlive.player === 18, `Oyuncu gizli canlı 18 olmalı: ${snap.hiddenAlive.player}`);
+                assert(snap.hiddenAlive.enemy === 12, `Düşman gizli canlı 12 olmalı: ${snap.hiddenAlive.enemy}`);
+                assert(snap.dataAuthority === 'existing_battle_simulation', 'Veri otoritesi korunmalı');
+            });
+
+            runCase('2. deriveSectorViewBounds null / boş snapshot güvenliği ve salt-okunur değişmezlik', () => {
+                const nullDerived = deriveSectorViewBounds(null);
+                assert(nullDerived.isEmpty === true, 'null snapshot isEmpty=true dönmeli');
+                assert(nullDerived.sectorId === 'BOS_SEKTOR', 'null snapshot BOS_SEKTOR dönmeli');
+
+                const sm = new SectorManager();
+                sm.initSectors(3, createTestBattleData().playerGroups, createTestBattleData().enemyGroups);
+                const frozenSnap = deepFreeze(projectActiveSector3D(sm));
+                const derived = deriveSectorViewBounds(frozenSnap);
+
+                assert(derived.uniqueGroupCount === 8, `8 benzersiz groupId bekleniyor, gelen: ${derived.uniqueGroupCount}`);
+                assert(derived.bounds.minX < derived.bounds.maxX, 'minX < maxX olmalı');
+                assert(derived.bounds.minZ < derived.bounds.maxZ, 'minZ < maxZ olmalı');
+            });
+
+            runCase('3. RTSCamera3D sınır kelepçeleme (Clamp) ve yakınlaştırma limitleri', () => {
+                const cam = new RTSCamera3D({ aspect: 16 / 9 });
+                cam.setBoundsAndTarget({ minX: -40, maxX: 40, minZ: -30, maxZ: 30 }, { x: 0, z: 0 }, true);
+                cam.panRelative(500, 500);
+                cam.syncTransform(1);
+                assert(cam.current.targetX === 40 && cam.current.targetZ === -30, 'Kamera hedefi sektör sınırlarında kelepçelenmeli');
+
+                cam.zoomBy(-500);
+                cam.syncTransform(1);
+                assert(cam.current.distance === cam.limits.minDistance, 'Min yakınlaştırma sınırı çalışmalı');
+
+                cam.zoomBy(500);
+                cam.syncTransform(1);
+                assert(cam.current.distance === cam.limits.maxDistance, 'Max uzaklaştırma sınırı çalışmalı');
+            });
+
+            runCase('4. Battle3DRenderer yaşam döngüsü (init -> sync -> resize -> idempotent dispose -> re-init)', () => {
+                let disposeCount = 0;
+                const mockCanvas = document.createElement('canvas');
+                const mockMount = document.createElement('div');
+                Object.defineProperty(mockMount, 'clientWidth', { value: 1024, configurable: true });
+                Object.defineProperty(mockMount, 'clientHeight', { value: 768, configurable: true });
+
+                const r = new Battle3DRenderer({
+                    rendererFactory: () => ({
+                        domElement: mockCanvas,
+                        setSize() {},
+                        setPixelRatio() {},
+                        render() {},
+                        dispose() { disposeCount++; },
+                        forceContextLoss() {}
+                    })
+                });
+
+                assert(r.init(mockMount, null) === true, 'init başarılı olmalı');
+                assert(r.isInitialized === true, 'isInitialized=true olmalı');
+                r.resize();
+                r.dispose();
+                r.dispose();
+                assert(r.isDisposed === true && disposeCount === 1, 'dispose idempotent olmalı');
+                assert(r.init(mockMount, null) === true, 'dispose sonrası yeniden başlatma çalışmalı');
+                r.dispose();
+            });
+
+            runCase('5. WebGL yokluğu durumunda çökmeden güvenli hata bildirimi', () => {
+                let errMsg = null;
+                const r = new Battle3DRenderer({
+                    rendererFactory: () => { throw new Error('Simulated WebGL Disabled'); },
+                    onError: (m) => { errMsg = m; }
+                });
+                const mockMount = document.createElement('div');
+                const ok = r.init(mockMount, null);
+                assert(ok === false && typeof errMsg === 'string' && errMsg.length > 0, 'WebGL hatası güvenli yakalanmalı');
+            });
+
+            return results;
+        }
+
+        /* ============================================================================
+         * 6. DEVELOPER PREVIEW CONTROLLER (Battle3DPreview)
+         * ============================================================================ */
+        class Battle3DPreviewController {
+            constructor() {
+                this.renderer = null;
+                this.sectorManager = null;
+                this.currentMode = 'test';
+                this.activeSectorIdx = 0;
+
+                this.dom = {
+                    mount: document.getElementById('battle3dMount'),
+                    fallbackScreen: document.getElementById('fallbackScreen'),
+                    fallbackIcon: document.getElementById('fallbackIcon'),
+                    fallbackTitle: document.getElementById('fallbackTitle'),
+                    fallbackMessage: document.getElementById('fallbackMessage'),
+                    btnModeTest: document.getElementById('btnModeTest'),
+                    btnModeEmpty: document.getElementById('btnModeEmpty'),
+                    btnModeNoWebGL: document.getElementById('btnModeNoWebGL'),
+                    btnDispose: document.getElementById('btnDispose'),
+                    btnReinit: document.getElementById('btnReinit'),
+                    btnRunTests: document.getElementById('btnRunTests'),
+                    btnCloseTests: document.getElementById('btnCloseTests'),
+                    unitTestPanel: document.getElementById('unitTestPanel'),
+                    unitTestSummary: document.getElementById('unitTestSummary'),
+                    unitTestList: document.getElementById('unitTestList'),
+                    btnSector0: document.getElementById('btnSector0'),
+                    btnSector1: document.getElementById('btnSector1'),
+                    btnSector2: document.getElementById('btnSector2'),
+                    btnRotLeft: document.getElementById('btnRotLeft'),
+                    btnRotRight: document.getElementById('btnRotRight'),
+                    btnZoomIn: document.getElementById('btnZoomIn'),
+                    btnZoomOut: document.getElementById('btnZoomOut'),
+                    btnFocus: document.getElementById('btnFocus'),
+                    dataSourceBadge: document.getElementById('dataSourceBadge'),
+                    vmSectorId: document.getElementById('vmSectorId'),
+                    vmSectorBounds: document.getElementById('vmSectorBounds'),
+                    vmGroupCount: document.getElementById('vmGroupCount'),
+                    vmSoldierCount: document.getElementById('vmSoldierCount'),
+                    vmLimits: document.getElementById('vmLimits'),
+                    vmAuthority: document.getElementById('vmAuthority'),
+                    lifecycleStatus: document.getElementById('lifecycleStatus'),
+                    cameraTelemetry: document.getElementById('cameraTelemetry')
+                };
+            }
+
+            init() {
+                this._buildSectorManager('test');
+                this._bindUIEvents();
+                this.startScene();
+            }
+
+            _buildSectorManager(mode) {
+                const sm = new SectorManager();
+                if (mode === 'test') {
+                    const battleData = createTestBattleData();
+                    sm.initSectors(battleData.sectorCount, battleData.playerGroups, battleData.enemyGroups);
+                    sm.setActiveSector(this.activeSectorIdx);
+                } else {
+                    sm.initSectors(1, [], []);
+                }
+                this.sectorManager = sm;
+            }
+
+            _getSnapshot() {
+                return projectActiveSector3D(this.sectorManager);
+            }
+
+            _bindUIEvents() {
+                this.dom.btnModeTest?.addEventListener('click', () => this.applyDataMode('test'));
+                this.dom.btnModeEmpty?.addEventListener('click', () => this.applyDataMode('empty'));
+                this.dom.btnModeNoWebGL?.addEventListener('click', () => this.simulateNoWebGL());
+                this.dom.btnDispose?.addEventListener('click', () => this.disposeScene());
+                this.dom.btnReinit?.addEventListener('click', () => this.startScene());
+
+                this.dom.btnSector0?.addEventListener('click', () => this.selectSector(0));
+                this.dom.btnSector1?.addEventListener('click', () => this.selectSector(1));
+                this.dom.btnSector2?.addEventListener('click', () => this.selectSector(2));
+
+                this.dom.btnRunTests?.addEventListener('click', () => this.executeUnitTests());
+                this.dom.btnCloseTests?.addEventListener('click', () => this.dom.unitTestPanel?.classList.add('hidden'));
+
+                this.dom.btnRotLeft?.addEventListener('click', () => this.renderer?.rotateBy(-0.35));
+                this.dom.btnRotRight?.addEventListener('click', () => this.renderer?.rotateBy(0.35));
+                this.dom.btnZoomIn?.addEventListener('click', () => this.renderer?.zoomBy(-6));
+                this.dom.btnZoomOut?.addEventListener('click', () => this.renderer?.zoomBy(6));
+                this.dom.btnFocus?.addEventListener('click', () => this.renderer?.focusOnSectorCenter());
+            }
+
+            selectSector(index) {
+                this.activeSectorIdx = index;
+                [this.dom.btnSector0, this.dom.btnSector1, this.dom.btnSector2].forEach((btn, idx) => {
+                    btn?.classList.toggle('active', idx === index);
+                });
+
+                if (this.currentMode !== 'test') {
+                    this.applyDataMode('test');
+                    return;
+                }
+
+                this.sectorManager?.setActiveSector(index);
+                const snapshot = this._getSnapshot();
+                if (this.renderer && this.renderer.isInitialized) {
+                    const derived = this.renderer.sync(snapshot, { snapCamera: false });
+                    this._updateHUD(derived);
+                }
+            }
+
+            applyDataMode(mode) {
+                this.currentMode = mode;
+                this.dom.btnModeTest?.classList.toggle('active', mode === 'test');
+                this.dom.btnModeEmpty?.classList.toggle('active', mode === 'empty');
+
+                this._buildSectorManager(mode);
+                const snapshot = this._getSnapshot();
+
+                if (!this.renderer || !this.renderer.isInitialized) {
+                    this.startScene();
+                    return;
+                }
+
+                const derived = this.renderer.sync(snapshot, { snapCamera: true });
+                this._updateHUD(derived);
+            }
+
+            startScene() {
+                this._hideFallback();
+
+                if (this.renderer) {
+                    this.renderer.dispose();
+                }
+
+                this._buildSectorManager(this.currentMode);
+                const initialSnapshot = this._getSnapshot();
+
+                this.renderer = new Battle3DRenderer({
+                    onCameraUpdate: ({ targetX, targetZ, distance }) => {
+                        if (this.dom.cameraTelemetry) {
+                            this.dom.cameraTelemetry.textContent = `${targetX.toFixed(1)}, ${targetZ.toFixed(1)} | D:${distance.toFixed(0)}`;
+                        }
+                    },
+                    onError: (errMsg) => {
+                        this._setLifecycleStatus('WEBGL DEVRE DIŞI', 'status-warn');
+                        this._showFallback('⚠️', 'WebGL Desteklenmiyor veya Başlatılamadı', errMsg);
+                    }
+                });
+
+                const ok = this.renderer.init(this.dom.mount, initialSnapshot);
+                if (ok) {
+                    this._updateHUD(this.renderer.derivedSummary);
+                    this._setLifecycleStatus('AKTİF (WebGL)', 'status-ok');
+                }
+            }
+
+            disposeScene() {
+                if (this.renderer) {
+                    this.renderer.dispose();
+                }
+                this._setLifecycleStatus('KAPATILDI (Disposed)', 'status-danger');
+                this._showFallback(
+                    '🛡️',
+                    '3D Sahne Güvenle Kapatıldı (Dispose)',
+                    'WebGL bağlamı, geometriler, dokular, olay dinleyicileri ve animasyon döngüsü temizlendi.'
+                );
+            }
+
+            simulateNoWebGL() {
+                if (this.renderer) {
+                    this.renderer.dispose();
+                }
+                this._setLifecycleStatus('FALLBACK MODU', 'status-warn');
+                this._showFallback(
+                    '⚠️',
+                    'WebGL Desteklenmiyor (Güvenli Geri Dönüş)',
+                    'Tarayıcı WebGL context oluşturamadığında sistem mevcut 2D savaş ekranına zarar vermeden güvenli uyarı ekranına geçer.'
+                );
+            }
+
+            executeUnitTests() {
+                const results = runBattle3DUnitTests();
+                const passedCount = results.filter((r) => r.passed).length;
+
+                if (this.dom.unitTestSummary) {
+                    this.dom.unitTestSummary.innerHTML = `<strong>Sonuç:</strong> ${passedCount} / ${results.length} birim testi başarıyla geçti.`;
+                }
+
+                if (this.dom.unitTestList) {
+                    this.dom.unitTestList.innerHTML = '';
+                    results.forEach((res) => {
+                        const item = document.createElement('div');
+                        item.className = `test-item ${res.passed ? 'pass' : 'fail'}`;
+                        item.innerHTML = `
+                            <div style="font-weight:600; color:${res.passed ? '#6ee7b7' : '#fda4af'};">
+                                ${res.passed ? '✔' : '✘'} ${res.name}
+                            </div>
+                            <div style="color:#a8a29e; margin-top:2px;">${res.detail}</div>
+                        `;
+                        this.dom.unitTestList.appendChild(item);
+                    });
+                }
+
+                this.dom.unitTestPanel?.classList.remove('hidden');
+            }
+
+            _updateHUD(derived) {
+                if (!derived) return;
+                if (this.dom.vmSectorId) this.dom.vmSectorId.textContent = derived.sectorId;
+                if (this.dom.vmSectorBounds) {
+                    this.dom.vmSectorBounds.textContent = `${derived.bounds.minX}..${derived.bounds.maxX}m`;
+                }
+                if (this.dom.vmGroupCount) this.dom.vmGroupCount.textContent = String(derived.uniqueGroupCount);
+                if (this.dom.vmSoldierCount) {
+                    this.dom.vmSoldierCount.textContent = `${derived.playerCount} / ${derived.enemyCount}`;
+                }
+                if (this.dom.vmLimits) {
+                    this.dom.vmLimits.textContent = `${derived.limits.player}/${derived.limits.enemy} (Gizli: ${derived.hiddenAlive.player}/${derived.hiddenAlive.enemy})`;
+                }
+                if (this.dom.vmAuthority) {
+                    this.dom.vmAuthority.textContent = derived.dataAuthority;
+                }
+
+                if (this.dom.dataSourceBadge) {
+                    if (derived.isEmpty) {
+                        this.dom.dataSourceBadge.textContent = 'BOŞ VERİ (GÜVENLİ)';
+                        this.dom.dataSourceBadge.className = 'badge badge-muted';
+                    } else {
+                        this.dom.dataSourceBadge.textContent = 'GERÇEK PROJEKSİYON';
+                        this.dom.dataSourceBadge.className = 'badge badge-info';
+                    }
+                }
+            }
+
+            _setLifecycleStatus(text, className) {
+                if (!this.dom.lifecycleStatus) return;
+                this.dom.lifecycleStatus.textContent = text;
+                this.dom.lifecycleStatus.className = `status-val ${className}`;
+            }
+
+            _showFallback(icon, title, message) {
+                if (!this.dom.fallbackScreen) return;
+                this.dom.fallbackIcon.textContent = icon;
+                this.dom.fallbackTitle.textContent = title;
+                this.dom.fallbackMessage.textContent = message;
+                this.dom.fallbackScreen.classList.remove('hidden');
+            }
+
+            _hideFallback() {
+                this.dom.fallbackScreen?.classList.add('hidden');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const controller = new Battle3DPreviewController();
+            controller.init();
+            window.__focBattle3DPreview = controller;
+        });
+    })();
+    </script>
+</body>
+</html>
