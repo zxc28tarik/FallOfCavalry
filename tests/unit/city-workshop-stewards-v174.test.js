@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import * as CONST from '../../js/constants.js';
 import { createWorldCharacterRoster, promoteWorldCharacter } from '../../js/systems/world-characters.js';
 import {
   emptyCharacterOrganizationState, normalizeCharacterOrganizationState,
@@ -12,6 +11,8 @@ import { getCityWorkshopContacts } from '../../js/systems/city-workshop-contacts
 import { getCityMarketCyclePreview } from '../../js/systems/city-market-cycle.js';
 import { discoverCharacterProductionSources } from '../../js/systems/character-production-sources.js';
 import SaveSystem from '../../js/systems/save-system.js';
+import { SaveManager } from '../../js/managers/SaveManager.js';
+import { ensureSettlementCityState } from '../../js/systems/city-state.js';
 
 function setup({ owner = 'player', building = 'blacksmith', parcelState = 'occupied' } = {}) {
   const city = {
@@ -184,6 +185,69 @@ describe('WEB V1.74 — explicit single-source workshop stewards', () => {
       assignmentSource: { type: 'production', id: x.sourceId, settlementId: x.city.id },
     })).toBe(false);
     expect(x.organization.assignments).toEqual([]);
+  });
+
+  it('survives real SaveManager save/load after City V2 workshop restoration', () => {
+    const city = {
+      id: 'istanbul-reload-174', name: 'Istanbul', type: 'city', tier: 4,
+      ownerFactionId: 'ottoman', historicalFactionId: 'ottoman',
+      population: 25000,
+    };
+    ensureSettlementCityState(city);
+    const sourceId = discoverCharacterProductionSources([city])
+      .find(source => source.type === 'production')?.id;
+    expect(sourceId).toBeTruthy();
+    const roster = createWorldCharacterRoster({ seed: 1648, settlements: [city], perSettlement: 2 });
+    const person = roster.characters[0];
+    expect(promoteWorldCharacter(roster, person.id, { day: 2 })).toBe(true);
+    const organization = emptyCharacterOrganizationState();
+    expect(appointCityWorkshopSteward({
+      city, party: { factionId: 'ottoman', gold: 150 },
+      roster, organization, sourceId, characterId: person.id, day: 6,
+    }).ok).toBe(true);
+    const game = {
+      playerParty: { gold: 350, factionId: 'ottoman', roster: [] },
+      itemCatalog: [], settings: {},
+      worldManager: {
+        enemyParties: [], worldAi: { lastRespawnDay: 0, parties: [] },
+        lastEncounterEndTimeByEnemyId: {}, worldEncounterPartyByEnemyId: {},
+      },
+      ensureInventoryModel: () => {}, ensureRosterState: () => {},
+    };
+    const state = {
+      mode: 'map', day: 6, seed: 1648, map: { settlements: [city] },
+      worldCharacters: roster, characterOrganization: organization,
+    };
+    const manager = new SaveManager(state);
+    manager.init(game);
+    const payload = manager.buildSavePayload();
+    expect(payload.game.characterOrganization.assignments[0].assignmentSource.id)
+      .toBe(sourceId);
+    const saved = new SaveSystem().normalizePayload(JSON.parse(JSON.stringify(payload)));
+    expect(saved.ok).toBe(true);
+    const loadedCity = {
+      id: city.id, name: city.name, type: city.type,
+      historicalFactionId: city.historicalFactionId, ownerFactionId: city.ownerFactionId,
+      tier: city.tier, population: city.population,
+    };
+    const loadedState = { mode: 'map', day: 1, map: { settlements: [loadedCity] } };
+    const loader = new SaveManager(loadedState);
+    loader.init({ ...game, playerParty: { gold: 0, factionId: 'ottoman', roster: [] } });
+    expect(loader.applySavePayload(saved.data)).toBe(true);
+    expect(discoverCharacterProductionSources([loadedCity])
+      .some(source => source.id === sourceId)).toBe(true);
+    expect(loadedState.characterOrganization.assignments[0]).toMatchObject({
+      characterId: person.id, assignmentRole: WORKSHOP_STEWARD_ROLE,
+      assignmentSource: { id: sourceId, type: 'production' },
+      assignmentStatus: 'active',
+    });
+    const view = listCityWorkshopStewards({
+      city: loadedCity, party: { factionId: 'ottoman' },
+      roster: loadedState.worldCharacters,
+      organization: loadedState.characterOrganization,
+    });
+    expect(view.sources.some(source => source.sourceId === sourceId
+      && source.steward?.characterId === person.id)).toBe(true);
   });
 
   it('rejects an invalid day without changing organization, coins or residents', () => {
