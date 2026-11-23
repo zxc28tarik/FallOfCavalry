@@ -12,14 +12,49 @@ import { getKethudaServiceCoverage } from './city-infrastructure-benefits.js';
 import { mirrorMarketStockChange } from './market-stock-bridge.js';
 import { observeMarketMovement } from './market-cargo-report.js';
 
+/** V1.71: all IDs are existing, catalog-registered real buildings/goods.
+ * Rates and exact input quantities are provisional game balance assumptions.
+ * Dye, alkali, candle wax and stonework finished goods do NOT exist in the
+ * canonical market; those workshops remain unimplemented, not magic minting.
+ */
 export const CITY_MARKET_RECIPES = Object.freeze([
   Object.freeze({
-    buildingId: 'mill', name: 'Değirmen',
+    buildingId: 'mill', name: 'Değirmen', boost: 'water',
     inputs: Object.freeze({ wheat: 2 }), outputId: 'flour', outputQty: 1,
   }),
   Object.freeze({
-    buildingId: 'bakery', name: 'Fırın',
+    buildingId: 'bakery', name: 'Fırın', boost: 'water_sanitation',
     inputs: Object.freeze({ flour: 1, wood: 1 }), outputId: 'bread', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'tannery', name: 'Tabakhane', boost: 'water_sanitation',
+    inputs: Object.freeze({ leather: 1, salt: 1 }),
+    outputId: 'processed_leather', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'weaving_house', name: 'Dokuma Atölyesi', boost: 'water',
+    inputs: Object.freeze({ wool: 2 }), outputId: 'cloth', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'blacksmith', name: 'Demirci', boost: 'roads',
+    inputs: Object.freeze({ iron: 1, wood: 1 }),
+    outputId: 'iron_tools', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'carpenter', name: 'Marangoz', boost: 'roads',
+    inputs: Object.freeze({ timber: 1, iron_tools: 1 }),
+    outputId: 'furniture', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'paper_mill', name: 'Kâğıt İmalathanesi', boost: 'water',
+    // Rag-based papermaking, using existing market cloth as a textile proxy.
+    // No ahistorical wood-pulp production in a 1650 campaign.
+    inputs: Object.freeze({ cloth: 1 }), outputId: 'paper', outputQty: 1,
+  }),
+  Object.freeze({
+    buildingId: 'farrier', name: 'Nalbant', boost: 'roads',
+    inputs: Object.freeze({ iron: 1, wood: 1 }),
+    outputId: 'horseshoe', outputQty: 2,
   }),
 ]);
 const FOOD_PRIORITY = Object.freeze(['bread', 'flour', 'wheat', 'cheese', 'fish', 'meat']);
@@ -59,10 +94,12 @@ function workshopBatches(city, buildingId, counts, coverage) {
   // exist; no upgrades => no additional supply from basic infrastructure.
   const water = coverage?.water;
   const sanitation = coverage?.sanitation;
-  const waterReady = water?.improvedLevels > 0 && water?.coveragePct >= 50;
-  const sanitationReady = sanitation?.improvedLevels > 0 && sanitation?.coveragePct >= 50;
-  const extra = buildingId === 'mill' ? Number(waterReady)
-    : Number(waterReady && sanitationReady);
+  const roads = coverage?.roads;
+  const ready = group => Number(group?.improvedLevels > 0 && group?.coveragePct >= 50);
+  const recipe = CITY_MARKET_RECIPES.find(entry => entry.buildingId === buildingId);
+  const extra = recipe?.boost === 'water' ? ready(water)
+    : recipe?.boost === 'water_sanitation' ? ready(water) * ready(sanitation)
+      : recipe?.boost === 'roads' ? ready(roads) : 0;
   return Math.min(6, actualBuildings * (1 + extra));
 }
 
