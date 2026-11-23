@@ -78,7 +78,7 @@ describe('WEB V1.73 — canonical workshop source to living character provenance
       buildingId: 'tannery', parcelId: 'industrial',
       contacts: [{ characterId: person.id, name: person.name, role: person.role }],
     });
-    expect(result.sources[0].sourceId).toBe(data.sources[0].id);
+    expect(result.sources[0].sourceId).toBe(data.sources.find(s => s.type === 'production').id);
   });
 
   it('never treats an ordinary town resident or matching profession as workshop staff', () => {
