@@ -5,7 +5,10 @@
  * NO automatic appointments, stat boosts, soldier/party recruitment, faction,
  * house, clique or religion membership. Only authorized descriptive commands.
  */
+import { getProductionSourceByIdentity } from './character-production-sources.js';
+
 export const CHARACTER_ORGANIZATION_VERSION = 1;
+export const WORKSHOP_STEWARD_ROLE = 'workshop_steward';
 export const PLAYER_ORGANIZATION_BRANCHES = Object.freeze([
   'party', 'household', 'army_network', 'city_administration',
   'trade_network', 'diplomacy_network',
@@ -36,6 +39,25 @@ function locationOf(input, settlements) {
   if (!id || (Array.isArray(settlements)
     && !settlements.some((place) => settlementId(place?.id) === id))) return null;
   return { kind: 'settlement', settlementId: id };
+}
+
+/**
+ * Optional verified physical source for explicitly appointed workshop stewards.
+ * It belongs to the existing organization assignment, never a new payroll
+ * ledger or legal workshop owner record.
+ */
+function normalizeAssignmentSource(role, branch, raw, location, settlements, { active = false } = {}) {
+  if (role !== WORKSHOP_STEWARD_ROLE) return raw == null ? null : false;
+  if (branch !== 'trade_network' || !record(raw) || raw.type !== 'production'
+    || typeof raw.id !== 'string' || !raw.id.startsWith('built-')
+    || raw.id.length > 80 || /[<>\r\n\t]/.test(raw.id)
+    || String(raw.settlementId) !== location?.settlementId) return false;
+  if (active && Array.isArray(settlements)) {
+    const city = settlements.find(place => String(place?.id) === location.settlementId);
+    if (!city || !getProductionSourceByIdentity([city], 'production',
+      raw.id, location.settlementId)) return false;
+  }
+  return { type: 'production', id: raw.id, settlementId: location.settlementId };
 }
 
 function actorRef(id, roster, requireAlive = false) {
@@ -77,7 +99,11 @@ export function normalizeCharacterOrganizationState(input, { roster, settlements
     const loc = locationOf(row.assignmentLocation, settlements);
     const employer = actorRef(row.employerCharacterId, actors);
     const assigner = actorRef(row.assignedByCharacterId, actors);
-    if (!loc || employer === false || assigner === false
+    const source = normalizeAssignmentSource(
+      row.assignmentRole, row.branch, row.assignmentSource, loc, settlements,
+      { active: row.assignmentStatus === 'active' },
+    );
+    if (!loc || source === false || employer === false || assigner === false
       || (row.assignmentStatus === 'active' && active.has(row.characterId))) continue;
     if (row.assignmentStatus === 'completed' && (!validDay(row.endDay)
       || row.endDay < row.assignmentStartDay || !validReason(row.endReason))) continue;
@@ -92,6 +118,7 @@ export function normalizeCharacterOrganizationState(input, { roster, settlements
       assignmentStartDay: row.assignmentStartDay, assignmentStatus: row.assignmentStatus,
       employerCharacterId: employer, assignedByCharacterId: assigner,
       reason: row.reason.trim(),
+      ...(source ? { assignmentSource: source } : {}),
       ...(row.assignmentStatus === 'completed'
         ? { endDay: row.endDay, endReason: row.endReason.trim() } : {}),
     });
@@ -121,13 +148,17 @@ export function addCharacterBranchMembership(state, characterId, branch, {
 export function startCharacterAssignment(state, characterId, {
   roster, settlements, branch, assignmentRole, assignmentLocation,
   day = 1, reason, employerCharacterId = null, assignedByCharacterId = null,
+  assignmentSource = null,
 } = {}) {
   const loc = locationOf(assignmentLocation, settlements);
+  const source = normalizeAssignmentSource(
+    assignmentRole, branch, assignmentSource, loc, settlements, { active: true },
+  );
   const employer = actorRef(employerCharacterId, roster, true);
   const assigner = actorRef(assignedByCharacterId, roster, true);
   if (!record(state) || !Array.isArray(state.assignments) || !livingNamed(roster, characterId)
     || !branchOk(branch) || !ROLE_PATTERN.test(assignmentRole)
-    || !loc || !validDay(day) || !validReason(reason)
+    || !loc || source === false || !validDay(day) || !validReason(reason)
     || employer === false || assigner === false
     || state.assignments.length >= MAX_ASSIGNMENTS
     || state.assignments.some((x) => x.characterId === characterId
@@ -137,6 +168,7 @@ export function startCharacterAssignment(state, characterId, {
     assignmentStartDay: day, assignmentStatus: 'active',
     employerCharacterId: employer, assignedByCharacterId: assigner,
     reason: reason.trim(),
+    ...(source ? { assignmentSource: source } : {}),
   });
   return true;
 }
