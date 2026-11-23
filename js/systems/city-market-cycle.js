@@ -1,5 +1,5 @@
 /**
- * WEB V1.70 — real-input city workshops and population's market-food flow.
+ * WEB V1.70–72 — real-input city workshops, food flow and nonmutating forecasts.
  *
  * ONE authoritative market: state.markets[id].stocks. Every actual change is
  * mirrored through the existing market-stock-bridge and movement journal.
@@ -127,6 +127,62 @@ export function getCityMarketCyclePreview(city) {
   };
 }
 
+/**
+ * WEB V1.72: read-only operating forecast on current real market stocks.
+ * Runs the same deterministic dependency order as the real daily economy.
+ * Importantly, this is a projection, not a separate stock or money ledger.
+ * Existing market drift before the real daily tick can change final outputs.
+ */
+export function planCityMarketProduction(city, market) {
+  const preview = getCityMarketCyclePreview(city);
+  if (!market?.stocks || typeof market.stocks !== 'object'
+    || Array.isArray(market.stocks)) {
+    return { ok: false, reason: 'market_unavailable', cityId: city?.id ?? null,
+      rows: [], totalBatches: 0 };
+  }
+  const shadow = Object.fromEntries(CONST.TRADE_ITEMS.map(good =>
+    [good.id, validStock(market.stocks[good.id])]));
+  const maxStock = tierCeiling(city);
+  const rows = [];
+  let totalBatches = 0;
+  for (const recipe of preview.recipes) {
+    let batches = 0;
+    let blockedReason = recipe.buildingCount ? null : 'not_built';
+    let missingInputId = null;
+    while (batches < recipe.maxBatches) {
+      const invalid = Object.entries(recipe.inputs).find(([id, qty]) =>
+        !canonicalGoods.has(id) || !Number.isSafeInteger(qty) || qty < 1
+        || shadow[id] === null || shadow[id] < qty);
+      if (invalid) {
+        missingInputId = invalid[0];
+        blockedReason = 'missing_input';
+        break;
+      }
+      const stock = shadow[recipe.outputId];
+      if (stock === null) {
+        blockedReason = 'missing_output_stock';
+        break;
+      }
+      if (stock + recipe.outputQty > maxStock) {
+        blockedReason = 'storage_full';
+        break;
+      }
+      for (const [id, qty] of Object.entries(recipe.inputs)) shadow[id] -= qty;
+      shadow[recipe.outputId] += recipe.outputQty;
+      batches++;
+    }
+    totalBatches += batches;
+    rows.push({
+      buildingId: recipe.buildingId, name: recipe.name,
+      buildingCount: recipe.buildingCount, maxBatches: recipe.maxBatches,
+      plannedBatches: batches, inputs: { ...recipe.inputs },
+      outputId: recipe.outputId, outputQty: recipe.outputQty,
+      blockedReason, missingInputId,
+    });
+  }
+  return { ok: true, cityId: city?.id ?? null, rows, totalBatches };
+}
+
 function changeStock(city, market, itemId, delta, kind, day) {
   if (!canonicalGoods.has(itemId) || !Number.isSafeInteger(delta)) return false;
   const before = validStock(market?.stocks?.[itemId]);
@@ -169,25 +225,22 @@ export function advanceCityMarketCycle(city, market, { day } = {}) {
       dailyFoodNeed: 0, shortageUnits: 0 };
   const produced = [];
   const consumed = [];
-  for (const recipe of preview.recipes) {
-    let batches = 0;
-    for (let i = 0; i < recipe.maxBatches; i += 1) {
-      if (!Object.entries(recipe.inputs).every(([id, amount]) =>
-        canonicalGoods.has(id) && Number.isSafeInteger(amount) && amount > 0
-          && validStock(market.stocks[id]) !== null && market.stocks[id] >= amount)) break;
-      const outputBefore = validStock(market.stocks[recipe.outputId]);
-      if (outputBefore === null || outputBefore + recipe.outputQty > tierCeiling(city)) break;
-      // Above checks are a full transaction preflight, so no partial recipe
-      // conversion if a required material or storage unit is unavailable.
+  // The preview and the actual processor share this exact stock-conserving
+  // batch planner. A later workshop may consume an earlier one's real output.
+  const plan = planCityMarketProduction(city, market);
+  if (!plan.ok) return { ok: false, reason: 'invalid_market' };
+  for (const recipe of plan.rows) {
+    for (let batch = 0; batch < recipe.plannedBatches; batch += 1) {
+      // Preflight was performed on a shadow stock ledger before any writes.
       for (const [id, amount] of Object.entries(recipe.inputs)) {
         changeStock(city, market, id, -amount, 'workshop_input', today);
       }
       changeStock(city, market, recipe.outputId, recipe.outputQty, 'workshop_output', today);
-      batches++;
     }
-    if (batches > 0) produced.push({
-      buildingId: recipe.buildingId, batches,
-      outputId: recipe.outputId, outputQty: batches * recipe.outputQty,
+    if (recipe.plannedBatches > 0) produced.push({
+      buildingId: recipe.buildingId, batches: recipe.plannedBatches,
+      outputId: recipe.outputId,
+      outputQty: recipe.plannedBatches * recipe.outputQty,
     });
   }
 
