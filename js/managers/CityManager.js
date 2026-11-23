@@ -8,6 +8,7 @@ import { applyCivicDecision } from '../systems/city-civic-decisions.js';
 import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
 import { answerCharacterPetition } from '../systems/city-character-petitions.js';
 import { resolveCityDispute } from '../systems/city-character-disputes.js';
+import { appointCityWorkshopSteward, releaseCityWorkshopSteward } from '../systems/city-workshop-assignments.js';
 import { appendAccordLegacy, getAccordTradeBonus, getCityAccordLegacy } from '../systems/city-accord-legacy.js';
 import { recordRegionalAidOutcome } from '../systems/regional-aid-legacy.js';
 import {recordRegionalCooperation,getRegionalCooperation} from '../systems/regional-cooperation.js';
@@ -472,6 +473,24 @@ export class CityManager {
         g.saveManager.runAutosave('city-build');
       },
       getQuestManager: () => g.questManager,
+      onWorkshopAssignment: (action, sourceId, characterId) => {
+        const values = {
+          city: this.state?.city,
+          party: g.playerParty,
+          roster: this.state?.worldCharacters,
+          organization: this.state?.characterOrganization,
+          sourceId,
+          characterId,
+          day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+        };
+        const outcome = action === 'appoint'
+          ? appointCityWorkshopSteward(values)
+          : action === 'release' ? releaseCityWorkshopSteward(values)
+            : { ok: false, message: 'Bilinmeyen atölye işlemi.' };
+        g.gameFlowManager?.setLastEventLog?.(outcome.message);
+        if (outcome.ok) g.saveManager?.runAutosave?.('workshop-steward-assignment');
+        return outcome;
+      },
       onAssignQuest: (questId, characterId, reason) => {
         const ok = g.gameFlowManager.assignWorldCharacterToQuest(questId, characterId, {
           reason,
