@@ -15,18 +15,28 @@
 - Dünya haritası büyüktür; bölgesel yükleme, kamera tabanlı ayrıntı, uzakta veri simülasyonu. Bütün dünyayı tek 3D mesh/nesne yığınına dönüştürme YASAK.
 - Yeni 3D kod **önce ayrı, isteğe bağlı katman** olarak kurulur. 2D çalışan yol çalışır kalır, geçiş kapalıyken birebir korunur.
 
-## HER GEMINI TESLİMİNİN ZORUNLU DÖNGÜSÜ (atlama yok)
+## GÜNCEL ÜST KURAL — KAYITLARI **GEMINI DEĞİL CHATGPT** YAPAR
+
+Kullanıcı açıkça: **“kayıtları sen yapacaksın hiçbir zaman geminiye güven olmaz”** diye belirtti. Bu nedenle iş bölümü kesin:
+
+- **GEMINI:** Sadece görevde izin verilen üretim kodunu yazar, gerekirse kendi *aday* dalına commit eder, değişikliklerini teslim eder. Gemini'nin raporu, testi çalıştırdım iddiası, backup/registry/checkpoint dosyası **güvenilir kabul edilmez**.
+- **CHATGPT KOORDİNATÖRÜ (tek yetkili):** Her Gemini **alt tesliminden hemen sonra** SHA'yı yakalar, bağımsız geri dönüş referansı ve önceki BEST'i kaydeder, dosya/işlev/asset/davranış karşılaştırmasını yapar, kayıpları önceki BEST'ten geri getirir, test/oyun/browser sonuçlarını doğrular ve **yalnız kendisi** BEST kararı verip registry/checkpoint dosyasını günceller.
+- Gemini'nin değiştirmesi **YASAK** olan yollar: `GEMINI.md`, `docs/3d-migration/00_KORUMA_SISTEMI.md`, `docs/3d-migration/01_EN_IYI_PARCA_KAYITLARI.md`, `docs/3d-migration/checkpoints/**`, `scripts/check-3d-core-protection.mjs` ve `archive/**`. Kod commit'i kayıt/backup yerine geçmez.
+- Kullanıcıya sunulacak her sürümün geçmiş parçaları ChatGPT tarafından **ayrı ayrı doğrulanmış** olmalı. Şüpheli/görsel doğrulaması eksik sürüm yalnız CANDIDATE'tir.
+- Gemini sonraki göreve **ChatGPT kabul kontrolü tamamlanmadan** geçmeyecek. Başka bir oturumda bu kontrol kendiliğinden/arka planda çalışmış sayılmaz.
+
+## HER GEMINI TESLİMİNİN CHATGPT DENETİMLİ ZORUNLU DÖNGÜSÜ (atlama yok)
 
 1. **Önce oku:** `00_KORUMA_SISTEMI.md`, `01_EN_IYI_PARCA_KAYITLARI.md`, ilgili G3D görev dosyası, çalışan kod ve tüm ilgili testler. Baseline commit ve mevcut dal HEAD SHA'sını raporla.
 2. **Bir hedef = bir ayrı geliştirme:** Her görev için `G3D-XX` kimliği, izinli dosya listesi, gereksinimler ve net yasak değişiklikler yaz; ilgili alana **ayrı dal** aç. Bir görevde dünya/şehir/savaş/ekonomi karıştırma.
-3. **İlk işi değişiklik yapmadan yap:** Korunan yöntemlerin en iyi kodu, testleri, mevcut oyun akışı ve UI davranışını `01_EN_IYI_PARCA_KAYITLARI.md` içinde commit SHA'sıyla tespit et. Bir dosyanın son sürümü her zaman o özelliğin en iyisi olmayabilir.
+3. **İlk işi değişiklik yapmadan yap:** CHATGPT korunan yöntemlerin en iyi kodunu, testlerini, mevcut oyun akışını ve UI davranışını `01_EN_IYI_PARCA_KAYITLARI.md` içinde SHA ile tespit eder; Gemini yalnız okur. Bir dosyanın son sürümü her zaman o özelliğin en iyisi olmayabilir.
 4. **Değiştirirken ekle:** Öncelik yeni `js/battle3d/`, `js/world3d/`, `js/city3d/` gibi ayrı dizinlerde kod. Gerçek sistem sahiplerini (BattleAdapter, SectorManager, SoldierInstance, economy, quest, saves) kopyalayıp ikinci bir gerçeklik üretme.
-5. **Her mantıklı artışı ayrı commit:** her teslim adımı için yeni commit SHA, değişen dosyalar ve ne kazandırdığı not edilir. Toplu tek commit ile birden çok kabul edilmiş parçayı kaybetme.
-6. **Önce-sonra karşılaştır:** `git diff --name-status`, `git diff --stat`, `git diff`; silinen fonksiyon, kaybolan davranış, eskiye dönen geometri, asker kimliği/yükü, sektör/ordular, UI ve testleri tek tek kontrol et. Deletion veya gerileme varsa **en iyi sürümden SADECE o parçayı geri getir**, başka yeni parçaları silme.
-7. **Test kanıtı:** En az `npm run validate`, `npm test`, `npm run audit:world`; gerçek Chromium/WebGL 3D giriş-görünürlük, sektör geçişi ve 2D fallback testi. FPS'i ölçmediysen değer uydurma. Her başarısız testi kaydet, geçmeden tamamlandı deme.
-8. **Kabul öncesi özet:** görev, base SHA, candidate SHA, hangi önceki en iyi parçaları koruduğu, test çıktısı, performans sınırları, açık eksikler. **Kullanıcı istemeden main'e merge veya önceki dalı silme.**
-9. **Registry güncelle:** Yalnız gerçekten kanıtlanıp kabul edilmiş özelliklerin `best_commit` işaretini taşı; başarısız/aday kodu 'en iyi' yapma. Her aşama için `checkpoints/G3D-XX.md` oluştur.
-10. **Sonraki Gemini promptu** her seferinde güncel registry'deki en iyi parçaları ve SHAları listelemek zorunda. Sadece son Gemini cevabını kopyalayıp 'güncel' varsayma.
+5. **Her mantıklı artışı ayrı commit:** Gemini kod adayını ayrı commit'te teslim eder; **ChatGPT** her teslimin SHA'sını ve bağımsız yedeğini alır, değişen dosyaları ve kazanımları kendi kayıtlarına geçirir. Toplu tek commit ile birden çok kabul edilmiş parçayı kaybetme.
+6. **CHATGPT önce-sonra karşılaştırır:** `git diff --name-status`, `git diff --stat`, `git diff`; silinen fonksiyon, kaybolan davranış, eskiye dönen geometri, asker kimliği/yükü, sektör/ordular, UI ve testleri tek tek kontrol et. Deletion veya gerileme varsa **en iyi sürümden SADECE o parçayı geri getir**, başka yeni parçaları silme.
+7. **CHATGPT test kanıtını doğrular:** En az `npm run validate`, `npm test`, `npm run audit:world`; gerçek Chromium/WebGL 3D giriş-görünürlük, sektör geçişi ve 2D fallback testi. FPS'i ölçmediysen değer uydurma. Her başarısız testi kaydet, geçmeden tamamlandı deme.
+8. **CHATGPT kabul öncesi özet:** görev, base SHA, candidate SHA, hangi önceki en iyi parçaları koruduğu, test çıktısı, performans sınırları, açık eksikler. **Kullanıcı istemeden main'e merge veya önceki dalı silme.**
+9. **YALNIZ CHATGPT registry günceller:** Yalnız gerçekten kanıtlanıp kabul edilmiş özelliklerin `best_commit` işaretini taşı; başarısız/aday kodu 'en iyi' yapma. Her aşama için `checkpoints/G3D-XX.md` oluştur.
+10. **ChatGPT'nin hazırladığı sonraki Gemini promptu** her seferinde güncel registry'deki en iyi parçaları ve SHAları listelemek zorunda. Sadece son Gemini cevabını kopyalayıp 'güncel' varsayma.
 
 ### Kurtarma ve koruma kuralları
 
@@ -47,4 +57,4 @@
 - `G3D-07` : Şehir V2 3D: gerçek parseller ve yapılar; pazar/atölye/karakter sistemi aynen korunur.
 - `G3D-08` : Deploy/Aftermath/Encounter 3D uyarlaması, uçtan uca gameplay QA.
 
-**Bu belge yalnız talimat değil; asıl koruma Git geçmişi, dallar, testler ve en iyi bileşenlerin SHA kayıtlarıdır.** Gemini erişimi olmayan bir ortamda görev kendiliğinden çalıştırılmış sayılmaz.
+**Bu belge yalnız talimat değil; asıl koruma ChatGPT'nin doğruladığı Git geçmişi, bağımsız geri dönüş dalları, testler ve en iyi bileşenlerin SHA kayıtlarıdır.** Gemini erişimi olmayan bir ortamda görev kendiliğinden çalıştırılmış sayılmaz.
