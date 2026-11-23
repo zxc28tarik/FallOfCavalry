@@ -1,0 +1,38 @@
+name: Protected 3D migration verification
+on:
+  push:
+    branches:
+      - 'codex/web-3d-*'
+  pull_request:
+    branches:
+      - 'codex/web-3d-*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-guard:
+    name: Protect original game + test 3D increments
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Keep original game systems unchanged
+        run: node scripts/check-3d-core-protection.mjs
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Static checks and full unit suite
+        run: npm run validate
+      - name: Full existing feature regression suite
+        run: npm test
+      - name: Verify canonical world source
+        run: npm run audit:world
+      - name: 3D-specific sector projection regression tests
+        run: npx vitest run tests/unit/battle3d-projection-g3d01.test.js
