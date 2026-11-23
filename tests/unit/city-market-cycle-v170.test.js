@@ -119,7 +119,8 @@ describe('WEB V1.70 — actual city-market production and civilian consumption',
       stocks: { wheat: 10, flour: 2, wood: 4 },
     });
     const preview = getCityMarketCyclePreview(city);
-    expect(preview.recipes.map(r => r.maxBatches)).toEqual([2, 2]);
+    expect(preview.recipes.filter(r => ['mill', 'bakery'].includes(r.buildingId))
+      .map(r => r.maxBatches)).toEqual([2, 2]);
     const result = advanceCityMarketCycle(city, market, { day: 4 });
     expect(result.produced.map(row => row.batches)).toEqual([2, 2]);
     expect(market.stocks.wheat).toBe(6);
@@ -127,7 +128,9 @@ describe('WEB V1.70 — actual city-market production and civilian consumption',
     expect(market.stocks.bread).toBe(2);
     expect(auditMarketStockBridge(city, market, CONST.TRADE_ITEMS).status).toBe('equal');
     city.population = 90000;
-    expect(getCityMarketCyclePreview(city).recipes.map(r => r.maxBatches)).toEqual([1, 1]);
+    expect(getCityMarketCyclePreview(city).recipes
+      .filter(r => ['mill', 'bakery'].includes(r.buildingId))
+      .map(r => r.maxBatches)).toEqual([1, 1]);
   });
 
   it('existing daily trade tick calls the same flow, not a second inventory system', () => {
