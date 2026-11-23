@@ -2,7 +2,7 @@
 
 **HER OTURUMUN / HER PROMPTUN BAŞINDA UYGULA.** Bu dosya proje sahibinin **23 Kasım 2026** tarihli bağlayıcı talimatıdır.
 
-> **Gemini her geliştirmede eski iyi özellikleri silmeyecek. Her artışı ayrı commit/dal olarak kaydedecek. Her özelliğin gerçekten en gelişmiş, en iyi çalışan kodunu saklayacak. Son cevabın son sürüm olması, her parçanın en iyi sürüm olması anlamına gelmez. Kayıpları tek tek bulup geri alacak.**
+> **GEMINI YALNIZCA KOD ÜRETİR. HER GELİŞTİRMENİN KAYDINI, KORUMA YEDEĞİNİ, EN İYİ PARÇA KIYASLAMASINI, GERİ KAZANIMINI, TEST DOĞRULAMASINI VE BEST SÜRÜMÜNE TERFİSİNİ YALNIZ CHATGPT KOORDİNATÖRÜ YAPAR. GEMINI RAPORLARINA GÜVENİLMEZ.**
 
 ÖNCE OKU:
 1. `docs/3d-migration/00_KORUMA_SISTEMI.md`
@@ -14,7 +14,15 @@
 
 **Mevcut 3D çalışma dalı:** `codex/web-3d-protected-battle-20261123`; 3D savaş işleri ayrı G3D kodlarıyla ve bağımsız commit'lerle ilerler. `main`, eski PR #68 veya Unity projesi açık kullanıcı onayı olmadan değiştirilmez.
 
-**KABUL KAPISI:**
+## Yetki ayrımı — kullanıcının kesin kararı
+
+Gemini'nin görevi yalnızca kendisine verilen kapsamda kod üretmek, kendi aday dalına değişiklik ve teslim commit'i bırakmaktır. Commit yapmak **güvenli yedek almak anlamına gelmez.** Gemini hiçbir aşamada kendi teslimini 'en iyi' ilan edemez, eksilen özelliği koruduğunu iddia ederek kayıt oluşturamaz.
+
+**YALNIZ CHATGPT:** Her küçük teslimi ayrı kaydeder, SHA ve bağımsız geri dönüş dalı oluşturur, eski ve yeni kodu/görseli/testi karşılaştırır, kayıpları eski en iyi parçalardan geri getirir, tam regresyon testlerini bizzat doğrular, `BEST` kararı verir ve bir sonraki Gemini istemine tam koruma listesini koyar.
+
+**GEMINI DEĞİŞTİREMEZ:** `GEMINI.md`, `docs/3d-migration/00_KORUMA_SISTEMI.md`, `docs/3d-migration/01_EN_IYI_PARCA_KAYITLARI.md`, `docs/3d-migration/checkpoints/**`, `archive/**`, `scripts/check-3d-core-protection.mjs`. Bunlar ChatGPT kayıtlarıdır. Gemini yalnız aday dosya/öneri hazırlar; kabul kaydı yazamaz.
+
+**KABUL KAPISI (YALNIZ CHATGPT):**
 - Önceki kabul edilmiş BEST SHA ile yeni adayın **fonksiyon, görsel, simülasyon, UI, performans** farklarını karşılaştır.
 - Silinen işlev/asset/animasyon/komut/test tespitinde otomatik olarak kabul etme; eski en iyi parçayı geri getir.
 - Sektörlü savaş: **tek aktif 3D görünür sektör, diğerleri hafif simülasyon; 150+150 asker görsel tavanı**.
