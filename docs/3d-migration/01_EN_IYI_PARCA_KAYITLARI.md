@@ -16,7 +16,7 @@ Bu kayıt **onaylanmış (BEST)** ve yalnızca önerilen **aday (CANDIDATE)** ko
 | `BattleScene`, DeployScreen | V1.75 baseline SHA | Mevcut oynanabilir savaş/deploy modları kırılmaz |
 | `js/systems/world-*` + harita | V1.75 baseline SHA | 881 şehir / 304 gerçek yol ve dünya kimliği (kanıt gerektirir) |
 | City V2 / NPC / pazar / görev / kayıt | V1.75 baseline SHA | Şehir arazisi, gerçek üretim/stoğu, NPC/kervan ve save kaybı yok |
-| 3D aktif sektör verisi adaptörü | YOK — G3D-01 ADAY | Salt-okunur, ayrı yeni modül; kabul sonrası yeni SHA doldur |
+| 3D aktif sektör verisi adaptörü | **G3D-01 BEST: `c0e91e86873e2e680d1eb40c8fc9abd49d9f4224`**; test `cd02a59d72d41c1ece7ff9acdb5469bc64d862de` | Aktif sektör, 150+150, gerçek ID/equipment/formation; CI PASS `cbe3a1383c63f145010bec2b99d372832e2c2249` |
 | Gerçek Three.js 3D savaş renderer'ı | YOK — G3D-02 BEKLEMEDE | 2D yol korunarak geliştirilecek |
 | 3D dünya / 3D şehir | YOK — G3D-06/07 BEKLEMEDE | Önce gerçek kaynak, sonra çizim |
 
