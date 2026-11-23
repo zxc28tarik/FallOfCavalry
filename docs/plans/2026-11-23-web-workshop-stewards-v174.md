@@ -22,7 +22,8 @@
    - `releaseCityWorkshopSteward`: **aynı atölye + aynı aktif görevli** doğrulanmadan görev sonlandırmaz; `completeCharacterAssignment` mevcut gerçek görev geçmişini kapatır.
    - Para stok, pazar fiyatı, görev dışı karakter özellikleri ve asker sistemine **dokunmaz**.
 3. `js/managers/CityManager.js` UI eylemlerini mevcut GameFlowManager olay kaydına ve `runAutosave('workshop-steward-assignment')` ile mevcut save hattına bağlar. Sadece **başarılı kullanıcı eyleminde** autosave yapılır.
-4. `js/ui/city-services.js` Şehir İaşesi altında `Atölye Nezaretçileri — Açık Görevlendirme` paneli gösterir. Oyuncu gerçek kendi şehrindeki boşta kalıcı karakterlerden seçer, `Görevlendir` / `Görevi bitir` butonlarını kullanır. Başka fraksiyon şehrinde butonlar yoktur. Hata nedeni açıkça gösterilir.
+4. `js/managers/SaveManager.js` şehir V2 bina kayıtlarını `applySavedCityStateCollection` ile geri yükledikten **sonra** atölye kaynağına bağlı aktif görevi canlı kaynak üzerinden tekrar doğrular. Yeni inşa edilmiş ve kaydedilmiş atölyenin görevi, yüklemenin erken aşamasındaki boş parsel nedeniyle silinmez.
+5. `js/ui/city-services.js` Şehir İaşesi altında `Atölye Nezaretçileri — Açık Görevlendirme` paneli gösterir. Oyuncu gerçek kendi şehrindeki boşta kalıcı karakterlerden seçer, `Görevlendir` / `Görevi bitir` butonlarını kullanır. Başka fraksiyon şehrinde butonlar yoktur. Hata nedeni açıkça gösterilir.
 
 ## Kapsam dışı (bilerek)
 
@@ -34,7 +35,7 @@
 
 ## Test kapıları
 
-Yeni `tests/unit/city-workshop-stewards-v174.test.js` **10 test**: oyuncu ataması, tekil atölye/aktif görev çatışması, yabancı şehir yetki reddi, kilitli/silinmiş/sahte atölye, ölü/taşınmış/generated NPC, görev kapama/tarihçe, eski-yeni save normalizasyonu, sahte fiziksel kaynak, org API yetkisiz kullanım ve başarısız günün yan etkisizliği.
+Yeni `tests/unit/city-workshop-stewards-v174.test.js` **11 test**: oyuncu ataması, tekil atölye/aktif görev çatışması, yabancı şehir yetki reddi, kilitli/silinmiş/sahte atölye, ölü/taşınmış/generated NPC, görev kapama/tarihçe, eski-yeni save normalizasyonu, sahte fiziksel kaynak, org API yetkisiz kullanım ve başarısız günün yan etkisizliği ve gerçek SaveManager ile City V2 bina geri yüklemesinden sonra atamanın korunması.
 
 Daha önceki V1.73 karakter provenansı ve V1.72 pazar hesapları testleri aynı anda korunur. Son commit üzerinde Web validation + indirilir HTML file:// smoke + Chromium gerçek dünya smoke üçü PASS olana kadar teslimde o son kontrol eksik belirtilir.
 
