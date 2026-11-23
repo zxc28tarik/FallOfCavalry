@@ -14,6 +14,16 @@
 
 **Mevcut 3D çalışma dalı:** `codex/web-3d-protected-battle-20261123`; 3D savaş işleri ayrı G3D kodlarıyla ve bağımsız commit'lerle ilerler. `main`, eski PR #68 veya Unity projesi açık kullanıcı onayı olmadan değiştirilmez.
 
+## ÜÇ AŞAMALI GELİŞTİRME PROTOKOLÜ — 23.11.2026 KULLANICI KARARI
+
+**ŞU ANKİ AŞAMA: AŞAMA 1 — GEMINI İLE GELİŞTİRME.** Aşama geçişini yalnız kullanıcı bildirir.
+
+1. **Aşama 1 / Gemini üretir, ChatGPT korur:** ChatGPT her konu için ayrı ve kapsamı tanımlanmış prompt yazar. Gemini kod üretir ve teslim eder. **Her Gemini tesliminden sonra ChatGPT, mümkün olan ilk inceleme turunda özgün commit SHA'sını ve ayrı geri dönüş kaydını güvenceye alır; mevcut BEST parçalarıyla farklı dosya/fonksiyon/görsel/test kıyası yapar ve kaybolan özellikleri kayıp listesine kaydeder.** Gemini'nin hatalarını/kayıplarını üst üste örtmez, aday değişikliği BEST diye etiketlemez. Koruma için gerekirse kırık teslimi reddeder veya izolasyon dalında tutar. Gemini bir süre geliştirilmeye devam edebilir; **toplu son onarım hemen zorunlu değil**, kullanıcı Aşama 2'yi başlatana kadar bütün iyi parçalar ayrı tutulur.
+2. **Aşama 2 / Kullanıcı 'Gemini artık bozuyor, toparla / düzelt' dediğinde ChatGPT bütün sürümleri toparlar:** Gemini üretimi durur; ChatGPT geriye dönük tüm commit/teslimleri kendi kayıtları ve gerçek kod üzerinden tarar; **tek son commit'i doğru varsaymadan**, her modülün en iyi çalışan/görünen parçasını seçer. Kaybolan asker, model, animasyon, UI, şehir, dünya, simülasyon, ekonomi ve kontrolleri geri getirir; gerekli uyarlamaları yapar, testleri koşar, 2D fallback ve 3D gerçek akışı doğrular, sonra entegre en iyi sürümü ayrı dal/commit/QA kanıtıyla sunar. Onaysız main merge YOK.
+3. **Aşama 3 / Kalan geliştirmeleri ChatGPT üstlenir:** Toparlanmış en iyi sürüm yeni temel olur. Eksik 3D ve oyun özelliklerini Gemini'ye devretmeden **ChatGPT bizzat kodlar, ayrı paketler halinde kaydeder ve test eder**. Aynı kayıp önleme ve BEST denetimi devam eder.
+
+**ÖNEMLİ SINIR:** ChatGPT, Gemini'nin başka oturumlardaki ilerlemesini kendiliğinden canlı izleyemez. Her Gemini işi bu sohbete teslim edildiğinde veya GitHub branch/PR/commit bilgisi erişilebilir olduğunda ChatGPT bağımsız kayıt ve denetimi uygular. Oturum dışında arka planda yapılmış sayılmaz. Kullanıcının "artık toparla" talimatı gelmeden Gemini'den kendi kendine geçiş ilan edilmez.
+
 ## Yetki ayrımı — kullanıcının kesin kararı
 
 Gemini'nin görevi yalnızca kendisine verilen kapsamda kod üretmek, kendi aday dalına değişiklik ve teslim commit'i bırakmaktır. Commit yapmak **güvenli yedek almak anlamına gelmez.** Gemini hiçbir aşamada kendi teslimini 'en iyi' ilan edemez, eksilen özelliği koruduğunu iddia ederek kayıt oluşturamaz.
