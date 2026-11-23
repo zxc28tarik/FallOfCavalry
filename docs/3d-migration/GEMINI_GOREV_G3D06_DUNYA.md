@@ -1,6 +1,8 @@
 # GEMINI G3D-06 — DEVASA 3D DÜNYA HARİTASI (AYRI GÖREV)
 
-**Önce zorunlu dosyalar:** `GEMINI.md`, `docs/3d-migration/00_KORUMA_SISTEMI.md`, `01_EN_IYI_PARCA_KAYITLARI.md`. Her alt değişiklik kendi commit'i, karşılaştırması, testi ve best-of checkpoint'i ile korunur. **G3D-02 savaş çalışmasıyla dosya çatıştırma.**
+**GÖREV AYRIMI: Gemini yalnızca kod adayı üretir. Yedek/önceki BEST kıyası/checkpoint/test doğrulaması/kabul yalnız ChatGPT'ye aittir.**
+
+**Önce zorunlu dosyalar:** `GEMINI.md`, `docs/3d-migration/00_KORUMA_SISTEMI.md`, `01_EN_IYI_PARCA_KAYITLARI.md`. Gemini her alt değişikliği aday kod commit'i olarak teslim eder; **yedekleme, karşılaştırma, bağımsız test ve BEST checkpoint'ini yalnız ChatGPT yapar**. **G3D-02 savaş çalışmasıyla dosya çatıştırma.**
 
 ## Kaynak gerçekliği
 
@@ -24,5 +26,5 @@
 - Coğrafi uyum ve ID parity testleri: gerçek kaynak City/road/river/crossing, fog/owner ve chunk sınırı.
 - Kamera gider-gelir testi, kaynak nesne sürekliliği; chunk cache memory ve load süreleri **ölçülerek** kaydedilir.
 - `npm run validate`, `npm test`, `npm run audit:world`, Chromium/WebGL gerçek test.
-- `docs/3d-migration/checkpoints/G3D-06.md` içine **önceki BEST**, yeni commit SHA, en iyi korunan parçalar, yeni görsel kanıt, performans ölçümü, kayıplar ve geriye dönüş adresi.
+- `docs/3d-migration/checkpoints/G3D-06.md` dosyasına **yalnız ChatGPT** eski BEST, yeni teslim SHA, en iyi parçalar, bağımsız görsel kanıt, performans ölçümü, kayıplar ve geri dönüş adresini yazar. Gemini bu dosyaya dokunmaz.
 - **Savaş ve City V2 dosyaları ayrı görevdir; başka bir sistemin başarısını kaybetme.**
