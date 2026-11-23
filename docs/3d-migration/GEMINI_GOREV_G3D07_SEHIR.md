@@ -1,5 +1,7 @@
 # GEMINI G3D-07 — CITY V2 GERÇEK 3D ŞEHİRLER (AYRI GÖREV)
 
+**GÖREV AYRIMI: Gemini yalnızca kod adayı üretir. Yedek/önceki BEST kıyası/checkpoint/test doğrulaması/kabul yalnız ChatGPT'ye aittir.**
+
 **Zorunlu:** `GEMINI.md`, `docs/3d-migration/00_KORUMA_SISTEMI.md`, `01_EN_IYI_PARCA_KAYITLARI.md`; dünya/savaş dosyaları bu görevin kapsamı değildir. Eski en iyi sürüm kıyaslanmadan yeni kod BEST olmaz.
 
 ## Gerçek şehir kaynakları
@@ -22,7 +24,7 @@
 ## Teslim ve test
 
 - Ayrı commit'ler: `G3D-07a` gerçek parcel projection + test, `G3D-07b` 3D modüler yapı sahnesi, `G3D-07c` seçim/servis + browser test.
-- Reddedilen/eksik parçaları silerek değil, önceki kabul edilmiş en iyi parçayı geri yükleyerek düzelt.
+- Gemini kabul edilen parçaları silemez. **Eksik parça karşılaştırması ve en iyi sürümden kurtarma yalnız ChatGPT tarafından** yapılıp kayıt altına alınır.
 - Eski bütün `npm run validate`, `npm test`, `npm run audit:world` ve gerçek Chromium 2D/3D şehir testleri PASS.
-- `docs/3d-migration/checkpoints/G3D-07.md`: exact SHA, öncesi-sonrası kod ve görüntü, şehir parsel kaynak uyumu, kayıpların onarımı, VRAM/FPS ölçümü.
+- `docs/3d-migration/checkpoints/G3D-07.md`: **yalnız ChatGPT'nin** tuttuğu exact SHA, önce-sonra kod/görüntü, gerçek parsel uyumu, kayıpların ChatGPT tarafından onarımı ve ölçülen VRAM/FPS. Gemini yazamaz.
 - G3D-06 dünya ve G3D-02 savaş ilerlemelerini değiştirme; main'e merge yok.
