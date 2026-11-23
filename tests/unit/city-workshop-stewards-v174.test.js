@@ -11,7 +11,7 @@ import {
 import { getCityWorkshopContacts } from '../../js/systems/city-workshop-contacts.js';
 import { getCityMarketCyclePreview } from '../../js/systems/city-market-cycle.js';
 import { discoverCharacterProductionSources } from '../../js/systems/character-production-sources.js';
-import { SaveSystem } from '../../js/systems/save.js';
+import SaveSystem from '../../js/systems/save-system.js';
 
 function setup({ owner = 'player', building = 'blacksmith', parcelState = 'occupied' } = {}) {
   const city = {
