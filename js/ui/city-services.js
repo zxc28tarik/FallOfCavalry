@@ -15,6 +15,7 @@ import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '..
 import { getKethudaConstructionQuote } from '../systems/city-infrastructure-benefits.js';
 import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
 import { getCityWorkshopOperatingReport } from '../systems/city-workshop-accounts.js';
+import { getCityWorkshopContacts } from '../systems/city-workshop-contacts.js';
 import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
@@ -429,6 +430,8 @@ export default class CityServicesUI {
       day:Number.isSafeInteger(this.state?.day)?this.state.day:null,
     });
     const workshopById=new Map(workshopAccounts.rows.map(row=>[row.buildingId,row]));
+    const workshopContacts=getCityWorkshopContacts(this.currentSettlement,this.state?.worldCharacters);
+    const knownWorkshopContacts=workshopContacts.sources.filter(source=>source.contacts.length>0);
     const workshopBlockLabels={
       not_built:'Şehirde kurulmamış',
       missing_input:'Hammadde yetersiz',
@@ -592,6 +595,31 @@ export default class CityServicesUI {
             `).join('')}
           </details>
           <div class="text-xs opacity-75">İyileştirilmiş su, drenaj veya yol hizmeti yalnız ilgili atölyenin kapasitesini artırır. Hammadde yoksa üretim yapılmaz; stok ve para yaratılmaz.</div>
+          <details class="mt-2" data-city-workshop-contacts>
+            <summary class="cursor-pointer font-bold">Zanaat Kaynağından Tanınan Karakterler (${workshopContacts.contactCount})</summary>
+            <div class="text-xs opacity-75">
+              Kayıtlı ${workshopContacts.sourceCount} gerçek zanaat kaynağı kontrol edildi.
+              Buradaki bağlantı yalnız karakterin üretildiği kaynak binayı gösterir;
+              atölye sahibi, ücretli çalışan, lonca üyesi veya tayin edilmiş görevli olduğu anlamına gelmez.
+            </div>
+            ${knownWorkshopContacts.length ? knownWorkshopContacts.map(source=>`
+              <div class="city-overview-row">
+                <span>
+                  <strong>${escapeHtml(getCityBuildingDef(source.buildingId)?.name||source.buildingId)}</strong>
+                  <small class="block opacity-75">Parsel: ${escapeHtml(source.parcelId)} · Kaynağı kayıtlı kişiler: ${source.contacts.length}</small>
+                  <span class="flex flex-wrap gap-2 mt-1">
+                    ${source.contacts.map(contact=>`
+                      <button type="button" class="action-btn btn-dark text-xs"
+                        data-action="open-npc" data-id="${escapeHtml(contact.characterId)}"
+                        aria-label="${escapeHtml(contact.name)} karakterini incele">
+                        ${escapeHtml(contact.name)} · ${escapeHtml(NPC_ROLE_LABELS[contact.role]||contact.role)}
+                      </button>
+                    `).join('')}
+                  </span>
+                </span>
+              </div>
+            `).join('') : '<div class="text-xs opacity-75">Bu şehirde açık zanaat kaynağına bağlı, hâlen burada yaşayan kayıtlı önemli karakter bulunmuyor.</div>'}
+          </details>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yapman gereken</div>
