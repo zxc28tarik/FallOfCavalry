@@ -25,6 +25,16 @@ Kullanıcı açıkça: **“kayıtları sen yapacaksın hiçbir zaman geminiye g
 - Kullanıcıya sunulacak her sürümün geçmiş parçaları ChatGPT tarafından **ayrı ayrı doğrulanmış** olmalı. Şüpheli/görsel doğrulaması eksik sürüm yalnız CANDIDATE'tir.
 - Gemini sonraki göreve **ChatGPT kabul kontrolü tamamlanmadan** geçmeyecek. Başka bir oturumda bu kontrol kendiliğinden/arka planda çalışmış sayılmaz.
 
+## Aşama yönetimi (kullanıcıya ait geçiş yetkisi)
+
+**Etkin durum (23.11.2026): GEMINI ÜRETİM + CHATGPT BAĞIMSIZ KORUMA.** Ayrıntılı talimat `GEMINI.md` içindeki **ÜÇ AŞAMALI GELİŞTİRME PROTOKOLÜ**'dür.
+
+- **1 — Gemini üretim:** ChatGPT ayrı prompt verir; Gemini kendi kapsamındaki kodu üretir. ChatGPT her *teslim edilen* ara sürümü SHA/koruma dalıyla güvenceye alır, hangi bölümün en iyi olduğunu ayrı kaydeder, silinen/bozulan özellikleri tespit eder. Çalışan özellikler asla daha zayıf sürümle BEST'te değiştirilmez. Gemini'nin her bozduğu parçayı hemen tüm oyuna entegre ederek düzeltmek gerekmiyor; **en iyi versiyon kurtarılabilir kalacak**, toparlama aşamasında hepsi birleştirilecek. Temel regresyon güvenliği atlanmaz.
+- **2 — Kullanıcı 'Gemini yeter, sen toparla' dediği an:** Gemini işi durur. ChatGPT tüm adayları ve kendi koruduğu BEST referanslarını inceleyerek sistemleri tek tek geri kazanır, çatışmaları çözer, entegre en iyi 3D oyunu oluşturur ve bağımsız QA gerçekleştirir.
+- **3 — Sonraki geliştirmeler:** Tamamlanan toparlama sürümünden sonraki eksik özelliklerin mühendislik ve uygulama sorumlusu ChatGPT'dir. Aynı ayrı commit/checkpoint/test düzeni devam eder.
+- **Geçişi ChatGPT değil kullanıcı başlatır.** Kullanıcı söylemeden Aşama 2 veya 3 ilan edilemez.
+- **Teslim sınırı:** Gemini'den gelen yeni kod ChatGPT'ye görünür olmadan saklanmış/doğrulanmış sayılmaz. ChatGPT oturum dışında çalışan otomatik takip yapıyormuş gibi rapor vermez.
+
 ## HER GEMINI TESLİMİNİN CHATGPT DENETİMLİ ZORUNLU DÖNGÜSÜ (atlama yok)
 
 1. **Önce oku:** `00_KORUMA_SISTEMI.md`, `01_EN_IYI_PARCA_KAYITLARI.md`, ilgili G3D görev dosyası, çalışan kod ve tüm ilgili testler. Baseline commit ve mevcut dal HEAD SHA'sını raporla.
