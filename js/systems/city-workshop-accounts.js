@@ -6,7 +6,6 @@
  * ownership, payroll claims, tax income, or money transfer. All unit recipes
  * and cash equivalences are provisional gameplay balance.
  */
-import * as CONST from '../constants.js';
 import { planCityMarketProduction } from './city-market-cycle.js';
 import { getPrice } from './trade.js';
 
