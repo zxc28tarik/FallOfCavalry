@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fall of Cavalry — G3D-02A-R1 3D Savaş Altyapısı Önizlemesi</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            user-select: none;
+            background-color: #141714;
+            color: #e7e5e4;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .foc-title {
+            font-family: Georgia, 'Times New Roman', serif;
+            letter-spacing: 0.04em;
+        }
+
+        .foc-mount {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .foc-panel {
+            background: rgba(24, 27, 23, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(168, 162, 158, 0.25);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+            border-radius: 12px;
+        }
+
+        .foc-btn {
+            background: rgba(41, 45, 39, 0.94);
+            color: #e7e5e4;
+            border: 1px solid rgba(168, 162, 158, 0.32);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.14s ease, border-color 0.14s ease;
+        }
+
+        .foc-btn:hover:not(:disabled) {
+            background: rgba(63, 69, 60, 0.96);
+            border-color: #d6c38b;
+        }
+
+        .foc-btn.active {
+            background: rgba(87, 74, 42, 0.94);
+            border-color: #e5c97b;
+            color: #fef3c7;
+        }
+
+        .foc-btn-danger {
+            color: #fecdd3;
+            border-color: rgba(244, 63, 94, 0.45);
+        }
+
+        .foc-btn-accent {
+            color: #fde68a;
+        }
+
+        /* Header */
+        .foc-header {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            right: 12px;
+            z-index: 20;
+            padding: 10px 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .foc-header-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .foc-header-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-header-sub {
+            font-size: 11px;
+            color: #a8a29e;
+            margin-top: 2px;
+        }
+
+        .foc-header-sub strong {
+            color: #fcd34d;
+            font-weight: 500;
+        }
+
+        .foc-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Badges */
+        .badge {
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+
+        .badge-warn {
+            background: rgba(120, 53, 15, 0.8);
+            border-color: rgba(245, 158, 11, 0.45);
+            color: #fde68a;
+        }
+
+        .badge-info {
+            background: rgba(12, 74, 110, 0.85);
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #bae6fd;
+        }
+
+        .badge-muted {
+            background: rgba(41, 37, 36, 0.9);
+            border-color: rgba(120, 113, 108, 0.45);
+            color: #d6d3d1;
+        }
+
+        /* Left Telemetry Card */
+        .foc-sidebar {
+            position: fixed;
+            top: 78px;
+            left: 12px;
+            width: 310px;
+            max-width: calc(100vw - 24px);
+            z-index: 20;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .foc-sidebar-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(68, 64, 60, 0.8);
+            padding-bottom: 8px;
+        }
+
+        .foc-sidebar-head span:first-child {
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-notice {
+            background: rgba(12, 10, 9, 0.65);
+            border: 1px solid #292524;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 11px;
+            color: #d6d3d1;
+            line-height: 1.4;
+        }
+
+        .foc-notice code {
+            color: #fde68a;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .foc-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .foc-stat-box {
+            background: rgba(28, 25, 23, 0.85);
+            border: 1px solid #292524;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .foc-stat-box.span-2 {
+            grid-column: span 2;
+        }
+
+        .foc-stat-label {
+            color: #a8a29e;
+        }
+
+        .foc-stat-value {
+            color: #f5f5f4;
+            font-weight: 600;
+            margin-top: 3px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .foc-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #a8a29e;
+        }
+
+        .foc-meta-row.bordered {
+            border-top: 1px solid rgba(68, 64, 60, 0.8);
+            padding-top: 8px;
+        }
+
+        .status-val {
+            font-weight: 600;
+        }
+
+        .status-ok {
+            color: #6ee7b7;
+        }
+
+        .status-warn {
+            color: #fcd34d;
+        }
+
+        .status-danger {
+            color: #fda4af;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: #e7e5e4;
+        }
+
+        /* Bottom Camera Controls */
+        .foc-footer {
+            position: fixed;
+            bottom: 12px;
+            right: 12px;
+            left: 12px;
+            z-index: 20;
+            padding: 10px 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 11px;
+            color: #d6d3d1;
+        }
+
+        @media (min-width: 640px) {
+            .foc-footer {
+                left: auto;
+                width: auto;
+            }
+        }
+
+        .foc-hints strong {
+            color: #fde68a;
+        }
+
+        .foc-cam-btns {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Fallback Overlay */
+        .foc-fallback {
+            position: fixed;
+            inset: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(12, 10, 9, 0.94);
+        }
+
+        .foc-fallback-card {
+            max-width: 420px;
+            width: 100%;
+            padding: 24px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .foc-fallback-icon {
+            font-size: 36px;
+        }
+
+        .foc-fallback-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        .foc-fallback-msg {
+            font-size: 13px;
+            color: #d6d3d1;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- 3D WEBGL MOUNT CONTAINER -->
+    <div id="battle3dMount" class="foc-mount"></div>
+
+    <!-- GRACEFUL WEBGL / DISPOSED FALLBACK OVERLAY -->
+    <div id="fallbackScreen" class="foc-fallback hidden">
+        <div class="foc-panel foc-fallback-card">
+            <div id="fallbackIcon" class="foc-fallback-icon">🛡️</div>
+            <h2 id="fallbackTitle" class="foc-title foc-fallback-title">
+                3D Savaş Sahnesi Kapalı
+            </h2>
+            <p id="fallbackMessage" class="foc-fallback-msg">
+                WebGL kaynakları, olay dinleyicileri ve animasyon döngüsü güvenli şekilde temizlendi.
+            </p>
+            <div>
+                <button id="btnReinit" type="button" class="foc-btn foc-btn-accent">
+                    🔄 3D Sahneyi Yeniden Başlat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP DEVELOPER HEADER -->
+    <header class="foc-panel foc-header">
+        <div>
+            <div class="foc-header-title-row">
+                <span class="foc-title foc-header-title">FALL OF CAVALRY — G3D-02A-R1</span>
+                <span class="badge badge-warn">GELİŞTİRİCİ ÖNİZLEMESİ</span>
+            </div>
+            <p class="foc-header-sub">
+                1650 Meydan Muharebesi • <strong>Geçici 3D Zemin (Gerçek arazi verisi henüz bağlı değil)</strong>
+            </p>
+        </div>
+
+        <div class="foc-toolbar">
+            <button id="btnModeTest" type="button" class="foc-btn active">📊 Test Sektörü</button>
+            <button id="btnModeEmpty" type="button" class="foc-btn">∅ Boş Veri Testi</button>
+            <button id="btnModeNoWebGL" type="button" class="foc-btn">⚠️ WebGL Yok Testi</button>
+            <button id="btnDispose" type="button" class="foc-btn foc-btn-danger">⏹️ Sahneyi Kapat (Dispose)</button>
+        </div>
+    </header>
+
+    <!-- LEFT TELEMETRY CARD: READ-ONLY ActiveSector3DViewModel INSPECTOR -->
+    <aside class="foc-panel foc-sidebar">
+        <div class="foc-sidebar-head">
+            <span class="foc-title">Aktif Sektör Görünüm Modeli</span>
+            <span id="dataSourceBadge" class="badge badge-info">GERÇEK PROJEKSİYON</span>
+        </div>
+
+        <div class="foc-notice">
+            <strong>Salt-Okunur Bağlantı:</strong> <code>createTestBattleData()</code>, <code>SectorManager</code> ve G3D-01 <code>projectActiveSector3D()</code> çıktısından türetilir; simülasyonu değiştirmez.
+        </div>
+
+        <div class="foc-grid">
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Sektör Kimliği</div>
+                <div id="vmSectorId" class="foc-stat-value">—</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Türetilen Sınırlar</div>
+                <div id="vmSectorBounds" class="foc-stat-value">—</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Benzersiz Grup (groupId)</div>
+                <div id="vmGroupCount" class="foc-stat-value">0</div>
+            </div>
+            <div class="foc-stat-box">
+                <div class="foc-stat-label">Görünür Asker (Oyuncu/Düşman)</div>
+                <div id="vmSoldierCount" class="foc-stat-value">0 / 0</div>
+            </div>
+            <div class="foc-stat-box span-2">
+                <div class="foc-stat-label">G3D-01 Görünürlük Limiti &amp; Gizli Canlı</div>
+                <div id="vmLimits" class="foc-stat-value">150/150 (Gizli: 0/0)</div>
+            </div>
+        </div>
+
+        <div class="foc-meta-row bordered">
+            <span>Sahne Yaşam Döngüsü:</span>
+            <span id="lifecycleStatus" class="status-val status-ok">AKTİF (WebGL)</span>
+        </div>
+        <div class="foc-meta-row">
+            <span>Kamera Hedefi (X, Z):</span>
+            <span id="cameraTelemetry" class="mono">0.0, 0.0 | D:46</span>
+        </div>
+    </aside>
+
+    <!-- BOTTOM RTS CAMERA CONTROLS BAR -->
+    <footer class="foc-panel foc-footer">
+        <div class="foc-hints">
+            <span><strong>Kaydır:</strong> WASD / Yön / Sağ-Tık</span>
+            <span> • </span>
+            <span><strong>Döndür:</strong> Q-E / Orta-Tık</span>
+            <span> • </span>
+            <span><strong>Yakınlaş:</strong> Tekerlek</span>
+        </div>
+        <div class="foc-cam-btns">
+            <button id="btnRotLeft" type="button" class="foc-btn" title="Kamerayı Sola Döndür (Q)">↺</button>
+            <button id="btnRotRight" type="button" class="foc-btn" title="Kamerayı Sağa Döndür (E)">↻</button>
+            <button id="btnZoomIn" type="button" class="foc-btn" title="Yakınlaş">+</button>
+            <button id="btnZoomOut" type="button" class="foc-btn" title="Uzaklaş">−</button>
+            <button id="btnFocus" type="button" class="foc-btn foc-btn-accent" title="Sektör Merkezine Dön (Space)">🧭 Odakla</button>
+        </div>
+    </footer>
+
+    <script type="module" src="./js/battle3d/Battle3DPreview.js"></script>
+</body>
+</html>
