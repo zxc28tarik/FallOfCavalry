@@ -158,7 +158,9 @@ export function startCharacterAssignment(state, characterId, {
   const assigner = actorRef(assignedByCharacterId, roster, true);
   if (!record(state) || !Array.isArray(state.assignments) || !livingNamed(roster, characterId)
     || !branchOk(branch) || !ROLE_PATTERN.test(assignmentRole)
-    || !loc || source === false || !validDay(day) || !validReason(reason)
+    || !loc || source === false
+    || (assignmentRole === WORKSHOP_STEWARD_ROLE && !Array.isArray(settlements))
+    || !validDay(day) || !validReason(reason)
     || employer === false || assigner === false
     || state.assignments.length >= MAX_ASSIGNMENTS
     || state.assignments.some((x) => x.characterId === characterId
