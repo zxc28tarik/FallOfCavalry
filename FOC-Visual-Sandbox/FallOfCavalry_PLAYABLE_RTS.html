@@ -7585,10 +7585,110 @@ const OrganicCharacterGeometries = (() => {
             for(const [section,mat] of Object.entries(mats))result.push({prim:'focHead_'+id+'_'+section,mat,rigGroup:rig,localMat:new Float32Array(head.localMat)});
             return result;
         }
+        // FOC-MESH-07: historically inspired fixed headwear silhouettes.
+        // Sizes are in character metres relative to the existing head centre.
+        // Each crown is one closed loft, with contiguous material regions.
+        const FOC_HAT_PROFILES=Object.freeze({
+            turban:{kind:'wrap',rings:[[.046,.111,.111],[.058,.147,.144],[.079,.157,.154],[.101,.156,.151],[.124,.143,.139],[.147,.126,.121],[.169,.087,.085],[.180,.025,.026]],trim:[],fold:.009},
+            striped:{kind:'wrap',rings:[[.046,.112,.111],[.060,.145,.143],[.082,.156,.151],[.101,.151,.146],[.121,.146,.142],[.145,.123,.122],[.167,.080,.084],[.180,.027,.027]],trim:[2,4],fold:.009},
+            bork:{kind:'bork',rings:[[.048,.112,.112],[.064,.131,.132],[.096,.133,.132],[.153,.124,.128],[.211,.105,.122],[.251,.071,.100],[.270,.037,.065],[.278,.015,.028]],trim:[],fold:.002},
+            bostanci:{kind:'point',rings:[[.042,.111,.113],[.055,.125,.127],[.072,.125,.125],[.115,.112,.111],[.175,.086,.089],[.240,.057,.061],[.298,.023,.029],[.318,.006,.007]],trim:[1],fold:.002},
+            sisak:{kind:'metal',rings:[[.041,.114,.115],[.059,.129,.132],[.076,.123,.125],[.115,.117,.115],[.153,.093,.095],[.186,.061,.065],[.217,.022,.026],[.236,.008,.009]],trim:[5,6],visor:.071,guard:.077,fold:.002},
+            tolga:{kind:'metal',rings:[[.035,.117,.119],[.057,.135,.136],[.078,.129,.132],[.120,.122,.126],[.163,.096,.103],[.201,.061,.072],[.232,.023,.028],[.250,.008,.009]],trim:[5,6],visor:.078,guard:.092,fold:.002},
+            kalpak:{kind:'fur',rings:[[.043,.112,.113],[.057,.142,.145],[.081,.145,.143],[.116,.144,.142],[.155,.137,.137],[.184,.117,.120],[.203,.070,.075],[.210,.026,.029]],trim:[],fold:.005},
+            kulah:{kind:'wrap',rings:[[.044,.112,.114],[.056,.137,.140],[.082,.141,.144],[.106,.123,.127],[.153,.102,.107],[.202,.066,.076],[.248,.025,.031],[.268,.006,.009]],trim:[0,1,2],fold:.006},
+            cavalier:{kind:'brim',rings:[[.053,.115,.118],[.058,.211,.207],[.070,.240,.238],[.083,.237,.234],[.087,.130,.135],[.105,.124,.128],[.131,.122,.126],[.181,.112,.114],[.206,.096,.099],[.216,.023,.026]],trim:[4,5],fold:.002},
+            morion:{kind:'morion',rings:[[.043,.112,.122],[.052,.150,.205],[.067,.158,.219],[.081,.129,.154],[.104,.118,.127],[.143,.102,.113],[.181,.072,.083],[.211,.030,.045],[.221,.009,.013]],trim:[],fold:.0015},
+            openpot:{kind:'metal',rings:[[.035,.115,.116],[.052,.136,.139],[.071,.132,.134],[.115,.118,.122],[.156,.093,.099],[.185,.057,.061],[.198,.023,.028],[.202,.008,.010]],trim:[],visor:.063,guard:.077,fold:.0015},
+            burgonet:{kind:'metal',rings:[[.038,.116,.117],[.057,.133,.137],[.079,.128,.132],[.123,.118,.122],[.160,.093,.105],[.193,.055,.069],[.211,.022,.031],[.220,.008,.012]],trim:[6],visor:.073,guard:.072,crest:.044,fold:.0015},
+            zischagge:{kind:'metal',rings:[[.028,.115,.120],[.049,.137,.145],[.073,.130,.135],[.114,.117,.120],[.153,.093,.101],[.182,.056,.064],[.196,.022,.025],[.202,.008,.010]],trim:[],visor:.070,guard:.100,lobster:true,fold:.0015}
+        });
+        const FOC_FIXED_HAT_ASSIGNMENTS=Object.freeze({
+            ottoman_azap_pike:['turban','ottomanWhite'],ottoman_azap_pike_sword:['turban','ottomanWhite'],ottoman_azap_musket:['turban','ottomanWhite'],
+            ottoman_janissary_musket:['bork','ottomanWhite',null,'spoon'],ottoman_janissary_sword:['bork','ottomanWhite',null,'spoon'],
+            ottoman_bostanci_axe:['bostanci','ottomanCrimson','gold'],ottoman_bostanci_pike:['bostanci','ottomanCrimson','gold'],
+            ottoman_humbaraci:['turban','ottomanEmerald'],ottoman_levend:['striped','ottomanSaffron','ottomanNavy'],
+            ottoman_sipahi_lance:['sisak','damascusSteel','gold','nasal'],ottoman_sipahi_sword_shield:['sisak','damascusSteel','gold','nasal'],
+            ottoman_kapikulu_heavy:['tolga','steel','gold','nasal'],ottoman_deli_lance:['kalpak','horseDark',null,'wings'],ottoman_deli_sword:['kalpak','horseDark',null,'wings'],
+            ottoman_akinci_carbine:['kulah','buffLeather','ottomanWhite'],
+            euro_musketier:['cavalier','feltBlack','gold','bluePlume'],euro_arquebusier:['cavalier','feltBlack','leather'],
+            euro_pikeniere:['morion','steel'],euro_hellebardier:['openpot','steel'],euro_armored_infantry:['burgonet','blackenedSteel','gold'],
+            euro_curassier_pistol:['zischagge','blackenedSteel',null,'nasal'],euro_curassier_sword:['zischagge','blackenedSteel',null,'nasal'],
+            euro_light_cavalry:['burgonet','steel','gold'],euro_harquebusier_mounted:['cavalier','feltBlack','gold','redPlume']
+        });
+        function buildFOCHat(profile) {
+            const N=32,kind=profile.kind;
+            const rings=profile.rings.map(([y,rx,rz],ri)=>Array.from({length:N},(_,i)=>{
+                const a=i*Math.PI*2/N,c=Math.cos(a),v=Math.sin(a),front=Math.max(0,v),back=Math.max(0,-v),side=Math.abs(c);
+                let dy=0,dz=0,dr=0,shift=0;
+                if(kind==='wrap')dr=profile.fold*Math.sin(ri*1.6+5*a)*Math.sin(Math.PI*ri/(profile.rings.length-1));
+                if(kind==='fur')dr=profile.fold*(Math.cos(a*13+ri*.7)+.3*Math.sin(a*7-ri));
+                if(kind==='bork'){shift=-.085*Math.pow(ri/(profile.rings.length-1),1.6);dy=-.025*back*(ri<3?1:0);}
+                if(kind==='brim'&&ri>=1&&ri<=3)dy=.020*c+.013*back;
+                if(kind==='morion'){
+                    if(ri>=1&&ri<=3)dy=.046*Math.pow(Math.abs(v),3);
+                    if(ri>=4)dy+=.064*Math.exp(-Math.pow(c/.22,2))*Math.sin(Math.PI*(ri-3)/(profile.rings.length-3));
+                }
+                if(kind==='metal'){
+                    if(ri===0)dy-=profile.guard*(.95*back*back+.60*Math.pow(side,6));
+                    if(ri===1||ri===2)dz=(profile.visor||0)*Math.pow(front,4)*(ri===1?1:.55);
+                    if(profile.lobster&&ri<=2)dz-=.022*back*(1-ri*.25);
+                    if(profile.crest&&ri>=3)dy+=profile.crest*Math.exp(-Math.pow(c/.24,2))*Math.sin(Math.PI*(ri-2)/(profile.rings.length-2));
+                }
+                return [(rx+dr)*c,y+dy,shift+(rz+dr)*v+dz];
+            }));
+            const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            const materials=profile.rings.slice(0,-1).map((_,i)=>profile.trim.includes(i)?'trim':'main');
+            return {full,sections:focMountedMaterialSections(full,materials,N,'main')};
+        }
+        function buildFOCHatOrnament(kind){
+            const N=16;
+            // y, centre x/z, x/z half widths. The base enters the crown.
+            const points=kind==='nasal'?[[-.047,0,.137,.010,.005],[-.016,0,.139,.011,.007],[.028,0,.139,.012,.007],[.078,0,.147,.013,.007],[.095,0,.142,.009,.005]]:
+              kind==='spoon'?[[.047,0,.130,.009,.004],[.080,0,.137,.012,.005],[.130,0,.135,.014,.005],[.158,0,.128,.012,.005],[.177,0,.115,.006,.003]]:
+              kind==='wingL'||kind==='wingR'?[[.087,.10,-.012,.018,.026],[.130,.137,-.030,.023,.045],[.190,.164,-.062,.022,.061],[.249,.179,-.105,.016,.057],[.302,.183,-.150,.012,.041],[.342,.178,-.184,.003,.009]]:
+              [[.099,.123,-.012,.012,.014],[.150,.155,-.042,.020,.027],[.204,.179,-.084,.022,.031],[.256,.198,-.139,.015,.028],[.294,.201,-.184,.004,.009]];
+            const sign=kind==='wingL'?-1:1;
+            const rings=points.map(([y,x,z,rx,rz],j)=>Array.from({length:N},(_,i)=>{
+                const a=i*Math.PI*2/N,c=Math.cos(a),v=Math.sin(a),feather=(kind.startsWith('wing')||kind==='plume')?.002*Math.sin(j*2.4+a*5):0;
+                return [sign*x+(rx+feather)*c,y,z+(rz+feather)*v];
+            }));
+            return OrganicCharacterGeometries.createClosedLoft(rings);
+        }
+        function createFOCFixedHatGeometries(){
+            const result={};
+            for(const [id,p] of Object.entries(FOC_HAT_PROFILES)){
+                for(const [section,g] of Object.entries(buildFOCHat(p).sections))result['focHat_'+id+'_'+section]=g;
+            }
+            for(const kind of ['nasal','spoon','wingL','wingR','plume'])result['focHatOrn_'+kind]=buildFOCHatOrnament(kind);
+            return result;
+        }
+        function upgradeFixedHatParts(key,parts){
+            const id=key.slice(6),a=FOC_FIXED_HAT_ASSIGNMENTS[id];
+            const head=parts.find(p=>p.prim==='focHead_'+id+'_skin');
+            if(!a||!head)throw Error('Missing fixed hat '+key);
+            const [hat,mat,trim,orn]=a,rig=head.rigGroup,hy=head.localMat[13],hz=head.localMat[14];
+            const result=parts.filter(p=>{
+                if(p.rigGroup!==rig||p.prim.startsWith('focHead_')||p.prim==='orgHairCurtain')return true;
+                if(p.prim.startsWith('orgHelmet'))return false;
+                const y=p.localMat[13];
+                // Only obsolete headwear hardware, not torso or weapon parts.
+                return !(y>hy-.105&&['box','cone','cylinder','frustum'].includes(p.prim));
+            });
+            result.push(makePart('focHat_'+hat+'_main',mat,0,hy,hz,1,1,1,0,0,0,rig));
+            if(FOC_HAT_PROFILES[hat].trim.length)result.push(makePart('focHat_'+hat+'_trim',trim||mat,0,hy,hz,1,1,1,0,0,0,rig));
+            const add=(k,m)=>result.push(makePart('focHatOrn_'+k,m,0,hy,hz,1,1,1,0,0,0,rig));
+            if(orn==='nasal')add('nasal',mat);
+            if(orn==='spoon')add('spoon','gold');
+            if(orn==='wings'){add('wingL','ottomanWhite');add('wingR','ottomanWhite');}
+            if(orn==='bluePlume'||orn==='redPlume')add('plume',orn==='bluePlume'?'playerCloth':'enemyCloth');
+            return result;
+        }
+
         // Upgrade each fixed definition once. Legacy/classic templates stay untouched.
         for(const family of [FIXED_OTTOMAN_INFANTRY,FIXED_OTTOMAN_CAVALRY,FIXED_EURO_INFANTRY,FIXED_EURO_CAVALRY]){
             for(const [key,entry] of Object.entries(family)){
-                family[key]=upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry);
+                family[key]=upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry));
             }
         }
 
@@ -9564,7 +9664,8 @@ function createSoldierPartTemplates() {
                     orgHorseTail: OrganicCharacterGeometries.createHorseTail(),
                     ...createFOCInfantryGarmentGeometries(),
                     ...createFOCMountedGeometries(),
-                    ...createFOCFixedHeadGeometries()
+                    ...createFOCFixedHeadGeometries(),
+                    ...createFOCFixedHatGeometries()
                 };
 
                 this.materials = {
@@ -16253,8 +16354,8 @@ function createSoldierPartTemplates() {
                 const reg = new SoldierVisualRegistry();
                 const jan = reg.templates['fixed:ottoman_janissary_musket'];
                 const azap = reg.templates['fixed:ottoman_azap_pike'];
-                assert(jan.some(p => p.prim === 'orgHelmetBork'), 'Yeniçeri sabit arketipi bütünlüklü Börk taşımalı');
-                assert(azap.some(p => p.prim === 'orgHelmetTurban'), 'Azap sabit arketipi bütünlüklü Sarık taşımalı');
+                assert(jan.some(p => p.prim === 'focHat_bork_main'), 'Yeniçeri sabit arketipi bütünlüklü Börk taşımalı');
+                assert(azap.some(p => p.prim === 'focHat_turban_main'), 'Azap sabit arketipi bütünlüklü Sarık taşımalı');
             });
 
             // 67. Ajan 03: Avrupa / HRE Sabit Arketip Kıyafet ve Miğfer Detayları
@@ -16262,8 +16363,8 @@ function createSoldierPartTemplates() {
                 const reg = new SoldierVisualRegistry();
                 const musk = reg.templates['fixed:euro_musketier'];
                 const pike = reg.templates['fixed:euro_pikeniere'];
-                assert(musk.some(p => p.prim === 'orgHelmetCavalier') && musk.some(p => p.mat === 'linen'), 'Musketier Cavalier şapka ve keten yaka taşımalı');
-                assert(pike.some(p => p.prim === 'orgHelmetMorion') && pike.some(p => p.prim === 'focGarment_euroPikeniere_armor'), 'Pikeniere Morion miğferi ve zırhlı gövde taşımalı');
+                assert(musk.some(p => p.prim === 'focHat_cavalier_main') && musk.some(p => p.mat === 'linen'), 'Musketier Cavalier şapka ve keten yaka taşımalı');
+                assert(pike.some(p => p.prim === 'focHat_morion_main') && pike.some(p => p.prim === 'focGarment_euroPikeniere_armor'), 'Pikeniere Morion miğferi ve zırhlı gövde taşımalı');
             });
 
             // 68. Ajan 04: Bütünlüklü Baş ve Yüz Geometrisi
@@ -16495,7 +16596,7 @@ function createSoldierPartTemplates() {
                 assert(keys.length === 5, `5 sabit Avrupa piyade arketipi olmalı, gelen: ${keys.length}`);
                 const mEntry = FIXED_EURO_INFANTRY['fixed:euro_musketier'];
                 const musketier = typeof mEntry === 'function' ? mEntry() : mEntry;
-                const hasSlouchHat = musketier.some(p => p.prim === 'orgHelmetCavalier');
+                const hasSlouchHat = musketier.some(p => p.prim === 'focHat_cavalier_main');
                 const hasCoat = musketier.some(p => p.prim === 'focGarment_euroMusketier_cloth' && p.mat === 'playerCloth');
                 assert(hasSlouchHat && hasCoat, 'Musketier bütünlüklü ceket ve Cavalier şapka kullanmalı');
             });
@@ -16523,6 +16624,17 @@ function createSoldierPartTemplates() {
                     assert(Object.keys(sections).length===4,id+' face material coverage');
                     assert(Object.values(sections).reduce((n,g)=>n+g.indices.length,0)===full.indices.length,id+' index partition');
                     for(const section of Object.keys(sections))assert(parts.some(p=>p.prim==='focHead_'+id+'_'+section)&&reg.geometries['focHead_'+id+'_'+section],id+' face section '+section);
+                }
+                reg.dispose();
+            });
+
+            runCase('83b. FOC-MESH-07: fixed historical-style headwear', () => {
+                const reg=new SoldierVisualRegistry();
+                for(const [id,a] of Object.entries(FOC_FIXED_HAT_ASSIGNMENTS)){
+                    const p=reg.templates['fixed:'+id];
+                    assert(p.filter(x=>x.prim==='focHat_'+a[0]+'_main').length===1,id+' new crown');
+                    assert(!p.some(x=>x.prim.startsWith('orgHelmet')),id+' no legacy helmet');
+                    assert(p.filter(x=>x.prim.startsWith('focHat')).every(x=>reg.geometries[x.prim]&&reg.materials[x.mat]),id+' resolved hat geometry');
                 }
                 reg.dispose();
             });
