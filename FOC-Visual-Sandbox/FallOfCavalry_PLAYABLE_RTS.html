@@ -3358,7 +3358,7 @@
                     if (gid === 'grp_e_tercio_pikemen') return 'fixed:euro_pikeniere';
                     if (gid === 'grp_e_arquebusiers_north') return 'fixed:euro_musketier';
                     if (gid === 'grp_e_arquebusiers_south') return 'fixed:euro_arquebusier';
-                    if (gid === 'grp_e_lancers_guard') return 'fixed:euro_curassier_sword';
+                    if (gid === 'grp_e_lancers_guard') return 'fixed:euro_light_cavalry';
                     if (gid === 'grp_e_reiters_west') return 'fixed:euro_curassier_pistol';
                     if (gid === 'grp_e_cossack_skirmishers_east') return 'fixed:euro_harquebusier_mounted';
                     if (this.unitClass === 'cavalry' || this.combatRole === 'cavalry' || this.mountType === 'horse') return 'fixed:euro_curassier_sword';
@@ -3408,6 +3408,7 @@
                         side: this.side,
                         sectorIndex: this.sectorIndex,
                         unitClass: this.unitClass,
+                        archetypeId: config.archetypeId,
                         combatRole: config.combatRole || 'melee',
                         bodyType: config.bodyType || 'human',
                         mountType: config.mountType || 'foot',
@@ -3488,6 +3489,7 @@
             const playerGroups = [
                 new UnitGroup({
                     id: 'grp_p_pikemen_center',
+                    archetypeId: 'fixed:ottoman_azap_pike',
                     side: 'player',
                     sectorIndex: 0,
                     unitClass: 'pikeman',
@@ -3495,14 +3497,15 @@
                     bodyType: 'human',
                     mountType: 'foot',
                     activeWeapon: 'pike',
-                    weaponLoadout: ['pike', 'tuck_sword'],
-                    armorLoadout: ['morion_helmet', 'iron_cuirass'],
+                    weaponLoadout: ["pike"],
+                    armorLoadout: ["cloth_coat","turban"],
                     formation: 'box',
                     anchor: { x: -16, z: -8 },
                     count: 54
                 }),
                 new UnitGroup({
                     id: 'grp_p_musketeers_left',
+                    archetypeId: 'fixed:ottoman_janissary_musket',
                     side: 'player',
                     sectorIndex: 0,
                     unitClass: 'musketeer',
@@ -3510,14 +3513,15 @@
                     bodyType: 'human',
                     mountType: 'foot',
                     activeWeapon: 'matchlock_musket',
-                    weaponLoadout: ['matchlock_musket', 'rapier'],
-                    armorLoadout: ['felt_hat', 'buff_coat'],
+                    weaponLoadout: ["matchlock_musket"],
+                    armorLoadout: ["bork","body_armor"],
                     formation: 'line',
                     anchor: { x: -24, z: -22 },
                     count: 42
                 }),
                 new UnitGroup({
                     id: 'grp_p_musketeers_right',
+                    archetypeId: 'fixed:ottoman_azap_musket',
                     side: 'player',
                     sectorIndex: 0,
                     unitClass: 'musketeer',
@@ -3525,53 +3529,56 @@
                     bodyType: 'human',
                     mountType: 'foot',
                     activeWeapon: 'matchlock_musket',
-                    weaponLoadout: ['matchlock_musket', 'rapier'],
-                    armorLoadout: ['felt_hat', 'buff_coat'],
+                    weaponLoadout: ["matchlock_musket"],
+                    armorLoadout: ["cloth_coat","turban"],
                     formation: 'line',
                     anchor: { x: -24, z: 16 },
                     count: 40
                 }),
                 new UnitGroup({
                     id: 'grp_p_cuirassiers_reserve',
+                    archetypeId: 'fixed:ottoman_kapikulu_heavy',
                     side: 'player',
                     sectorIndex: 0,
                     unitClass: 'cuirassier',
                     combatRole: 'heavy_cavalry',
                     bodyType: 'mounted',
                     mountType: 'warhorse',
-                    activeWeapon: 'cavalry_sabre',
-                    weaponLoadout: ['cavalry_sabre', 'wheellock_pistol'],
-                    armorLoadout: ['lobster_tail_pot', 'three_quarter_plate'],
+                    activeWeapon: 'mace',
+                    weaponLoadout: ["mace"],
+                    armorLoadout: ["tolga","four_mirror_armor","horse_armor"],
                     formation: 'line',
                     anchor: { x: -34, z: 4 },
                     count: 32
                 }),
                 new UnitGroup({
                     id: 'grp_p_harquebusiers_west',
+                    archetypeId: 'fixed:ottoman_sipahi_sword_shield',
                     side: 'player',
                     sectorIndex: 1,
                     unitClass: 'harquebusier',
                     combatRole: 'medium_cavalry',
                     bodyType: 'mounted',
                     mountType: 'courser',
-                    activeWeapon: 'carbine',
-                    weaponLoadout: ['carbine', 'broadsword'],
-                    armorLoadout: ['burgonet', 'breastplate'],
+                    activeWeapon: 'cavalry_sabre',
+                    weaponLoadout: ["cavalry_sabre","shield"],
+                    armorLoadout: ["sisak","mirror_armor","vambrace"],
                     formation: 'spread',
                     anchor: { x: -42, z: -30 },
                     count: 28
                 }),
                 new UnitGroup({
                     id: 'grp_p_dragoon_east',
+                    archetypeId: 'fixed:ottoman_deli_lance',
                     side: 'player',
                     sectorIndex: 2,
                     unitClass: 'dragoon',
                     combatRole: 'mounted_infantry',
                     bodyType: 'mounted',
                     mountType: 'rouncey',
-                    activeWeapon: 'flintlock_carbine',
-                    weaponLoadout: ['flintlock_carbine', 'hanger_sword'],
-                    armorLoadout: ['leather_jerkin'],
+                    activeWeapon: 'war_lance',
+                    weaponLoadout: ["war_lance"],
+                    armorLoadout: ["fur_mantle","kalpak"],
                     formation: 'line',
                     anchor: { x: 26, z: 32 },
                     count: 24
@@ -3581,6 +3588,7 @@
             const enemyGroups = [
                 new UnitGroup({
                     id: 'grp_e_tercio_pikemen',
+                    archetypeId: 'fixed:euro_pikeniere',
                     side: 'enemy',
                     sectorIndex: 0,
                     unitClass: 'tercio_pikeman',
@@ -3588,29 +3596,31 @@
                     bodyType: 'human',
                     mountType: 'foot',
                     activeWeapon: 'ash_pike',
-                    weaponLoadout: ['ash_pike', 'side_sword'],
-                    armorLoadout: ['cabasset', 'corselet'],
+                    weaponLoadout: ["ash_pike"],
+                    armorLoadout: ["morion_helmet","corselet"],
                     formation: 'box',
                     anchor: { x: 16, z: -6 },
                     count: 56
                 }),
                 new UnitGroup({
                     id: 'grp_e_arquebusiers_north',
+                    archetypeId: 'fixed:euro_musketier',
                     side: 'enemy',
                     sectorIndex: 0,
                     unitClass: 'arquebusier',
                     combatRole: 'ranged',
                     bodyType: 'human',
                     mountType: 'foot',
-                    activeWeapon: 'arquebus',
-                    weaponLoadout: ['arquebus', 'dagger'],
-                    armorLoadout: ['cloth_doublet'],
+                    activeWeapon: 'matchlock_musket',
+                    weaponLoadout: ["matchlock_musket"],
+                    armorLoadout: ["felt_hat","cloth_doublet"],
                     formation: 'line',
                     anchor: { x: 24, z: -20 },
                     count: 38
                 }),
                 new UnitGroup({
                     id: 'grp_e_arquebusiers_south',
+                    archetypeId: 'fixed:euro_arquebusier',
                     side: 'enemy',
                     sectorIndex: 0,
                     unitClass: 'arquebusier',
@@ -3618,14 +3628,15 @@
                     bodyType: 'human',
                     mountType: 'foot',
                     activeWeapon: 'arquebus',
-                    weaponLoadout: ['arquebus', 'dagger'],
-                    armorLoadout: ['cloth_doublet'],
+                    weaponLoadout: ["arquebus"],
+                    armorLoadout: ["felt_hat","cloth_doublet"],
                     formation: 'line',
                     anchor: { x: 24, z: 18 },
                     count: 38
                 }),
                 new UnitGroup({
                     id: 'grp_e_lancers_guard',
+                    archetypeId: 'fixed:euro_light_cavalry',
                     side: 'enemy',
                     sectorIndex: 0,
                     unitClass: 'demi_lancer',
@@ -3633,14 +3644,15 @@
                     bodyType: 'mounted',
                     mountType: 'destrier',
                     activeWeapon: 'war_lance',
-                    weaponLoadout: ['war_lance', 'arming_sword'],
-                    armorLoadout: ['close_helm', 'half_plate'],
+                    weaponLoadout: ["war_lance"],
+                    armorLoadout: ["burgonet","breastplate"],
                     formation: 'line',
                     anchor: { x: 35, z: 2 },
                     count: 30
                 }),
                 new UnitGroup({
                     id: 'grp_e_reiters_west',
+                    archetypeId: 'fixed:euro_curassier_pistol',
                     side: 'enemy',
                     sectorIndex: 1,
                     unitClass: 'reiter',
@@ -3648,23 +3660,24 @@
                     bodyType: 'mounted',
                     mountType: 'charger',
                     activeWeapon: 'wheellock_pistol',
-                    weaponLoadout: ['wheellock_pistol', 'reitschwert'],
-                    armorLoadout: ['blackened_cuirass'],
+                    weaponLoadout: ["wheellock_pistol"],
+                    armorLoadout: ["lobster_tail_pot","three_quarter_plate"],
                     formation: 'box',
                     anchor: { x: -18, z: -34 },
                     count: 34
                 }),
                 new UnitGroup({
                     id: 'grp_e_cossack_skirmishers_east',
+                    archetypeId: 'fixed:euro_harquebusier_mounted',
                     side: 'enemy',
                     sectorIndex: 2,
                     unitClass: 'light_cavalry',
                     combatRole: 'skirmisher',
                     bodyType: 'mounted',
                     mountType: 'steppe_horse',
-                    activeWeapon: 'sabre',
-                    weaponLoadout: ['sabre', 'short_carbine'],
-                    armorLoadout: ['mail_shirt'],
+                    activeWeapon: 'short_carbine',
+                    weaponLoadout: ["short_carbine"],
+                    armorLoadout: ["felt_hat","breastplate","buff_coat"],
                     formation: 'spread',
                     anchor: { x: 46, z: 28 },
                     count: 26
@@ -3719,66 +3732,8 @@
                 }
 
                 visible[side]++;
-                const gid = String(s.groupId || '');
-                let fixedKey;
-                if (side === 'player') {
-                    // Osmanlı Ordusu — Kalıcı Sabit Karakter Arketipleri (Silah ve Sınıfa Doğrudan Bağlı)
-                    if (gid === 'grp_p_pikemen_center') {
-                        // Mızraklı Azap
-                        fixedKey = 'fixed:ottoman_azap_pike';
-                    } else if (gid === 'grp_p_musketeers_left') {
-                        // Fitilli Tüfekli Yeniçeri
-                        fixedKey = 'fixed:ottoman_janissary_musket';
-                    } else if (gid === 'grp_p_musketeers_right') {
-                        // Tüfekli Azap
-                        fixedKey = 'fixed:ottoman_azap_musket';
-                    } else if (gid === 'grp_p_cuirassiers_reserve') {
-                        // Kapıkulu Ağır Sipahi
-                        fixedKey = 'fixed:ottoman_kapikulu_heavy';
-                    } else if (gid === 'grp_p_harquebusiers_west') {
-                        // Kılıç & Kalkanlı Sipahi
-                        fixedKey = 'fixed:ottoman_sipahi_sword_shield';
-                    } else if (gid === 'grp_p_dragoon_east') {
-                        // Deli Mızraklı
-                        fixedKey = 'fixed:ottoman_deli_lance';
-                    } else if (s.unitClass === 'cavalry' || s.combatRole === 'cavalry' || s.mountType === 'horse') {
-                        fixedKey = 'fixed:ottoman_sipahi_lance';
-                    } else if (s.combatRole === 'musketeer' || s.activeWeapon === 'musket' || s.activeWeapon === 'matchlock_musket') {
-                        fixedKey = 'fixed:ottoman_janissary_musket';
-                    } else {
-                        fixedKey = 'fixed:ottoman_azap_pike';
-                    }
-                } else {
-                    // Avrupa / Kutsal Roma Ordusu — Kalıcı Sabit Karakter Arketipleri
-                    if (gid === 'grp_e_tercio_pikemen') {
-                        // 4.5m Kargılı Tercio Pikeniere
-                        fixedKey = 'fixed:euro_pikeniere';
-                    } else if (gid === 'grp_e_arquebusiers_north') {
-                        // Ağır Fitilli Musketier
-                        fixedKey = 'fixed:euro_musketier';
-                    } else if (gid === 'grp_e_arquebusiers_south') {
-                        // Hafif Arkebüzcü
-                        fixedKey = 'fixed:euro_arquebusier';
-                    } else if (gid === 'grp_e_lancers_guard') {
-                        // Kılıçlı Kürassier
-                        fixedKey = 'fixed:euro_curassier_sword';
-                    } else if (gid === 'grp_e_reiters_west') {
-                        // Tabancalı Kürassier (Çift Çarklı Piştov)
-                        fixedKey = 'fixed:euro_curassier_pistol';
-                    } else if (gid === 'grp_e_cossack_skirmishers_east') {
-                        // Atlı Karabinier / Harquebusier
-                        fixedKey = 'fixed:euro_harquebusier_mounted';
-                    } else if (s.unitClass === 'cavalry' || s.combatRole === 'cavalry' || s.mountType === 'horse') {
-                        fixedKey = 'fixed:euro_curassier_sword';
-                    } else if (s.combatRole === 'musketeer' || s.activeWeapon === 'musket' || s.activeWeapon === 'matchlock_musket') {
-                        fixedKey = 'fixed:euro_musketier';
-                    } else {
-                        fixedKey = 'fixed:euro_pikeniere';
-                    }
-                }
-                const templateKey = s.archetypeId || s.templateKey || fixedKey;
-                s.templateKey = templateKey; // Asker örneğine kalıcı olarak yazılır
-                s.archetypeId = templateKey;
+                // Projection is read-only: the model identity belongs to SoldierInstance.
+                const templateKey = s.archetypeId || s.templateKey;
 
                 soldiers.push({
                     viewId: `${activeSector.sectorId}:${s.id}`,
@@ -12276,8 +12231,8 @@ function createSoldierPartTemplates() {
                 const s1Stats = reg.sync(s1Snap);
                 assert(s1Stats.activeCount === 62 && s1Stats.lastRemoved === 300, 'Batı sektöründe 62 süvari olmalı ve önceki 300 temizlenmeli');
                 assert(
-                    s1Stats.cavalryWeapons.carbine === s1Expected.cavalry_carbine && s1Stats.cavalryWeapons.carbine === 28,
-                    `grp_p_harquebusiers_west (28) karabinalı görünmeli, gelen: ${s1Stats.cavalryWeapons.carbine}`
+                    s1Stats.cavalryWeapons.sabre === s1Expected.cavalry_sabre && s1Stats.cavalryWeapons.sabre === 28,
+                    `grp_p_harquebusiers_west (28) kılıçlı görünmeli, gelen: ${s1Stats.cavalryWeapons.sabre}`
                 );
                 assert(
                     s1Stats.cavalryWeapons.pistol === s1Expected.cavalry_pistol && s1Stats.cavalryWeapons.pistol === 34,
@@ -12290,12 +12245,12 @@ function createSoldierPartTemplates() {
                 const s2Stats = reg.sync(s2Snap);
                 assert(s2Stats.activeCount === 50 && s2Stats.lastRemoved === 62, 'Doğu sektöründe 50 süvari olmalı ve önceki 62 temizlenmeli');
                 assert(
-                    s2Stats.cavalryWeapons.carbine === s2Expected.cavalry_carbine && s2Stats.cavalryWeapons.carbine === 24,
-                    `grp_p_dragoon_east (24) karabinalı görünmeli, gelen: ${s2Stats.cavalryWeapons.carbine}`
+                    s2Stats.cavalryWeapons.lance === s2Expected.cavalry_lance && s2Stats.cavalryWeapons.lance === 24,
+                    `grp_p_dragoon_east (24) mızraklı görünmeli, gelen: ${s2Stats.cavalryWeapons.lance}`
                 );
                 assert(
-                    s2Stats.cavalryWeapons.sabre === s2Expected.cavalry_sabre && s2Stats.cavalryWeapons.sabre === 26,
-                    `grp_e_cossack_skirmishers_east (26) kılıçlı görünmeli, gelen: ${s2Stats.cavalryWeapons.sabre}`
+                    s2Stats.cavalryWeapons.carbine === s2Expected.cavalry_carbine && s2Stats.cavalryWeapons.carbine === 26,
+                    `grp_e_cossack_skirmishers_east (26) karabinalı görünmeli, gelen: ${s2Stats.cavalryWeapons.carbine}`
                 );
 
                 reg.dispose();
@@ -17616,8 +17571,7 @@ function createSoldierPartTemplates() {
             getWeaponProperties(soldier) {
                 const w = String(soldier.activeWeapon || '').toLowerCase();
                 const uClass = String(soldier.unitClass || '').toLowerCase();
-                const isRanged = uClass === 'musketeer' ||
-                    w.includes('musket') ||
+                const isRanged = w.includes('musket') ||
                     w.includes('arquebus') ||
                     w.includes('matchlock') ||
                     w.includes('carbine') ||
@@ -17647,7 +17601,11 @@ function createSoldierPartTemplates() {
                         baseDmgMin = 28; baseDmgMax = 46;
                     }
                 } else {
-                    if (w.includes('pike') || uClass === 'pikeman') {
+                    if (w.includes('pike')) {
+                        range = 4.2;
+                        cooldown = 1.5;
+                        baseDmgMin = 20; baseDmgMax = 34;
+                    } else if (w.includes('lance')) {
                         range = 4.2;
                         cooldown = 1.5;
                         baseDmgMin = 20; baseDmgMax = 34;
