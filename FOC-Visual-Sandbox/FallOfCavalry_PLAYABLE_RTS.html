@@ -7685,10 +7685,168 @@ const OrganicCharacterGeometries = (() => {
             return result;
         }
 
+        // FOC-MESH-08: anatomical limb lofts. The arm/hand surface and each
+        // boot/breeches surface share indexed boundaries and normals.
+        const FOC_ARM_ANCHORS=Object.freeze({
+            orgArmMusketL:[[-.23,1.32,0],[-.25,1.15,.16],[-.10,1.25,.62]],
+            orgArmMusketR:[[.23,1.32,0],[.25,1.14,.08],[.17,1.23,.28]],
+            orgArmPikeL:[[-.23,1.32,0],[-.29,1.14,-.02],[-.31,1.10,.16]],
+            orgArmPikeR:[[.23,1.32,0],[.10,1.18,.22],[-.27,1.30,.50]],
+            orgArmSwordR:[[.23,1.32,0],[.28,1.13,.10],[.23,1.20,.32]],
+            orgArmShieldL:[[-.23,1.32,0],[-.30,1.14,.10],[-.27,1.23,.30]],
+            orgArmRiderReinsL:[[-.23,1.85,-.02],[-.25,1.69,.11],[-.14,1.65,.31]],
+            orgArmRiderWeaponR:[[.23,1.85,-.02],[.27,1.70,.10],[.22,1.67,.32]]
+        });
+        const focVAdd=(a,b)=>a.map((v,i)=>v+b[i]);
+        const focVSub=(a,b)=>a.map((v,i)=>v-b[i]);
+        const focVScale=(a,s)=>a.map(v=>v*s);
+        const focVUnit=a=>focVScale(a,1/(Math.hypot(...a)||1));
+        const focVDot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0);
+        const focVCross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+        const focVLerp=(a,b,t)=>a.map((v,i)=>v+(b[i]-v)*t);
+        function focLimbSweep(stations,N=20){
+            let previous=null;
+            const rings=stations.map((st,i)=>{
+                const tangent=focVUnit(focVSub(stations[Math.min(i+1,stations.length-1)].p,stations[Math.max(0,i-1)].p));
+                let u=previous?focVSub(previous,focVScale(tangent,focVDot(previous,tangent))):focVCross(Math.abs(tangent[1])>.9?[0,0,1]:[0,1,0],tangent);
+                if(Math.hypot(...u)<.001)u=focVCross([1,0,0],tangent);
+                u=focVUnit(u);previous=u;
+                const v=focVCross(u,tangent); // +U,+V winds outward along path
+                return Array.from({length:N},(_,j)=>{
+                    const a=j*Math.PI*2/N,ca=Math.cos(a),sa=Math.sin(a),f=(st.fold||0)*Math.cos(a*5+i*.8);
+                    return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+f)*ca),focVScale(v,(st.rz+f)*sa)));
+                });
+            });
+            const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            const sections=focMountedMaterialSections(full,stations.slice(0,-1).map(st=>st.mat),N,stations[0].mat);
+            // End cap belongs to the terminal material, not the shoulder.
+            if(stations[0].mat!==stations[stations.length-1].mat){
+                const first=sections[stations[0].mat],last=sections[stations[stations.length-1].mat];
+                const cap=first.indices.slice(-N*3);first.indices=first.indices.slice(0,-N*3);
+                const merged=new Uint16Array(last.indices.length+cap.length);merged.set(last.indices);merged.set(cap,last.indices.length);last.indices=merged;
+            }
+            return {full,sections};
+        }
+        function buildFOCArmAndGrip(name,style){
+            const [sh,el,wr]=FOC_ARM_ANCHORS[name],d1=focVUnit(focVSub(el,sh)),d2=focVUnit(focVSub(wr,el));
+            const mounted=name.includes('Rider'),factor=mounted?.88:1;
+            const r=style==='plate'?1.08:style==='cloth'?1:1.03;
+            const bend=Math.min(Math.hypot(...focVSub(el,sh)),Math.hypot(...focVSub(wr,el)))*.42;
+            const ein=focVSub(el,focVScale(d1,bend)),eout=focVAdd(el,focVScale(d2,bend));
+            const st=[],add=(p,rx,rz,mat,fold=0)=>st.push({p,rx:rx*factor,rz:rz*factor,mat,fold});
+            add(focVSub(sh,focVScale(d1,.065)),.049*r,.053*r,'sleeve');
+            add(focVSub(sh,focVScale(d1,.026)),.080*r,.076*r,'sleeve',.002);
+            add(sh,.088*r,.079*r,'sleeve',.003);
+            add(focVLerp(sh,ein,.5),.073*r,.070*r,'sleeve',.003);
+            add(ein,.065*r,.062*r,'sleeve',.002);
+            for(const t of [.25,.5,.75,1])add(focVLerp(focVLerp(ein,el,t),focVLerp(el,eout,t),t),(.063-.008*t)*r,(.065-.009*t)*r,'sleeve',style==='plate'?.001:.003);
+            add(focVLerp(eout,wr,.45),.058*r,.052*r,'sleeve',.002);
+            // Keep the grip centre at the existing weapon socket, with hand volume
+            // extending along the final forearm axis. No equipment transforms change.
+            add(focVSub(wr,focVScale(d2,.052*factor)),.046*r,.044*r,'sleeve');
+            add(focVSub(wr,focVScale(d2,.038*factor)),.049,.045,'cuff');
+            add(focVSub(wr,focVScale(d2,.025*factor)),.033,.030,'hand');
+            add(focVSub(wr,focVScale(d2,.009*factor)),.043,.039,'hand');
+            add(wr,.045,.042,'hand',.002);
+            add(focVAdd(wr,focVScale(d2,.019*factor)),.041,.038,'hand',.002);
+            add(focVAdd(wr,focVScale(d2,.037*factor)),.028,.027,'hand');
+            add(focVAdd(wr,focVScale(d2,.043*factor)),.012,.013,'hand');
+            return focLimbSweep(st,20);
+        }
+        function buildFOCStandingLeg(side,style,upper){
+            const N=20,x=side*.14,ottoman=style==='salvar',heavy=style==='plate';
+            const levels=upper?[
+                [.410,.063,.070,0,'cloth'],[.438,.078,.083,0,'cloth'],[.460,.087,.087,.004,'cloth'],[.495,.091,.091,.004,'cloth'],
+                [.550,ottoman?.108:.096,.099,.0,'cloth'],[.630,ottoman?.115:.103,.103,-.003,'cloth'],
+                [.730,.110,.102,-.004,'cloth'],[.810,.104,.098,-.005,'cloth'],[.865,.080,.084,-.004,'cloth']
+            ]:[
+                [.005,.064,.114,.037,'boot'],[.020,.071,.122,.039,'boot'],[.055,.070,.113,.036,'boot'],
+                [.088,.060,.088,.024,'boot'],[.126,.054,.059,.009,'boot'],[.175,.062,.064,.002,ottoman?'cloth':'boot'],
+                [.235,.071,.075,0,ottoman?'cloth':'boot'],[.310,.076,.080,0,ottoman?'cloth':'boot'],
+                [.380,.079,.083,0,ottoman?'cloth':'boot'],[.427,.082,.086,.003,ottoman?'cloth':'boot'],
+                [.460,.086,.089,.003,ottoman?'cloth':'boot'],[.492,.070,.076,0,ottoman?'cloth':'boot']
+            ];
+            const rings=levels.map(([y,rx,rz,z,mat],ri)=>Array.from({length:N},(_,i)=>{
+                const a=i*2*Math.PI/N,c=Math.cos(a),v=Math.sin(a);
+                const f=mat==='cloth'?(ottoman?.006:.003)*Math.cos(a*6+ri*.85):heavy?.002*Math.cos(a*4):.0015*Math.cos(a*5);
+                return [x+(rx+f)*c,y,z+(rz+f)*v];
+            }));
+            const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            const sections=focMountedMaterialSections(full,levels.slice(0,-1).map(st=>st[4]),N,levels[0][4]);
+            if(!upper&&ottoman){const boot=sections.boot,cloth=sections.cloth,cap=boot.indices.slice(-N*3);boot.indices=boot.indices.slice(0,-N*3);const a=new Uint16Array(cloth.indices.length+cap.length);a.set(cloth.indices);a.set(cap,cloth.indices.length);cloth.indices=a;}
+            return {full,sections};
+        }
+        function buildFOCSeatedLeg(side){
+            const data=[
+                [1.525,.159,-.042,.075,.078,'cloth'],[1.479,.194,-.011,.091,.092,'cloth'],
+                [1.424,.246,.057,.088,.090,'cloth'],[1.364,.292,.114,.080,.083,'cloth'],
+                [1.296,.333,.153,.071,.074,'cloth'],[1.235,.348,.147,.060,.066,'cloth'],
+                [1.195,.349,.137,.069,.073,'boot'],[1.155,.350,.117,.075,.078,'boot'],
+                [1.100,.350,.096,.059,.065,'boot'],[1.005,.350,.066,.055,.060,'boot'],
+                [.900,.350,.037,.051,.055,'boot'],[.812,.350,.020,.049,.054,'boot'],
+                [.779,.350,.054,.048,.040,'boot'],[.774,.350,.105,.047,.031,'boot'],
+                [.769,.350,.157,.037,.023,'boot'],[.766,.350,.184,.019,.013,'boot']
+            ];
+            return focLimbSweep(data.map(([y,x,z,rx,rz,mat])=>({p:[side*x,y,z],rx,rz,mat,fold:mat==='cloth'?.003:.001})),20);
+        }
+        function buildFOCSeatedPelvis(){
+            const levels=[[1.407,.163,.102],[1.433,.210,.139],[1.480,.220,.151],[1.525,.216,.146],[1.574,.183,.118]];
+            return OrganicCharacterGeometries.createClosedLoft(levels.map(([y,rx,rz])=>Array.from({length:24},(_,i)=>{const a=i*Math.PI*2/24;return [rx*Math.cos(a),y,-.047+rz*Math.sin(a)];})));
+        }
+        function createFOCFixedLimbGeometries(){
+            const result={};
+            const add=(prefix,model)=>{for(const [mat,g] of Object.entries(model.sections))result[prefix+'_'+mat]=g;};
+            for(const name of Object.keys(FOC_ARM_ANCHORS))for(const style of ['cloth','plate','leather'])add('focArm_'+name+'_'+style,buildFOCArmAndGrip(name,style));
+            for(const side of [-1,1]){
+                const tag=side<0?'L':'R';
+                for(const style of ['salvar','euro','plate'])for(const upper of [true,false])add('focLeg_'+tag+'_'+style+'_'+(upper?'upper':'lower'),buildFOCStandingLeg(side,style,upper));
+                add('focSeatLeg_'+tag,buildFOCSeatedLeg(side));
+            }
+            result.focSeatPelvis=buildFOCSeatedPelvis();
+            return result;
+        }
+        function upgradeFixedLimbParts(key,parts){
+            const removed=new Set(),additions=[];
+            const add=(prim,mat,rig)=>additions.push(makePart(prim,mat,0,0,0,1,1,1,0,0,0,rig));
+            for(const arm of parts.filter(p=>FOC_ARM_ANCHORS[p.prim])){
+                const wr=FOC_ARM_ANCHORS[arm.prim][2],dist=p=>Math.hypot(p.localMat[12]-wr[0],p.localMat[13]-wr[1],p.localMat[14]-wr[2]);
+                const hand=parts.find(p=>p.prim==='orgHand'&&p.rigGroup===arm.rigGroup&&dist(p)<.025);
+                if(!hand)throw Error('Missing hand '+key+' '+arm.prim);
+                const cuff=parts.find(p=>p.prim==='cylinder'&&p.mat==='linen'&&p.rigGroup===arm.rigGroup&&dist(p)<.035);
+                const style=/Steel|steel/.test(arm.mat)?'plate':/Leather|leather/.test(arm.mat)?'leather':'cloth';
+                const prefix='focArm_'+arm.prim+'_'+style;
+                add(prefix+'_sleeve',arm.mat,arm.rigGroup);add(prefix+'_cuff',cuff?'linen':arm.mat,arm.rigGroup);add(prefix+'_hand',hand.mat,arm.rigGroup);
+                removed.add(arm);removed.add(hand);if(cuff)removed.add(cuff);
+            }
+            const mounted=parts.some(p=>p.prim==='orgRiderLegL');
+            if(mounted){
+                const pelvis=parts.find(p=>p.rigGroup==='riderLower'&&p.prim==='frustum'&&Math.abs(p.localMat[12])<.01);
+                if(!pelvis)throw Error('Missing pelvis '+key);
+                add('focSeatPelvis',pelvis.mat,'riderLower');removed.add(pelvis);
+                for(const p of parts.filter(p=>p.rigGroup==='riderLower'&&['sphere','orgLimb'].includes(p.prim)))removed.add(p);
+                for(const tag of ['L','R']){
+                    const leg=parts.find(p=>p.prim==='orgRiderLeg'+tag);removed.add(leg);
+                    add('focSeatLeg_'+tag+'_cloth',pelvis.mat,'riderLower');add('focSeatLeg_'+tag+'_boot',leg.mat,'riderLower');
+                }
+            }else{
+                for(const tag of ['L','R']){
+                    const side=tag==='L'?'left':'right',ur=side+'LegUpper',lr=side+'LegLower';
+                    const thigh=parts.find(p=>p.rigGroup===ur&&p.prim==='orgLimb'),boot=parts.find(p=>p.rigGroup===lr&&p.prim==='orgBoot');
+                    const calf=parts.find(p=>p.rigGroup===lr&&p.prim==='orgLimb');
+                    if(!thigh||!boot)throw Error('Missing standing leg '+key);
+                    const style=calf?'salvar':/steel/i.test(boot.mat)?'plate':'euro',prefix='focLeg_'+tag+'_'+style;
+                    add(prefix+'_upper_cloth',thigh.mat,ur);add(prefix+'_lower_boot',boot.mat,lr);
+                    if(calf){add(prefix+'_lower_cloth',calf.mat,lr);removed.add(calf);}
+                    removed.add(thigh);removed.add(boot);
+                }
+            }
+            return parts.filter(p=>!removed.has(p)).concat(additions);
+        }
+
         // Upgrade each fixed definition once. Legacy/classic templates stay untouched.
         for(const family of [FIXED_OTTOMAN_INFANTRY,FIXED_OTTOMAN_CAVALRY,FIXED_EURO_INFANTRY,FIXED_EURO_CAVALRY]){
             for(const [key,entry] of Object.entries(family)){
-                family[key]=upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry));
+                family[key]=upgradeFixedLimbParts(key,upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry)));
             }
         }
 
@@ -9665,7 +9823,8 @@ function createSoldierPartTemplates() {
                     ...createFOCInfantryGarmentGeometries(),
                     ...createFOCMountedGeometries(),
                     ...createFOCFixedHeadGeometries(),
-                    ...createFOCFixedHatGeometries()
+                    ...createFOCFixedHatGeometries(),
+                    ...createFOCFixedLimbGeometries()
                 };
 
                 this.materials = {
@@ -16635,6 +16794,17 @@ function createSoldierPartTemplates() {
                     assert(p.filter(x=>x.prim==='focHat_'+a[0]+'_main').length===1,id+' new crown');
                     assert(!p.some(x=>x.prim.startsWith('orgHelmet')),id+' no legacy helmet');
                     assert(p.filter(x=>x.prim.startsWith('focHat')).every(x=>reg.geometries[x.prim]&&reg.materials[x.mat]),id+' resolved hat geometry');
+                }
+                reg.dispose();
+            });
+
+            runCase('83c. FOC-MESH-08: fixed continuous arm grips and boot/leg surfaces', () => {
+                const reg=new SoldierVisualRegistry();
+                for(const key of Object.keys(FIXED_CHARACTER_ARCHETYPES)){
+                    const p=reg.templates[key];
+                    assert(p.filter(x=>x.prim.startsWith('focArm_')&&x.prim.endsWith('_hand')).length===2,key+' two integrated grips');
+                    assert(!p.some(x=>x.prim.startsWith('orgArm')||x.prim==='orgHand'||x.prim==='orgBoot'||x.prim.startsWith('orgRiderLeg')),key+' legacy limb removed');
+                    assert(p.every(x=>reg.geometries[x.prim]&&reg.materials[x.mat]),key+' resolved geometry');
                 }
                 reg.dispose();
             });
