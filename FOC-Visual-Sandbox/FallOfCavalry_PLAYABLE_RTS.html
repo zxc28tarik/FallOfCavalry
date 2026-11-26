@@ -7480,6 +7480,118 @@ const OrganicCharacterGeometries = (() => {
             'fixed:euro_harquebusier_mounted': buildFixedEuroHarquebusierMounted()
         };
     
+        // FOC-MESH-06. Fixed head/neck topology with painted anatomical features.
+        // The dimensions are artistic variants, not cultural or ethnic assumptions.
+        // Jaw, cheek, nose, brow, ear and neck are part of one welded surface.
+        const FOC_FIXED_HEAD_STYLES = Object.freeze({
+            ottoman_azap_pike:          [.96,.92,1.02,.95,0],
+            ottoman_azap_pike_sword:    [1.02,1.06,.96,1.04,0],
+            ottoman_azap_musket:        [.95,.98,1.08,.98,0],
+            ottoman_janissary_musket:   [1.03,1.07,.99,1.02,1],
+            ottoman_janissary_sword:    [1.06,1.09,1.02,1.06,1],
+            ottoman_bostanci_axe:       [1.08,1.10,.95,1.04,1],
+            ottoman_bostanci_pike:      [1.04,1.12,1.05,1.01,1],
+            ottoman_humbaraci:          [1.01,1.02,1.09,1.03,1],
+            ottoman_levend:             [.96,.94,1.12,1.06,0],
+            ottoman_sipahi_lance:       [1.00,1.03,1.04,.97,0],
+            ottoman_sipahi_sword_shield:[1.03,1.06,1.01,1.02,0],
+            ottoman_kapikulu_heavy:     [1.07,1.10,.98,1.05,1],
+            ottoman_deli_lance:         [1.02,1.05,1.10,1.09,0],
+            ottoman_deli_sword:         [1.05,1.08,1.06,1.12,0],
+            ottoman_akinci_carbine:     [.95,.93,1.05,.96,0],
+            euro_musketier:             [.98,.96,1.03,.92,2],
+            euro_arquebusier:           [.95,.94,1.07,.97,2],
+            euro_pikeniere:             [1.04,1.08,.98,1.04,2],
+            euro_hellebardier:          [1.02,1.03,1.10,1.01,2],
+            euro_armored_infantry:      [1.07,1.09,1.01,1.06,2],
+            euro_curassier_pistol:      [1.05,1.07,1.06,.99,2],
+            euro_curassier_sword:       [1.06,1.11,1.00,1.05,2],
+            euro_light_cavalry:         [.97,.95,1.09,.96,2],
+            euro_harquebusier_mounted:  [1.00,.98,1.04,1.01,2]
+        });
+        function buildFOCFixedHead(style) {
+            const [width,jaw,nose,brow,beard]=style, N=40;
+            // Height relative to the existing head center; neck seats inside collar.
+            const levels=[
+                [-.73,.285,.270,-.025],[-.62,.270,.265,-.020],[-.51,.265,.260,-.018],
+                [-.44,.295,.290,-.015],[-.39,.325,.323,-.004],[-.33,.345,.345,.005],
+                [-.28,.352,.354,.008],[-.23,.366,.365,.008],[-.19,.375,.380,.006],
+                [-.15,.385,.389,.004],[-.11,.397,.400,.001],[-.07,.405,.406,-.005],
+                [-.025,.410,.410,-.009],[.015,.411,.413,-.012],[.052,.414,.416,-.012],
+                [.085,.415,.419,-.012],[.12,.414,.420,-.012],[.16,.411,.419,-.014],
+                [.20,.406,.414,-.016],[.25,.392,.398,-.018],[.31,.365,.374,-.020],
+                [.37,.314,.330,-.022],[.42,.244,.268,-.023],[.47,.143,.170,-.024],[.50,.045,.058,-.025]
+            ];
+            const g=(x,c,w)=>Math.exp(-Math.pow((x-c)/w,2));
+            const rings=levels.map(([y,rx,rz,z])=>Array.from({length:N},(_,i)=>{
+                const a=i*Math.PI*2/N, ca=Math.cos(a),sa=Math.sin(a), f=Math.atan2(ca,sa), af=Math.abs(f), front=Math.max(0,sa);
+                const jawShape=1+(jaw-1)*g(y,-.29,.19);
+                const ear=.064*g(y,-.015,.115)*g(af,1.57,.24);
+                const cheek=.031*g(y,-.055,.11)*g(af,.66,.32);
+                const socket=.043*g(y,.055,.049)*g(af,.40,.20);
+                const nasal=nose*(.115*g(y,-.015,.105)*g(f,0,.14)+.034*g(y,-.11,.055)*g(af,.18,.12));
+                const brows=brow*.037*g(y,.135,.042)*g(af,.37,.27);
+                const chin=.042*g(y,-.32,.06)*g(f,0,.38);
+                const lips=.024*g(y,-.207,.034)*g(f,0,.34)-.012*g(y,-.195,.015)*g(f,0,.31);
+                const faceHair=(beard===1?.009*g(y,-.30,.09)*g(f,0,.62):beard===2?.008*g(y,-.32,.08)*g(f,0,.22):0);
+                return [(rx*width*jawShape+ear+cheek)*ca,y,z+rz*sa+front*(nasal+brows+chin+lips+faceHair-socket)];
+            }));
+            const full=OrganicCharacterGeometries.createClosedLoft(rings), lists={skin:[],hair:[],eye:[],lip:[]};
+            // Material boundaries are on the same surface; no floating eye or hair solids.
+            for(let j=0;j<levels.length-1;j++)for(let i=0;i<N;i++){
+                const y=(levels[j][0]+levels[j+1][0])/2, a=(i+.5)*Math.PI*2/N;
+                const f=Math.abs(Math.atan2(Math.cos(a),Math.sin(a)));
+                let mat='skin';
+                if(y>=.015&&y<.085&&f>.24&&f<.55) mat='eye';
+                else if(y>=.085&&y<.16&&f>.18&&f<.65)mat='hair';
+                else if(y>=-.19&&y<-.11&&f<.49&&f>.07)mat='hair';
+                else if(beard===1&&y>=-.39&&y<-.23&&f<.54)mat='hair';
+                else if(beard===2&&y>=-.39&&y<-.25&&f<.22)mat='hair';
+                else if(y>=-.23&&y<-.19&&f<.31)mat='lip';
+                const offset=(j*N+i)*6;
+                lists[mat].push(...full.indices.slice(offset,offset+6));
+            }
+            lists.skin.push(...full.indices.slice((levels.length-1)*N*6));
+            const sections={};
+            for(const [mat,list] of Object.entries(lists)){
+                if(!list.length)continue;
+                const geo=new FOC_THREE.BufferGeometry();
+                geo.positions=full.positions;geo.normals=full.normals;geo.indices=new Uint16Array(list);
+                sections[mat]=geo;
+            }
+            return {full,sections};
+        }
+        function createFOCFixedHeadGeometries(){
+            const result={};
+            for(const [id,style] of Object.entries(FOC_FIXED_HEAD_STYLES)){
+                const {sections}=buildFOCFixedHead(style);
+                for(const [mat,geo] of Object.entries(sections))result['focHead_'+id+'_'+mat]=geo;
+            }
+            return result;
+        }
+        function upgradeFixedHeadParts(key,parts){
+            const id=key.slice(6),head=parts.find(p=>p.prim==='orgHeadNatural');
+            if(!FOC_FIXED_HEAD_STYLES[id]||!head)throw new Error('Missing fixed head: '+key);
+            const hy=head.localMat[13],rig=head.rigGroup;
+            const result=parts.filter(p=>{
+                if(p===head)return false;
+                if(p.rigGroup!==rig)return true;
+                const [x,y,z]=[p.localMat[12],p.localMat[13],p.localMat[14]];
+                const oldNeck=p.mat==='skin'&&(p.prim==='orgLimb'||p.prim==='frustum')&&Math.abs(x)<.001&&y>hy-.18&&y<hy-.065;
+                const oldFace=(p.mat==='eyeDark'||p.mat==='hairDark')&&p.prim!=='orgHairCurtain'&&y>hy-.10&&y<hy+.085&&z>.045;
+                return !oldNeck&&!oldFace;
+            });
+            const mats={skin:'skin',hair:'hairDark',eye:'eyeDark',lip:'faceLip'};
+            for(const [section,mat] of Object.entries(mats))result.push({prim:'focHead_'+id+'_'+section,mat,rigGroup:rig,localMat:new Float32Array(head.localMat)});
+            return result;
+        }
+        // Upgrade each fixed definition once. Legacy/classic templates stay untouched.
+        for(const family of [FIXED_OTTOMAN_INFANTRY,FIXED_OTTOMAN_CAVALRY,FIXED_EURO_INFANTRY,FIXED_EURO_CAVALRY]){
+            for(const [key,entry] of Object.entries(family)){
+                family[key]=upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry);
+            }
+        }
+
         // SABİT KARAKTER ARKETİP SİSTEMİ (Modüler ekipman tak-çıkar askıda; her birim sabit bütünlüklü karakterdir)
         const FIXED_CHARACTER_ARCHETYPES = Object.freeze({
             ...(typeof FIXED_OTTOMAN_INFANTRY !== 'undefined' ? FIXED_OTTOMAN_INFANTRY : {}),
@@ -9451,7 +9563,8 @@ function createSoldierPartTemplates() {
                     orgRiderLegR: OrganicCharacterGeometries.createRiderLegR(),
                     orgHorseTail: OrganicCharacterGeometries.createHorseTail(),
                     ...createFOCInfantryGarmentGeometries(),
-                    ...createFOCMountedGeometries()
+                    ...createFOCMountedGeometries(),
+                    ...createFOCFixedHeadGeometries()
                 };
 
                 this.materials = {
@@ -9489,6 +9602,7 @@ function createSoldierPartTemplates() {
                     eyeDark: new FOC_THREE.Material({ color: 0x181412, metalness: 0.15 }),
                     crimsonVelvet: new FOC_THREE.Material({ color: 0x991b1b, metalness: 0.03 }),
                     darkCloth: new FOC_THREE.Material({ color: 0x282b32, metalness: 0.02 }),
+                    faceLip: new FOC_THREE.Material({color:0xb67865,metalness:0}),
 
 
                 };
@@ -16329,7 +16443,7 @@ function createSoldierPartTemplates() {
                     const parts = typeof entry === 'function' ? entry() : entry;
                     assert(Array.isArray(parts) && parts.length >= 6, `${k} bütünlüklü parçalara sahip olmalı`);
                     const hasOrganicTorso = parts.some(p => p.prim === 'orgTorsoCoat' || p.prim === 'orgTorsoArmored' || p.prim.startsWith('focGarment_'));
-                    const hasOrganicHead = parts.some(p => p.prim === 'orgHeadNatural');
+                    const hasOrganicHead = parts.some(p => p.prim.startsWith('focHead_') && p.prim.endsWith('_skin'));
                     assert(hasOrganicTorso && hasOrganicHead, `${k} organik gövde ve baş mesh kullanmalı`);
                 }
             });
@@ -16398,6 +16512,19 @@ function createSoldierPartTemplates() {
                     const hasRider = parts.some(p => p.rigGroup === 'riderUpper') && parts.some(p => p.rigGroup === 'riderLower');
                     assert(hasHorse && hasRider, `${k} organik savaş atı ve binici yapısına sahip olmalı`);
                 }
+            });
+
+            runCase('83a. FOC-MESH-06: 24 fixed welded head and neck meshes', () => {
+                const reg=new SoldierVisualRegistry();
+                for(const [id,style] of Object.entries(FOC_FIXED_HEAD_STYLES)){
+                    const {full,sections}=buildFOCFixedHead(style);
+                    const parts=reg.templates['fixed:'+id];
+                    assert(parts&&!parts.some(p=>p.prim==='orgHeadNatural'),id+' old head removed');
+                    assert(Object.keys(sections).length===4,id+' face material coverage');
+                    assert(Object.values(sections).reduce((n,g)=>n+g.indices.length,0)===full.indices.length,id+' index partition');
+                    for(const section of Object.keys(sections))assert(parts.some(p=>p.prim==='focHead_'+id+'_'+section)&&reg.geometries['focHead_'+id+'_'+section],id+' face section '+section);
+                }
+                reg.dispose();
             });
 
             // 84. Ajan 06: Gerçek Savaş Alanı 300 Askerin Sabit Arketiplere Bağlanması (Modülerlik Askıda)
