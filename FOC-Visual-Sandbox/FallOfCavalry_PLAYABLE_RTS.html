@@ -3774,7 +3774,42 @@
          * 3. PRESERVED 3D MODELS (44/43/41 INFANTRY + 200 CAVALRY) & DATA-DRIVEN
          *    INFANTRY WALKING + CAVALRY WALK/TROT + INFANTRY COMBAT POSES (G3D-03C)
          * ============================================================================ */
+        // FOC-ARCH-02: current fixed model / primary weapon / existing animation rig contract.
+        // Humbaraci and mace retain provisional poses; this is not a new combat implementation.
+        const FIXED_ARCHETYPE_PROFILE = Object.freeze({
+            'fixed:ottoman_azap_pike': Object.freeze({"rig":"infantry_pikeman","weapon":"pike","label":"Mızrak","secondary":"—","mounted":false}),
+            'fixed:ottoman_azap_pike_sword': Object.freeze({"rig":"infantry_pikeman","weapon":"pike","label":"Mızrak","secondary":"Kılıç ve kalkan","mounted":false}),
+            'fixed:ottoman_azap_musket': Object.freeze({"rig":"infantry_musketeer","weapon":"matchlock_musket","label":"Fitilli tüfek","secondary":"—","mounted":false}),
+            'fixed:ottoman_janissary_musket': Object.freeze({"rig":"infantry_musketeer","weapon":"matchlock_musket","label":"Fitilli tüfek","secondary":"—","mounted":false}),
+            'fixed:ottoman_janissary_sword': Object.freeze({"rig":"infantry_swordsman","weapon":"yatagan","label":"Yatağan","secondary":"Kalkan","mounted":false}),
+            'fixed:ottoman_bostanci_axe': Object.freeze({"rig":"infantry_pikeman","weapon":"halberd","label":"Baltalı teber","secondary":"—","mounted":false}),
+            'fixed:ottoman_bostanci_pike': Object.freeze({"rig":"infantry_pikeman","weapon":"pike","label":"Mızrak","secondary":"—","mounted":false}),
+            'fixed:ottoman_humbaraci': Object.freeze({"rig":"infantry_swordsman","weapon":"humbara","label":"Humbara","secondary":"Yatağan (kınında)","mounted":false}),
+            'fixed:ottoman_levend': Object.freeze({"rig":"infantry_swordsman","weapon":"yatagan","label":"Yatağan","secondary":"Piştov","mounted":false}),
+            'fixed:ottoman_sipahi_lance': Object.freeze({"rig":"cavalry_lance","weapon":"war_lance","label":"Kargı","secondary":"—","mounted":true}),
+            'fixed:ottoman_sipahi_sword_shield': Object.freeze({"rig":"cavalry_sabre","weapon":"cavalry_sabre","label":"Kılıç","secondary":"Kalkan","mounted":true}),
+            'fixed:ottoman_kapikulu_heavy': Object.freeze({"rig":"cavalry_sabre","weapon":"mace","label":"Şeşper","secondary":"—","mounted":true}),
+            'fixed:ottoman_deli_lance': Object.freeze({"rig":"cavalry_lance","weapon":"war_lance","label":"Kargı","secondary":"—","mounted":true}),
+            'fixed:ottoman_deli_sword': Object.freeze({"rig":"cavalry_sabre","weapon":"cavalry_sabre","label":"Kılıç","secondary":"—","mounted":true}),
+            'fixed:ottoman_akinci_carbine': Object.freeze({"rig":"cavalry_carbine","weapon":"carbine","label":"Karabina","secondary":"Sırtta yay ve sadak","mounted":true}),
+            'fixed:euro_musketier': Object.freeze({"rig":"infantry_musketeer","weapon":"matchlock_musket","label":"Fitilli musket","secondary":"—","mounted":false}),
+            'fixed:euro_arquebusier': Object.freeze({"rig":"infantry_musketeer","weapon":"arquebus","label":"Arkebüz","secondary":"—","mounted":false}),
+            'fixed:euro_pikeniere': Object.freeze({"rig":"infantry_pikeman","weapon":"ash_pike","label":"Pike","secondary":"—","mounted":false}),
+            'fixed:euro_hellebardier': Object.freeze({"rig":"infantry_pikeman","weapon":"halberd","label":"Hellebarda","secondary":"—","mounted":false}),
+            'fixed:euro_armored_infantry': Object.freeze({"rig":"infantry_swordsman","weapon":"sword","label":"Kılıç","secondary":"Kalkan","mounted":false}),
+            'fixed:euro_curassier_pistol': Object.freeze({"rig":"cavalry_pistol","weapon":"wheellock_pistol","label":"Çarklı tabanca","secondary":"—","mounted":true}),
+            'fixed:euro_curassier_sword': Object.freeze({"rig":"cavalry_sabre","weapon":"cavalry_sabre","label":"Pallasch","secondary":"—","mounted":true}),
+            'fixed:euro_light_cavalry': Object.freeze({"rig":"cavalry_lance","weapon":"war_lance","label":"Kargı","secondary":"—","mounted":true}),
+            'fixed:euro_harquebusier_mounted': Object.freeze({"rig":"cavalry_carbine","weapon":"short_carbine","label":"Karabina","secondary":"—","mounted":true})
+        });
+
+        function getFixedArchetypeProfile(soldier) {
+            return FIXED_ARCHETYPE_PROFILE[soldier.archetypeId || soldier.templateKey] || null;
+        }
+
         function classifySoldierArchetype(soldier) {
+            const fixed = getFixedArchetypeProfile(soldier);
+            if (fixed) return fixed.rig;
             const bodyType = String(soldier.bodyType || '').toLowerCase();
             const mountType = String(soldier.mountType || '').toLowerCase();
             const unitClass = String(soldier.unitClass || '').toLowerCase();
@@ -3810,7 +3845,7 @@
                 return 'cavalry_sabre';
             }
 
-            if (weapon.includes('pike') || unitClass.includes('pike')) {
+            if (weapon.includes('pike') || weapon.includes('halberd') || weapon.includes('polearm') || (!weapon && unitClass.includes('pike'))) {
                 return 'infantry_pikeman';
             }
 
@@ -3818,8 +3853,7 @@
                 weapon.includes('musket') ||
                 weapon.includes('arquebus') ||
                 weapon.includes('carbine') ||
-                unitClass.includes('musketeer') ||
-                unitClass.includes('arquebusier')
+                (!weapon && (unitClass.includes('musketeer') || unitClass.includes('arquebusier')))
             ) {
                 return 'infantry_musketeer';
             }
@@ -8940,6 +8974,7 @@ function createSoldierPartTemplates() {
                 st === 'attacking' ||
                 st === 'thrust' ||
                 st === 'fire' ||
+                st === 'firing' ||
                 st === 'shoot' ||
                 st === 'reload' ||
                 st === 'slash' ||
@@ -9408,11 +9443,13 @@ function createSoldierPartTemplates() {
                     const restingYaw = (s.facingYaw !== undefined && Number.isFinite(s.facingYaw)) ? s.facingYaw : (side === 'enemy' ? -Math.PI * 0.5 : Math.PI * 0.5);
 
                     const archetype = classifySoldierArchetype(s);
-                    let templateKey = (s.templateKey && this.templates[s.templateKey]) ? s.templateKey : `${side}:${archetype}`;
+                    const requestedTemplate = s.archetypeId || s.templateKey;
+                    const hasRequestedTemplate = Boolean(requestedTemplate && this.templates[requestedTemplate]);
+                    let templateKey = hasRequestedTemplate ? requestedTemplate : `${side}:${archetype}`;
 
-                    if (archetype.startsWith('cavalry') || (s.templateKey && (s.templateKey.includes('cavalry') || s.templateKey.includes('sipahi') || s.templateKey.includes('kapikulu') || s.templateKey.includes('curassier') || s.templateKey.includes('reiter') || s.templateKey.includes('deli') || s.templateKey.includes('ciritci') || s.templateKey.includes('akinci') || s.templateKey.includes('harquebusier_mounted')))) {
+                    if (archetype.startsWith('cavalry')) {
                         cavalryCount++;
-                        if (!s.templateKey) {
+                        if (!hasRequestedTemplate) {
                             templateKey = resolveCavalryVisualVariant(s);
                         }
                         if (archetype === 'cavalry_lance') cavalryWeapons.lance++;
@@ -9428,7 +9465,7 @@ function createSoldierPartTemplates() {
 
                     const existing = this.records.get(viewId);
                     if (existing) {
-                        if (existing.templateKey !== templateKey || existing.side !== side) {
+                        if (existing.templateKey !== templateKey || existing.side !== side || existing.archetype !== archetype) {
                             existing.archetype = archetype;
                             existing.templateKey = templateKey;
                             existing.side = side;
@@ -15943,6 +15980,11 @@ function createSoldierPartTemplates() {
             runCase('70. Sabit Karakter Arketip Sistemi ve Vitrin Entegrasyonu', () => {
                 assert(typeof FIXED_CHARACTER_ARCHETYPES === 'object', 'FIXED_CHARACTER_ARCHETYPES sözlüğü tanımlı olmalı');
                 assert(Object.keys(FIXED_CHARACTER_ARCHETYPES).length === 24, '24 sabit karakter arketipi tanımlı olmalı');
+                assert(Object.keys(FIXED_ARCHETYPE_PROFILE).length === 24, '24 arketip silah ve rig profili tanımlı olmalı');
+                for (const [key, p] of Object.entries(FIXED_ARCHETYPE_PROFILE)) {
+                    assert(Object.prototype.hasOwnProperty.call(FIXED_CHARACTER_ARCHETYPES, key), 'Eksik sabit model: ' + key);
+                    assert(classifySoldierArchetype({templateKey:key}) === p.rig, 'Arketip rig uyuşmazlığı: ' + key);
+                }
                 const mockRenderer = { cameraController: new RTSCamera3D() };
                 const showcase = new RTSUnitShowcaseController(mockRenderer);
                 assert(showcase.qualityMode === 'high', 'Asker vitrini varsayılan olarak yüksek kalite modunda başlamalı');
@@ -16357,6 +16399,7 @@ function createSoldierPartTemplates() {
 
                 this.unitCatalog = {
                     ottoman: [
+                        { key: 'azap_musket', name: 'Tüfekli Azap', role: 'Hafif tüfekli piyade', weapon1: 'Fitilli tüfek', weapon2: '—', headwear: 'Sarık', armor: 'Kaftan' },
                         { key: 'janissary', name: 'Yeniçeri', role: 'Seçkin Tüfekli/Yatağanlı Kapıkulu Piyadesi', template: 'ottoman:janissary', weapon1: 'Fitilli Osmanlı Tüfengi', weapon2: 'Fildişi Yatağan & Çevşen', headwear: 'Börk (Serpuş)', armor: 'Kaftan & Kuşak' },
                         { key: 'azap', name: 'Azap', role: 'Hafif Sefer Piyadesi & Tırpanlı/Kılıçlı Hat Askeri', template: 'ottoman:azap', weapon1: '3.85m Tırpan Kargı', weapon2: 'Eğri Kılıç & Kalkan', headwear: 'Sarıklı Başlık', armor: 'Keten Yelek & Şalvar' },
                         { key: 'humbaraci', name: 'Humbaracı', role: 'Kuşatma ve Alan Hasarlı Patlayıcı Birliği', template: 'ottoman:humbaraci', weapon1: 'Demir Döküm Humbara Bombası', weapon2: 'Kısa Piştov & Yatağan', headwear: 'Yeşil Sarık', armor: 'Deri Bomba Önlüğü' },
@@ -16369,6 +16412,9 @@ function createSoldierPartTemplates() {
                         { key: 'akinci', name: 'Akıncı', role: 'Menzilli Step ve Yay Süvarisi', template: 'ottoman:akinci', weapon1: 'Kompozit Yay & Ok Sadakı', weapon2: 'Kargı & Süvari Kılıcı', headwear: 'Keçe Külah', armor: 'Deri Yelek' }
                     ],
                     european: [
+                        { key: 'arquebusier', name: 'Arkebüzcü', role: 'Hafif ateşli piyade', weapon1: 'Arkebüz', weapon2: '—', headwear: 'Geniş şapka', armor: 'Kumaş ceket' },
+                        { key: 'armored_infantry', name: 'Zırhlı piyade', role: 'Kılıç ve kalkanlı ağır piyade', weapon1: 'Kılıç', weapon2: 'Kalkan', headwear: 'Burgonet', armor: 'Çelik göğüslük' },
+                        { key: 'light_cavalry', name: 'Mızraklı hafif süvari', role: 'Kargılı süvari', weapon1: 'Kargı', weapon2: '—', headwear: 'Burgonet', armor: 'Çelik göğüslük' },
                         { key: 'musketier', name: 'Musketier (Tüfekçi)', role: '17. Yüzyıl Fitilli Ağır Tüfekçi', template: 'european:musketier', weapon1: 'Fitilli Musket & Çatal Ayak', weapon2: 'Kısa Süvari Kılıcı', headwear: 'Geniş Şapka & Tüy', armor: '12 Havariler Bandolyesi' },
                         { key: 'pikeniere', name: 'Pikeniere (Mızrakçı)', role: '4.5m Ağır Piyade Kargıcısı', template: 'european:pikeniere', weapon1: '4.5m Kül Dişbudak Pikesi', weapon2: 'Kısa Kılıç', headwear: 'İbikli Morion Miğfer', armor: 'Tapul Göğüslük & Tasset' },
                         { key: 'hellebardier', name: 'Hellebardier', role: 'Kancalı ve Baltalı Çok Amaçlı Piyade', template: 'european:hellebardier', weapon1: 'Gaga Kancalı Hellebarda', weapon2: 'Buckler & Kılıç', headwear: 'Burgonet Miğfer', armor: 'Karartılmış Plaka Zırh' },
@@ -16576,7 +16622,7 @@ function createSoldierPartTemplates() {
             getTemplateKey(cult, uKey, variant) {
                 if (this.qualityMode === 'high') {
                     const fixedMap = {
-                        'ottoman:janissary': 'fixed:ottoman_janissary_musket',
+                        'ottoman:janissary': variant === 2 ? 'fixed:ottoman_janissary_sword' : 'fixed:ottoman_janissary_musket',
                         'ottoman:azap': variant === 2 ? 'fixed:ottoman_azap_pike_sword' : 'fixed:ottoman_azap_pike',
                         'ottoman:humbaraci': 'fixed:ottoman_humbaraci',
                         'ottoman:bostanci': variant === 2 ? 'fixed:ottoman_bostanci_pike' : 'fixed:ottoman_bostanci_axe',
@@ -16584,7 +16630,11 @@ function createSoldierPartTemplates() {
                         'ottoman:sipahi': variant === 2 ? 'fixed:ottoman_sipahi_sword_shield' : 'fixed:ottoman_sipahi_lance',
                         'ottoman:kapikulu_sipahi': 'fixed:ottoman_kapikulu_heavy',
                         'ottoman:deli': variant === 2 ? 'fixed:ottoman_deli_sword' : 'fixed:ottoman_deli_lance',
-                        'ottoman:ciritci': 'fixed:ottoman_sipahi_sword_shield',
+                        'ottoman:ciritci': `ottoman:ciritci:v${variant}`,
+                        'ottoman:azap_musket': 'fixed:ottoman_azap_musket',
+                        'european:arquebusier': 'fixed:euro_arquebusier',
+                        'european:armored_infantry': 'fixed:euro_armored_infantry',
+                        'european:light_cavalry': 'fixed:euro_light_cavalry',
                         'ottoman:akinci': 'fixed:ottoman_akinci_carbine',
                         'european:musketier': 'fixed:euro_musketier',
                         'european:pikeniere': 'fixed:euro_pikeniere',
@@ -16592,9 +16642,10 @@ function createSoldierPartTemplates() {
                         'european:curassier': variant === 2 ? 'fixed:euro_curassier_pistol' : 'fixed:euro_curassier_sword',
                         'european:reiter': 'fixed:euro_harquebusier_mounted'
                     };
-                    return fixedMap[`${cult}:${uKey}`] || 'fixed:ottoman_janissary_musket';
+                    return fixedMap[`${cult}:${uKey}`] || null;
                 } else {
-                    return `${cult}:${uKey}:v${variant}`;
+                    const fixedOnly = { 'ottoman:azap_musket': 'fixed:ottoman_azap_musket', 'european:arquebusier': 'fixed:euro_arquebusier', 'european:armored_infantry': 'fixed:euro_armored_infantry', 'european:light_cavalry': 'fixed:euro_light_cavalry' };
+                    return fixedOnly[`${cult}:${uKey}`] || `${cult}:${uKey}:v${variant}`;
                 }
             }
 
@@ -16610,7 +16661,14 @@ function createSoldierPartTemplates() {
 
                 const getTpl = (cult, uKey, variant) => this.getTemplateKey(cult, uKey, variant);
 
-                const isCavalry = (key) => key.includes('sipahi') || key.includes('deli') || key.includes('ciritci') || key.includes('akinci') || key.includes('curassier') || key.includes('reiter');
+                const isCavalry = (key) => /sipahi|deli|ciritci|akinci|curassier|reiter|light_cavalry/.test(key);
+                const previewFields = (cult, key, variant) => {
+                    const templateKey = getTpl(cult, key, variant);
+                    const profile = FIXED_ARCHETYPE_PROFILE[templateKey];
+                    const mounted = profile ? profile.mounted : isCavalry(key);
+                    const classicWeapon = mounted ? (key === 'curassier' && variant === 1 ? 'wheellock_pistol' : key === 'reiter' ? 'carbine' : 'war_lance') : (/azap|pikeniere|hellebardier/.test(key) ? 'pike' : /musketier|janissary/.test(key) ? 'matchlock_musket' : 'sword');
+                    return { templateKey, bodyType: mounted ? 'mounted' : 'human', mountType: mounted ? 'horse' : 'foot', activeWeapon: profile ? profile.weapon : classicWeapon };
+                };
 
                 let soldiers = [];
 
@@ -16637,8 +16695,7 @@ function createSoldierPartTemplates() {
                         viewId: 'SHOWCASE:U1',
                         soldierId: 'sc1',
                         side: (this.currentCulture === 'european' && currentUnit.key === 'musketier') ? 'player' : (isOttoman ? 'player' : 'enemy'),
-                        templateKey: tplKey,
-                        archetype: isCavalry(currentUnit.key) ? 'cavalry_lance' : 'infantry_musketeer',
+                        ...previewFields(this.currentCulture, currentUnit.key, this.selectedVariant),
                         position: { x: 0, y: 0, z: 0 },
                         facingYaw: 0,
                         walkBlend: this.selectedAnim === 'walk' ? 1.0 : 0.0,
@@ -16648,14 +16705,15 @@ function createSoldierPartTemplates() {
                     });
                 } else {
                     const euroMapping = {
+                        azap_musket: 'arquebusier',
                         janissary: 'musketier',
                         azap: 'pikeniere',
                         bostanci: 'hellebardier',
-                        humbaraci: 'reiter',
+                        humbaraci: 'armored_infantry',
                         levend: 'musketier',
                         sipahi: 'curassier',
                         kapikulu_sipahi: 'curassier',
-                        deli: 'curassier',
+                        deli: 'light_cavalry',
                         ciritci: 'reiter',
                         akinci: 'reiter'
                     };
@@ -16666,8 +16724,7 @@ function createSoldierPartTemplates() {
                         viewId: 'SHOWCASE:OTT',
                         soldierId: 'sc_ott',
                         side: 'player',
-                        templateKey: getTpl('ottoman', ottKey, this.selectedVariant),
-                        archetype: isCavalry(ottKey) ? 'cavalry_lance' : 'infantry_musketeer',
+                        ...previewFields('ottoman', ottKey, this.selectedVariant),
                         position: { x: -1.25, y: 0, z: 0 },
                         facingYaw: 0,
                         walkBlend: this.selectedAnim === 'walk' ? 1.0 : 0.0,
@@ -16680,8 +16737,7 @@ function createSoldierPartTemplates() {
                         viewId: 'SHOWCASE:EUR',
                         soldierId: 'sc_eur',
                         side: 'enemy',
-                        templateKey: getTpl('european', eurKey, this.selectedVariant),
-                        archetype: isCavalry(eurKey) ? 'cavalry_lance' : 'infantry_musketeer',
+                        ...previewFields('european', eurKey, this.selectedVariant),
                         position: { x: 1.25, y: 0, z: 0 },
                         facingYaw: 0,
                         walkBlend: this.selectedAnim === 'walk' ? 1.0 : 0.0,
@@ -16710,7 +16766,7 @@ function createSoldierPartTemplates() {
                 units.forEach(u => {
                     const item = document.createElement('div');
                     item.className = 'showcase-unit-item' + (u.key === this.selectedUnitKey ? ' active' : '');
-                    item.innerHTML = `<span>${u.name}</span> <span style="font-size:10px; opacity:0.6;">${u.key.includes('sipahi') || u.key.includes('deli') || u.key.includes('ciritci') || u.key.includes('akinci') || u.key.includes('curassier') || u.key.includes('reiter') ? 'Süvari' : 'Piyade'}</span>`;
+                    item.innerHTML = `<span>${u.name}</span> <span style="font-size:10px; opacity:0.6;">${u.key.includes('sipahi') || u.key.includes('deli') || u.key.includes('ciritci') || u.key.includes('akinci') || u.key.includes('curassier') || u.key.includes('reiter') || u.key.includes('light_cavalry') ? 'Süvari' : 'Piyade'}</span>`;
                     item.addEventListener('click', () => {
                         this.selectedUnitKey = u.key;
                         this.renderUnitList();
@@ -16731,8 +16787,10 @@ function createSoldierPartTemplates() {
                 const currentUnit = units.find(u => u.key === this.selectedUnitKey) || units[0];
                 if (!currentUnit) return;
 
-                const isCav = currentUnit.key.includes('sipahi') || currentUnit.key.includes('deli') || currentUnit.key.includes('ciritci') || currentUnit.key.includes('akinci') || currentUnit.key.includes('curassier') || currentUnit.key.includes('reiter');
+                const isCav = /sipahi|deli|ciritci|akinci|curassier|reiter|light_cavalry/.test(currentUnit.key);
                 const cultTitle = this.currentCulture === 'ottoman' ? 'Osmanlı Ordusu' : 'Avrupa / Kutsal Roma';
+                const tpl = this.getTemplateKey(this.currentCulture, currentUnit.key, this.selectedVariant);
+                const profile = FIXED_ARCHETYPE_PROFILE[tpl];
 
                 titleEl.textContent = `${currentUnit.name} — ${cultTitle}`;
 
@@ -16742,13 +16800,13 @@ function createSoldierPartTemplates() {
                 specsEl.innerHTML = `
                     <div>Sınıf: <strong>${isCav ? 'Süvari' : 'Piyade'}</strong></div>
                     <div>Kültür: <strong>${cultTitle}</strong></div>
-                    <div>Ana Silah: <strong>${currentUnit.weapon1}</strong></div>
-                    <div>Yan Silah / Zırh: <strong>${currentUnit.weapon2}</strong></div>
+                    <div>Ana Silah: <strong>${profile ? profile.label : currentUnit.weapon1}</strong></div>
+                    <div>Yan Silah / Zırh: <strong>${profile ? profile.secondary : currentUnit.weapon2}</strong></div>
                     <div>Başlık: <strong>${currentUnit.headwear}</strong></div>
                     <div>Gövde Koruması: <strong>${currentUnit.armor}</strong></div>
                     <div>Şablon Anahtarı: <strong>${this.getTemplateKey(this.currentCulture, currentUnit.key, this.selectedVariant)}</strong></div>
-                    <div>Anatomi & Profil: <strong>${this.qualityMode === 'high' ? '3 Beden Profili (Slim/Avg/Heavy)' : 'Standart'}</strong></div>
-                    <div>Model Standardı: <strong>${this.qualityMode === 'high' ? 'Sabit Karakter Arketipi (Bütünlüklü 3D)' : 'G3D-03J'}</strong></div>
+                    <div>Anatomi & Profil: <strong>${profile ? 'Sabit model profili' : 'Standart'}</strong></div>
+                    <div>Model Standardı: <strong>${profile ? 'Sabit arketip / mevcut parçalı model (yeni mesh bekliyor)' : 'Klasik model — sabit mesh henüz yok'}</strong></div>
                 `;
             }
         }
