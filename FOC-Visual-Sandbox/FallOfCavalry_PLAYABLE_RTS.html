@@ -4487,6 +4487,12 @@ const OrganicCharacterGeometries = (() => {
     }
 
     return {
+        // Keep the private MeshBuilder in its real lexical scope.
+        createClosedLoft(rings) {
+            const mb = new MeshBuilder();
+            mb.addLoft(rings, true, true);
+            return mb.toBufferGeometry(false);
+        },
         /**
          * 1. Athletic sculpted human torso + collarbone/trapezius slope + kaftan/doublet
          *    collar opening + 1650 peascod doublet front + folded belt ridge +
@@ -6084,10 +6090,15 @@ const OrganicCharacterGeometries = (() => {
             bostanciAxe:    { hem: 0.282, chest: 0.276, waist: 0.187, depth: 0.160, fold: 0.010, phase: 0.4, armored: true, hemDepth: 0.168, armorRidge: 0.019, armorFlare: 0.012, pleats: 6 },
             bostanciPike:   { hem: 0.290, chest: 0.281, waist: 0.189, depth: 0.155, fold: 0.010, phase: 1.2, armored: true, hemDepth: 0.162, armorRidge: 0.025, armorFlare: 0.015, pleats: 8 },
             humbaraci:     { hem: 0.273, chest: 0.258, waist: 0.182, depth: 0.149, fold: 0.012, phase: 0.9, armored: false, hemDepth: 0.162, belt: true, pleats: 6, apron: 0.012 },
-            levend:        { hem: 0.235, chest: 0.251, waist: 0.168, depth: 0.136, fold: 0.016, phase: 2.1, armored: false, hemDepth: 0.145, hemLift: 0.045, pleats: 5, asymmetry: 0.009 }
+            levend:        { hem: 0.235, chest: 0.251, waist: 0.168, depth: 0.136, fold: 0.016, phase: 2.1, armored: false, hemDepth: 0.145, hemLift: 0.045, pleats: 5, asymmetry: 0.009 },
+            // FOC-MESH-03: European doublets, jerkin and articulated cuirass silhouettes.
+            euroMusketier: { hem: 0.239, chest: 0.247, waist: 0.156, depth: 0.131, fold: 0.009, phase: 0.3, armored: false, hemDepth: 0.135, hemLift: 0.012, pleats: 8, euro: true },
+            euroArquebus:  { hem: 0.224, chest: 0.248, waist: 0.162, depth: 0.138, fold: 0.006, phase: 1.4, armored: false, hemDepth: 0.139, hemLift: 0.027, pleats: 6, euro: true, jerkin: true },
+            euroPikeniere: { hem: 0.246, chest: 0.265, waist: 0.171, depth: 0.151, fold: 0.004, phase: 0.6, armored: true, hemDepth: 0.150, armorRidge: 0.026, armorFlare: 0.012, pleats: 4, euro: true, fauld: true, gorget: true },
+            euroHalberd:   { hem: 0.251, chest: 0.262, waist: 0.168, depth: 0.149, fold: 0.007, phase: 1.6, armored: true, hemDepth: 0.151, armorRidge: 0.020, armorFlare: 0.010, pleats: 6, euro: true, gorget: true },
+            euroArmored:   { hem: 0.269, chest: 0.279, waist: 0.182, depth: 0.160, fold: 0.003, phase: 0.2, armored: true, hemDepth: 0.166, armorRidge: 0.030, armorFlare: 0.016, pleats: 4, euro: true, fauld: true, gorget: true }
         });
         function buildFOCInfantryGarment(style) {
-            const mb = new MeshBuilder();
             const N = 24;
             // y, half-width, half-depth, front displacement, cloth fold weight
             const hemDepth = style.hemDepth ?? 0.153;
@@ -6115,7 +6126,13 @@ const OrganicCharacterGeometries = (() => {
                 [1.413, 0.105, 0.085, 0.005, 0.00],
                 [1.424, 0.096, 0.078, 0.005, 0.00]
             ];
-            const rings = levels.map(([y, rx, rz, shift, foldWeight]) => {
+            if (style.euro) {
+                // Tailored belt narrower than an Ottoman sash, with no detached cylinder.
+                levels[6][1] = style.waist + 0.004; levels[7][1] = style.waist + 0.009;
+                levels[8][1] = style.waist + 0.009; levels[9][1] = style.waist + 0.004;
+            }
+            if (style.gorget) { levels[17][1] = 0.139; levels[17][2] = 0.105; levels[18][1] = 0.118; levels[18][2] = 0.092; }
+            const rings = levels.map(([y, rx, rz, shift, foldWeight], ringIndex) => {
                 const ring = [];
                 const armor = style.armored && y >= 1.082 && y <= 1.350;
                 for (let i = 0; i < N; i++) {
@@ -6129,16 +6146,17 @@ const OrganicCharacterGeometries = (() => {
                     const vent = y < 0.915 ? -0.014 * seam * (0.915 - y) / 0.125 : 0;
                     const apron = (style.apron || 0) * Math.pow(front, 4) * Math.max(0, 1 - Math.abs(y - 0.97) / 0.17);
                     const asym = (style.asymmetry || 0) * Math.sin(a + style.phase) * foldWeight;
-                    ring.push([(rx + folds + plate * 0.4) * ca + asym, y, shift + (rz + folds) * sa + plate * sa + overlap + vent + apron]);
+                    const lame = style.fauld && ringIndex < 5 ? (ringIndex % 2 === 0 ? 0.010 : -0.003) : 0;
+                    const doublet = style.euro && !style.armored && y > 1.08 && y < 1.35 ? 0.009 * front * Math.exp(-Math.pow((y-1.17)/0.10,2)) : 0;
+                    ring.push([(rx + folds + plate * 0.4 + lame) * ca + asym, y, shift + (rz + folds + lame) * sa + plate * sa + overlap + vent + apron + doublet]);
                 }
                 return ring;
             });
-            mb.addLoft(rings, true, true);
-            const full = mb.toBufferGeometry(false);
-            const indices = { cloth: [], sash: [], armor: [], belt: [] };
+            const full = OrganicCharacterGeometries.createClosedLoft(rings);
+            const indices = { cloth: [], sash: [], armor: [], belt: [], jerkin: [], gorget: [] };
             // Each ring strip uses 6*N indices; caps are emitted last by addLoft.
             for (let i = 0; i < levels.length - 1; i++) {
-                const material = style.belt && i === 7 ? 'belt' : i >= 5 && i < 9 ? 'sash' : style.armored && i >= 9 && i < 16 ? 'armor' : 'cloth';
+                const material = style.belt && i === 7 ? 'belt' : i >= 5 && i < 9 ? 'sash' : style.gorget && i >= 16 && i < 19 ? 'gorget' : style.armored && ((i >= 9 && i < 16) || (style.fauld && i < 5)) ? 'armor' : style.jerkin && i >= 9 && i < 17 ? 'jerkin' : 'cloth';
                 indices[material].push(...full.indices.slice(i * N * 6, (i + 1) * N * 6));
             }
             indices.cloth.push(...full.indices.slice((levels.length - 1) * N * 6));
@@ -6169,6 +6187,8 @@ const OrganicCharacterGeometries = (() => {
             ];
             if (armor) parts.push(makePart('focGarment_' + id + '_armor', armor, 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
             if (FOC_INFANTRY_GARMENT_STYLES[id].belt) parts.push(makePart('focGarment_' + id + '_belt', 'leather', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
+            if (FOC_INFANTRY_GARMENT_STYLES[id].jerkin) parts.push(makePart('focGarment_' + id + '_jerkin', 'buffLeather', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
+            if (FOC_INFANTRY_GARMENT_STYLES[id].gorget) parts.push(makePart('focGarment_' + id + '_gorget', 'steel', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
             return parts;
         }
 
@@ -6809,28 +6829,27 @@ const OrganicCharacterGeometries = (() => {
                 ...buildEuroLowerBodyAndHead('playerBreeches', 'leather', 'hairDark', 'linen'),
 
                 // Sculpted royal blue organic coat torso (waist at y=1.05, 8-fold flared skirt down to y=0.76)
-                makePart('orgTorsoCoat', 'playerCloth', 0, 1.09, 0.0, 0.50, 0.66, 0.44, 0, 0, 0, 'torso'),
+                ...focInfantryGarmentParts('euroMusketier', 'playerCloth', 'leather'),
 
                 // 6 small gold buttons seated flush down sculpted chest & skirt front
-                makePart('sphere', 'gold', 0, 1.32, 0.120, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
-                makePart('sphere', 'gold', 0, 1.26, 0.133, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
-                makePart('sphere', 'gold', 0, 1.20, 0.121, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
-                makePart('sphere', 'gold', 0, 1.14, 0.100, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
-                makePart('sphere', 'gold', 0, 0.99, 0.098, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
-                makePart('sphere', 'gold', 0, 0.92, 0.110, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 1.32, 0.114, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 1.26, 0.148, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 1.20, 0.158, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 1.14, 0.145, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 0.99, 0.124, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
+                makePart('sphere', 'gold', 0, 0.92, 0.144, 0.022, 0.022, 0.020, 0, 0, 0, 'torso'),
 
                 // Waist belt & subtle brass buckle (0.055)
-                makePart('cylinder', 'leather', 0, 1.05, 0.005, 0.315, 0.058, 0.225, 0, 0, 0, 'torso'),
-                makePart('box', 'gold', 0, 1.05, 0.120, 0.055, 0.052, 0.020, 0, 0, 0, 'torso'),
+                makePart('box', 'gold', 0, 1.05, 0.140, 0.055, 0.052, 0.020, 0, 0, 0, 'torso'),
 
                 // 12 Apostles leather bandolier + hanging wooden powder flasks
-                makePart('box', 'leather', 0.0, 1.20,  0.116, 0.38, 0.048, 0.024, 0, 0, -0.68, 'torso'),
-                makePart('box', 'leather', 0.0, 1.20, -0.105, 0.38, 0.048, 0.024, 0, 0,  0.68, 'torso'),
-                makePart('cylinder', 'wood', -0.11, 1.09, 0.132, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
-                makePart('cylinder', 'wood', -0.04, 1.14, 0.135, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
-                makePart('cylinder', 'wood',  0.04, 1.19, 0.135, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
-                makePart('cylinder', 'wood',  0.11, 1.24, 0.132, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
-                makePart('cylinder', 'gold',  0.04, 1.23, 0.135, 0.040, 0.018, 0.040, 0.08, 0, -0.12, 'torso'),
+                makePart('box', 'leather', 0.0, 1.20,  0.152, 0.38, 0.048, 0.024, 0, 0, -0.68, 'torso'),
+                makePart('box', 'leather', 0.0, 1.20, -0.142, 0.38, 0.048, 0.024, 0, 0,  0.68, 'torso'),
+                makePart('cylinder', 'wood', -0.11, 1.09, 0.172, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
+                makePart('cylinder', 'wood', -0.04, 1.14, 0.172, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
+                makePart('cylinder', 'wood',  0.04, 1.19, 0.172, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
+                makePart('cylinder', 'wood',  0.11, 1.24, 0.172, 0.036, 0.095, 0.036, 0.08, 0, -0.12, 'torso'),
+                makePart('cylinder', 'gold',  0.04, 1.23, 0.172, 0.040, 0.018, 0.040, 0.08, 0, -0.12, 'torso'),
 
                 // Cavalier slouch hat with sky-blue ostrich plume (seated snugly at y=1.63)
                 makePart('orgHelmetCavalier', 'feltBlack', 0, 1.63, 0.015, 0.54, 0.24, 0.54, -0.06, 0.08, -0.05, 'torso'),
@@ -6857,12 +6876,10 @@ const OrganicCharacterGeometries = (() => {
                 ...buildEuroLowerBodyAndHead('enemyBreeches', 'leather', 'hairDark', 'linen'),
 
                 // Crimson enemyCloth doublet + sleeveless buffLeather jerkin
-                makePart('orgTorsoCoat', 'enemyCloth',  0, 1.09, 0.0,   0.49, 0.66, 0.43, 0, 0, 0, 'torso'),
-                makePart('orgTorsoCoat', 'buffLeather', 0, 1.11, 0.008, 0.51, 0.60, 0.45, 0, 0, 0, 'torso'),
+                ...focInfantryGarmentParts('euroArquebus', 'enemyCloth', 'leather'),
 
                 // Leather waist belt, subtle bronze buckle (0.055) & powder pouch
-                makePart('cylinder', 'leather', 0, 1.05, 0.005, 0.325, 0.058, 0.235, 0, 0, 0, 'torso'),
-                makePart('box', 'bronze', 0, 1.05, 0.125, 0.055, 0.050, 0.020, 0, 0, 0, 'torso'),
+                makePart('box', 'bronze', 0, 1.05, 0.140, 0.055, 0.050, 0.020, 0, 0, 0, 'torso'),
                 makePart('box', 'leather', 0.17, 0.98, 0.04, 0.07, 0.10, 0.09, 0, 0, -0.1, 'torso'),
 
                 // Broad-brimmed slouch hat without plume (seated snugly at y=1.62)
@@ -6895,9 +6912,7 @@ const OrganicCharacterGeometries = (() => {
                 ...buildEuroLowerBodyAndHead('buffLeather', 'leather', 'hairDark', null),
 
                 // Dark cloth doublet under sculpted blackenedSteel breastplate with integrated shot ridge & fauld/tassets
-                makePart('orgTorsoCoat',    'darkCloth',      0, 1.09, 0.0,   0.47, 0.64, 0.39, 0, 0, 0, 'torso'),
-                makePart('orgTorsoArmored', 'blackenedSteel', 0, 1.12, 0.008, 0.54, 0.58, 0.47, 0, 0, 0, 'torso'),
-                makePart('frustum',         'steel',          0, 1.40, 0.01,  0.32, 0.065, 0.29, 0, 0, 0, 'torso'),
+                ...focInfantryGarmentParts('euroPikeniere', 'darkCloth', 'leather', 'blackenedSteel'),
 
                 // Steel pauldrons seated tightly onto upper arms
                 makePart('dome', 'blackenedSteel', -0.235, 1.32, 0.0, 0.20, 0.16, 0.21, 0, 0,  0.24, 'torso'),
@@ -6933,10 +6948,7 @@ const OrganicCharacterGeometries = (() => {
                 ...buildEuroLowerBodyAndHead('enemyBreeches', 'leather', 'hairDark', 'linen'),
 
                 // Crimson coat + sculpted steel breastplate & gorget
-                makePart('orgTorsoCoat',    'enemyCloth', 0, 1.09, 0.0,   0.49, 0.66, 0.42, 0, 0, 0, 'torso'),
-                makePart('orgTorsoArmored', 'steel',      0, 1.13, 0.008, 0.53, 0.56, 0.46, 0, 0, 0, 'torso'),
-                makePart('frustum',         'steel',      0, 1.40, 0.01,  0.31, 0.060, 0.28, 0, 0, 0, 'torso'),
-                makePart('cylinder',        'leather',    0, 1.08, 0.006, 0.33, 0.055, 0.245, 0, 0, 0, 'torso'),
+                ...focInfantryGarmentParts('euroHalberd', 'enemyCloth', 'leather', 'steel'),
 
                 // Open helmet (lobster-tail / pointed open pot, snug at y=1.60)
                 makePart('orgHelmetPointed', 'steel', 0, 1.60, 0.015, 0.31, 0.25, 0.33, 0, 0, 0, 'torso'),
@@ -6977,8 +6989,7 @@ const OrganicCharacterGeometries = (() => {
                 ...buildEuroLowerBodyAndHead('darkCloth', 'blackenedSteel', 'hairDark', null),
 
                 // Full sculpted blackenedSteel cuirass with integrated shot ridge & 4-lame fauld/tasset skirt
-                makePart('orgTorsoArmored', 'blackenedSteel', 0, 1.12, 0.0, 0.55, 0.60, 0.48, 0, 0, 0, 'torso'),
-                makePart('frustum',         'steel',          0, 1.40, 0.01, 0.33, 0.070, 0.30, 0, 0, 0, 'torso'),
+                ...focInfantryGarmentParts('euroArmored', 'darkCloth', 'blackenedSteel', 'blackenedSteel'),
 
                 // Layered steel pauldrons seated tightly onto upper arms
                 makePart('dome', 'steel', -0.235, 1.32, 0.0, 0.22, 0.18, 0.23, 0, 0,  0.24, 'torso'),
@@ -9381,6 +9392,7 @@ function createSoldierPartTemplates() {
                     hairDark: new FOC_THREE.Material({ color: 0x3b2314, metalness: 0.03 }),
                     eyeDark: new FOC_THREE.Material({ color: 0x181412, metalness: 0.15 }),
                     crimsonVelvet: new FOC_THREE.Material({ color: 0x991b1b, metalness: 0.03 }),
+                    darkCloth: new FOC_THREE.Material({ color: 0x282b32, metalness: 0.02 }),
 
 
                 };
@@ -16041,7 +16053,7 @@ function createSoldierPartTemplates() {
                 const musk = reg.templates['fixed:euro_musketier'];
                 const pike = reg.templates['fixed:euro_pikeniere'];
                 assert(musk.some(p => p.prim === 'orgHelmetCavalier') && musk.some(p => p.mat === 'linen'), 'Musketier Cavalier şapka ve keten yaka taşımalı');
-                assert(pike.some(p => p.prim === 'orgHelmetMorion') && pike.some(p => p.prim === 'orgTorsoArmored'), 'Pikeniere Morion miğferi ve zırhlı gövde taşımalı');
+                assert(pike.some(p => p.prim === 'orgHelmetMorion') && pike.some(p => p.prim === 'focGarment_euroPikeniere_armor'), 'Pikeniere Morion miğferi ve zırhlı gövde taşımalı');
             });
 
             // 68. Ajan 04: Bütünlüklü Baş ve Yüz Geometrisi
@@ -16236,7 +16248,7 @@ function createSoldierPartTemplates() {
                     }
                     assert([...edges.values()].every(n=>n===2), id+' closed manifold');
                     assert(Object.values(sections).reduce((n,g)=>n+g.indices.length,0)===full.indices.length, id+' material coverage');
-                    assert(sections.cloth && sections.sash && Boolean(sections.armor)===style.armored && Boolean(sections.belt)===Boolean(style.belt), id+' material sections');
+                    assert(sections.cloth && sections.sash && Boolean(sections.armor)===style.armored && Boolean(sections.belt)===Boolean(style.belt) && Boolean(sections.jerkin)===Boolean(style.jerkin) && Boolean(sections.gorget)===Boolean(style.gorget), id+' material sections');
                 }
             });
 
@@ -16262,7 +16274,7 @@ function createSoldierPartTemplates() {
                 const mEntry = FIXED_EURO_INFANTRY['fixed:euro_musketier'];
                 const musketier = typeof mEntry === 'function' ? mEntry() : mEntry;
                 const hasSlouchHat = musketier.some(p => p.prim === 'orgHelmetCavalier');
-                const hasCoat = musketier.some(p => p.prim === 'orgTorsoCoat' && p.mat === 'playerCloth');
+                const hasCoat = musketier.some(p => p.prim === 'focGarment_euroMusketier_cloth' && p.mat === 'playerCloth');
                 assert(hasSlouchHat && hasCoat, 'Musketier bütünlüklü ceket ve Cavalier şapka kullanmalı');
             });
 
