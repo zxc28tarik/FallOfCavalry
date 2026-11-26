@@ -1991,6 +1991,7 @@
                         if (this._buffers.norm) this._gl.deleteBuffer(this._buffers.norm);
                         if (this._buffers.uv) this._gl.deleteBuffer(this._buffers.uv);
                         if (this._buffers.idx) this._gl.deleteBuffer(this._buffers.idx);
+                        if (this._buffers.skin) this._gl.deleteBuffer(this._buffers.skin);
                     } catch (err) {
                         // Ignore on lost context
                     }
@@ -2658,7 +2659,8 @@
                     }
                 `;
 
-                const instancedVS = `
+                const supportsSkin=Boolean(this.instancedExt && gl.getParameter(gl.MAX_VERTEX_ATTRIBS)>=12);
+                let instancedVS = `
                     attribute vec3 aPosition;
                     attribute vec3 aNormal;
                     attribute vec4 aInstCol0;
@@ -2701,6 +2703,13 @@
                     }
                 `;
 
+                // Two-bone linear blend skinning with 3 affine rows and one vertex weight.
+                // Keep the original 8-attribute program for low-capability GPUs.
+                if(supportsSkin){
+                    instancedVS=instancedVS.replace('attribute float aInstMetalness;', 'attribute float aInstMetalness; attribute float aSkinWeight; attribute vec4 aParentRow0; attribute vec4 aParentRow1; attribute vec4 aParentRow2;');
+                    instancedVS=instancedVS.replace('vec4 viewPos = uViewMatrix * worldPos;', 'vec4 bindPos=vec4(aPosition,1.0); vec3 parentPos=vec3(dot(aParentRow0,bindPos),dot(aParentRow1,bindPos),dot(aParentRow2,bindPos)); worldPos.xyz=mix(worldPos.xyz,parentPos,aSkinWeight); vec4 viewPos = uViewMatrix * worldPos;');
+                    instancedVS=instancedVS.replace('vFogDepth = length(viewPos.xyz);','vec3 parentN=vec3(dot(aParentRow0.xyz,aNormal),dot(aParentRow1.xyz,aNormal),dot(aParentRow2.xyz,aNormal)); vNormal=normalize(mix(vNormal,parentN,aSkinWeight)); vFogDepth = length(viewPos.xyz);');
+                }
                 const instancedFS = `
                     precision mediump float;
                     varying vec3 vNormal;
@@ -2941,7 +2950,9 @@
                     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geo.indices, gl.STATIC_DRAW);
                 }
 
-                geo._buffers = { pos, norm, uv, idx };
+                let skin=null;
+                if(geo.skinWeights){skin=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,skin);gl.bufferData(gl.ARRAY_BUFFER,geo.skinWeights,gl.STATIC_DRAW);}
+                geo._buffers = { pos, norm, uv, idx, skin };
                 return geo._buffers;
             }
 
@@ -2992,6 +3003,8 @@
                     ];
                     const aInstColor = gl.getAttribLocation(this.instancedProg, 'aInstColor');
                     const aInstMetal = gl.getAttribLocation(this.instancedProg, 'aInstMetalness');
+                    const aSkin=gl.getAttribLocation(this.instancedProg,'aSkinWeight');
+                    const parentLocs=[0,1,2].map(i=>gl.getAttribLocation(this.instancedProg,'aParentRow'+i));
 
                     for (let i = 0; i < batchGroup.batches.length; i++) {
                         const batch = batchGroup.batches[i];
@@ -3032,7 +3045,7 @@
                         }
 
                         gl.bindBuffer(gl.ARRAY_BUFFER, batch._glInstanceBuffer);
-                        const stride = INSTANCE_STRIDE_FLOATS * 4;
+                        const stride = (batch.stride||INSTANCE_STRIDE_FLOATS) * 4;
                         for (let c = 0; c < 4; c++) {
                             if (colLocs[c] >= 0) {
                                 gl.enableVertexAttribArray(colLocs[c]);
@@ -3053,9 +3066,19 @@
                             ext.vertexAttribDivisorANGLE(aInstMetal, 1);
                         }
 
+                        if(aSkin>=0){
+                            if(buffers.skin&&batch.stride===33){
+                                for(let j=0;j<3;j++){const loc=parentLocs[j];if(loc>=0){gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,4,gl.FLOAT,false,stride,84+j*16);ext.vertexAttribDivisorANGLE(loc,1);}}
+                                gl.bindBuffer(gl.ARRAY_BUFFER,buffers.skin);gl.enableVertexAttribArray(aSkin);gl.vertexAttribPointer(aSkin,1,gl.FLOAT,false,0,0);ext.vertexAttribDivisorANGLE(aSkin,0);
+                            }else{
+                                gl.disableVertexAttribArray(aSkin);gl.vertexAttrib1f(aSkin,0);
+                                for(const loc of parentLocs)if(loc>=0){gl.disableVertexAttribArray(loc);gl.vertexAttrib4f(loc,0,0,0,0);}
+                            }
+                        }
                         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.idx);
                         ext.drawElementsInstancedANGLE(gl.TRIANGLES, batch.geometry.indices.length, gl.UNSIGNED_SHORT, 0, batch.count);
                         this.drawCallsLastFrame++;
+                        if(aSkin>=0){gl.disableVertexAttribArray(aSkin);for(const loc of parentLocs)if(loc>=0){ext.vertexAttribDivisorANGLE(loc,0);gl.disableVertexAttribArray(loc);}}
 
                         for (let c = 0; c < 4; c++) {
                             if (colLocs[c] >= 0) {
@@ -3121,7 +3144,7 @@
                         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.idx);
 
                         for (let m = 0; m < batch.count; m++) {
-                            const base = m * INSTANCE_STRIDE_FLOATS;
+                            const base = m * (batch.stride||INSTANCE_STRIDE_FLOATS);
                             const subMat = batch.instanceData.subarray(base, base + 16);
                             gl.uniformMatrix4fv(uModel, false, subMat);
                             gl.uniform3f(
@@ -9174,7 +9197,7 @@ function createSoldierPartTemplates() {
 
                 FOC_THREE.Mat4.fromPivotEulerRollOffset(
                     scratchA,
-                    0.27, 1.32, 0.0,
+                    -0.23, 1.32, 0.0,
                     armPitch, armYaw, armRoll,
                     dx, dy, dz
                 );
@@ -9194,7 +9217,7 @@ function createSoldierPartTemplates() {
 
                 FOC_THREE.Mat4.fromPivotEulerRollOffset(
                     scratchA,
-                    -0.27, 1.32, 0.0,
+                    0.23, 1.32, 0.0,
                     armPitch, armYaw, armRoll,
                     dx, dy, dz
                 );
@@ -9393,7 +9416,7 @@ function createSoldierPartTemplates() {
                     }
                 }
 
-                return { pitch, yaw, roll, dx, dy, dz };
+                return { pitch, yaw, roll, dx, dy, dz, weaponPitch:pitch, weaponYaw:yaw, weaponRoll:roll, weaponDx:dx, weaponDy:dy, weaponDz:dz, torsoPitch:0,torsoYaw:0,torsoRoll:0,torsoDy:0 };
             }
 
             return null;
@@ -9579,7 +9602,7 @@ function createSoldierPartTemplates() {
                 const dz = (pose ? pose.weaponDz * ab : 0);
 
                 FOC_THREE.Mat4.fromPivotEulerRollOffset(
-                    scratchA, -0.25, 1.92, -0.04, // Sağ omuz pivotu
+                    scratchA, 0.23, 1.85, -0.02, // Sağ omuz pivotu
                     armPitch, armYaw, armRoll,
                     dx, dy, dz
                 );
@@ -9596,7 +9619,7 @@ function createSoldierPartTemplates() {
 
                 // A) Mızrak Kolu ve Silah Parçaları (Ajan 1)
                 const isLancePart = (archetype === 'cavalry_lance') &&
-                    ((part && part.subGroup === 'lance') || (totalParts > 0 && partIndex >= totalParts - 8));
+                    (part && part.subGroup === 'lance');
 
                 if (isLancePart && pose && ab > 1e-4) {
                     const armPitch = riderGaitPitch * 0.5 + pose.weaponPitch * ab;
@@ -9607,7 +9630,7 @@ function createSoldierPartTemplates() {
                     const armDz = pose.weaponDz * ab;
 
                     FOC_THREE.Mat4.fromPivotEulerRollOffset(
-                        scratchA, -0.25, 1.92, -0.04, // Sağ omuz pivotu
+                        scratchA, 0.23, 1.85, -0.02, // Sağ omuz pivotu
                         armPitch, armYaw, armRoll,
                         armDx, armDy, armDz
                     );
@@ -9893,6 +9916,53 @@ function createSoldierPartTemplates() {
             }
         }
 
+        // FOC-MESH-10. Bind-pose vertex weights for fixed anatomical surfaces.
+        // Weight=1 follows the parent, weight=0 follows the limb's original rig.
+        function focSkinParent(prim,rig){
+            if(prim.startsWith('focArm_'))return rig==='riderRightArmWeapon'?'riderUpper':rig==='riderUpper'?null:'torso';
+            if(prim.startsWith('focLeg_'))return rig.endsWith('Lower')?rig.replace('Lower','Upper'):'torso';
+            if(prim.startsWith('focMounted_'))return 'riderLower';
+            if(prim.startsWith('focEquine_')){
+                if(rig==='horseNeckHead'&&prim.endsWith('_neck')||rig==='horseTail')return 'horseBody';
+                if(rig.startsWith('horseLeg'))return rig.endsWith('Lower')?rig.replace('Lower',''):'horseBody';
+            }
+            return null;
+        }
+        function focPrepareSkinWeights(geometries,templates){
+            for(const key of Object.keys(FIXED_CHARACTER_ARCHETYPES)){
+                for(const part of templates[key]){
+                    const parent=focSkinParent(part.prim,part.rigGroup);if(!parent)continue;
+                    const g=geometries[part.prim];if(!g||g.skinWeights)continue;
+                    const p=g.positions,w=new Float32Array(p.length/3),prim=part.prim,rig=part.rigGroup;
+                    let segments=20,range=null;
+                    if(prim.startsWith('focArm_')){range=[1,6,false];}
+                    else if(prim.startsWith('focLeg_')){range=rig.endsWith('Lower')?[7,10,true]:[5,8,true];}
+                    else if(prim.startsWith('focMounted_')){segments=24;range=[0,5,false];}
+                    else if(prim.endsWith('_neck')){segments=28;range=[0,4,false];}
+                    else if(rig==='horseTail'){range=[0,3,false];}
+                    else if(rig.startsWith('horseLeg')){range=rig.endsWith('Lower')?[7,10,true]:[5,8,true];}
+                    if(!range)continue;
+                    const rings=(w.length-2)/segments;
+                    if(!Number.isInteger(rings))throw Error('skin ring layout '+prim);
+                    const [lo,hi,reverse]=range;
+                    for(let j=0;j<rings;j++){const f=smoothStep01((j-lo)/(hi-lo));w.fill(reverse?f:1-f,j*segments,(j+1)*segments);}
+                    w[w.length-2]=w[0];w[w.length-1]=w[(rings-1)*segments];
+                    g.skinWeights=w;
+                }
+            }
+        }
+        function focWriteSkinParent(reg,rec,part,data,base){
+            const parent=focSkinParent(part.prim,part.rigGroup);
+            if(!parent)return;
+            const proxy=reg._skinProxy;proxy.rigGroup=parent;
+            const out=reg._skinLocal;
+            if(rec.archetype.startsWith('infantry_'))computeInfantryPartLocalMatrix(out,proxy,rec.archetype,rec.walkPhase,rec.walkBlend,reg._scratchA,reg._scratchB,rec.actionPhase,rec.actionBlend,rec.actionMode);
+            else computeCavalryPartLocalMatrix(out,proxy,rec.walkPhase,rec.walkBlend,rec.trotBlend,reg._scratchA,reg._scratchB,rec.actionPhase,rec.actionBlend,rec.actionMode,rec.archetype);
+            FOC_THREE.Mat4.multiply(reg._skinWorld,rec.worldMat,out);
+            const m=reg._skinWorld;
+            for(let row=0;row<3;row++)for(let col=0;col<4;col++)data[base+21+row*4+col]=m[col*4+row];
+        }
+
         class SoldierVisualRegistry {
             constructor() {
                 this.records = new Map();
@@ -9941,6 +10011,10 @@ function createSoldierPartTemplates() {
                     ...createFOCFixedLimbGeometries(),
                     ...createFOCFixedHorseGeometries()
                 };
+                focPrepareSkinWeights(this.geometries,this.templates);
+                this._skinProxy={rigGroup:'static',localMat:FOC_THREE.Mat4.create()};
+                this._skinLocal=FOC_THREE.Mat4.create();this._skinWorld=FOC_THREE.Mat4.create();
+                this._partBatchIndices=new Map();
 
                 this.materials = {
                     playerCloth: new FOC_THREE.Material({ color: 0x2563eb, metalness: 0.08 }),
@@ -10537,12 +10611,12 @@ function createSoldierPartTemplates() {
 
                     for (let p = 0; p < parts.length; p++) {
                         const part = parts[p];
-                        const bIdx = part._batchIndex;
+                        const bIdx = this._partBatchIndices.get(part);
                         if (bIdx === undefined || bIdx < 0 || bIdx >= batches.length) continue;
 
                         const batch = batches[bIdx];
                         const slot = writeOffsets[bIdx]++;
-                        const base = slot * INSTANCE_STRIDE_FLOATS;
+                        const base = slot * (batch.stride||INSTANCE_STRIDE_FLOATS);
 
                         if (isInfantry && (rec.walkBlend > 1e-4 || rec.actionBlend > 1e-4)) {
                             computeInfantryPartLocalMatrix(
@@ -10580,6 +10654,7 @@ function createSoldierPartTemplates() {
                         }
 
                         batch.instanceData.set(this._tmpWorldPartMat, base);
+                        if(batch.stride===33)focWriteSkinParent(this,rec,part,batch.instanceData,base);
                     }
                 }
 
@@ -10595,6 +10670,7 @@ function createSoldierPartTemplates() {
                 }
 
                 const buckets = new Map();
+                this._partBatchIndices.clear();
 
                 for (const rec of this.records.values()) {
                     const parts = this.templates[rec.templateKey] || this.templates['player:infantry_pikeman'];
@@ -10651,6 +10727,7 @@ function createSoldierPartTemplates() {
 
                         bucket.entries.push({
                             partRef: part,
+                            rec,
                             worldMat: rec.worldMat,
                             localMat: localMatToUse,
                             r: matObj.color.r,
@@ -10672,12 +10749,14 @@ function createSoldierPartTemplates() {
                 for (let bIdx = 0; bIdx < sortedBuckets.length; bIdx++) {
                     const bucket = sortedBuckets[bIdx];
                     const count = bucket.entries.length;
-                    const instanceData = new Float32Array(count * INSTANCE_STRIDE_FLOATS);
+                    const geometry=this.geometries[bucket.prim];
+                    const stride=geometry.skinWeights?33:INSTANCE_STRIDE_FLOATS;
+                    const instanceData = new Float32Array(count * stride);
 
                     for (let i = 0; i < count; i++) {
                         const entry = bucket.entries[i];
-                        entry.partRef._batchIndex = bIdx;
-                        const base = i * INSTANCE_STRIDE_FLOATS;
+                        this._partBatchIndices.set(entry.partRef,bIdx);
+                        const base = i * stride;
                         FOC_THREE.Mat4.multiply(tmpMat, entry.worldMat, entry.localMat);
                         instanceData.set(tmpMat, base);
                         instanceData[base + 16] = entry.r;
@@ -10685,10 +10764,12 @@ function createSoldierPartTemplates() {
                         instanceData[base + 18] = entry.b;
                         instanceData[base + 19] = entry.a;
                         instanceData[base + 20] = entry.metalness;
+                        if(stride===33)focWriteSkinParent(this,entry.rec,entry.partRef,instanceData,base);
                     }
 
                     batches.push({
-                        geometry: this.geometries[bucket.prim],
+                        geometry,
+                        stride,
                         transparent: bucket.transparent,
                         instanceData,
                         count,
@@ -16935,6 +17016,12 @@ function createSoldierPartTemplates() {
                     assert(!p.some(x=>['orgHorseNeckHead','orgHorseTail','orgHorseLegUpper','orgHorseLegLower'].includes(x.prim)),key+' no legacy anatomy');
                 }
                 reg.dispose();
+            });
+
+            runCase('83e. FOC-MESH-10: parent-weighted joint data', () => {
+                const reg=new SoldierVisualRegistry();
+                let count=0;for(const g of Object.values(reg.geometries))if(g.skinWeights){count++;assert(g.skinWeights.length===g.positions.length/3,'vertex weights');assert(g.skinWeights.every(w=>w>=0&&w<=1),'normalized weights');}
+                assert(count>0,'skin geometries exist');reg.dispose();
             });
 
             // 84. Ajan 06: Gerçek Savaş Alanı 300 Askerin Sabit Arketiplere Bağlanması (Modülerlik Askıda)
