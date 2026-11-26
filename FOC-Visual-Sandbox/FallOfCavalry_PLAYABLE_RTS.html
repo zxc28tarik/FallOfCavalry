@@ -6079,17 +6079,24 @@ const OrganicCharacterGeometries = (() => {
             azapShield:     { hem: 0.266, chest: 0.250, waist: 0.170, depth: 0.139, fold: 0.014, phase: 0.8, armored: false },
             azapMusket:     { hem: 0.240, chest: 0.245, waist: 0.162, depth: 0.133, fold: 0.009, phase: 1.4, armored: false },
             janissaryMusket:{ hem: 0.274, chest: 0.257, waist: 0.177, depth: 0.147, fold: 0.012, phase: 0.5, armored: true },
-            janissarySword: { hem: 0.286, chest: 0.265, waist: 0.181, depth: 0.150, fold: 0.014, phase: 1.1, armored: true }
+            janissarySword: { hem: 0.286, chest: 0.265, waist: 0.181, depth: 0.150, fold: 0.014, phase: 1.1, armored: true },
+            // FOC-MESH-02: guard, siege specialist and irregular infantry silhouettes.
+            bostanciAxe:    { hem: 0.282, chest: 0.276, waist: 0.187, depth: 0.160, fold: 0.010, phase: 0.4, armored: true, hemDepth: 0.168, armorRidge: 0.019, armorFlare: 0.012, pleats: 6 },
+            bostanciPike:   { hem: 0.290, chest: 0.281, waist: 0.189, depth: 0.155, fold: 0.010, phase: 1.2, armored: true, hemDepth: 0.162, armorRidge: 0.025, armorFlare: 0.015, pleats: 8 },
+            humbaraci:     { hem: 0.273, chest: 0.258, waist: 0.182, depth: 0.149, fold: 0.012, phase: 0.9, armored: false, hemDepth: 0.162, belt: true, pleats: 6, apron: 0.012 },
+            levend:        { hem: 0.235, chest: 0.251, waist: 0.168, depth: 0.136, fold: 0.016, phase: 2.1, armored: false, hemDepth: 0.145, hemLift: 0.045, pleats: 5, asymmetry: 0.009 }
         });
         function buildFOCInfantryGarment(style) {
             const mb = new MeshBuilder();
             const N = 24;
             // y, half-width, half-depth, front displacement, cloth fold weight
+            const hemDepth = style.hemDepth ?? 0.153;
+            const hemLift = style.hemLift || 0;
             const levels = [
-                [0.790, style.hem, 0.153, -0.012, 1.0],
-                [0.816, style.hem, 0.153, -0.010, 1.0],
-                [0.865, style.hem * 0.94, 0.146, -0.006, 0.85],
-                [0.915, style.hem * 0.83, 0.131, 0.000, 0.65],
+                [0.790 + hemLift, style.hem, hemDepth, -0.012, 1.0],
+                [0.816 + hemLift, style.hem, hemDepth, -0.010, 1.0],
+                [0.865 + hemLift * 0.65, style.hem * 0.94, hemDepth - 0.007, -0.006, 0.85],
+                [0.915 + hemLift * 0.30, style.hem * 0.83, hemDepth - 0.022, 0.000, 0.65],
                 [0.975, style.waist * 1.15, 0.112, 0.008, 0.30],
                 [1.006, style.waist, 0.108, 0.010, 0.12],
                 [1.018, style.waist + 0.009, 0.116, 0.010, 0.08],
@@ -6116,20 +6123,22 @@ const OrganicCharacterGeometries = (() => {
                     const ca = Math.cos(a), sa = Math.sin(a);
                     const front = Math.max(0, sa);
                     const seam = Math.exp(-Math.pow(ca / 0.14, 2)) * front;
-                    const folds = style.fold * foldWeight * (0.75 * Math.cos(a * 7 + style.phase + y * 4) + 0.25 * Math.sin(a * 11 - y * 7));
-                    const plate = armor ? 0.007 + 0.012 * Math.pow(front, 2) + 0.010 * seam : 0;
+                    const folds = style.fold * foldWeight * (0.75 * Math.cos(a * (style.pleats || 7) + style.phase + y * 4) + 0.25 * Math.sin(a * 11 - y * 7));
+                    const plate = armor ? 0.007 + 0.012 * Math.pow(front, 2) + (style.armorRidge ?? 0.010) * seam + (style.armorFlare || 0) * Math.exp(-Math.pow((y - 1.107) / 0.027, 2)) : 0;
                     const overlap = !armor && y > 1.082 && y < 1.375 ? 0.007 * seam : 0;
                     const vent = y < 0.915 ? -0.014 * seam * (0.915 - y) / 0.125 : 0;
-                    ring.push([(rx + folds + plate * 0.4) * ca, y, shift + (rz + folds) * sa + plate * sa + overlap + vent]);
+                    const apron = (style.apron || 0) * Math.pow(front, 4) * Math.max(0, 1 - Math.abs(y - 0.97) / 0.17);
+                    const asym = (style.asymmetry || 0) * Math.sin(a + style.phase) * foldWeight;
+                    ring.push([(rx + folds + plate * 0.4) * ca + asym, y, shift + (rz + folds) * sa + plate * sa + overlap + vent + apron]);
                 }
                 return ring;
             });
             mb.addLoft(rings, true, true);
             const full = mb.toBufferGeometry(false);
-            const indices = { cloth: [], sash: [], armor: [] };
+            const indices = { cloth: [], sash: [], armor: [], belt: [] };
             // Each ring strip uses 6*N indices; caps are emitted last by addLoft.
             for (let i = 0; i < levels.length - 1; i++) {
-                const material = i >= 5 && i < 9 ? 'sash' : style.armored && i >= 9 && i < 16 ? 'armor' : 'cloth';
+                const material = style.belt && i === 7 ? 'belt' : i >= 5 && i < 9 ? 'sash' : style.armored && i >= 9 && i < 16 ? 'armor' : 'cloth';
                 indices[material].push(...full.indices.slice(i * N * 6, (i + 1) * N * 6));
             }
             indices.cloth.push(...full.indices.slice((levels.length - 1) * N * 6));
@@ -6159,6 +6168,7 @@ const OrganicCharacterGeometries = (() => {
                 makePart('focGarment_' + id + '_sash', sash, 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso')
             ];
             if (armor) parts.push(makePart('focGarment_' + id + '_armor', armor, 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
+            if (FOC_INFANTRY_GARMENT_STYLES[id].belt) parts.push(makePart('focGarment_' + id + '_belt', 'leather', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'torso'));
             return parts;
         }
 
@@ -6245,10 +6255,8 @@ const OrganicCharacterGeometries = (() => {
         function buildFixedOttomanBostanciAxe() {
             return [
                 ..._fixedOttomanLegs('ottomanNavy', 'buffLeather', 1.08),
-                makePart('orgTorsoCoat', 'crimsonVelvet', 0, 1.09, 0.0, 0.57, 0.58, 0.38, 0, 0, 0, 'torso'),
-                makePart('orgTorsoArmored', 'damascusSteel', 0, 1.09, 0.015, 0.58, 0.54, 0.40, 0, 0, 0, 'torso'),
-                _fixedSnugWaistSash('ottomanEmerald', 0.57, 0.38, true, 0.09),
-                ..._fixedOttomanHeadAndNeck('ottomanEmerald', 'hairDark', 'hairDark'),
+                ...focInfantryGarmentParts('bostanciAxe', 'crimsonVelvet', 'ottomanEmerald', 'damascusSteel'),
+                ..._fixedOttomanHeadAndNeck('ottomanEmerald', 'hairDark', 'hairDark').slice(1),
                 makePart('orgHelmetPointed', 'ottomanCrimson', 0, 1.63, 0.01, 0.27, 0.43, 0.28, 0, 0, 0, 'torso'),
                 makePart('cylinder', 'gold', 0, 1.57, 0.01, 0.26, 0.036, 0.27, 0, 0, 0, 'torso'),
                 ..._fixedTwoHandPikeParts('ottomanEmerald', 'skin', 3.10, true)
@@ -6259,10 +6267,8 @@ const OrganicCharacterGeometries = (() => {
         function buildFixedOttomanBostanciPike() {
             return [
                 ..._fixedOttomanLegs('ottomanNavy', 'leather', 1.10),
-                makePart('orgTorsoCoat', 'crimsonVelvet', 0, 1.09, 0.0, 0.58, 0.58, 0.38, 0, 0, 0, 'torso'),
-                makePart('orgTorsoArmored', 'steel', 0, 1.09, 0.015, 0.59, 0.54, 0.40, 0, 0, 0, 'torso'),
-                _fixedSnugWaistSash('gold', 0.58, 0.38, true, 0.085),
-                ..._fixedOttomanHeadAndNeck('crimsonVelvet', 'hairDark', 'hairDark'),
+                ...focInfantryGarmentParts('bostanciPike', 'crimsonVelvet', 'gold', 'steel'),
+                ..._fixedOttomanHeadAndNeck('crimsonVelvet', 'hairDark', 'hairDark').slice(1),
                 makePart('orgHelmetPointed', 'ottomanCrimson', 0, 1.63, 0.01, 0.27, 0.43, 0.28, 0, 0, 0, 'torso'),
                 makePart('cylinder', 'gold', 0, 1.57, 0.01, 0.26, 0.036, 0.27, 0, 0, 0, 'torso'),
                 ..._fixedTwoHandPikeParts('ottomanCrimson', 'skin', 4.20, false)
@@ -6277,14 +6283,12 @@ const OrganicCharacterGeometries = (() => {
             const eL = [-0.30, 1.14, 0.10];
             return [
                 ..._fixedOttomanLegs('buffLeather', 'leather', 1.04),
-                makePart('orgTorsoCoat', 'crimsonVelvet', 0, 1.09, 0.0, 0.56, 0.58, 0.37, 0, 0, 0, 'torso'),
-                _fixedSnugWaistSash('ottomanSaffron', 0.56, 0.37, false, 0.085),
+                ...focInfantryGarmentParts('humbaraci', 'crimsonVelvet', 'ottomanSaffron'),
                 // Snug leather belt & compact hip bomb pouch + yatağan scabbard
-                makePart('cylinder', 'leather', 0, 1.03, 0.007, 0.348, 0.030, 0.184, 0, 0, 0, 'torso'),
                 makePart('box', 'buffLeather',  0.175, 0.99,  0.02, 0.065, 0.095, 0.075, 0, 0, 0, 'torso'),
                 makePart('box', 'buffLeather', -0.175, 0.94, -0.02, 0.030, 0.055, 0.46, 0.40, -0.20, 0.14, 'torso'),
                 makePart('box', 'gold',        -0.180, 1.01,  0.18, 0.040, 0.095, 0.045, 0.40, -0.20, 0.14, 'torso'),
-                ..._fixedOttomanHeadAndNeck('crimsonVelvet', 'hairDark', 'hairDark'),
+                ..._fixedOttomanHeadAndNeck('crimsonVelvet', 'hairDark', 'hairDark').slice(1),
                 makePart('orgHelmetTurban', 'ottomanEmerald', 0, 1.62, 0.01, 0.33, 0.23, 0.33, 0, 0, 0, 'torso'),
                 // Right arm holding cast-iron humbara bomb cleanly in hand (0.23, 1.20, 0.32)
                 makePart('orgArmSwordR', 'ottomanCrimson', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'rightArmWeapon'),
@@ -6305,11 +6309,10 @@ const OrganicCharacterGeometries = (() => {
             const eL = [-0.30, 1.14, 0.10];
             return [
                 ..._fixedOttomanLegs('linen', 'buffLeather', 0.98),
-                makePart('orgTorsoCoat', 'ottomanNavy', 0, 1.09, 0.0, 0.53, 0.56, 0.35, 0, 0, 0, 'torso'),
-                _fixedSnugWaistSash('crimsonVelvet', 0.53, 0.35, false, 0.088),
+                ...focInfantryGarmentParts('levend', 'ottomanNavy', 'crimsonVelvet'),
                 // Spare flintlock pistol tucked snugly into front-left of waist sash
                 makePart('box', 'wood', -0.075, 1.045, 0.085, 0.034, 0.14, 0.055, 0.30, 0.22, 0.20, 'torso'),
-                ..._fixedOttomanHeadAndNeck('ottomanNavy', 'hairDark', null, true),
+                ..._fixedOttomanHeadAndNeck('ottomanNavy', 'hairDark', null, true).slice(1),
                 // Striped saffron/navy turban
                 makePart('orgHelmetTurban', 'ottomanSaffron', 0, 1.62, 0.01, 0.33, 0.22, 0.33, 0, 0, 0, 'torso'),
                 makePart('cylinder', 'ottomanNavy', 0, 1.63, 0.01, 0.34, 0.045, 0.34, 0.1, 0, 0.12, 'torso'),
@@ -16233,7 +16236,7 @@ function createSoldierPartTemplates() {
                     }
                     assert([...edges.values()].every(n=>n===2), id+' closed manifold');
                     assert(Object.values(sections).reduce((n,g)=>n+g.indices.length,0)===full.indices.length, id+' material coverage');
-                    assert(sections.cloth && sections.sash && Boolean(sections.armor)===style.armored, id+' material sections');
+                    assert(sections.cloth && sections.sash && Boolean(sections.armor)===style.armored && Boolean(sections.belt)===Boolean(style.belt), id+' material sections');
                 }
             });
 
