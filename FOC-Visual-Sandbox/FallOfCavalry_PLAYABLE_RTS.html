@@ -6383,6 +6383,101 @@ const OrganicCharacterGeometries = (() => {
             return makePart(prim, mat, mx, my, mz, avgScale, len, avgScale, rx, 0, rz, rigGroup);
         }
 
+        // FOC-MESH-04: fixed mounted silhouettes in character-space. All variants
+        // retain the existing saddle, shoulder and leg animation anchors.
+        const FOC_OTTOMAN_MOUNT_STYLES = Object.freeze({
+            sipahiLance: { chest:.232, waist:.178, depth:.145, hem:.211, horseWidth:.181, horseDepth:.216, horseLength:.68, armor:false, mirror:true, phase:.3 },
+            sipahiSword: { chest:.240, waist:.183, depth:.150, hem:.216, horseWidth:.189, horseDepth:.224, horseLength:.68, armor:false, mirror:true, phase:.9 },
+            kapikulu:    { chest:.253, waist:.193, depth:.161, hem:.226, horseWidth:.211, horseDepth:.245, horseLength:.69, armor:true, mirror:true, phase:.5 },
+            deliLance:   { chest:.239, waist:.176, depth:.145, hem:.216, horseWidth:.171, horseDepth:.213, horseLength:.67, armor:false, pelt:true, phase:1.3 },
+            deliSword:   { chest:.245, waist:.179, depth:.150, hem:.221, horseWidth:.180, horseDepth:.219, horseLength:.68, armor:false, pelt:true, phase:2.1 },
+            akinci:      { chest:.222, waist:.164, depth:.132, hem:.195, horseWidth:.162, horseDepth:.201, horseLength:.66, armor:false, phase:2.7 }
+        });
+        function focMountedMaterialSections(full, stripMaterials, segs, capMaterial) {
+            const lists = {};
+            for (let i=0; i<stripMaterials.length; i++) {
+                const m = stripMaterials[i];
+                (lists[m] ||= []).push(...full.indices.slice(i*segs*6,(i+1)*segs*6));
+            }
+            (lists[capMaterial] ||= []).push(...full.indices.slice(stripMaterials.length*segs*6));
+            const sections = {};
+            for (const [mat,list] of Object.entries(lists)) {
+                const geo = new FOC_THREE.BufferGeometry();
+                geo.positions = full.positions; geo.normals = full.normals; geo.indices = new Uint16Array(list);
+                sections[mat] = geo;
+            }
+            return sections;
+        }
+        function buildFOCMountedTorso(style) {
+            const N=24;
+            const levels=[
+                [1.505,style.hem,.129,-.047,1],
+                [1.537,style.hem,.133,-.043,.8],
+                [1.574,style.waist*1.13,.126,-.04,.5],
+                [1.598,style.waist,.119,-.04,.2],
+                [1.610,style.waist+.008,.129,-.04,.12],
+                [1.640,style.waist+.012,.137,-.04,.08],
+                [1.673,style.waist+.008,.130,-.04,.08],
+                [1.687,style.waist,.122,-.04,.12],
+                [1.728,style.waist*1.14,style.depth*.95,-.04,.2],
+                [1.770,style.chest*.94,style.depth,-.035,.2],
+                [1.814,style.chest,style.depth,-.035,.2],
+                [1.859,style.chest,style.depth*.94,-.036,.15],
+                [1.901,style.chest*.93,style.depth*.83,-.037,.1],
+                [1.929,style.chest*.75,style.depth*.72,-.034,.08],
+                [1.950,.121,.091,-.028,.05],
+                [1.968,.103,.083,-.024,.02],
+                [1.986,.083,.073,-.021,0]
+            ];
+            const rings=levels.map(([y,rx,rz,z,fold],ri)=>Array.from({length:N},(_,i)=>{
+                const a=i*2*Math.PI/N, ca=Math.cos(a),sa=Math.sin(a),front=Math.max(0,sa);
+                const f=.009*fold*Math.cos(7*a+style.phase+y*5);
+                const plate=style.armor && ri>=7 && ri<=13 ? .008+.014*Math.pow(front,4) : 0;
+                const pelt=style.pelt && ri>=11 && ri<=14 ? .014*(.7+.3*Math.cos(9*a+ri)) : 0;
+                return [(rx+f+plate*.35+pelt)*ca,y,z+(rz+f+plate+pelt)*sa];
+            }));
+            const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            const mats=levels.slice(0,-1).map((_,i)=>i>=3&&i<7?'sash':style.armor&&i>=7&&i<13?'armor':style.pelt&&i>=11&&i<14?'pelt':'cloth');
+            return {full,sections:focMountedMaterialSections(full,mats,N,'cloth')};
+        }
+        function buildFOCMountedHorse(style) {
+            const N=28,L=style.horseLength,W=style.horseWidth,D=style.horseDepth;
+            // z, width fraction, top and underside relative to y=1.20
+            const levels=[
+                [-1,.12,.015,-.025],[-.97,.42,.10,-.10],[-.89,.78,.18,-.16],
+                [-.76,1.04,.23,-.20],[-.61,1.10,.25,-.22],[-.45,1.02,.23,-.24],
+                [-.28,.94,.19,-.27],[-.10,.96,.17,-.29],[.08,1.02,.17,-.30],
+                [.24,1.07,.20,-.31],[.40,1.12,.26,-.32],[.55,1.11,.30,-.31],
+                [.70,1.02,.25,-.29],[.83,.83,.19,-.24],[.93,.56,.12,-.17],
+                [1,.17,.025,-.045]
+            ];
+            const rings=levels.map(([z,w,top,bot])=>Array.from({length:N},(_,i)=>{
+                const a=i*2*Math.PI/N,ca=Math.cos(a),sa=-Math.sin(a);
+                const t=sa>0?top: -bot;
+                const rib=.009*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z-.28)/.38,2));
+                const rump=.006*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z+.65)/.22,2));
+                return [(W*w+rib+rump)*ca,1.20+sa*t*(D/.224),z*L];
+            }));
+            return OrganicCharacterGeometries.createClosedLoft(rings);
+        }
+        function createFOCOttomanMountedGeometries() {
+            const result={};
+            for (const [id,style] of Object.entries(FOC_OTTOMAN_MOUNT_STYLES)) {
+                const torso=buildFOCMountedTorso(style);
+                for (const [mat,g] of Object.entries(torso.sections)) result['focMounted_'+id+'_'+mat]=g;
+                result['focHorse_'+id]=buildFOCMountedHorse(style);
+            }
+            return result;
+        }
+        function focMountedTorsoParts(id,cloth,sash) {
+            const style=FOC_OTTOMAN_MOUNT_STYLES[id];
+            const parts=[makePart('focMounted_'+id+'_cloth',cloth,0,0,0,1,1,1,0,0,0,'riderUpper'),
+                makePart('focMounted_'+id+'_sash',sash,0,0,0,1,1,1,0,0,0,'riderUpper')];
+            if(style.armor) parts.push(makePart('focMounted_'+id+'_armor','damascusSteel',0,0,0,1,1,1,0,0,0,'riderUpper'));
+            if(style.pelt) parts.push(makePart('focMounted_'+id+'_pelt','leopardPelt',0,0,0,1,1,1,0,0,0,'riderUpper'));
+            return parts;
+        }
+
         function buildFixedOttomanWarhorse(coatMat, maneMat, clothMat, options = {}) {
             const isArmored = Boolean(options.armored);
             const isLeopardSaddle = Boolean(options.leopardSaddle);
@@ -6393,7 +6488,7 @@ const OrganicCharacterGeometries = (() => {
                 makePart('cylinder', 'shadow', 0, 0.02, 0.0, 2.24, 0.02, 1.32, 0, 0, 0, 'shadow'),
 
                 // Unified organic horse barrel (y=1.20) and downward-angled neck+head flowing out of withers/chest
-                makePart('orgHorseBody', coatMat, 0, 1.20, 0.0, 0.68, 0.72, 1.36, 0, 0, 0, 'horseBody'),
+                (options.meshId ? makePart('focHorse_'+options.meshId,coatMat,0,0,0,1,1,1,0,0,0,'horseBody') : makePart('orgHorseBody', coatMat, 0, 1.20, 0.0, 0.68, 0.72, 1.36, 0, 0, 0, 'horseBody')),
                 makePart('orgHorseNeckHead', coatMat, 0, 1.60, 0.80, 0.34, 0.76, 0.72, 0, 0, 0, 'horseNeckHead'),
 
                 // Sleek thin leather bridle & bit bosses hugging orgHorseNeckHead
@@ -6485,8 +6580,7 @@ const OrganicCharacterGeometries = (() => {
                 makePart('orgRiderLegR', bootMat || 'leather', 0, 0, 0, 1, 1, 1, 0, 0, 0, 'riderLower'),
 
                 // Upper torso at y=1.62..1.90 (riderUpper)
-                makePart(torsoPrim, coatMat, 0, 1.76, -0.04, 0.48, 0.38, 0.32, 0, 0, 0, 'riderUpper'),
-                makePart('cylinder', sashMat, 0, 1.64, -0.04, 0.45, 0.09, 0.31, 0, 0, 0, 'riderUpper'),
+                ...(options.meshId ? focMountedTorsoParts(options.meshId, coatMat, sashMat) : [makePart(torsoPrim, coatMat, 0, 1.76, -0.04, 0.48, 0.38, 0.32, 0, 0, 0, 'riderUpper'), makePart('cylinder', sashMat, 0, 1.64, -0.04, 0.45, 0.09, 0.31, 0, 0, 0, 'riderUpper')]),
                 makePart('box', 'gold', 0, 1.64, 0.12, 0.09, 0.08, 0.03, 0, 0, 0, 'riderUpper'),
 
                 // Neck & Natural Head at y=2.10 (riderUpper)
@@ -6579,8 +6673,8 @@ const OrganicCharacterGeometries = (() => {
         // 1. Sipahi Mızraklı
         function buildFixedOttomanSipahiLance() {
             return [
-                ...buildFixedOttomanWarhorse('horseChestnut', 'horseDark', 'ottomanCrimson'),
-                ...buildSeatedOttomanRiderBase('ottomanEmerald', 'leather', 'ottomanCrimson', 'orgTorsoCoat', { sashMat: 'ottomanSaffron' }),
+                ...buildFixedOttomanWarhorse('horseChestnut', 'horseDark', 'ottomanCrimson', { meshId: 'sipahiLance' }),
+                ...buildSeatedOttomanRiderBase('ottomanEmerald', 'leather', 'ottomanCrimson', 'orgTorsoCoat', { meshId: 'sipahiLance', sashMat: 'ottomanSaffron' }),
                 // Çar-Ayna mirror plate (breast & back disc) with damascus steel & brass trim
                 makePart('cylinder', 'damascusSteel', 0, 1.78, 0.115, 0.26, 0.024, 0.26, Math.PI * 0.5, 0, 0, 'riderUpper'),
                 makePart('cylinder', 'burnishedBronze', 0, 1.78, 0.118, 0.28, 0.008, 0.28, Math.PI * 0.5, 0, 0, 'riderUpper'),
@@ -6597,8 +6691,8 @@ const OrganicCharacterGeometries = (() => {
         // 2. Sipahi Kılıç + Kalkanlı
         function buildFixedOttomanSipahiSwordShield() {
             return [
-                ...buildFixedOttomanWarhorse('horseBay', 'horseDark', 'ottomanEmerald'),
-                ...buildSeatedOttomanRiderBase('ottomanCrimson', 'leather', 'ottomanEmerald', 'orgTorsoCoat', { sashMat: 'ottomanSaffron' }),
+                ...buildFixedOttomanWarhorse('horseBay', 'horseDark', 'ottomanEmerald', { meshId: 'sipahiSword' }),
+                ...buildSeatedOttomanRiderBase('ottomanCrimson', 'leather', 'ottomanEmerald', 'orgTorsoCoat', { meshId: 'sipahiSword', sashMat: 'ottomanSaffron' }),
                 // Çar-Ayna chest & back mirror plate
                 makePart('cylinder', 'damascusSteel', 0, 1.78, 0.115, 0.26, 0.024, 0.26, Math.PI * 0.5, 0, 0, 'riderUpper'),
                 makePart('cylinder', 'burnishedBronze', 0, 1.78, 0.118, 0.28, 0.008, 0.28, Math.PI * 0.5, 0, 0, 'riderUpper'),
@@ -6618,8 +6712,8 @@ const OrganicCharacterGeometries = (() => {
         // 3. Ağır Kapıkulu Sipahisi
         function buildFixedOttomanKapikuluHeavy() {
             return [
-                ...buildFixedOttomanWarhorse('horseDark', 'horseDark', 'ottomanCrimson', { armored: true }),
-                ...buildSeatedOttomanRiderBase('ottomanNavy', 'darkSteel', 'damascusSteel', 'orgTorsoArmored', {
+                ...buildFixedOttomanWarhorse('horseDark', 'horseDark', 'ottomanCrimson', { meshId: 'kapikulu', armored: true }),
+                ...buildSeatedOttomanRiderBase('ottomanNavy', 'darkSteel', 'damascusSteel', 'orgTorsoArmored', { meshId: 'kapikulu',
                     sashMat: 'ottomanCrimson',
                     sleeveMat: 'damascusSteel'
                 }),
@@ -6647,9 +6741,8 @@ const OrganicCharacterGeometries = (() => {
         // 4. Deli Mızraklı
         function buildFixedOttomanDeliLance() {
             return [
-                ...buildFixedOttomanWarhorse('horseDun', 'horseDark', 'ottomanCrimson', { leopardSaddle: true }),
-                ...buildSeatedOttomanRiderBase('ottomanCrimson', 'leather', 'ottomanCrimson', 'orgTorsoCoat', { sashMat: 'ottomanSaffron' }),
-                ...buildLeopardPeltMantleParts(),
+                ...buildFixedOttomanWarhorse('horseDun', 'horseDark', 'ottomanCrimson', { meshId: 'deliLance', leopardSaddle: true }),
+                ...buildSeatedOttomanRiderBase('ottomanCrimson', 'leather', 'ottomanCrimson', 'orgTorsoCoat', { meshId: 'deliLance', sashMat: 'ottomanSaffron' }),
                 ...buildDeliWingedKalpakParts(),
                 ...buildRiderRightArm('ottomanCrimson'),
                 ...buildOttomanLanceParts(0.22, 1.67, 0.32, 3.8, 'ottomanSaffron', { pitch: 0.98, tasselMat: 'leopardPelt' })
@@ -6659,9 +6752,8 @@ const OrganicCharacterGeometries = (() => {
         // 5. Deli Kılıçlı
         function buildFixedOttomanDeliSword() {
             return [
-                ...buildFixedOttomanWarhorse('horseChestnut', 'horseDark', 'ottomanNavy', { leopardSaddle: true }),
-                ...buildSeatedOttomanRiderBase('ottomanNavy', 'leather', 'roughWool', 'orgTorsoCoat', { sashMat: 'ottomanCrimson' }),
-                ...buildLeopardPeltMantleParts(),
+                ...buildFixedOttomanWarhorse('horseChestnut', 'horseDark', 'ottomanNavy', { meshId: 'deliSword', leopardSaddle: true }),
+                ...buildSeatedOttomanRiderBase('ottomanNavy', 'leather', 'roughWool', 'orgTorsoCoat', { meshId: 'deliSword', sashMat: 'ottomanCrimson' }),
                 ...buildDeliWingedKalpakParts(),
                 ...buildRiderRightArm('roughWool'),
                 ...buildOttomanSabreParts(0.22, 1.67, 0.32, 0.92, 'burnishedBronze')
@@ -6671,8 +6763,8 @@ const OrganicCharacterGeometries = (() => {
         // 6. Akıncı / Hafif Atlı Ateşli
         function buildFixedOttomanAkinciCarbine() {
             return [
-                ...buildFixedOttomanWarhorse('horseDun', 'wood', 'ottomanSaffron'),
-                ...buildSeatedOttomanRiderBase('ottomanNavy', 'buffLeather', 'buffLeather', 'orgTorsoCoat', { sashMat: 'ottomanCrimson' }),
+                ...buildFixedOttomanWarhorse('horseDun', 'wood', 'ottomanSaffron', { meshId: 'akinci' }),
+                ...buildSeatedOttomanRiderBase('ottomanNavy', 'buffLeather', 'buffLeather', 'orgTorsoCoat', { meshId: 'akinci', sashMat: 'ottomanCrimson' }),
                 // Felt külah + wrapped turban band
                 makePart('orgHelmetPointed', 'buffLeather', 0, 2.18, -0.01, 0.23, 0.28, 0.24, -0.08, 0, 0, 'riderUpper'),
                 makePart('orgHelmetTurban', 'ottomanWhite', 0, 2.14, -0.01, 0.27, 0.11, 0.28, 0, 0, 0, 'riderUpper'),
@@ -9355,7 +9447,8 @@ function createSoldierPartTemplates() {
                     orgRiderLegL: OrganicCharacterGeometries.createRiderLegL(),
                     orgRiderLegR: OrganicCharacterGeometries.createRiderLegR(),
                     orgHorseTail: OrganicCharacterGeometries.createHorseTail(),
-                    ...createFOCInfantryGarmentGeometries()
+                    ...createFOCInfantryGarmentGeometries(),
+                    ...createFOCOttomanMountedGeometries()
                 };
 
                 this.materials = {
@@ -16260,9 +16353,21 @@ function createSoldierPartTemplates() {
                 for (const k of keys) {
                     const entry = FIXED_OTTOMAN_CAVALRY[k];
                     const parts = typeof entry === 'function' ? entry() : entry;
-                    const hasHorse = parts.some(p => p.prim === 'orgHorseBody' && p.rigGroup === 'horseBody');
+                    const hasHorse = parts.some(p => p.prim.startsWith('focHorse_') && p.rigGroup === 'horseBody');
                     const hasRider = parts.some(p => p.rigGroup === 'riderUpper') && parts.some(p => p.rigGroup === 'riderLower');
                     assert(hasHorse && hasRider, `${k} organik savaş atı ve binici rig gruplarına sahip olmalı`);
+                }
+            });
+
+            runCase('81a. FOC-MESH-04: mounted torso and horse closed surfaces', () => {
+                for (const [id,style] of Object.entries(FOC_OTTOMAN_MOUNT_STYLES)) {
+                    const torso=buildFOCMountedTorso(style),horse=buildFOCMountedHorse(style);
+                    for(const full of [torso.full,horse]) {
+                        const edges=new Map();
+                        for(let i=0;i<full.indices.length;i+=3) {const tri=Array.from(full.indices.slice(i,i+3));for(let j=0;j<3;j++){const k=[tri[j],tri[(j+1)%3]].sort((a,b)=>a-b).join(':');edges.set(k,(edges.get(k)||0)+1);}}
+                        assert([...edges.values()].every(n=>n===2),id+' manifold');
+                    }
+                    assert(Object.values(torso.sections).reduce((n,g)=>n+g.indices.length,0)===torso.full.indices.length,id+' materials');
                 }
             });
 
