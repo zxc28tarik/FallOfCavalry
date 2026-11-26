@@ -2608,6 +2608,7 @@
             }
 
             _initShaders() {
+                const gl=this.gl;
                 const meshVS = `
                     attribute vec3 aPosition;
                     attribute vec3 aNormal;
@@ -2659,7 +2660,7 @@
                     }
                 `;
 
-                const supportsSkin=Boolean(this.instancedExt && gl.getParameter(gl.MAX_VERTEX_ATTRIBS)>=12);
+                const supportsSkin=Boolean(this.instancedExt && typeof gl.getParameter==='function' && gl.getParameter(gl.MAX_VERTEX_ATTRIBS)>=12);
                 let instancedVS = `
                     attribute vec3 aPosition;
                     attribute vec3 aNormal;
@@ -2705,6 +2706,7 @@
 
                 // Two-bone linear blend skinning with 3 affine rows and one vertex weight.
                 // Keep the original 8-attribute program for low-capability GPUs.
+                const rigidInstancedVS=instancedVS;
                 if(supportsSkin){
                     instancedVS=instancedVS.replace('attribute float aInstMetalness;', 'attribute float aInstMetalness; attribute float aSkinWeight; attribute vec4 aParentRow0; attribute vec4 aParentRow1; attribute vec4 aParentRow2;');
                     instancedVS=instancedVS.replace('vec4 viewPos = uViewMatrix * worldPos;', 'vec4 bindPos=vec4(aPosition,1.0); vec3 parentPos=vec3(dot(aParentRow0,bindPos),dot(aParentRow1,bindPos),dot(aParentRow2,bindPos)); worldPos.xyz=mix(worldPos.xyz,parentPos,aSkinWeight); vec4 viewPos = uViewMatrix * worldPos;');
@@ -2783,7 +2785,8 @@
 
                 try {
                     this.meshProg = this._createProgram(meshVS, meshFS);
-                    this.instancedProg = this._createProgram(instancedVS, instancedFS);
+                    try{this.instancedProg = this._createProgram(instancedVS, instancedFS);}
+                    catch(err){if(!supportsSkin)throw err;this.instancedProg=this._createProgram(rigidInstancedVS,instancedFS);}
                     this.lineProg = this._createProgram(lineVS, lineFS);
                 } catch (err) {
                     this._cleanupPrograms();
