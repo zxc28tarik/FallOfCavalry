@@ -202,6 +202,11 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - SHA `64ee1b8ad176f7e644774863112dd4c81ebfe14e`: 32 sabit model malzeme rengi için ayrı palet; nötr çelik, daha doğal pirinç, deri, kumaş ve at tonları. Eski material tablosu, ortam ışığı, oyun davranışı ve instance stride korunur. 8 omuz kabuğunun kademeleri daha ince ve kenarları eğimli; mevcut kapalı kabuk topolojisi korunur. Bu bir renk/biçim denemesidir, gerçekçilik garantisi değildir.
 - QA SHA `0184ceb71af92f397f7056221449de792e7ca564`: sabit paletin eski materyallerden ayrı nesneler olduğunu, RGB değerlerini ve metalness/opacity/transparent korunmasını sınar. Yeni WebGL sonucu ve karşılaştırma açık; ana dal/Unity değişmedi, 13E ertelendi.
 
+## 27 Kasım 2026 — Kullanıcı omuz zırhı revizyonunu reddetti
+
+- Kullanıcı: "omuz zırhları kötüleşmiş ." Yeni kademeli kabuk tasarımı kabul edilmedi. SHA `7baaa3d70f0ba56946d0cd8b0a6d5ed3136acb87`: 4 Avrupa arketipindeki 8 omuzluk, 13D referansındaki orijinal dome parçalara ve transformlara geri döndürüldü. Yeni shell builder, helper ve template upgrade kaldırıldı. 13B'nin önceki kol anatomisi, 13C, 13D ve sabit model paleti `64ee1b8` korundu; renk paleti nedeniyle eski şekillerin rengi 13D ile birebir aynı olmayabilir. Yeni omuz tasarımı kullanıcı onayı olmadan tekrar uygulanmayacak.
+- QA SHA `b79ed291ae32c50e3dcf6c81a14e2fd15305a609`: 4 arketipte orijinal 8 dome parçasının konum, boyut ve malzeme kimliğini doğrular; reddedilmiş shell parçalarının kalmadığını kontrol eder. WebGL ve teknik test sonucu açık. Ana dal ve Unity değişmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
