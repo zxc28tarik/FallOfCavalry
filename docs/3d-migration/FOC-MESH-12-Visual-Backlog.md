@@ -97,6 +97,12 @@
 - İlk yapısal koşu `45991972391` PASS. Dizgin uçları ve binici/üzengi rig uyumu için genişletilmiş test `7717ac32fa7e46d2b0a711619a8bc2d786d4cf15`, koşu `45992020516`. Sonucu ayrıca kaydet.
 - WebGL model koşusu `45991972404`; iki yeni koşum yakın planını ve doğru geometrileri denetleyen test commit `afdbb85a8fcd93d0f19928abb938d6a58d59d10f`. Görsel inceleme açık. Ana dal ve Unity değişmedi; donanım FPS ölçülmedi.
 
+### 12F ilk teknik sonuç / 12G geçiş kriterleri
+
+- `45991972391` PASS: 24 arketip, 1172 parça (değişmedi), 522 geometri, 249756 denetlenen üçgen, 0 dejenere üçgen; 60480 piyade ve 86400 at eklem örneği sıfır farkla geçti. 12E'ye göre geometri kütüphanesinde +15960 üçgen; bu, sahnedeki tek kare çizilen üçgen sayısı değildir. 12G'de gerçek sahne bütçesi ve frame time ölçümü gerekli.
+- Yeni genişletilmiş tack testi `45992020516` ve 19 çekim hedefli WebGL `45992055514` kuyrukta, ilk WebGL `45991972404` çalışıyor. Bu üçü tamamlanana kadar 12F görsel onay kapatılmayacak.
+- 12G: sabit 300 asker benchmark senaryosunda aktif instance/batch/draw-call/üçgen ve CPU animasyon/instance upload/render sürelerini ölç. SwiftShader ile teknik regresyon yapılabilir, ancak fiziksel GPU FPS kararı verilemez. Uzak mesafe görünümü için LOD/eleme yalnızca ölçüm sonrasında ve yakın plan kalitesini bozmadan ele alınacak.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
