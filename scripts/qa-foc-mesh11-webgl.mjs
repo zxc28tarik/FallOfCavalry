@@ -214,6 +214,59 @@ try {
   }
   if (results.mountedShowcase.length !== 6) throw Error('Mounted showcase coverage incomplete');
 
+  // MESH-12G: controlled real WebGL workload after all normal screenshots.
+  // Freeze normal game ticks only in this QA session; no production behavior change.
+  results.perf300 = await page.evaluate(() => {
+    const r=window.__focBattle3DPreview.renderer,reg=r.soldierRegistry,webgl=r.renderer,gl=webgl.gl;
+    r._stopAnimationLoop();
+    reg.clear();
+    const keys=Object.keys(reg.templates).filter(k=>k.startsWith('fixed:'));
+    if(keys.length!==24)throw Error('Expected 24 fixed templates, got '+keys.length);
+    const soldiers=Array.from({length:300},(_,i)=>{
+      const templateKey=keys[i%keys.length],mounted=reg.templates[templateKey].some(p=>p.rigGroup==='horseBody');
+      return {viewId:'PERF:'+i,soldierId:'p'+i,side:i<150?'player':'enemy',templateKey,
+        bodyType:mounted?'mounted':'human',mountType:mounted?'horse':'foot',
+        activeWeapon:mounted?'war_lance':'matchlock_musket',state:'idle',
+        position:{x:(i%20-9.5)*2.5,y:0,z:(Math.floor(i/20)-7)*2.5},facingYaw:i<150?0:Math.PI};
+    });
+    reg.sync({sectorId:'PERF',soldiers});
+    if(reg.records.size!==300)throw Error('Missing performance fixture soldiers');
+    const cam=r.cameraController;
+    const view={targetX:0,targetY:0,targetZ:0,distance:46,pitch:.85,yaw:.28};
+    Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+    const batches=reg.batchGroup.batches;
+    const report={soldiers:reg.records.size,batches:batches.length,instances:reg.batchGroup.totalInstances,
+      submittedSoldierTriangles:batches.reduce((n,b)=>n+b.count*b.geometry.indices.length/3,0),
+      fullInstanceBytes:batches.reduce((n,b)=>n+b.instanceData.byteLength,0),cases:[]};
+    let uploadBytes=0,uploadCalls=0;
+    const sub=gl.bufferSubData.bind(gl);
+    gl.bufferSubData=(target,offset,data)=>{uploadBytes+=data.byteLength;uploadCalls++;return sub(target,offset,data);};
+    try{
+      webgl.render(r.scene,cam.camera);gl.finish();
+      for(const [label,active] of [['idle',0],['one-moving',1],['mixed-30',30],['all-300',300]]){
+        const samples=[];
+        for(let f=1;f<=3;f++){
+          let i=0;
+          for(const rec of reg.records.values()){
+            rec.walkBlend=i<active?.8:0;rec.trotBlend=i<active?.5:0;
+            rec.walkPhase=f*.19+i*.01;rec.actionBlend=i<active?.6:0;rec.actionMode='attack';rec.actionPhase=f*.11;i++;
+          }
+          uploadBytes=0;uploadCalls=0;
+          const t0=performance.now();reg._updateBatchBuffersInPlace();const t1=performance.now();
+          webgl.render(r.scene,cam.camera);const t2=performance.now();gl.finish();const t3=performance.now();
+          samples.push({cpuInstanceMs:t1-t0,renderSubmissionMs:t2-t1,gpuSyncWaitMs:t3-t2,
+            totalMs:t3-t0,uploadBytes,uploadCalls,drawCalls:webgl.drawCallsLastFrame,renderMode:webgl.lastRenderMode,
+            changedRecords:reg._focPerf?.changedRecords,rigEvaluations:reg._focPerf?.rigEvaluations});
+        }
+        report.cases.push({label,active,samples});
+      }
+      if(report.cases[0].samples.slice(1).some(x=>x.uploadBytes!==0))throw Error('Idle instance upload still occurring');
+      report.glError=gl.getError();if(report.glError!==gl.NO_ERROR)throw Error('WebGL benchmark error '+report.glError);
+      return report;
+    }finally{gl.bufferSubData=sub;}
+  });
+  await page.screenshot({path:resolve(reportDir,'perf-300-soldiers.png'),fullPage:true,timeout:30000});
+
   if (results.errors.some(x => /shader|WebGL|context lost|uncaught/i.test(x))) {
     throw Error('WebGL-related console/page errors: ' + results.errors.slice(0, 3).join(' | '));
   }
