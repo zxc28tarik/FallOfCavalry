@@ -55,6 +55,13 @@
 - Gerçek WebGL smoke: https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983008344 (model commit'i); sonuç ve ekran görüntüsü kıyaslaması ayrıca kaydedilecek.
 - Sırada diz/çizme ve at anatomisi; 24 sabit arketipin görsel kontrolü ve fiziksel GPU üzerinde 300 asker iş yükü açık. Ana dal, Unity, şehir/strateji ve oyun kuralları değiştirilmedi.
 
+## 27 Kasım 2026 — 12C görsel test sonucu ve 12D hazırlığı
+
+- Gerçek Chrome/WebGL koşusu `45983008344` **PASS**, model SHA `6be454967c0e668558418164bc5f39ae3db1f840`. Üç sektör, dört piyade vitrin görüntüsü, 0 tarayıcı hatası, 24 aktif vitrin batch'i. https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983008344/artifacts/15189219396
+- 12B/12C aynı idle Yeniçeri kamera görüntüsünde alt göğüs daha az şişkin ve omuz tepeleri biraz daha alçak. Görsel değişim sınırlı; ellerin gerçek parmak kavraması, kıyafet/omuz geçişleri, yüz ve kaba silah geometrisi hâlâ açık. Estetik onay verilmedi.
+- 12D öncesi WebGL testine sabit Sipahi ve Kürassier için idle, walk, çeyrek-yandan idle görüntüsü (toplam 6 yeni çekim) ve doğru mounted template/at geometri varlığı kontrolleri eklendi. Test commit `09eb8decd98644ac232365114cca35f0bbb66bef`; koşu https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983209975 başlatıldı, henüz PASS denilmiyor.
+- Fiziksel GPU FPS ölçülmedi; SwiftShader rAF değeri 1, gerçek donanım performansı değildir. 12C ana dala birleştirilmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
