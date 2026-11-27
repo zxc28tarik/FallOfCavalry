@@ -173,6 +173,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - Model SHA `f0999d5901b1f2f5c4b6567ad96f5d6504658775`: beş sabit asker yüzey sınıfı (mat kumaş, deri/ipek, metal, ahşap, organik). Bind-space desen, mesafeye göre azalma, ayrı parlama/rim katsayıları. Ortam ışık ayarları, temel renkler, geometri, animasyon ve savaş kuralları değişmedi. Ek vertex attribute veya instance stride yok; batch grupları yüzey sınıfına göre ayrıldığı için çizim çağrıları artabilir. Instancing bulunmayan fallback yolu eski görünümü korur. Gerçek doku haritası veya PBR değildir.
 - QA SHA `7751afdaad485bd93f24c4b12b1c02dc04486fb0`: 24 vitrin modelindeki aktif yüzey sınıfları ve toplam 5 sınıf kapsaması denetlenir. 48 karşılaştırma görüntüsü hedefi korunur. Gerçek WebGL ve görsel A/B değerlendirmesi açık; fiziksel GPU maliyeti ölçülmedi. Ana dal/Unity korunuyor.
 
+## 27 Kasım 2026 — 13A teknik sonuç / 13B kol anatomisi ilk revizyonu
+
+- 13A geometri `46008052025`, CPU regresyon `46008051992`, WebGL `46008052026` ve 24 modelde beş yüzey sınıfı testi `46008089549`: PASS. Görsel A/B ve gerçek donanım maliyeti henüz incelenmedi.
+- 13B model SHA `a1eca6fc94a69d5e5054d0f7ebcb267c1b6b00bd`: sekiz kol ankrajı ve üç malzeme stili için ortak kol loftunda daha içeri alınmış kök, omuz/biseps/dirsek/önkol konturları, stile göre katlanma. Ring sayıları, rig pivotları, el halkaları, silah transformları ve oyun davranışı aynı. Omuz-gövde geometrik penetrasyonu veya kusursuz birleşim kanıtlanmış değil.
+- QA SHA `33b6c118aa3cad2d5b6cb87d2608bda06e463104`: dört piyade/süvari arketipinde idle/attack omuz yakın planı, sekiz ek PNG hedefi. Toplu 24 model çekimleri korunur. 13B test ve estetik onayı açık; 13C sırada. Ana dal ve Unity korunmuştur.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
