@@ -383,6 +383,32 @@ try {
   }finally{await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);}
   if(results.shoulderShowcase.length!==8)throw Error('Incomplete shoulder screenshot coverage');
 
+  // MESH-13C: inspect horse chest/neck and upper leg roots in the 10 mounted models.
+  results.horseRootShowcase=[];
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  try{
+    for(const sample of catalog.filter(x=>x.mounted)){
+      await page.locator('#btnShowcase'+(sample.culture==='ottoman'?'Ottoman':'European')).evaluate(el=>el.click());
+      await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+      await page.locator('#btnShowcaseVariant'+sample.variant).evaluate(el=>el.click());
+      await page.locator('#btnShowcaseAnimIdle').evaluate(el=>el.click());
+      const state=await page.evaluate(()=>{
+        const r=window.__focBattle3DPreview.renderer,reg=r.soldierRegistry,cam=r.cameraController;
+        const rec=reg.records.get('SHOWCASE:U1'),parts=reg.templates[rec?.templateKey]||[];
+        const view={targetX:0,targetY:1.08,targetZ:.12,distance:3.65,yaw:1.06,pitch:.06};
+        Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+        return {template:rec?.templateKey,neck:parts.filter(p=>p.prim.startsWith('focEquine_')&&p.prim.endsWith('_neck')).length,
+          upperLegs:parts.filter(p=>p.prim.startsWith('focEquine_')&&/^horseLeg[HF][LR]$/.test(p.rigGroup)).length};
+      });
+      if(state.template!==sample.key||state.neck!==1||state.upperLegs!==4)throw Error('Wrong horse root showcase '+JSON.stringify(state));
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      const file='showcase-horse-root-'+sample.key.slice(6)+'.png';
+      await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+      results.horseRootShowcase.push({...state,screenshot:file});
+    }
+  }finally{await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);}
+  if(results.horseRootShowcase.length!==10)throw Error('Incomplete horse root screenshot coverage');
+
   // MESH-12G: controlled real WebGL workload after all normal screenshots.
   // Freeze normal game ticks only in this QA session; no production behavior change.
   if(process.env.FOC_QA_PERF300==='1'){
