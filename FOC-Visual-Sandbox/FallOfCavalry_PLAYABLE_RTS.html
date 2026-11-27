@@ -7897,16 +7897,22 @@ const OrganicCharacterGeometries = (() => {
             const bend=Math.min(Math.hypot(...focVSub(el,sh)),Math.hypot(...focVSub(wr,el)))*.42;
             const ein=focVSub(el,focVScale(d1,bend)),eout=focVAdd(el,focVScale(d2,bend));
             const st=[],add=(p,rx,rz,mat,fold=0)=>st.push({p,rx:rx*factor,rz:rz*factor,mat,fold});
-            // Seat sleeve roots inward toward the torso. Rig anchors and station counts stay fixed.
+            // MESH-13B: bury sleeve cap in chest, taper deltoid to biceps,
+            // then shape elbow and forearm. Keep every skin ring and grip anchor.
             const shoulderSign=Math.sign(sh[0]);
             const root=(distance,inset,drop)=>focVAdd(focVSub(sh,focVScale(d1,distance)),[-shoulderSign*inset,-drop,0]);
-            add(root(.065,.045,.025),.052*r,.050*r,'sleeve');
-            add(root(.026,.022,.014),.067*r,.067*r,'sleeve',.002);
-            add(sh,.073*r,.069*r,'sleeve',.003);
-            add(focVLerp(sh,ein,.5),.070*r,.068*r,'sleeve',.003);
-            add(ein,.065*r,.062*r,'sleeve',.002);
-            for(const t of [.25,.5,.75,1])add(focVLerp(focVLerp(ein,el,t),focVLerp(el,eout,t),t),(.063-.008*t)*r,(.065-.009*t)*r,'sleeve',style==='plate'?.001:.003);
-            add(focVLerp(eout,wr,.45),.058*r,.052*r,'sleeve',.002);
+            const plate=style==='plate',fold=plate?.001:style==='cloth'?.004:.002;
+            add(root(.058,.082,.037),.045*r,.046*r,'sleeve');
+            add(root(.024,.046,.026),.060*r,.065*r,'sleeve',fold*.65);
+            add(focVAdd(sh,[-shoulderSign*.014,-.006,0]),.067*r,.073*r,'sleeve',fold);
+            add(focVLerp(sh,ein,.5),.064*r,.066*r,'sleeve',fold);
+            add(ein,.059*r,.059*r,'sleeve',fold*.7);
+            for(const t of [.25,.5,.75,1]){
+                const p=focVLerp(focVLerp(ein,el,t),focVLerp(el,eout,t),t);
+                const elbow=Math.sin(Math.PI*t);
+                add(p,(.058-.006*t-.003*elbow)*r,(.061-.006*t+.002*elbow)*r,'sleeve',fold*(.75+.25*elbow));
+            }
+            add(focVLerp(eout,wr,.45),.056*r,.050*r,'sleeve',fold*.7);
             // Keep the grip centre at the existing weapon socket, with hand volume
             // extending along the final forearm axis. No equipment transforms change.
             add(focVSub(wr,focVScale(d2,.052*factor)),.046*r,.044*r,'sleeve');
