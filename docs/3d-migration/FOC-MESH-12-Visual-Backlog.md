@@ -5,6 +5,20 @@
 **Doğrulanmış görüntüler:** üç savaş sektörü + Osmanlı idle/walk/attack + Avrupa attack.
 **Bu dosya görev kaydıdır, henüz tamamlanmış geliştirme değildir.**
 
+## 27 Kasım 2026 — FOC-MESH-12A yüz anatomisi, ilk uygulama
+
+**Durum: IN PROGRESS — görsel kalite onayı bekleniyor.**
+**Dal:** `codex/foc-mesh12-face-anatomy-20261127` (FOC-MESH-11 dalından oluşturuldu).
+
+- 24 sabit arketipte `buildFOCFixedHead` halka açısı 40 → 56 örnekleme yükseltildi; göz/kaş/dudak geçişlerine yeni enlem halkaları eklendi.
+- Yüzdeki dikdörtgen göz/kaş/bıyık/dudak materyal bantları eğrisel sınırlara dönüştürüldü. Göz çukurundaki sert derinlik hafifletildi. Ayrı göz küresi, baş rig'i veya oyun mantığı eklenmedi.
+- `scripts/qa-fixed-mesh-animation.mjs` testine 24 başta yüz materyal kapsaması, gözlerin iki yanda bulunması ve tek sürekli baş yüzeyi kontrolleri eklendi.
+- **Yapısal CI:** GitHub Actions `45981454584` PASS — commit `b182f96c39415a34161d9dfc16c162068ea5f5eb`.
+- **WebGL kalite kararı:** Mevcut `qa-foc-mesh11-webgl.mjs` smoke koşusu `45981397579` tetiklendi. Başarı ve gerçek ekran görüntüsü incelemesi tamamlanmadan **görsel onay / DONE** denilmeyecek.
+- **Ölçülmemiş:** Fiziksel GPU'da FPS, kafa ek poligon bütçesi ile 300 asker performansı. Runner üzerindeki SwiftShader FPS sonucu buna eşdeğer değildir.
+- **Sıradaki:** Yeniçeri idle/walk/attack ve Avrupa arkebüzcü attack yakın planlarını önceki FOC-MESH-11 görüntüleriyle karşılaştır. Ardından omuz-gövde, el-dipçik ve diz/çizme iyileştirmelerine ayrı küçük paketler halinde geç.
+- **Değişmeyenler:** RTS savaşı, 24 arketip, rig/ekipman, kök web oyun, Unity deposu, strateji/şehir/ekonomi/diplomasi sistemleri.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
