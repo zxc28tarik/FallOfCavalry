@@ -203,6 +203,34 @@ try {
   }
   await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
 
+  // MESH-12J: show weapon silhouette and hand attachment in actual browser frames.
+  results.weaponShowcase=[];
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  for(const sample of [
+    {culture:'Ottoman',label:'Yeniçeri',template:'fixed:ottoman_janissary_musket',tag:'janissary'},
+    {culture:'European',label:'Zırhlı piyade',template:'fixed:euro_armored_infantry',tag:'armored'}
+  ]){
+    await page.locator('#btnShowcase'+sample.culture).evaluate(el=>el.click());
+    await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+    await page.locator('#btnShowcaseVariant1').evaluate(el=>el.click());
+    for(const anim of ['Idle','Attack']){
+      await page.locator('#btnShowcaseAnim'+anim).evaluate(el=>el.click());
+      const state=await page.evaluate(()=>{
+        const r=window.__focBattle3DPreview.renderer,cam=r.cameraController,reg=r.soldierRegistry;
+        const u=reg.records.get('SHOWCASE:U1'),parts=reg.templates[u.templateKey];
+        const view={targetX:0,targetY:1.22,targetZ:.35,distance:2.7,yaw:1.03,pitch:.14};
+        Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+        return {template:u.templateKey,weaponParts:parts.filter(p=>p.prim.startsWith('focWeapon_')).map(p=>p.prim)};
+      });
+      if(state.template!==sample.template||state.weaponParts.length<3)throw Error('Incorrect weapon showcase '+JSON.stringify(state));
+      await page.waitForTimeout(900);
+      const file='showcase-weapon-'+sample.tag+'-'+anim.toLowerCase()+'.png';
+      await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+      results.weaponShowcase.push({...state,anim,screenshot:file});
+    }
+  }
+  await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
+
   // MESH-12C: mounted anatomy gate. Select actual existing fixed archetypes
   // through the showcase UI, capture their whole body and check active mesh data.
   results.mountedShowcase = [];
