@@ -1,0 +1,17 @@
+name: FOC playable HTML export
+on:
+  push:
+    paths:
+      - '.github/workflows/foc-playable-export.yml'
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: foc-playable-html
+          path: FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html
+          if-no-files-found: error
+          retention-days: 14
