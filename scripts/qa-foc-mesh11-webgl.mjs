@@ -73,6 +73,28 @@ try {
     await page.screenshot({ path: resolve(reportDir, file), fullPage: true, timeout: 30000 });
     results.sectors.push({ sector: i, screenshot: file });
   }
+  // Capture enlarged anatomy from the actual in-game model showcase.
+  await page.locator('#btnOpenArmory').evaluate(el => el.click());
+  await page.locator('#rtsShowcaseOverlay').waitFor({ state: 'visible', timeout: 20000 });
+  await page.waitForTimeout(1700);
+  await page.screenshot({ path: resolve(reportDir, 'showcase-ottoman-idle.png'), fullPage: true, timeout: 30000 });
+  results.showcase = ['showcase-ottoman-idle.png'];
+
+  await page.locator('#btnShowcaseAnimWalk').evaluate(el => el.click());
+  await page.waitForTimeout(1300);
+  await page.screenshot({ path: resolve(reportDir, 'showcase-ottoman-walk.png'), fullPage: true, timeout: 30000 });
+  results.showcase.push('showcase-ottoman-walk.png');
+
+  await page.locator('#btnShowcaseAnimAttack').evaluate(el => el.click());
+  await page.waitForTimeout(1300);
+  await page.screenshot({ path: resolve(reportDir, 'showcase-ottoman-attack.png'), fullPage: true, timeout: 30000 });
+  results.showcase.push('showcase-ottoman-attack.png');
+
+  await page.locator('#btnShowcaseEuropean').evaluate(el => el.click());
+  await page.waitForTimeout(1300);
+  await page.screenshot({ path: resolve(reportDir, 'showcase-european-attack.png'), fullPage: true, timeout: 30000 });
+  results.showcase.push('showcase-european-attack.png');
+
   if (results.errors.some(x => /shader|WebGL|context lost|uncaught/i.test(x))) {
     throw Error('WebGL-related console/page errors: ' + results.errors.slice(0, 3).join(' | '));
   }
