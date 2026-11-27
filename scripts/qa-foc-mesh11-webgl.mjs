@@ -193,6 +193,24 @@ try {
     const file = 'showcase-' + sample.tag + '-quarter.png';
     await page.screenshot({ path: resolve(reportDir, file), fullPage: true, timeout: 30000 });
     results.mountedShowcase.push({ templateKey: sample.template, selectedAnim: 'idle', view: 'quarter', screenshot: file });
+    // Capture a close side view of actual tack rather than the info-card covered legs.
+    const tack = await page.evaluate(() => {
+      const r=window.__focBattle3DPreview?.renderer, reg=r?.soldierRegistry;
+      const u=reg?.records?.get('SHOWCASE:U1'), parts=reg?.templates?.[u?.templateKey]||[];
+      const view={targetX:0,targetY:1.25,targetZ:.25,distance:3.5,yaw:1.26,pitch:.10};
+      Object.assign(r.cameraController.desired,view);Object.assign(r.cameraController.current,view);
+      r.cameraController.syncTransform?.(1);
+      return {template:u?.templateKey,reins:parts.filter(p=>p.prim.startsWith('focRein_')).length,
+        stirrups:parts.filter(p=>p.prim.startsWith('focStirrup_')).length,
+        saddle:parts.filter(p=>p.prim.startsWith('focTack_')).length};
+    });
+    if(tack.template!==sample.template||tack.reins!==2||tack.stirrups!==2||tack.saddle!==2)throw Error('Tack showcase incomplete '+JSON.stringify(tack));
+    await card.evaluate(el=>{el.style.visibility='hidden';});
+    await page.waitForTimeout(900);
+    const tackFile='showcase-'+sample.tag+'-tack.png';
+    await page.screenshot({path:resolve(reportDir,tackFile),fullPage:true,timeout:30000});
+    await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
+    (results.tackShowcase ||= []).push({...tack,screenshot:tackFile});
   }
   if (results.mountedShowcase.length !== 6) throw Error('Mounted showcase coverage incomplete');
 
