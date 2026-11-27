@@ -7873,11 +7873,14 @@ const OrganicCharacterGeometries = (() => {
                 const v=focVCross(u,tangent); // +U,+V winds outward along path
                 return Array.from({length:N},(_,j)=>{
                     const a=j*Math.PI*2/N,ca=Math.cos(a),sa=Math.sin(a),f=(st.fold||0)*Math.cos(a*5+i*.8);
-                    // Palm-only contour: a slightly squared knuckle cross section, not a sphere.
+                    // MESH-13D: compact knuckle/palm contour with paired relief.
+                    // Opposite vertices retain the exact grip centre at each hand ring.
                     const palm=st.mat==='hand';
-                    const cu=palm?Math.sign(ca)*Math.pow(Math.abs(ca),.73):ca;
-                    const sv=palm?Math.sign(sa)*Math.pow(Math.abs(sa),.79):sa;
-                    return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+f)*cu),focVScale(v,(st.rz+f)*sv)));
+                    const cu=palm?Math.sign(ca)*Math.pow(Math.abs(ca),.67):ca;
+                    const sv=palm?Math.sign(sa)*Math.pow(Math.abs(sa),.76):sa;
+                    const relief=palm?(st.knuckle||0)*Math.cos(a*4):0;
+                    const fold=palm?0:f;
+                    return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+fold+relief)*cu),focVScale(v,(st.rz+fold-relief*.35)*sv)));
                 });
             });
             const full=OrganicCharacterGeometries.createClosedLoft(rings);
@@ -7917,12 +7920,18 @@ const OrganicCharacterGeometries = (() => {
             // extending along the final forearm axis. No equipment transforms change.
             add(focVSub(wr,focVScale(d2,.052*factor)),.046*r,.044*r,'sleeve');
             add(focVSub(wr,focVScale(d2,.038*factor)),.049,.045,'cuff');
-            add(focVSub(wr,focVScale(d2,.025*factor)),.033,.030,'hand');
-            add(focVSub(wr,focVScale(d2,.009*factor)),.039,.025,'hand');
-            add(wr,.041,.028,'hand',.0015);
-            add(focVAdd(wr,focVScale(d2,.019*factor)),.039,.026,'hand',.002);
-            add(focVAdd(wr,focVScale(d2,.037*factor)),.028,.027,'hand');
-            add(focVAdd(wr,focVScale(d2,.043*factor)),.012,.013,'hand');
+            // Separate the wrist, palm, knuckle and curled fingertip profiles
+            // without moving the established weapon anchor or adding rig joints.
+            const hand=(p,rx,rz,knuckle=0)=>{
+                add(p,rx,rz,'hand');
+                st[st.length-1].knuckle=knuckle*factor;
+            };
+            hand(focVSub(wr,focVScale(d2,.025*factor)),.031,.028);
+            hand(focVSub(wr,focVScale(d2,.009*factor)),.037,.027,.001);
+            hand(wr,.040,.028,.002);
+            hand(focVAdd(wr,focVScale(d2,.019*factor)),.037,.025,.0025);
+            hand(focVAdd(wr,focVScale(d2,.037*factor)),.026,.022,.001);
+            hand(focVAdd(wr,focVScale(d2,.043*factor)),.012,.011);
             return focLimbSweep(st,20);
         }
         function buildFOCStandingLeg(side,style,upper){
@@ -8275,13 +8284,13 @@ const OrganicCharacterGeometries = (() => {
         function createFOCWeaponVisualGeometries(){
             const loft=focWeaponLoft;
             return {
-                focWeapon_stock:loft([[-.5,.39,.48,-.012],[-.46,.49,.50,-.015],[-.31,.46,.48,-.03],[-.12,.37,.38,-.02],[.12,.28,.29,.015],[.31,.32,.25,.045],[.48,.38,.22,.04],[.5,.32,.19,.035]],24,'z',.60,.012),
+                focWeapon_stock:loft([[-.5,.38,.43,-.012],[-.46,.48,.50,-.015],[-.31,.45,.47,-.03],[-.12,.35,.36,-.02],[.12,.27,.27,.015],[.31,.31,.24,.045],[.48,.37,.22,.04],[.5,.32,.19,.035]],24,'z',.72,.008),
                 focWeapon_foreZ:loft([[-.5,.43,.45],[-.43,.50,.48],[-.21,.48,.46],[.12,.43,.44],[.37,.39,.39],[.5,.32,.32]],20,'z',.66,.008),
                 focWeapon_foreY:loft([[-.5,.40,.41],[-.44,.50,.50],[-.18,.48,.48],[.12,.42,.43],[.38,.36,.37],[.5,.32,.33]],20,'y',.75,.008),
                 focWeapon_barrel:loft([[-.5,.46,.46],[-.47,.50,.50],[-.29,.47,.47],[.20,.45,.45],[.47,.45,.45],[.50,.49,.49],[.50,.32,.32],[.485,.30,.30]],24),
                 focWeapon_band:loft([[-.5,.40,.40],[-.37,.50,.50],[.37,.50,.50],[.5,.40,.40],[.5,.33,.33],[-.5,.33,.33]],24),
                 focWeapon_shaft:loft([[-.5,.44,.44],[-.46,.48,.48],[-.2,.50,.50],[.18,.48,.48],[.46,.43,.43],[.5,.40,.40]],16),
-                focWeapon_grip:loft(Array.from({length:21},(_,i)=>{const t=i/20,r=.44+.04*Math.sin(Math.PI*t)+.025*Math.cos(t*Math.PI*12);return [t-.5,r,r];}),20),
+                focWeapon_grip:loft(Array.from({length:21},(_,i)=>{const t=i/20,r=.43+.05*Math.sin(Math.PI*t)+.018*Math.cos(t*Math.PI*12);return [t-.5,r,r];}),20,'y',.88),
                 focWeapon_tip:loft([[-.5,.26,.24],[-.34,.30,.27],[-.17,.50,.50],[.06,.42,.42],[.30,.21,.23],[.48,.035,.04],[.5,.008,.009]],12,'y',1.8),
                 focWeapon_bladeY:loft([[-.5,.37,.49],[-.45,.50,.50],[-.18,.48,.47],[.14,.44,.44],[.35,.36,.32],[.48,.13,.15],[.5,.025,.03]],16,'y',1.8),
                 focWeapon_bladeZ:loft([[-.5,.43,.42,0],[-.42,.50,.50,0],[-.15,.49,.47,-.045],[.13,.46,.43,-.04],[.34,.36,.31,.015],[.48,.12,.12,.08],[.5,.02,.02,.10]],16,'z',1.8),
