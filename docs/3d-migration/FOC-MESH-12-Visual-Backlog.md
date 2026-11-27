@@ -70,6 +70,13 @@
 - WebGL model koşusu `45985328537`; yakın plan testine dört yeni diz/çizme çekimi eklendi (`6870e8a9457aa7e766123d83c77add9d870ec940`, koşu `45985395577`). QA kamera ve bilgi kartı görünürlüğü yalnızca testte değiştirilir. Görsel kalite onayı henüz yok.
 - Ana dal/Unity/oyun mantığı değişmedi. Fiziksel GPU performansı açık.
 
+### 12D teknik doğrulama sonucu
+
+- Düzeltilmiş koşu `45985437703` **PASS**. 24 arketip, 1172 parça, 480 geometri, 235396 üçgen (12C'ye göre 240 az), 0 dejenere üçgen; 7344 joint örneği, 1440 grip örneği.
+- Yeni doğrulama: 28 piyade diz çifti, 60480 skinlenmiş verteks çifti, maksimum konum farkı 0 ve yerel seam normal farkı 0. Render edilen iç kapak indeksi yok. Bu, yüzeyin görsel kıvrım/penetrasyon kalitesini veya performansı tek başına ispatlamaz.
+- 12E hazırlık: atın mevcut boyun loft kökü (y=1.17,z=.37), gövde ayrı 28 segmentli loft, ön/arka bacak ayrı 20 segmentli loft. Yandan gerçek referansta görülen keskin boyun ve kalça/omuz sınırları, derinlik ve kök bağlantı profili üzerinde çalışılacak; mevcut rig ve koşum koordinatları korunacak.
+- WebGL koşuları henüz tamamlanmadı; 12D görsel değerlendirme açık.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
