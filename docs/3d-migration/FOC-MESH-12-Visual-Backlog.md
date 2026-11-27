@@ -179,6 +179,11 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 13B model SHA `a1eca6fc94a69d5e5054d0f7ebcb267c1b6b00bd`: sekiz kol ankrajı ve üç malzeme stili için ortak kol loftunda daha içeri alınmış kök, omuz/biseps/dirsek/önkol konturları, stile göre katlanma. Ring sayıları, rig pivotları, el halkaları, silah transformları ve oyun davranışı aynı. Omuz-gövde geometrik penetrasyonu veya kusursuz birleşim kanıtlanmış değil.
 - QA SHA `33b6c118aa3cad2d5b6cb87d2608bda06e463104`: dört piyade/süvari arketipinde idle/attack omuz yakın planı, sekiz ek PNG hedefi. Toplu 24 model çekimleri korunur. 13B test ve estetik onayı açık; 13C sırada. Ana dal ve Unity korunmuştur.
 
+## 27 Kasım 2026 — FOC-MESH-13C at gövde bağlantıları
+
+- Model SHA `c3a978ec35b6d61cb034bcbe2ab49db4330204e7`: 10 at stilinin ön göğüs profili, gövde içine oturan boyun kökü ve üst bacak kökleri revize edildi. Boyun ilk 5 halka ve üst bacak 5–8. halkalarının normalleri yakın gövde normalleriyle mesafe ve yön uyumuna göre karıştırılıyor. Diz/hock dikişleri, ring sayıları, skin ağırlıkları, eyer/dizgin ve animasyonlar değişmedi. Bu yöntem kaynak yüzeylerini birleştirmez; hareket sırasında kesintisiz birleşim ve estetik kabul açık. Normal hesaplama geometri oluşturulurken çalışır, kare başına değil.
+- QA SHA `576d89b4e922fa769657e9aa5c9162df58558183`: 10 atlı arketipte göğüs, boyun ve üst bacak kökü yakın planları, toplam 10 ilave PNG. Önceki 24 arketip ve omuz testleri korunur. 13B son WebGL ve 13C teknik/görsel sonuçları henüz doğrulanmadı. Ana dal/Unity ve savaş mantığı değişmedi. 13D sırada.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
