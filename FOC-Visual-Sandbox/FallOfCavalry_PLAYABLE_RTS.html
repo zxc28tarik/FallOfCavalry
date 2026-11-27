@@ -2240,7 +2240,8 @@
                         // The pole rings collapse to a single vertex position.
                         // Do not submit the zero-area pole triangles to the GPU.
                         if (lat > 0) idx.push(a, a + 1, b);
-                        if (lat < latSegs - 1) idx.push(a + 1, b + 1, b);
+                        // Unlike a sphere, the dome ends in a full-width base ring.
+                        idx.push(a + 1, b + 1, b);
                     }
                 }
 
