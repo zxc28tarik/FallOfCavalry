@@ -333,9 +333,10 @@ try {
           const view={targetX:0,targetY:sample.mounted?1.22:.91,targetZ:0,distance:sample.mounted?6.1:3.8,yaw,pitch:.12};
           Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
           return {template:rec?.templateKey,records:reg.records.size,batches:reg.batchGroup.batches.length,
-            mounted:parts.some(p=>p.rigGroup==='horseBody'),faces:parts.filter(p=>p.prim.startsWith('focHead_')).length};
+            mounted:parts.some(p=>p.rigGroup==='horseBody'),faces:parts.filter(p=>p.prim.startsWith('focHead_')).length,
+            surfaceClasses:[...new Set(reg.batchGroup.batches.map(b=>b.surfaceClass||0))].sort()};
         },{sample,yaw});
-        if(state.template!==sample.key||state.records!==1||state.batches<1||state.mounted!==sample.mounted||state.faces!==6)throw Error('Incorrect fixed showcase '+JSON.stringify({sample,state}));
+        if(state.template!==sample.key||state.records!==1||state.batches<1||state.mounted!==sample.mounted||state.faces!==6||!state.surfaceClasses.includes(5)||state.surfaceClasses.some(c=>c<0||c>5))throw Error('Incorrect fixed showcase '+JSON.stringify({sample,state}));
         // Await an actual browser frame following the camera change.
         await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
         const file='all-fixed-'+sample.key.slice(6)+'-'+angle+'.png';
@@ -345,6 +346,10 @@ try {
     }
   }finally{await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);}
   if(results.allFixedShowcase.length!==48||new Set(results.allFixedShowcase.map(x=>x.template)).size!==24)throw Error('Incomplete 24-model two-angle screenshot coverage');
+
+  const surfaceClasses=[...new Set(results.allFixedShowcase.flatMap(x=>x.surfaceClasses))].sort();
+  if(![1,2,3,4,5].every(c=>surfaceClasses.includes(c)))throw Error('Missing MESH-13A surface class '+surfaceClasses);
+  results.surfaceCoverage=surfaceClasses;
 
   // MESH-12G: controlled real WebGL workload after all normal screenshots.
   // Freeze normal game ticks only in this QA session; no production behavior change.
