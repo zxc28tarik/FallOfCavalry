@@ -156,6 +156,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 12L model SHA `c593de5a3dc865b5f131bb4c6e30c0fbaed9c130`: 24 sabit yüz profilinde elmacık, yanak, çene, şakak ve burun köprüsü farkları mevcut stil katsayılarıyla güçlendirildi; yüz materyal maskeleri, rig, başlık ve topoloji korundu. Sekiz piyade kıyafetinde göğüs/bel/etek oranları, beşinde pile sayısı farklılaştırıldı. Sabit 24 model kapsamı korundu; aynı arketip içi yeni yüz/beden varyantları eklenmedi. Oyun istatistikleri veya ekipman mantığı değiştirilmedi.
 - 12L QA SHA `356dd1e461c16132ad5f64deef9075f2ed0d97e2`: 276 farklı yüz çifti için vertex RMS farkı testi; sonuç bekleniyor. Bu sınama görsel okunurluğu ispatlamaz. 12L görsel onay ve tüm modellerin toplu incelemesi açık. Ana dal ve Unity korunuyor.
 
+## 27 Kasım 2026 — 12L teknik sonuç ve 24 arketip toplu görüntü kapısı
+
+- 12L yapısal çeşitlilik testi `46006197141`, model yapısal testi `46006172066`, tarihsel CPU regresyon `46006172031` ve WebGL smoke `46006172028` PASS. 276 yüz çifti geometrik farklılık denetimi başarılı. Bu sonuç aynı sınıf içi varyasyon veya nihai görsel kalite onayı değildir.
+- QA commit `26a8258a4fd6d157d48599edf28d7387471be792`: gerçek vitrin kataloğundan 24 sabit arketipi türetir, her birini mevcut kültür/birim/varyant kontrolleriyle seçer, doğru tekil kayıt, aktif batch, altı yüz materyal parçası ve atlı/yaya durumunu sınar. Sabit idle kamera ön ve çapraz açılarıyla 48 ek PNG hedefler. Mevcut WebGL çekimleri korunur. Oyun HTML'si ve kuralları değiştirilmedi.
+- Yeni toplu WebGL koşusu ve ekran görüntüsü incelemesi açık. Fiziksel GPU testi ve 300 asker GPU kıyası ertelenmiş. Ana dala birleştirme yok.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
