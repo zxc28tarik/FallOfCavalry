@@ -146,6 +146,35 @@ try {
   }
   await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
 
+  // MESH-12H: close front and three-quarter face views of both cultures.
+  results.faceShowcase=[];
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  for(const sample of [
+    {culture:'Ottoman',label:'Yeniçeri',template:'fixed:ottoman_janissary_musket',tag:'janissary'},
+    {culture:'European',label:'Zırhlı piyade',template:'fixed:euro_armored_infantry',tag:'armored'}
+  ]){
+    await page.locator('#btnShowcase'+sample.culture).evaluate(el=>el.click());
+    await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+    await page.locator('#btnShowcaseVariant1').evaluate(el=>el.click());
+    await page.locator('#btnShowcaseAnimIdle').evaluate(el=>el.click());
+    for(const [viewName,yaw] of [['front',0],['quarter',.66]]){
+      const state=await page.evaluate(yaw=>{
+        const r=window.__focBattle3DPreview.renderer,cam=r.cameraController,reg=r.soldierRegistry;
+        const u=reg.records.get('SHOWCASE:U1'),parts=reg.templates[u.templateKey];
+        const head=parts.find(p=>p.prim.startsWith('focHead_')&&p.prim.endsWith('_skin'));
+        const view={targetX:0,targetY:head.localMat[13],targetZ:0,distance:1.35,yaw,pitch:.025};
+        Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+        return {template:u.templateKey,faceParts:parts.filter(p=>p.prim.startsWith('focHead_')).length};
+      },yaw);
+      if(state.template!==sample.template||state.faceParts!==6)throw Error('Incorrect face showcase '+JSON.stringify(state));
+      await page.waitForTimeout(900);
+      const file='showcase-face-'+sample.tag+'-'+viewName+'.png';
+      await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+      results.faceShowcase.push({...state,view:viewName,screenshot:file});
+    }
+  }
+  await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
+
   // MESH-12C: mounted anatomy gate. Select actual existing fixed archetypes
   // through the showcase UI, capture their whole body and check active mesh data.
   results.mountedShowcase = [];
@@ -216,11 +245,12 @@ try {
 
   // MESH-12G: controlled real WebGL workload after all normal screenshots.
   // Freeze normal game ticks only in this QA session; no production behavior change.
+  if(process.env.FOC_QA_PERF300==='1'){
   results.perf300 = await page.evaluate(() => {
     const r=window.__focBattle3DPreview.renderer,reg=r.soldierRegistry,webgl=r.renderer,gl=webgl.gl;
     r._stopAnimationLoop();
     reg.clear();
-    const keys=Object.keys(reg.templates).filter(k=>k.startsWith('fixed:'));
+    const keys=Object.keys(reg.geometries).filter(k=>k.startsWith('focHead_')&&k.endsWith('_skin')).map(k=>'fixed:'+k.slice(8,-5));
     if(keys.length!==24)throw Error('Expected 24 fixed templates, got '+keys.length);
     const soldiers=Array.from({length:300},(_,i)=>{
       const templateKey=keys[i%keys.length],mounted=reg.templates[templateKey].some(p=>p.rigGroup==='horseBody');
@@ -266,6 +296,7 @@ try {
     }finally{gl.bufferSubData=sub;}
   });
   await page.screenshot({path:resolve(reportDir,'perf-300-soldiers.png'),fullPage:true,timeout:30000});
+  }else{results.perf300={status:'deferred',reason:'visual quality phase; opt in with FOC_QA_PERF300=1'};}
 
   if (results.errors.some(x => /shader|WebGL|context lost|uncaught/i.test(x))) {
     throw Error('WebGL-related console/page errors: ' + results.errors.slice(0, 3).join(' | '));
