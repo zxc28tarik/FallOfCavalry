@@ -85,6 +85,11 @@
 - Önceki yapısal regresyon `45989318664` PASS. At eklemlerinin tam çevresini animasyon boyunca doğrulayan test commit `918f55890402de9f042a2e55dd785cfae2bbe82b`; sonuç bekleniyor.
 - WebGL model koşusu https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45989318436 sürüyor. 12E estetik onayı açık; 12F eyer/binici, 12G gerçek donanım performansı bekliyor. Ana dal ve Unity değişmedi.
 
+### 12E teknik sonuç
+
+- `45989346109` PASS. 24 arketip, 1172 parça, 480 geometri, 233796 üçgen (12D'den 1600 az), 0 dejenere üçgen. 40 at eklemi / 86400 skinlenmiş verteks çifti, maksimum konum ve yerel normal farkı 0; 28 piyade dizinde önceki 60480 örnek de 0 farkla geçti. Hock birleşimi teknik olarak doğrulandı; boyun/gövde ve bacak/gövde estetik geçişleri ayrı WebGL değerlendirmesi gerektirir.
+- Eyer, koşum ve binici pozisyonu değişmedi; fiziksel GPU ölçümü yapılmadı.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
