@@ -6520,7 +6520,7 @@ const OrganicCharacterGeometries = (() => {
             return {full,sections};
         }
         function buildFOCMountedHorse(style) {
-            const N=28,L=style.horseLength,W=style.horseWidth,D=style.horseDepth;
+            const N=48,L=style.horseLength,W=style.horseWidth,D=style.horseDepth;
             // z, width fraction, top and underside relative to y=1.20
             const levels=[
                 [-1,.12,.015,-.025],[-.97,.42,.10,-.10],[-.89,.78,.18,-.16],
@@ -6533,11 +6533,13 @@ const OrganicCharacterGeometries = (() => {
             const rings=levels.map(([z,w,top,bot])=>Array.from({length:N},(_,i)=>{
                 const a=i*2*Math.PI/N,ca=Math.cos(a),sa=-Math.sin(a);
                 const t=sa>0?top: -bot;
-                const rib=.009*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z-.28)/.38,2));
+                const rib=.012*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z-.18)/.42,2));
                 const rump=.006*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z+.65)/.22,2));
-                const shoulder=.014*Math.pow(Math.abs(ca),3)*Math.exp(-Math.pow((z-.67)/.22,2));
+                const shoulder=.018*Math.pow(Math.abs(ca),3)*Math.exp(-Math.pow((z-.64)/.24,2));
                 const hind=.012*Math.pow(Math.abs(ca),3)*Math.exp(-Math.pow((z+.70)/.23,2));
-                return [(W*w+rib+rump+shoulder+hind)*ca,1.20+sa*t*(D/.224),z*L];
+                const flank=.011*Math.pow(Math.abs(ca),4)*Math.exp(-Math.pow((z+.38)/.20,2))*Math.max(0,-sa+.35);
+                const withers=.018*Math.pow(Math.max(0,sa),5)*Math.exp(-Math.pow((z-.55)/.20,2));
+                return [(W*w+rib+rump+shoulder+hind-flank)*ca,1.20+sa*t*(D/.224)+withers,z*L];
             }));
             return OrganicCharacterGeometries.createClosedLoft(rings);
         }
@@ -7906,18 +7908,18 @@ const OrganicCharacterGeometries = (() => {
         function buildFOCSeatedLeg(side){
             const data=[
                 [1.525,.135,-.042,.070,.075,'cloth'],[1.479,.185,-.011,.084,.085,'cloth'],
-                [1.424,.239,.057,.083,.086,'cloth'],[1.364,.292,.114,.075,.079,'cloth'],
-                [1.296,.326,.153,.064,.069,'cloth'],[1.235,.344,.147,.055,.061,'cloth'],
+                [1.424,.239,.057,.080,.085,'cloth'],[1.364,.292,.114,.070,.076,'cloth'],
+                [1.296,.326,.153,.067,.071,'cloth'],[1.235,.344,.147,.053,.058,'cloth'],
                 [1.195,.349,.137,.069,.073,'boot'],[1.155,.350,.117,.075,.078,'boot'],
                 [1.100,.350,.096,.059,.065,'boot'],[1.005,.350,.066,.055,.060,'boot'],
                 [.900,.350,.037,.051,.055,'boot'],[.812,.350,.020,.049,.054,'boot'],
                 [.779,.350,.054,.048,.040,'boot'],[.774,.350,.105,.047,.031,'boot'],
                 [.769,.350,.157,.037,.023,'boot'],[.766,.350,.184,.019,.013,'boot']
             ];
-            return focLimbSweep(data.map(([y,x,z,rx,rz,mat])=>({p:[side*x,y,z],rx,rz,mat,fold:mat==='cloth'?.003:.001})),20);
+            return focLimbSweep(data.map(([y,x,z,rx,rz,mat])=>({p:[side*x,y,z],rx,rz,mat,fold:mat==='cloth'?.006:.002})),20);
         }
         function buildFOCSeatedPelvis(){
-            const levels=[[1.407,.163,.102],[1.433,.210,.139],[1.480,.220,.151],[1.525,.216,.146],[1.574,.183,.118]];
+            const levels=[[1.407,.160,.102],[1.433,.204,.139],[1.480,.215,.150],[1.525,.213,.146],[1.574,.183,.118]];
             return OrganicCharacterGeometries.createClosedLoft(levels.map(([y,rx,rz])=>Array.from({length:24},(_,i)=>{const a=i*Math.PI*2/24;return [rx*Math.cos(a),y,-.047+rz*Math.sin(a)];})));
         }
         function createFOCFixedLimbGeometries(){
@@ -7974,13 +7976,13 @@ const OrganicCharacterGeometries = (() => {
         function buildFOCHorseNeck(style){
             const k=Math.max(.88,Math.min(1.12,style.horseWidth/.185));
             const st=[
-                [[0,1.15,.29],.094,.102],[[0,1.25,.40],.145,.160],
-                [[0,1.37,.49],.140,.173],[[0,1.49,.58],.111,.151],
-                [[0,1.61,.655],.087,.119],[[0,1.72,.72],.071,.090],
+                [[0,1.15,.29],.108,.114],[[0,1.25,.40],.151,.174],
+                [[0,1.37,.49],.138,.185],[[0,1.49,.58],.109,.163],
+                [[0,1.61,.655],.083,.126],[[0,1.72,.72],.067,.095],
                 [[0,1.81,.79],.066,.067],[[0,1.85,.85],.069,.068],
                 [[0,1.82,.91],.075,.070],[[0,1.76,.96],.060,.060],
-                [[0,1.70,1.015],.046,.047],[[0,1.65,1.061],.041,.044],
-                [[0,1.625,1.094],.049,.041],[[0,1.615,1.119],.038,.030],
+                [[0,1.70,1.015],.048,.052],[[0,1.65,1.061],.043,.048],
+                [[0,1.625,1.094],.051,.045],[[0,1.615,1.119],.040,.032],
                 [[0,1.615,1.127],.021,.017]
             ];
             return focLimbSweep(st.map(([p,rx,rz],i)=>({p,rx:rx*k,rz:rz*(.95+.05*k),mat:'coat',fold:i<6?.001:0})),28).full;
@@ -7993,7 +7995,7 @@ const OrganicCharacterGeometries = (() => {
                 [[0,1.82,.675],.029,.039],[[0,1.897,.759],.022,.030],
                 [[0,1.911,.820],.018,.023],[[0,1.891,.862],.010,.012]
             ];
-            return focLimbSweep(st.map(([p,rx,rz])=>({p,rx:rx*k,rz,mat:'mane',fold:.002})),18).full;
+            return focLimbSweep(st.map(([p,rx,rz])=>({p,rx:rx*k,rz,mat:'mane',fold:.004})),28).full;
         }
         function buildFOCHorseEar(side){
             const st=[
@@ -8011,7 +8013,7 @@ const OrganicCharacterGeometries = (() => {
                 [[.008,.58,-.84],.042,.038],[[.020,.46,-.88],.022,.026],
                 [[.022,.40,-.91],.005,.008]
             ];
-            return focLimbSweep(st.map(([p,rx,rz])=>({p,rx:rx*(.94+style.horseWidth*.3),rz,mat:'mane',fold:.003})),20).full;
+            return focLimbSweep(st.map(([p,rx,rz])=>({p,rx:rx*(.94+style.horseWidth*.3),rz,mat:'mane',fold:.005})),20).full;
         }
         function buildFOCHorseLeg(style,side,front,lower){
             const N=20,k=Math.max(.87,Math.min(1.16,style.horseWidth/.185));
