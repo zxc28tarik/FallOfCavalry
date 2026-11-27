@@ -150,6 +150,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 12K model commit `ceb330362dd60f195baee12f1c141097ce615edd`: 10 sabit at stilinin gövde çevresi 28→48 örnek; omuz, kaburga, böğür ve cidago konturları, boyun kökü/baş profili, yele/kuyruk yüzeyi, binici uyluk/pantolon ve pelvis profilleri revize edildi. Yele 18→28 örnek. Boyun ve kuyruk skin ring düzenleri, diz/hock çevreleri, eyer/üzengi/dizgin ve silah rig bağlantıları korunmuştur. Oyun mantığı değişmedi.
 - Yapısal ve gerçek WebGL test sonuçları, ekran görüntüsü karşılaştırması ve oturuş yüzeyi uyumu henüz doğrulanmadı. 12K IN PROGRESS; 12L açık. GPU/LOD optimizasyonu ertelenmiş, ana dal ve Unity korunmuştur.
 
+## 27 Kasım 2026 — 12K teknik sonuç ve 12L sabit model çeşitliliği
+
+- 12K model SHA `ceb330362dd60f195baee12f1c141097ce615edd`: yapısal `46005565381`, tarihsel CPU regresyon `46005565396` ve Chrome/WebGL `46005565722` PASS. Ekran görüntülerinin doğrudan estetik karşılaştırması yapılmadı; fiziksel GPU performansı ölçülmedi.
+- 12L model SHA `c593de5a3dc865b5f131bb4c6e30c0fbaed9c130`: 24 sabit yüz profilinde elmacık, yanak, çene, şakak ve burun köprüsü farkları mevcut stil katsayılarıyla güçlendirildi; yüz materyal maskeleri, rig, başlık ve topoloji korundu. Sekiz piyade kıyafetinde göğüs/bel/etek oranları, beşinde pile sayısı farklılaştırıldı. Sabit 24 model kapsamı korundu; aynı arketip içi yeni yüz/beden varyantları eklenmedi. Oyun istatistikleri veya ekipman mantığı değiştirilmedi.
+- 12L QA SHA `356dd1e461c16132ad5f64deef9075f2ed0d97e2`: 276 farklı yüz çifti için vertex RMS farkı testi; sonuç bekleniyor. Bu sınama görsel okunurluğu ispatlamaz. 12L görsel onay ve tüm modellerin toplu incelemesi açık. Ana dal ve Unity korunuyor.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
