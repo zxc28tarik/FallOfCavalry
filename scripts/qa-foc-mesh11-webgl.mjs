@@ -112,6 +112,40 @@ try {
   await page.screenshot({ path: resolve(reportDir, 'showcase-european-attack.png'), fullPage: true, timeout: 30000 });
   results.showcase.push('showcase-european-attack.png');
 
+  // MESH-12D: lower body close-up; hide only the info card in QA screenshots.
+  results.kneeShowcase = [];
+  const card = page.locator('#showcaseInfoCard');
+  const previousVisibility = await card.evaluate(el => el.style.visibility);
+  await card.evaluate(el => { el.style.visibility = 'hidden'; });
+  for (const sample of [
+    { culture: 'Ottoman', label: 'Yeniçeri', template: 'fixed:ottoman_janissary_musket', tag: 'janissary' },
+    { culture: 'European', label: 'Zırhlı piyade', template: 'fixed:euro_armored_infantry', tag: 'armored' }
+  ]) {
+    await page.locator('#btnShowcase' + sample.culture).evaluate(el => el.click());
+    await page.locator('#showcaseUnitList .showcase-unit-item').filter({
+      has: page.getByText(sample.label, { exact: true })
+    }).first().evaluate(el => el.click());
+    await page.locator('#btnShowcaseVariant1').evaluate(el => el.click());
+    for (const anim of ['Idle', 'Walk']) {
+      await page.locator('#btnShowcaseAnim' + anim).evaluate(el => el.click());
+      const state = await page.evaluate(() => {
+        const r=window.__focBattle3DPreview?.renderer;
+        const cam=r?.cameraController;
+        if(!cam) throw Error('Knee camera missing');
+        const view={targetX:0,targetY:.46,targetZ:0,distance:2.25,yaw:.54,pitch:.12};
+        Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform?.(1);
+        const reg=r.soldierRegistry,u=reg.records.get('SHOWCASE:U1');
+        return { templateKey:u?.templateKey, legs:(reg.templates[u?.templateKey]||[]).filter(p=>p.prim.startsWith('focLeg_')).length };
+      });
+      if(state.templateKey!==sample.template || state.legs<4) throw Error('Wrong knee showcase: '+JSON.stringify(state));
+      await page.waitForTimeout(900);
+      const file='showcase-knee-'+sample.tag+'-'+anim.toLowerCase()+'.png';
+      await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+      results.kneeShowcase.push({...state,anim,screenshot:file});
+    }
+  }
+  await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
+
   // MESH-12C: mounted anatomy gate. Select actual existing fixed archetypes
   // through the showcase UI, capture their whole body and check active mesh data.
   results.mountedShowcase = [];
