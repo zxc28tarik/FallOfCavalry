@@ -175,6 +175,34 @@ try {
   }
   await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
 
+  // MESH-12I: torso details on Ottoman and European infantry.
+  results.garmentShowcase=[];
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  for(const sample of [
+    {culture:'Ottoman',label:'Yeniçeri',template:'fixed:ottoman_janissary_musket',tag:'janissary'},
+    {culture:'European',label:'Zırhlı piyade',template:'fixed:euro_armored_infantry',tag:'armored'}
+  ]){
+    await page.locator('#btnShowcase'+sample.culture).evaluate(el=>el.click());
+    await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+    await page.locator('#btnShowcaseVariant1').evaluate(el=>el.click());
+    await page.locator('#btnShowcaseAnimIdle').evaluate(el=>el.click());
+    for(const [name,yaw] of [['front',0],['quarter',.77]]){
+      const state=await page.evaluate(yaw=>{
+        const r=window.__focBattle3DPreview.renderer,cam=r.cameraController,reg=r.soldierRegistry;
+        const u=reg.records.get('SHOWCASE:U1'),parts=reg.templates[u.templateKey];
+        const view={targetX:0,targetY:1.06,targetZ:0,distance:1.85,yaw,pitch:.08};
+        Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+        return {template:u.templateKey,trim:parts.filter(p=>p.prim.startsWith('focGarment_')&&p.prim.endsWith('_trim')).length};
+      },yaw);
+      if(state.template!==sample.template||state.trim!==1)throw Error('Incorrect garment showcase '+JSON.stringify(state));
+      await page.waitForTimeout(900);
+      const file='showcase-garment-'+sample.tag+'-'+name+'.png';
+      await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+      results.garmentShowcase.push({...state,view:name,screenshot:file});
+    }
+  }
+  await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);
+
   // MESH-12C: mounted anatomy gate. Select actual existing fixed archetypes
   // through the showcase UI, capture their whole body and check active mesh data.
   results.mountedShowcase = [];
