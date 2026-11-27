@@ -3027,11 +3027,12 @@
                             batch._glInstanceBuffer = gl.createBuffer();
                             gl.bindBuffer(gl.ARRAY_BUFFER, batch._glInstanceBuffer);
                             gl.bufferData(gl.ARRAY_BUFFER, batch.instanceData, gl.DYNAMIC_DRAW);
-                            batch._needsUpload = false;
+                            batch._needsUpload = false;batch._dirtyStart=undefined;batch._dirtyEnd=undefined;
                         } else if (batch._needsUpload && typeof gl.bufferSubData === 'function') {
                             gl.bindBuffer(gl.ARRAY_BUFFER, batch._glInstanceBuffer);
-                            gl.bufferSubData(gl.ARRAY_BUFFER, 0, batch.instanceData);
-                            batch._needsUpload = false;
+                            const start=batch._dirtyStart??0,end=batch._dirtyEnd??batch.instanceData.length;
+                            gl.bufferSubData(gl.ARRAY_BUFFER,start*4,batch.instanceData.subarray(start,end));
+                            batch._needsUpload = false;batch._dirtyStart=undefined;batch._dirtyEnd=undefined;
                         }
 
                         if (batch.count <= 0) continue;
@@ -10741,74 +10742,71 @@ function createSoldierPartTemplates() {
                 return movingCount + combatPosingCount;
             }
 
-            _updateBatchBuffersInPlace() {
-                const batches = this.batchGroup.batches;
-                if (!batches || batches.length === 0) return;
-                this._skinPoseRevision++; // New animation/frame transform state.
-
-                if (!this._batchWriteOffsets || this._batchWriteOffsets.length < batches.length) {
-                    this._batchWriteOffsets = new Int32Array(Math.max(16, batches.length));
-                } else {
-                    this._batchWriteOffsets.fill(0);
+            // MESH-12G: only changed records need matrix writes; layout is
+            // stable between rebuilds. Compare actual render inputs, not timers.
+            _captureRenderState(rec) {
+                const active=rec.walkBlend>1e-4||rec.actionBlend>1e-4;
+                const pose=rec._focRenderState||(rec._focRenderState=new Float64Array(22).fill(NaN));
+                let changed=false;
+                for(let i=0;i<16;i++){const v=rec.worldMat[i];if(pose[i]!==v){pose[i]=v;changed=true;}}
+                const walkPhase=active?rec.walkPhase:0,walkBlend=active?rec.walkBlend:0,trotBlend=active?rec.trotBlend:0,
+                    actionPhase=active?rec.actionPhase:0,actionBlend=active?rec.actionBlend:0;
+                if(pose[16]!==walkPhase||pose[17]!==walkBlend||pose[18]!==trotBlend||pose[19]!==actionPhase||pose[20]!==actionBlend||
+                   pose[21]!==Number(active)||rec._focRenderMode!==rec.actionMode||rec._focRenderTemplate!==rec.templateKey||rec._focRenderArchetype!==rec.archetype){
+                    pose[16]=walkPhase;pose[17]=walkBlend;pose[18]=trotBlend;pose[19]=actionPhase;pose[20]=actionBlend;pose[21]=Number(active);
+                    rec._focRenderMode=rec.actionMode;rec._focRenderTemplate=rec.templateKey;rec._focRenderArchetype=rec.archetype;changed=true;
                 }
-                const writeOffsets = this._batchWriteOffsets;
+                return changed;
+            }
 
-                for (const rec of this.records.values()) {
-                    const parts = this.templates[rec.templateKey] || this.templates['player:infantry_pikeman'];
-                    const isInfantry = rec.archetype.startsWith('infantry_');
-                    const isCavalry = rec.archetype.startsWith('cavalry');
-
-                    for (let p = 0; p < parts.length; p++) {
-                        const part = parts[p];
-                        const bIdx = this._partBatchIndices.get(part);
-                        if (bIdx === undefined || bIdx < 0 || bIdx >= batches.length) continue;
-
-                        const batch = batches[bIdx];
-                        const slot = writeOffsets[bIdx]++;
-                        const base = slot * (batch.stride||INSTANCE_STRIDE_FLOATS);
-
-                        if (isInfantry && (rec.walkBlend > 1e-4 || rec.actionBlend > 1e-4)) {
-                            computeInfantryPartLocalMatrix(
-                                this._tmpPartLocalMat,
-                                part,
-                                rec.archetype,
-                                rec.walkPhase,
-                                rec.walkBlend,
-                                this._scratchA,
-                                this._scratchB,
-                                rec.actionPhase,
-                                rec.actionBlend,
-                                rec.actionMode
-                            );
-                            FOC_THREE.Mat4.multiply(this._tmpWorldPartMat, rec.worldMat, this._tmpPartLocalMat);
-                        } else if (isCavalry && (rec.walkBlend > 1e-4 || rec.actionBlend > 1e-4)) {
-                            computeCavalryPartLocalMatrix(
-                                this._tmpPartLocalMat,
-                                part,
-                                rec.walkPhase,
-                                rec.walkBlend,
-                                rec.trotBlend,
-                                this._scratchA,
-                                this._scratchB,
-                                rec.actionPhase,
-                                rec.actionBlend,
-                                rec.actionMode,
-                                rec.archetype,
-                                p,
-                                parts.length
-                            );
-                            FOC_THREE.Mat4.multiply(this._tmpWorldPartMat, rec.worldMat, this._tmpPartLocalMat);
-                        } else {
-                            FOC_THREE.Mat4.multiply(this._tmpWorldPartMat, rec.worldMat, part.localMat);
+            _updateBatchBuffersInPlace() {
+                const batches=this.batchGroup.batches;
+                if(!batches||!batches.length)return;
+                this._skinPoseRevision++;
+                const stats=this._focPerf={records:this.records.size,changedRecords:0,partsWritten:0,rigEvaluations:0,dirtyBatches:0,dirtyBytes:0,fullBytes:0};
+                const rigProxy=this._focRigProxy||(this._focRigProxy={rigGroup:'static',subGroup:undefined,localMat:FOC_THREE.Mat4.create()});
+                const rigMatrices=this._focRigMatrices||(this._focRigMatrices=new Map());
+                for(const rec of this.records.values()){
+                    if(!this._captureRenderState(rec))continue;
+                    stats.changedRecords++;
+                    const parts=this.templates[rec.templateKey]||this.templates['player:infantry_pikeman'];
+                    const active=rec.walkBlend>1e-4||rec.actionBlend>1e-4,isInfantry=rec.archetype.startsWith('infantry_'),isCavalry=rec.archetype.startsWith('cavalry');
+                    // Store each rig transform once per record, including the
+                    // cavalry lance subgroup, which has separate action kinematics.
+                    const slots=rec._focBatchSlots;
+                    if(!slots||slots.length!==parts.length)throw Error('Missing FOC batch slots');
+                    rigMatrices.clear();
+                    for(let p=0;p<parts.length;p++){
+                        const part=parts[p],slot=slots[p];
+                        if(!slot)continue;
+                        const batch=batches[slot.bIdx],base=slot.base;
+                        let local=part.localMat;
+                        if(active&&(isInfantry||isCavalry)&&part.rigGroup!=='static'&&part.rigGroup!=='shadow'){
+                            const key=part.rigGroup+'|'+(part.subGroup||'');
+                            let rig=rigMatrices.get(key);
+                            if(!rig){
+                                rig=this._focRigPool?.[rigMatrices.size];
+                                if(!rig){(this._focRigPool||=[]).push(rig=FOC_THREE.Mat4.create());}
+                                rigProxy.rigGroup=part.rigGroup;rigProxy.subGroup=part.subGroup;
+                                if(isInfantry)computeInfantryPartLocalMatrix(rig,rigProxy,rec.archetype,rec.walkPhase,rec.walkBlend,this._scratchA,this._scratchB,rec.actionPhase,rec.actionBlend,rec.actionMode);
+                                else computeCavalryPartLocalMatrix(rig,rigProxy,rec.walkPhase,rec.walkBlend,rec.trotBlend,this._scratchA,this._scratchB,rec.actionPhase,rec.actionBlend,rec.actionMode,rec.archetype,p,parts.length);
+                                rigMatrices.set(key,rig);stats.rigEvaluations++;
+                            }
+                            FOC_THREE.Mat4.multiply(this._tmpPartLocalMat,rig,part.localMat);
+                            local=this._tmpPartLocalMat;
                         }
-
-                        batch.instanceData.set(this._tmpWorldPartMat, base);
+                        FOC_THREE.Mat4.multiply(this._tmpWorldPartMat,rec.worldMat,local);
+                        batch.instanceData.set(this._tmpWorldPartMat,base);
                         if(batch.stride===33)focWriteSkinParent(this,rec,part,batch.instanceData,base);
+                        batch._needsUpload=true;
+                        batch._dirtyStart=Math.min(batch._dirtyStart??Infinity,base);
+                        batch._dirtyEnd=Math.max(batch._dirtyEnd??0,base+batch.stride);
+                        stats.partsWritten++;
                     }
                 }
-
-                for (let b = 0; b < batches.length; b++) {
-                    batches[b]._needsUpload = true;
+                for(const batch of batches){
+                    stats.fullBytes+=batch.instanceData.byteLength;
+                    if(batch._needsUpload){stats.dirtyBatches++;stats.dirtyBytes+=((batch._dirtyEnd??batch.instanceData.length)-(batch._dirtyStart??0))*4;}
                 }
             }
 
@@ -10826,6 +10824,8 @@ function createSoldierPartTemplates() {
                     const parts = this.templates[rec.templateKey] || this.templates['player:infantry_pikeman'];
                     const isInfantry = rec.archetype.startsWith('infantry_');
                     const isCavalry = rec.archetype.startsWith('cavalry');
+                    rec._focBatchSlots=new Array(parts.length);
+                    this._captureRenderState(rec);
 
                     for (let p = 0; p < parts.length; p++) {
                         const part = parts[p];
@@ -10877,6 +10877,7 @@ function createSoldierPartTemplates() {
 
                         bucket.entries.push({
                             partRef: part,
+                            partIndex:p,
                             rec,
                             worldMat: rec.worldMat,
                             localMat: localMatToUse,
@@ -10907,6 +10908,7 @@ function createSoldierPartTemplates() {
                         const entry = bucket.entries[i];
                         this._partBatchIndices.set(entry.partRef,bIdx);
                         const base = i * stride;
+                        entry.rec._focBatchSlots[entry.partIndex]={bIdx,base};
                         FOC_THREE.Mat4.multiply(tmpMat, entry.worldMat, entry.localMat);
                         instanceData.set(tmpMat, base);
                         instanceData[base + 16] = entry.r;
