@@ -111,6 +111,14 @@
 - Gerçek WebGL testine `0201403f6d6423789a0f4e5346c165078fe35103` ile QA-only 300 asker sahnesi, gerçek bufferSubData byte/call, draw-call, CPU instance, render submission ve gl.finish bekleme ölçümü eklendi. Koşu `45993798023` bekliyor; önceki smoke `45993680557` devam ediyor. SwiftShader fiziksel GPU değildir; gerçek kullanıcı FPS'i henüz ölçülmedi.
 - Ana dal ve Unity değişmedi. Performans kapısı sonuçlanana kadar ana dala birleştirme yok.
 
+### 12G karşılaştırmalı CPU benchmark sonucu
+
+- `45993748263` PASS; aynı 300 asker, 24 arketip, 466 batch, 14543 instance, 3988388 submitted soldier triangles, 1448172 byte instance tamponu. 4 senaryo, 32 frame/senaryo, ilk 8 ısınma, 24 ölçüm; A/B çalışma sırası dönüşümlü.
+- Medyan ms eski/yeni: idle 2.2605/0.0803; 1 hareketli 2.3331/0.1447; 30 hareketli 8.1705/3.4664; 300 hareketli 64.4255/29.9354. P95 eski/yeni: 2.9082/0.2318, 2.3722/0.1515, 9.9924/4.5993, 65.7183/31.2182.
+- Potansiyel upload byte eski 1448172 her update; yeni 0/2592/133620/1448172. Yeni part write 0/24/1333/14543, rig eval 0/6/277/2971. Tüm instance float verileri maksimum fark 0, ekleme/silme/template değişimi sonrası rebuild PASS. Idle eski ölçümü zorunlu update çağrısıdır, normal oyunda tamamen boşta update çağrılmayabilir.
+- CPU testi VM ölçümüdür, gerçek frame süresi veya GPU FPS değildir. Gerçek WebGL 300 asker koşusu `45993798023` açık. Artifact: https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45993748263/artifacts/15194423468 .
+- Sonraki darboğaz: yaklaşık 4 milyon çizilen asker üçgeni ve 466 batch. Yeni görsel LOD veya mesafeye bağlı azaltım ancak ayrı geri alınabilir aşamada kalite kıyası ile yapılmalı.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
