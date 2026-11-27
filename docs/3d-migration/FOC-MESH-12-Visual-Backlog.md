@@ -184,6 +184,11 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - Model SHA `c3a978ec35b6d61cb034bcbe2ab49db4330204e7`: 10 at stilinin ön göğüs profili, gövde içine oturan boyun kökü ve üst bacak kökleri revize edildi. Boyun ilk 5 halka ve üst bacak 5–8. halkalarının normalleri yakın gövde normalleriyle mesafe ve yön uyumuna göre karıştırılıyor. Diz/hock dikişleri, ring sayıları, skin ağırlıkları, eyer/dizgin ve animasyonlar değişmedi. Bu yöntem kaynak yüzeylerini birleştirmez; hareket sırasında kesintisiz birleşim ve estetik kabul açık. Normal hesaplama geometri oluşturulurken çalışır, kare başına değil.
 - QA SHA `576d89b4e922fa769657e9aa5c9162df58558183`: 10 atlı arketipte göğüs, boyun ve üst bacak kökü yakın planları, toplam 10 ilave PNG. Önceki 24 arketip ve omuz testleri korunur. 13B son WebGL ve 13C teknik/görsel sonuçları henüz doğrulanmadı. Ana dal/Unity ve savaş mantığı değişmedi. 13D sırada.
 
+## 27 Kasım 2026 — FOC-MESH-13D tutuş yüzeyi
+
+- Model SHA `f7ca9e1e7e6b593df97d59a5a3d91d3859373712`: 8 kol ankrajı ve 3 kol stili için bilek/avuç/boğum/parmak ucu ring kesitleri, karşılıklı simetrik boğum kabartısı, dipçik ve kabza görsel profilleri. Ring sayıları, grip merkezi, rig, silah transformları ve oyun mantığı korunur. Parmaklar bağımsız kemiklerle hareket etmez; fiziksel el-silah teması kanıtlanmadı.
+- QA SHA `c16b6b90bf762e687fe7b7b1a5655fe79c5b63d9`: 24 kol/stil kombinasyonunda grip ring 14 merkez sapması ve render edilen el kapsamı denetimi. Önceki 48 animasyonlu el ve bütün silah testleri korunur. Chrome/WebGL ve görsel kabul açık; 13E sırada. Ana dal ve Unity korunmuştur.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
