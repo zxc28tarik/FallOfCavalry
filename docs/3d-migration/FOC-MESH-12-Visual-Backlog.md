@@ -144,6 +144,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - İlk genişletilmiş teknik koşu `46002961660` PASS (23 arketipte silah şekli; humbaracı istisnası sonraki commit ile kaldırıldı). Son geometri `46003076545` PASS. 24'ünde silah şekli ve özel mace/humbara gerektiren test `a67d13ea2196e5eefac4e56bb5dd9f01ceba1e3a`, koşu `46003095600`. Yeni silah/elde tutuş yakın planları `64d49e9956832879da28ce59c77a8368b55715a8`, WebGL `46003117953`. Görsel inceleme bekliyor; gerçek parmak temasını kanıtlayan test yok.
 - GPU/LOD optimizasyonu ertelenmiş durumda, ana dal ve Unity değişmedi. 12K at/binici ikinci tur ve 12L karakter çeşitliliği sırada.
 
+## 27 Kasım 2026 — 12J teknik sonuç ve 12K ilk anatomi revizyonu
+
+- 12J: `46003095600` ve `46003117953` PASS. 24 arketip ekipman kapsamı ve dört ilave silah/el yakın planı teknik olarak doğrulandı. Görüntülerin bu turda doğrudan estetik incelemesi yapılmadı.
+- 12K model commit `ceb330362dd60f195baee12f1c141097ce615edd`: 10 sabit at stilinin gövde çevresi 28→48 örnek; omuz, kaburga, böğür ve cidago konturları, boyun kökü/baş profili, yele/kuyruk yüzeyi, binici uyluk/pantolon ve pelvis profilleri revize edildi. Yele 18→28 örnek. Boyun ve kuyruk skin ring düzenleri, diz/hock çevreleri, eyer/üzengi/dizgin ve silah rig bağlantıları korunmuştur. Oyun mantığı değişmedi.
+- Yapısal ve gerçek WebGL test sonuçları, ekran görüntüsü karşılaştırması ve oturuş yüzeyi uyumu henüz doğrulanmadı. 12K IN PROGRESS; 12L açık. GPU/LOD optimizasyonu ertelenmiş, ana dal ve Unity korunmuştur.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
