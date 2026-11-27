@@ -7,7 +7,8 @@ import { runInNewContext } from 'node:vm';
 import { performance } from 'node:perf_hooks';
 const file='FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html';
 const baseline=execFileSync('git',['show','121bef5cb3a13bf794f67f79173856cbca6c9f21:'+file],{encoding:'utf8',maxBuffer:8*1024*1024});
-const candidate=readFileSync(file,'utf8');
+// Historical A/B experiment must compare identical geometry; later visual revisions are not its control.
+const candidate=execFileSync('git',['show','21a3b3319cad7f6d035ff32fea35e5e0dc181ea0:'+file],{encoding:'utf8',maxBuffer:8*1024*1024});
 function load(html){
   const start=html.indexOf('<script>')+8,end=html.indexOf('</script>',start);
   const src=html.slice(start,end);
