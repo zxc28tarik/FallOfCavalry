@@ -103,6 +103,14 @@
 - Yeni genişletilmiş tack testi `45992020516` ve 19 çekim hedefli WebGL `45992055514` kuyrukta, ilk WebGL `45991972404` çalışıyor. Bu üçü tamamlanana kadar 12F görsel onay kapatılmayacak.
 - 12G: sabit 300 asker benchmark senaryosunda aktif instance/batch/draw-call/üçgen ve CPU animasyon/instance upload/render sürelerini ölç. SwiftShader ile teknik regresyon yapılabilir, ancak fiziksel GPU FPS kararı verilemez. Uzak mesafe görünümü için LOD/eleme yalnızca ölçüm sonrasında ve yakın plan kalitesini bozmadan ele alınacak.
 
+## 27 Kasım 2026 — 12F sonuçları ve 12G performans
+
+- 12F genişletilmiş teknik koşu `45992020516` PASS: 10 atlı arketip, 2400 dizgin ucu örneği, en büyük uç sapması 2.4407106481358093e-8 model birimi, eyer/üzengi ve binici rig dönüşüm farkı 0. Gerçek WebGL koşuları `45991972404` ve `45992055514` PASS; 19 ekran görüntülü artifact https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45992055514/artifacts/15193329918 . Dizgin gerçek fizik simülasyonu değildir; ayak/üzengi yüzeyi temasının eksiksiz olduğu da kanıtlanmadı.
+- 12G `21a3b3319cad7f6d035ff32fea35e5e0dc181ea0`: sabit batch yerleşiminde kayıt başına değişen world/pose verisi tespiti; yalnız değişen kayıtları yaz, asker başına rig matrisini (lance subgroup ayrı) yeniden kullan, GPU instance tamponunda birikmiş min/max kirli aralığı bufferSubData ile gönder. Geometri, materyal, savaş mantığı, LOD değişmedi. İlk yapısal koşu `45993680557` PASS.
+- CPU kıyas testi `919784b77f98585b746892e62cb7310808c89914`, CI `45993748263`: sabit 300 asker, 24 arketip, 4 hareket yoğunluğu, eski 12F kaynak commit ile aynı süreçte instance tamponlarını birebir toleranslı karşılaştırma; yeniden batch oluşturma sınaması. CPU süreleri ve potansiyel upload byte ölçümü. Sonucu bekliyor.
+- Gerçek WebGL testine `0201403f6d6423789a0f4e5346c165078fe35103` ile QA-only 300 asker sahnesi, gerçek bufferSubData byte/call, draw-call, CPU instance, render submission ve gl.finish bekleme ölçümü eklendi. Koşu `45993798023` bekliyor; önceki smoke `45993680557` devam ediyor. SwiftShader fiziksel GPU değildir; gerçek kullanıcı FPS'i henüz ölçülmedi.
+- Ana dal ve Unity değişmedi. Performans kapısı sonuçlanana kadar ana dala birleştirme yok.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
