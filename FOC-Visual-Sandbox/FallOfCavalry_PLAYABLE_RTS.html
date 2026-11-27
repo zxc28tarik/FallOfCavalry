@@ -6490,10 +6490,10 @@ const OrganicCharacterGeometries = (() => {
             // z, width fraction, top and underside relative to y=1.20
             const levels=[
                 [-1,.12,.015,-.025],[-.97,.42,.10,-.10],[-.89,.78,.18,-.16],
-                [-.76,1.04,.23,-.20],[-.61,1.10,.25,-.22],[-.45,1.02,.23,-.24],
+                [-.76,1.05,.25,-.20],[-.61,1.14,.27,-.25],[-.45,1.06,.23,-.26],
                 [-.28,.94,.19,-.27],[-.10,.96,.17,-.29],[.08,1.02,.17,-.30],
-                [.24,1.07,.20,-.31],[.40,1.12,.26,-.32],[.55,1.11,.30,-.31],
-                [.70,1.02,.25,-.29],[.83,.83,.19,-.24],[.93,.56,.12,-.17],
+                [.24,1.07,.20,-.31],[.40,1.13,.27,-.32],[.55,1.14,.31,-.32],
+                [.70,1.09,.28,-.29],[.83,.92,.22,-.24],[.93,.62,.14,-.17],
                 [1,.17,.025,-.045]
             ];
             const rings=levels.map(([z,w,top,bot])=>Array.from({length:N},(_,i)=>{
@@ -6501,7 +6501,9 @@ const OrganicCharacterGeometries = (() => {
                 const t=sa>0?top: -bot;
                 const rib=.009*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z-.28)/.38,2));
                 const rump=.006*Math.pow(Math.abs(ca),2)*Math.exp(-Math.pow((z+.65)/.22,2));
-                return [(W*w+rib+rump)*ca,1.20+sa*t*(D/.224),z*L];
+                const shoulder=.014*Math.pow(Math.abs(ca),3)*Math.exp(-Math.pow((z-.67)/.22,2));
+                const hind=.012*Math.pow(Math.abs(ca),3)*Math.exp(-Math.pow((z+.70)/.23,2));
+                return [(W*w+rib+rump+shoulder+hind)*ca,1.20+sa*t*(D/.224),z*L];
             }));
             return OrganicCharacterGeometries.createClosedLoft(rings);
         }
@@ -7923,12 +7925,12 @@ const OrganicCharacterGeometries = (() => {
         function buildFOCHorseNeck(style){
             const k=Math.max(.88,Math.min(1.12,style.horseWidth/.185));
             const st=[
-                [[0,1.17,.37],.110,.133],[[0,1.27,.46],.139,.172],
-                [[0,1.38,.53],.123,.161],[[0,1.49,.60],.105,.141],
-                [[0,1.61,.66],.090,.113],[[0,1.72,.72],.075,.086],
+                [[0,1.15,.29],.094,.102],[[0,1.25,.40],.145,.160],
+                [[0,1.37,.49],.140,.173],[[0,1.49,.58],.111,.151],
+                [[0,1.61,.655],.087,.119],[[0,1.72,.72],.071,.090],
                 [[0,1.81,.79],.066,.067],[[0,1.85,.85],.069,.068],
-                [[0,1.82,.91],.075,.070],[[0,1.76,.96],.062,.057],
-                [[0,1.70,1.015],.046,.047],[[0,1.65,1.061],.042,.041],
+                [[0,1.82,.91],.075,.070],[[0,1.76,.96],.060,.060],
+                [[0,1.70,1.015],.046,.047],[[0,1.65,1.061],.041,.044],
                 [[0,1.625,1.094],.049,.041],[[0,1.615,1.119],.038,.030],
                 [[0,1.615,1.127],.021,.017]
             ];
@@ -7965,35 +7967,49 @@ const OrganicCharacterGeometries = (() => {
         function buildFOCHorseLeg(style,side,front,lower){
             const N=20,k=Math.max(.87,Math.min(1.16,style.horseWidth/.185));
             const x=side*(style.euro&&!front?.20:.19);
-            const kneeZ=front?.59:-.68;
-            const kneeY=front?.52:.54;
-            // Upper and lower overlap at the actual legacy hinge, not an arbitrary midpoint.
+            const kneeZ=front?.59:-.68,kneeY=front?.52:.54;
+            const kx=front?.040:.043,kz=front?.044:.049;
+            // Match the upper/lower joint perimeter exactly, while keeping the
+            // upper root deep inside the barrel under horseBody skin influence.
             const data=lower?[
-                [.006,front?.605:-.585,.046,.060,'hoof'],[.022,front?.605:-.585,.051,.062,'hoof'],
-                [.066,front?.598:-.594,.049,.055,'hoof'],[.087,front?.588:-.61,.039,.043,'coat'],
-                [.124,front?.567:-.637,.030,.034,'coat'],[.173,front?.555:-.653,.035,.039,'coat'],
-                [.222,front?.56:-.657,.027,.031,'coat'],[.310,front?.575:-.67,.027,.031,'coat'],
-                [.401,front?.585:-.68,.029,.034,'coat'],[kneeY-.022,kneeZ,.043,.046,'coat'],
-                [kneeY+.018,kneeZ,.045,.049,'coat'],[kneeY+.064,kneeZ,.029,.033,'coat']
+                [.006,front?.605:-.585,.043,.058,'hoof'],[.022,front?.605:-.585,.049,.064,'hoof'],
+                [.060,front?.598:-.594,.047,.054,'hoof'],[.087,front?.588:-.61,.033,.039,'coat'],
+                [.124,front?.567:-.637,.026,.031,'coat'],[.173,front?.555:-.653,.033,.036,'coat'],
+                [.222,front?.56:-.657,.025,.030,'coat'],[.310,front?.575:-.67,.025,.030,'coat'],
+                [.401,front?.585:-.68,.028,.033,'coat'],[kneeY-.060,kneeZ-.006,.031,.035,'coat'],
+                [kneeY-.027,kneeZ-.003,kx-.003,kz-.003,'coat'],[kneeY,kneeZ,kx,kz,'coat']
             ]:[
-                [kneeY-.050,kneeZ,.028,.032,'coat'],[kneeY-.014,kneeZ,.043,.048,'coat'],
-                [kneeY+.028,kneeZ,.048,.053,'coat'],
-                [kneeY+.105,front?.55:-.62,front?.054:.069,front?.060:.082,'coat'],
-                [.760,front?.51:-.56,front?.068:.091,front?.078:.100,'coat'],
-                [.862,front?.49:-.53,front?.085:.112,front?.096:.128,'coat'],
-                [.966,front?.47:-.49,front?.101:.120,front?.115:.135,'coat'],
-                [1.065,front?.445:-.47,front?.091:.107,front?.109:.119,'coat'],
-                [1.14,front?.43:-.46,.063,.075,'coat']
+                [kneeY,kneeZ,kx,kz,'coat'],[kneeY+.040,kneeZ-.010,.045,.051,'coat'],
+                [kneeY+.075,front?.567:-.64,.048,.057,'coat'],
+                [kneeY+.125,front?.545:-.61,front?.054:.069,front?.064:.085,'coat'],
+                [.760,front?.51:-.56,front?.065:.086,front?.078:.105,'coat'],
+                [.862,front?.49:-.53,front?.078:.103,front?.098:.125,'coat'],
+                [.966,front?.47:-.49,front?.093:.108,front?.117:.137,'coat'],
+                [1.065,front?.43:-.46,front?.090:.103,front?.116:.125,'coat'],
+                [1.17,front?.39:-.42,.055,.077,'coat']
             ];
+            const seam=lower?data.length-1:0;
             const rings=data.map(([y,z,rx,rz,mat],ri)=>Array.from({length:N},(_,i)=>{
                 const a=i*2*Math.PI/N,c=Math.cos(a),v=Math.sin(a);
-                const tendon=mat==='coat'&&lower?.003*Math.pow(Math.max(0,-v),4):0;
-                return [x+rx*k*c,y,z+rz*k*v-tendon];
+                if(ri===seam)return [x+kx*k*c,y,kneeZ+kz*k*v];
+                const blend=Math.min(1,Math.abs(y-kneeY)/.07);
+                const inset=lower?0:Math.max(0,Math.min(1,(y-.85)/.32))*.105;
+                const centerX=x-side*inset;
+                const tendon=mat==='coat'&&lower?.0035*blend*Math.pow(Math.max(0,-v),4):0;
+                const hoof=mat==='hoof',cs=hoof?Math.sign(c)*Math.pow(Math.abs(c),.72):c;
+                const vs=hoof?Math.sign(v)*Math.pow(Math.abs(v),.82):v;
+                return [centerX+rx*k*cs,y,z+rz*k*vs-tendon];
             }));
             const full=OrganicCharacterGeometries.createClosedLoft(rings);
-            const sections=focMountedMaterialSections(full,data.slice(0,-1).map(st=>st[4]),N,data[0][4]);
-            if(lower){const hoof=sections.hoof,coat=sections.coat,cap=hoof.indices.slice(-N*3);hoof.indices=hoof.indices.slice(0,-N*3);const a=new Uint16Array(coat.indices.length+cap.length);a.set(coat.indices);a.set(cap,coat.indices.length);coat.indices=a;}
-            return {full,sections};
+            // No overlapping internal faces at the animated knee/hock joint.
+            const capStart=(data.length-1)*N*6+(lower?N*3:0);
+            const filtered=new Uint16Array(full.indices.length-N*3);
+            filtered.set(full.indices.subarray(0,capStart));filtered.set(full.indices.subarray(capStart+N*3),capStart);full.indices=filtered;
+            for(let p=0;p<N;p++){
+                const a=p*2*Math.PI/N,nx=Math.cos(a)/kx,nz=Math.sin(a)/kz,len=Math.hypot(nx,nz),v=(seam*N+p)*3;
+                full.normals[v]=nx/len;full.normals[v+1]=0;full.normals[v+2]=nz/len;
+            }
+            return {full,sections:focMountedMaterialSections(full,data.slice(0,-1).map(st=>st[4]),N,data[0][4])};
         }
         function createFOCFixedHorseGeometries(){
             const result={focEquineEar_L:buildFOCHorseEar(-1),focEquineEar_R:buildFOCHorseEar(1)};
