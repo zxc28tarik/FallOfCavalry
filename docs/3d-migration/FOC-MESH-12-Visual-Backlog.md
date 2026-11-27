@@ -31,6 +31,18 @@
 - **WebGL test:** `45981999567` (commit `013e35e70b4efa14f24201b99bbfc112fa64f18c`) başlatıldı; ekran görüntüsü incelenmeden estetik onay verilmez.
 - **Açık:** at anatomisi, diz/çizme görünümü, gerçek GPU FPS, 300 asker performansı, 24 profilin her birinin yakın plan görsel incelemesi.
 
+## 27 Kasım 2026 — FOC-MESH-12B gerçek WebGL görüntü kararı
+
+**Yapısal test: PASS. Gerçek WebGL smoke: PASS. Nihai görsel kalite: NOT READY.**
+
+- `45982031534`: 24 sabit arketip ve 8 sabit kol/silah tutuşu kontrolü PASS; yüz tek-parça topolojisi ve yüz materyal bölümleri testleri de PASS.
+- `45981999567`: gerçek Chrome / ANGLE SwiftShader / WebGL smoke PASS. Üç savaş sektörü ve dört asker vitrini ekran görüntüsü üretildi; `SHOWCASE:U1`, 24 batch, sıfır tarayıcı hatası, 16 vertex attribute.
+- **Artifact:** https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45981999567/artifacts/15189068611
+- Görsel karşılaştırma: Yeniçeri yüzündeki önceki geniş dikdörtgen göz/ağız lekeleri küçüldü ve sakal daha eğrisel görünmeye başladı. Buna rağmen omuzlar hâlâ yuvarlak birer kütle, göğüs/gövde hacmi şişkin, avuç/silah birleşimi ve yakın plan yüz detayları henüz hedeflenen anatomik kaliteye ulaşmadı.
+- Avrupa saldırı pozu tarayıcının farklı animasyon anında kaydedildiğinden iki ekran görüntüsünü piksel-piksel kalite regresyonu olarak yorumlama. Sabit poz/aynı kamera/timing doğrulaması ileride ayrı QA olarak eklenmeli.
+- Yazılım GPU `fpsApprox=1` gerçek donanım FPS verisi değildir.
+- **Karar:** Ana dala birleştirme yok. FOC-MESH-12 kalan anatomi ve 300 asker gerçek GPU performansı doğrulaması açık tutulur.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
