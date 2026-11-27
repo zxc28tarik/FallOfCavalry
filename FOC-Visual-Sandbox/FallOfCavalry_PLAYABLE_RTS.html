@@ -6147,9 +6147,9 @@ const OrganicCharacterGeometries = (() => {
                 [1.038, style.waist + 0.013, 0.120, 0.010, 0.08],
                 [1.063, style.waist + 0.012, 0.119, 0.010, 0.08],
                 [1.082, style.waist + 0.006, 0.113, 0.010, 0.05],
-                [1.107, style.waist * 1.13, style.depth * 0.90, 0.014, 0.12],
-                [1.151, style.chest * 0.87, style.depth, 0.012, 0.16],
-                [1.200, style.chest * 0.96, style.depth, 0.006, 0.16],
+                [1.107, style.waist * 1.10, style.depth * 0.78, 0.010, 0.12],
+                [1.151, style.chest * 0.87, style.depth * 0.87, 0.008, 0.16],
+                [1.200, style.chest * 0.96, style.depth * 0.94, 0.004, 0.16],
                 [1.250, style.chest, style.depth * 0.96, 0.000, 0.13],
                 [1.291, style.chest, style.depth * 0.91, -0.006, 0.10],
                 [1.322, style.chest * 0.94, style.depth * 0.83, -0.006, 0.08],
@@ -6174,14 +6174,18 @@ const OrganicCharacterGeometries = (() => {
                     const front = Math.max(0, sa);
                     const seam = Math.exp(-Math.pow(ca / 0.14, 2)) * front;
                     const folds = style.fold * foldWeight * (0.75 * Math.cos(a * (style.pleats || 7) + style.phase + y * 4) + 0.25 * Math.sin(a * 11 - y * 7));
-                    const plate = armor ? 0.007 + 0.012 * Math.pow(front, 2) + (style.armorRidge ?? 0.010) * seam + (style.armorFlare || 0) * Math.exp(-Math.pow((y - 1.107) / 0.027, 2)) : 0;
+                    const plate = armor ? 0.005 + 0.007 * Math.pow(front, 2) + (style.armorRidge ?? 0.010) * 0.75 * seam + (style.armorFlare || 0) * Math.exp(-Math.pow((y - 1.107) / 0.027, 2)) : 0;
                     const overlap = !armor && y > 1.082 && y < 1.375 ? 0.007 * seam : 0;
                     const vent = y < 0.915 ? -0.014 * seam * (0.915 - y) / 0.125 : 0;
                     const apron = (style.apron || 0) * Math.pow(front, 4) * Math.max(0, 1 - Math.abs(y - 0.97) / 0.17);
                     const asym = (style.asymmetry || 0) * Math.sin(a + style.phase) * foldWeight;
                     const lame = style.fauld && ringIndex < 5 ? (ringIndex % 2 === 0 ? 0.010 : -0.003) : 0;
                     const doublet = style.euro && !style.armored && y > 1.08 && y < 1.35 ? 0.009 * front * Math.exp(-Math.pow((y-1.17)/0.10,2)) : 0;
-                    ring.push([(rx + folds + plate * 0.4 + lame) * ca + asym, y, shift + (rz + folds + lame) * sa + plate * sa + overlap + vent + apron + doublet]);
+                    // Broad chest planes, narrower lower cuirass, and unmodified collar/hem.
+                    const chest = y >= 1.107 && y <= 1.350;
+                    const profileZ = chest && armor ? Math.sign(sa)*Math.pow(Math.abs(sa),.78) : sa;
+                    const frontPlate = armor ? plate * Math.max(0,sa) : 0;
+                    ring.push([(rx + folds + plate * 0.25 + lame) * ca + asym, y, shift + (rz + folds + lame) * profileZ + frontPlate + overlap + vent + apron + doublet]);
                 }
                 return ring;
             });
@@ -6457,8 +6461,8 @@ const OrganicCharacterGeometries = (() => {
                 [1.640,style.waist+.012,.137,-.04,.08],
                 [1.673,style.waist+.008,.130,-.04,.08],
                 [1.687,style.waist,.122,-.04,.12],
-                [1.728,style.waist*1.14,style.depth*.95,-.04,.2],
-                [1.770,style.chest*.94,style.depth,-.035,.2],
+                [1.728,style.waist*1.12,style.depth*.83,-.04,.2],
+                [1.770,style.chest*.94,style.depth*.92,-.035,.2],
                 [1.814,style.chest,style.depth,-.035,.2],
                 [1.859,style.chest,style.depth*.94,-.036,.15],
                 [1.901,style.chest*.93,style.depth*.83,-.037,.1],
@@ -6471,10 +6475,11 @@ const OrganicCharacterGeometries = (() => {
             const rings=levels.map(([y,rx,rz,z,fold],ri)=>Array.from({length:N},(_,i)=>{
                 const a=i*2*Math.PI/N, ca=Math.cos(a),sa=Math.sin(a),front=Math.max(0,sa);
                 const f=.009*fold*Math.cos(7*a+style.phase+y*5);
-                const plate=style.armor && ri>=7 && ri<=13 ? .008+(style.euro?.022:.014)*Math.pow(front,4) : 0;
+                const plate=style.armor && ri>=7 && ri<=13 ? .005+(style.euro?.016:.010)*Math.pow(front,4) : 0;
                 const lame=style.fauld&&ri<3?(ri%2===0?.007:-.003):0;
                 const pelt=style.pelt && ri>=11 && ri<=14 ? .014*(.7+.3*Math.cos(9*a+ri)) : 0;
-                return [(rx+f+plate*.35+pelt+lame)*ca,y,z+(rz+f+plate+pelt+lame)*sa];
+                const profileZ=style.armor&&ri>=8&&ri<=13?Math.sign(sa)*Math.pow(Math.abs(sa),.80):sa;
+                return [(rx+f+plate*.25+pelt+lame)*ca,y,z+(rz+f+pelt+lame)*profileZ+plate*front];
             }));
             const full=OrganicCharacterGeometries.createClosedLoft(rings);
             const mats=levels.slice(0,-1).map((_,i)=>style.euro&&i===3?'belt':i>=3&&i<7?'sash':style.armor&&((i>=7&&i<13)||(style.fauld&&i<3))?'armor':style.pelt&&i>=11&&i<14?'pelt':'cloth');
@@ -7754,7 +7759,11 @@ const OrganicCharacterGeometries = (() => {
                 const v=focVCross(u,tangent); // +U,+V winds outward along path
                 return Array.from({length:N},(_,j)=>{
                     const a=j*Math.PI*2/N,ca=Math.cos(a),sa=Math.sin(a),f=(st.fold||0)*Math.cos(a*5+i*.8);
-                    return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+f)*ca),focVScale(v,(st.rz+f)*sa)));
+                    // Palm-only contour: a slightly squared knuckle cross section, not a sphere.
+                    const palm=st.mat==='hand';
+                    const cu=palm?Math.sign(ca)*Math.pow(Math.abs(ca),.82):ca;
+                    const sv=palm?Math.sign(sa)*Math.pow(Math.abs(sa),.82):sa;
+                    return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+f)*cu),focVScale(v,(st.rz+f)*sv)));
                 });
             });
             const full=OrganicCharacterGeometries.createClosedLoft(rings);
@@ -7774,9 +7783,12 @@ const OrganicCharacterGeometries = (() => {
             const bend=Math.min(Math.hypot(...focVSub(el,sh)),Math.hypot(...focVSub(wr,el)))*.42;
             const ein=focVSub(el,focVScale(d1,bend)),eout=focVAdd(el,focVScale(d2,bend));
             const st=[],add=(p,rx,rz,mat,fold=0)=>st.push({p,rx:rx*factor,rz:rz*factor,mat,fold});
-            add(focVSub(sh,focVScale(d1,.065)),.047*r,.050*r,'sleeve');
-            add(focVSub(sh,focVScale(d1,.026)),.069*r,.070*r,'sleeve',.002);
-            add(sh,.076*r,.071*r,'sleeve',.003);
+            // Seat sleeve roots inward toward the torso. Rig anchors and station counts stay fixed.
+            const shoulderSign=Math.sign(sh[0]);
+            const root=(distance,inset,drop)=>focVAdd(focVSub(sh,focVScale(d1,distance)),[-shoulderSign*inset,-drop,0]);
+            add(root(.065,.045,.025),.052*r,.050*r,'sleeve');
+            add(root(.026,.022,.014),.067*r,.067*r,'sleeve',.002);
+            add(sh,.073*r,.069*r,'sleeve',.003);
             add(focVLerp(sh,ein,.5),.070*r,.068*r,'sleeve',.003);
             add(ein,.065*r,.062*r,'sleeve',.002);
             for(const t of [.25,.5,.75,1])add(focVLerp(focVLerp(ein,el,t),focVLerp(el,eout,t),t),(.063-.008*t)*r,(.065-.009*t)*r,'sleeve',style==='plate'?.001:.003);
@@ -7786,9 +7798,9 @@ const OrganicCharacterGeometries = (() => {
             add(focVSub(wr,focVScale(d2,.052*factor)),.046*r,.044*r,'sleeve');
             add(focVSub(wr,focVScale(d2,.038*factor)),.049,.045,'cuff');
             add(focVSub(wr,focVScale(d2,.025*factor)),.033,.030,'hand');
-            add(focVSub(wr,focVScale(d2,.009*factor)),.035,.032,'hand');
-            add(wr,.038,.035,'hand',.002);
-            add(focVAdd(wr,focVScale(d2,.019*factor)),.037,.033,'hand',.002);
+            add(focVSub(wr,focVScale(d2,.009*factor)),.039,.025,'hand');
+            add(wr,.041,.028,'hand',.0015);
+            add(focVAdd(wr,focVScale(d2,.019*factor)),.039,.026,'hand',.002);
             add(focVAdd(wr,focVScale(d2,.037*factor)),.028,.027,'hand');
             add(focVAdd(wr,focVScale(d2,.043*factor)),.012,.013,'hand');
             return focLimbSweep(st,20);
