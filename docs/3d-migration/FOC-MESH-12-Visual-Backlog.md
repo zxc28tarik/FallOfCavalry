@@ -168,6 +168,11 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - **Teknik: PASS. Estetik: NOT READY.** Yaya ve atlı birimler okunur, kültürel başlık/ekipman farkları görülüyor; ancak kıyafet ve zırh yüzeyleri hâlâ fazla düz/parlak ve oyuncak hissi veriyor. Omuzlar ve kol geçişleri bazı modellerde yuvarlak kütle; yüzler benzer ve sert ifadeli. Atlarda önden boyun-göğüs birleşiminde koyu oval sınır, çaprazda omuz/kalça ek yerleri belirgin; yüzey sürekliliği ve oranlar iyileştirilmeli. Tutuşlar gerçek parmak temasına göre doğrulanmış değil. Uzun kargılar bazı çekimlerde kadraj dışında; tam silah geometrisi için ayrı geniş kadraj gerekli. Bunlar görsel gözlemdir, penetrasyon veya fizik hatası kanıtı değildir.
 - Yeni öncelik önerisi: MESH-13 yüzey/malzeme, omuz/kol ve at gövde-boyun geçişleri; ardından aynı kamera ile A/B karşılaştırma. Kullanıcının GPU/LOD erteleme kararı korunur. Aynı arketip içi varyasyon, gerçek GPU ve HUD tutarsızlığı açık. Ana dala merge edilmedi; bu tur model kodu değiştirilmedi.
 
+## 27 Kasım 2026 — FOC-MESH-13A ilk yüzey revizyonu
+
+- Model SHA `f0999d5901b1f2f5c4b6567ad96f5d6504658775`: beş sabit asker yüzey sınıfı (mat kumaş, deri/ipek, metal, ahşap, organik). Bind-space desen, mesafeye göre azalma, ayrı parlama/rim katsayıları. Ortam ışık ayarları, temel renkler, geometri, animasyon ve savaş kuralları değişmedi. Ek vertex attribute veya instance stride yok; batch grupları yüzey sınıfına göre ayrıldığı için çizim çağrıları artabilir. Instancing bulunmayan fallback yolu eski görünümü korur. Gerçek doku haritası veya PBR değildir.
+- QA SHA `7751afdaad485bd93f24c4b12b1c02dc04486fb0`: 24 vitrin modelindeki aktif yüzey sınıfları ve toplam 5 sınıf kapsaması denetlenir. 48 karşılaştırma görüntüsü hedefi korunur. Gerçek WebGL ve görsel A/B değerlendirmesi açık; fiziksel GPU maliyeti ölçülmedi. Ana dal/Unity korunuyor.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
