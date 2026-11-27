@@ -62,6 +62,14 @@
 - 12D öncesi WebGL testine sabit Sipahi ve Kürassier için idle, walk, çeyrek-yandan idle görüntüsü (toplam 6 yeni çekim) ve doğru mounted template/at geometri varlığı kontrolleri eklendi. Test commit `09eb8decd98644ac232365114cca35f0bbb66bef`; koşu https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983209975 başlatıldı, henüz PASS denilmiyor.
 - Fiziksel GPU FPS ölçülmedi; SwiftShader rAF değeri 1, gerçek donanım performansı değildir. 12C ana dala birleştirilmedi.
 
+## 27 Kasım 2026 — FOC-MESH-12D diz, pantolon, çizme
+
+- 12C mounted WebGL koşusu `45983209975` PASS: üç sektör, dört piyade, altı süvari çekimi, sıfır browser hatası. Sipahi 44, Kürassier 48 aktif batch; her birinde 15 focEquine parçası. Artifact https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983209975/artifacts/15190725456 . Görüntüde özellikle at omuz/boyun ve arka bacak köklerinde sert birleşimler var; 12E için açık.
+- 12D model commit `7e187d0b55701632609e10f578cb1bffea1f7eba`: üç standing leg stili için aynı .46 pivot düzleminde birebir ortak 20 verteksli diz halkası ve ortak normal; üst/alt iç kapaklar çizim indekslerinden çıkarıldı. Halka/verteks düzeni, rig ve animasyon korundu. Pantolon, patella, baldır, ayak bileği ve çizme profilleri düzenlendi.
+- Önceki tüm yapısal testler `45985328305` PASS. Yeni verteks bazlı testin ilk koşusu `45985357646` rapor kapsamı ReferenceError ile FAIL; test değişkenleri `18f0a6bf15d90d496085b619067c7ab05b2a44be` ile düzeltildi. Yeni koşunun sonucu ayrıca işlenecek.
+- WebGL model koşusu `45985328537`; yakın plan testine dört yeni diz/çizme çekimi eklendi (`6870e8a9457aa7e766123d83c77add9d870ec940`, koşu `45985395577`). QA kamera ve bilgi kartı görünürlüğü yalnızca testte değiştirilir. Görsel kalite onayı henüz yok.
+- Ana dal/Unity/oyun mantığı değişmedi. Fiziksel GPU performansı açık.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
