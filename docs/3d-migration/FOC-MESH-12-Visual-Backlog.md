@@ -119,6 +119,16 @@
 - CPU testi VM ölçümüdür, gerçek frame süresi veya GPU FPS değildir. Gerçek WebGL 300 asker koşusu `45993798023` açık. Artifact: https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45993748263/artifacts/15194423468 .
 - Sonraki darboğaz: yaklaşık 4 milyon çizilen asker üçgeni ve 466 batch. Yeni görsel LOD veya mesafeye bağlı azaltım ancak ayrı geri alınabilir aşamada kalite kıyası ile yapılmalı.
 
+## 27 Kasım 2026 — Görsel kalite ikinci tur (12H–12L)
+
+Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyonunu önceliklendirme. 12G CPU optimizasyonu korunacak. Sıra: 12H yüz, 12I kıyafet/zırh, 12J silah/elde tutuş, 12K at/binici, 12L siluet çeşitliliği.
+
+- 12H `8122f4e3aa1382c162a8c43ea24a15c415e5f206`: 24 sabit baş; 56→80 çevre örneği, 44 yükseklik halkası, ayrı iris/göz akı ve ağız/burun çizgisi malzeme bölgeleri, göz kapağı, kulak çukuru, yanak, burun ucu, dudak ve arketipe özel bıyık/keçi sakalı formları. Tek yüzey/aynı rig, önceki baş/başlık ölçeği korunur. 7040 üçgen/baş; kütüphane toplamı 319260 (12F +69504), 1220 parça, 570 geometri.
+- Genişletilmiş geometri testi `46000335994` PASS (24 baş, 1728 pose, 87840 matrix, 0 dejenere üçgen ve 0 hata). Her yüz 40 iris, 40 sclera, 16 dudak, 32 crease üçgeni; yüzeyler aynı vertex/normal dizisini paylaşır. Bu estetik onayı değildir.
+- WebGL yakın plan testi `fa3b326fbe80ee192c1e85c90c49d83bbfdceeeb`, koşu `46000378922`. Yeniçeri ve zırhlı piyade ön/çapraz yüz görüntüleri ekli, sonuç bekliyor.
+- 12G genişletilmiş GPU testi `45993798023` FAIL: sabit template anahtarlarının enumerate edilememesi (test fixture hatası). Normal WebGL smoke ve 300 asker CPU A/B daha önce PASS. GPU benchmark opt-in FOC_QA_PERF300=1, anahtarlar geometri adlarından türetilir; düzeltilmiş benchmark henüz çalıştırılmadı (kullanıcı önceliği nedeniyle ertelendi). 12H sonrası eski 12F ile güncel farklı geometriyi karşılaştıran CPU testi `46000318394` FAIL; tarihi A/B kıyası 12F/12G commitlerine sabitlendi `c76283ca8cef933d9cb6b2968b8dc2dac724e930`. Bu tarihsel kıyas yeni görsel modellerin performans testi değildir.
+- 12I–12L sırada. Ana dal ve Unity korunuyor. Görsel kabul henüz açık.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
