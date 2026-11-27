@@ -7856,9 +7856,9 @@ const OrganicCharacterGeometries = (() => {
         }
         function buildFOCSeatedLeg(side){
             const data=[
-                [1.525,.159,-.042,.075,.078,'cloth'],[1.479,.194,-.011,.091,.092,'cloth'],
-                [1.424,.246,.057,.088,.090,'cloth'],[1.364,.292,.114,.080,.083,'cloth'],
-                [1.296,.333,.153,.071,.074,'cloth'],[1.235,.348,.147,.060,.066,'cloth'],
+                [1.525,.135,-.042,.070,.075,'cloth'],[1.479,.185,-.011,.084,.085,'cloth'],
+                [1.424,.239,.057,.083,.086,'cloth'],[1.364,.292,.114,.075,.079,'cloth'],
+                [1.296,.326,.153,.064,.069,'cloth'],[1.235,.344,.147,.055,.061,'cloth'],
                 [1.195,.349,.137,.069,.073,'boot'],[1.155,.350,.117,.075,.078,'boot'],
                 [1.100,.350,.096,.059,.065,'boot'],[1.005,.350,.066,.055,.060,'boot'],
                 [.900,.350,.037,.051,.055,'boot'],[.812,.350,.020,.049,.054,'boot'],
@@ -8011,6 +8011,52 @@ const OrganicCharacterGeometries = (() => {
             }
             return {full,sections:focMountedMaterialSections(full,data.slice(0,-1).map(st=>st[4]),N,data[0][4])};
         }
+        function buildFOCFittedSaddle(style,pad){
+            // Closed thin shell in model space; no primitive scale mismatch.
+            const N=14,stations=[-.39,-.35,-.28,-.19,-.09,.02,.12,.21,.29,.35,.39];
+            const rings=stations.map(z0=>{
+                const z=z0*(pad?1:.85)-.055;
+                const edge=.65+.35*Math.sqrt(Math.max(0,1-Math.pow(z0/.40,2)));
+                const w=(style.horseWidth+(pad?.028:.018))*edge;
+                const crest=1.20+(style.horseDepth/.224)*(.175+.035*Math.abs(z0)/.39);
+                const arch=[];
+                for(let k=0;k<=N;k++){
+                    const a=(k/N-.5)*Math.PI*1.02;
+                    const roll=pad?0:.072*Math.exp(-Math.pow((z0+.29)/.095,2))+.061*Math.exp(-Math.pow((z0-.30)/.095,2));
+                    const y=crest+(pad?.016:.074)+roll*Math.pow(Math.max(0,Math.cos(a)),2)-(pad?.22:.15)*(1-Math.cos(a));
+                    arch.push([w*Math.sin(a),y,z]);
+                }
+                const inner=arch.slice().reverse().map(([x,y,z])=>[x*.975,y-(pad?.013:.033),z]);
+                return arch.concat(inner);
+            });
+            return OrganicCharacterGeometries.createClosedLoft(rings);
+        }
+        function buildFOCStirrup(side){
+            const x=side*.35,z=.088;
+            // Open metal arch across the boot, with a real opening and tread.
+            const data=[[-.008,.885,.009,.009],[-.037,.868,.010,.010],[-.064,.826,.009,.010],
+                [-.069,.778,.010,.011],[-.063,.744,.010,.016],[-.047,.735,.010,.025],
+                [0,.735,.010,.027],[.047,.735,.010,.025],[.063,.744,.010,.016],
+                [.069,.778,.010,.011],[.064,.826,.009,.010],[.037,.868,.010,.010],[.008,.885,.009,.009]];
+            return focLimbSweep(data.map(([dx,y,rx,rz])=>({p:[x+dx,y,z],rx,rz,mat:'metal'})),10).full;
+        }
+        function buildFOCRein(style,side){
+            const bit=style.euro?[side*.029,1.621,1.046]:[side*.030,1.62,1.09];
+            const hand=FOC_ARM_ANCHORS.orgArmRiderReinsL[2];
+            const data=[bit,[side*.060,1.641,.975],[side*.100,1.67,.865],
+                [side*.117,1.655,.745],[side*.126,1.615,.61],
+                [side*.101-.025,1.625,.47],hand];
+            return focLimbSweep(data.map(p=>({p,rx:.0055,rz:.008,mat:'rein'})),8).full;
+        }
+        function createFOCFixedTackGeometries(){
+            const result={focStirrup_L:buildFOCStirrup(-1),focStirrup_R:buildFOCStirrup(1)};
+            for(const [id,style] of Object.entries(FOC_MOUNT_STYLES)){
+                result['focTack_'+id+'_pad']=buildFOCFittedSaddle(style,true);
+                result['focTack_'+id+'_seat']=buildFOCFittedSaddle(style,false);
+                for(const side of [-1,1])result['focRein_'+id+'_'+(side<0?'L':'R')]=buildFOCRein(style,side);
+            }
+            return result;
+        }
         function createFOCFixedHorseGeometries(){
             const result={focEquineEar_L:buildFOCHorseEar(-1),focEquineEar_R:buildFOCHorseEar(1)};
             for(const [id,style] of Object.entries(FOC_MOUNT_STYLES)){
@@ -8029,7 +8075,25 @@ const OrganicCharacterGeometries = (() => {
             if(!body)return parts;
             const id=body.prim.slice('focHorse_'.length),style=FOC_MOUNT_STYLES[id],tail=parts.find(p=>p.prim==='orgHorseTail');
             if(!style||!tail)throw Error('Missing horse anatomy '+key);
-            const result=parts.filter(p=>!['orgHorseNeckHead','orgHorseTail','orgHorseLegUpper','orgHorseLegLower'].includes(p.prim)&&!(p.rigGroup==='horseNeckHead'&&p.mat==='eyeDark'));
+            const oldPad=parts.find(p=>p.prim==='orgHorseSaddle'&&p.rigGroup==='horseBody');
+            const oldSeat=parts.find(p=>p.prim==='orgHorseSaddle'&&p.rigGroup==='riderSaddle');
+            const oldStirrups=parts.filter(p=>p.prim==='box'&&p.rigGroup==='riderSaddle'&&p.localMat[13]<.80);
+            const oldStraps=parts.filter(p=>p.prim==='box'&&p.rigGroup==='riderSaddle'&&p.localMat[13]>.95&&p.localMat[13]<1.2);
+            const oldReins=parts.filter(p=>p.prim==='cylinder'&&p.rigGroup==='horseBody'&&p.localMat[13]>1.58&&p.localMat[14]>.65&&p.localMat[14]<.74);
+            if(!oldPad||!oldSeat||oldStirrups.length!==2||oldStraps.length!==2||oldReins.length!==2)throw Error('Unexpected legacy tack '+key+' '+[oldStirrups.length,oldStraps.length,oldReins.length]);
+            const replaced=new Set([oldPad,oldSeat,...oldStirrups,...oldStraps,...oldReins]);
+            const result=parts.filter(p=>!replaced.has(p)&&!['orgHorseNeckHead','orgHorseTail','orgHorseLegUpper','orgHorseLegLower'].includes(p.prim)&&!(p.rigGroup==='horseNeckHead'&&p.mat==='eyeDark'));
+            // Preserve existing cloth and metal choices. Pad and saddle move
+            // together with the pelvis; reins blend between head and hand.
+            const addTack=(prim,mat,rig)=>result.push(makePart(prim,mat,0,0,0,1,1,1,0,0,0,rig));
+            addTack('focTack_'+id+'_pad',oldPad.mat,'riderSaddle');
+            addTack('focTack_'+id+'_seat',oldSeat.mat,'riderSaddle');
+            for(const side of [-1,1]){
+                const tag=side<0?'L':'R',metal=oldStirrups.find(p=>Math.sign(p.localMat[12])===side).mat;
+                addTack('focStirrup_'+tag,metal,'riderSaddle');
+                addTack('focRein_'+id+'_'+tag,oldReins[0].mat,'horseNeckHead');
+                result.push(cavLimb('box','leather',side*(style.horseWidth+.015),1.39,.02,side*.35,.885,.088,.009,.009,'riderSaddle'));
+            }
             const add=(prim,mat,rig)=>result.push(makePart(prim,mat,0,0,0,1,1,1,0,0,0,rig));
             add('focEquine_'+id+'_neck',body.mat,'horseNeckHead');
             add('focEquine_'+id+'_mane',tail.mat,'horseNeckHead');
@@ -9991,6 +10055,7 @@ function createSoldierPartTemplates() {
             if(prim.startsWith('focArm_'))return rig==='riderRightArmWeapon'?'riderUpper':rig==='riderUpper'?null:'torso';
             if(prim.startsWith('focLeg_'))return rig.endsWith('Lower')?rig.replace('Lower','Upper'):'torso';
             if(prim.startsWith('focMounted_'))return 'riderLower';
+            if(prim.startsWith('focRein_'))return 'riderUpper';
             if(prim.startsWith('focEquine_')){
                 if(rig==='horseNeckHead'&&prim.endsWith('_neck')||rig==='horseTail')return 'horseBody';
                 if(rig.startsWith('horseLeg'))return rig.endsWith('Lower')?rig.replace('Lower',''):'horseBody';
@@ -10007,6 +10072,7 @@ function createSoldierPartTemplates() {
                     if(prim.startsWith('focArm_')){range=[1,6,false];}
                     else if(prim.startsWith('focLeg_')){range=rig.endsWith('Lower')?[7,10,true]:[5,8,true];}
                     else if(prim.startsWith('focMounted_')){segments=24;range=[0,5,false];}
+                    else if(prim.startsWith('focRein_')){segments=8;range=[0,6,true];}
                     else if(prim.endsWith('_neck')){segments=28;range=[0,4,false];}
                     else if(rig==='horseTail'){range=[0,3,false];}
                     else if(rig.startsWith('horseLeg')){range=rig.endsWith('Lower')?[7,10,true]:[5,8,true];}
@@ -10088,7 +10154,8 @@ function createSoldierPartTemplates() {
                     ...createFOCFixedHeadGeometries(),
                     ...createFOCFixedHatGeometries(),
                     ...createFOCFixedLimbGeometries(),
-                    ...createFOCFixedHorseGeometries()
+                    ...createFOCFixedHorseGeometries(),
+                    ...createFOCFixedTackGeometries()
                 };
                 focPrepareSkinWeights(this.geometries,this.templates);
                 this._skinProxy={rigGroup:'static',localMat:FOC_THREE.Mat4.create()};
