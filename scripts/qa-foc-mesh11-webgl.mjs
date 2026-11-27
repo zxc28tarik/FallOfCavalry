@@ -112,6 +112,56 @@ try {
   await page.screenshot({ path: resolve(reportDir, 'showcase-european-attack.png'), fullPage: true, timeout: 30000 });
   results.showcase.push('showcase-european-attack.png');
 
+  // MESH-12C: mounted anatomy gate. Select actual existing fixed archetypes
+  // through the showcase UI, capture their whole body and check active mesh data.
+  results.mountedShowcase = [];
+  for (const sample of [
+    { culture: 'Ottoman', label: 'Sipahi', template: 'fixed:ottoman_sipahi_lance', tag: 'sipahi' },
+    { culture: 'European', label: 'Kürassier', template: 'fixed:euro_curassier_sword', tag: 'cuirassier' }
+  ]) {
+    await page.locator('#btnShowcase' + sample.culture).evaluate(el => el.click());
+    await page.locator('#showcaseUnitList .showcase-unit-item').filter({
+      has: page.getByText(sample.label, { exact: true })
+    }).first().evaluate(el => el.click());
+    await page.locator('#btnShowcaseVariant1').evaluate(el => el.click());
+    for (const anim of ['Idle', 'Walk']) {
+      await page.locator('#btnShowcaseAnim' + anim).evaluate(el => el.click());
+      await page.waitForTimeout(1200);
+      const state = await page.evaluate(() => {
+        const r = window.__focBattle3DPreview?.renderer?.soldierRegistry;
+        const unit = r?.records?.get('SHOWCASE:U1');
+        const parts = r?.templates?.[unit?.templateKey] || [];
+        return {
+          templateKey: unit?.templateKey,
+          horseParts: parts.filter(p => p.prim.startsWith('focEquine_')).length,
+          activeBatches: r?.batchGroup?.batches?.length || 0,
+          selectedAnim: window.focShowcase?.selectedAnim
+        };
+      });
+      if (state.templateKey !== sample.template || state.horseParts < 6 ||
+          !state.activeBatches || state.selectedAnim !== anim.toLowerCase()) {
+        throw Error('Wrong/missing mounted showcase model: ' + JSON.stringify({sample, state}));
+      }
+      const file = 'showcase-' + sample.tag + '-' + anim.toLowerCase() + '.png';
+      await page.screenshot({ path: resolve(reportDir, file), fullPage: true, timeout: 30000 });
+      results.mountedShowcase.push({ ...state, screenshot: file });
+    }
+    // A quarter-side idle view exposes horse neck, shoulder and rear leg contours.
+    await page.locator('#btnShowcaseAnimIdle').evaluate(el => el.click());
+    await page.evaluate(() => {
+      const cam = window.__focBattle3DPreview?.renderer?.cameraController;
+      if (!cam) throw Error('Mounted camera missing');
+      Object.assign(cam.desired, { yaw: 1.10, distance: 5.8, targetY: 1.30, pitch: .16 });
+      Object.assign(cam.current, { yaw: 1.10, distance: 5.8, targetY: 1.30, pitch: .16 });
+      cam.syncTransform?.(1);
+    });
+    await page.waitForTimeout(1000);
+    const file = 'showcase-' + sample.tag + '-quarter.png';
+    await page.screenshot({ path: resolve(reportDir, file), fullPage: true, timeout: 30000 });
+    results.mountedShowcase.push({ templateKey: sample.template, selectedAnim: 'idle', view: 'quarter', screenshot: file });
+  }
+  if (results.mountedShowcase.length !== 6) throw Error('Mounted showcase coverage incomplete');
+
   if (results.errors.some(x => /shader|WebGL|context lost|uncaught/i.test(x))) {
     throw Error('WebGL-related console/page errors: ' + results.errors.slice(0, 3).join(' | '));
   }
