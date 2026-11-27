@@ -129,6 +129,14 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 12G genişletilmiş GPU testi `45993798023` FAIL: sabit template anahtarlarının enumerate edilememesi (test fixture hatası). Normal WebGL smoke ve 300 asker CPU A/B daha önce PASS. GPU benchmark opt-in FOC_QA_PERF300=1, anahtarlar geometri adlarından türetilir; düzeltilmiş benchmark henüz çalıştırılmadı (kullanıcı önceliği nedeniyle ertelendi). 12H sonrası eski 12F ile güncel farklı geometriyi karşılaştıran CPU testi `46000318394` FAIL; tarihi A/B kıyası 12F/12G commitlerine sabitlendi `c76283ca8cef933d9cb6b2968b8dc2dac724e930`. Bu tarihsel kıyas yeni görsel modellerin performans testi değildir.
 - 12I–12L sırada. Ana dal ve Unity korunuyor. Görsel kabul henüz açık.
 
+## 27 Kasım 2026 — 12H WebGL sonucu ve 12I kıyafet/zırh
+
+- 12H WebGL `46000378922` PASS, 23 PNG + JSON, artifact https://github.com/zxc28tarik/FallOfCavalry/actions/runs/46000378922/artifacts/15197439179 . Yeniçeri ön yüzü incelendi: gözler, burun ve dudak ayrı okunuyor, fakat malzeme maskeleri pikselli ve yüz hâlâ stilize; estetik onay açık.
+- 12I `1e110d2c663f1c9f6d93a660d71bfd5fef215e1f`: 14 piyade, 10 süvari gövdesi. 24→48 çevre örneği, piyadelerde 21→41 halka, süvari halka sayısı ve rig ağırlık geçiş aralığı sabit. Katlanmış Osmanlı kuşakları, kaftan/ceket pileleri, ön pat kabartısı, dalgalanan etek ucu, zırh kenar kabartısı ve etek plaka bantları. Osmanlı metal yüzeylerinde ince periyodik kabartı, Avrupa plakalarında daha net merkez sırtı/kenar; gerçek zincir halkası veya kumaş simülasyonu değildir. Ortak yüzey üzerinde trim malzemesi, yeni rig eklenmedi. Mevcut renkler/ekipman ve oyun davranışı korunur.
+- İlk yapısal test `46002449842` PASS. Tam materyal bölümü birebir üçgen eşitliğini kontrol eden yeni test `96bbc55e3cd7dbae00782509da3c4dbe7b66399e`, koşu `46002476012`. Yeni dört gövde yakın planı `86dbea0614fbd813af34f873fbebc26b6fd758ad`. Görsel değerlendirme bekliyor.
+- 12G tarihsel CPU kıyası sabit commitler ile `46000398474` PASS. GPU testleri kullanıcı kararıyla ertelendi; ana dal/Unity değişmedi.
+- Sırada 12J silah geometrisi/elde tutuş, 12K at/binici, 12L siluet çeşitliliği.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
