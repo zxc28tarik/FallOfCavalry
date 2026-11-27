@@ -43,6 +43,18 @@
 - Yazılım GPU `fpsApprox=1` gerçek donanım FPS verisi değildir.
 - **Karar:** Ana dala birleştirme yok. FOC-MESH-12 kalan anatomi ve 300 asker gerçek GPU performansı doğrulaması açık tutulur.
 
+## 27 Kasım 2026 — FOC-MESH-12C gövde / omuz / avuç
+
+**Durum: IN PROGRESS. Teknik regresyon PASS; gerçek ekran kalitesi ve donanım performansı henüz onaylanmadı.**
+
+- Piyade ve süvari sabit gövdelerinde alt göğüs derinliği azaltıldı, zırhın ön yüzü daha düz bir kesite ve daha sınırlı kabartmaya geçti; yaka ve kemer/etek materyal indeksleri, ekipman dönüşümleri korundu.
+- 8 kol tipinin omuz kökleri gövdeye doğru içeri ve aşağı çekildi. Aynı loft halka sayısı, rig ve silah soketi korundu. Avuç kesiti hafif köşeli/yassı yapıldı; bağımsız parmaklar ve gerçek kavrama IK henüz yok.
+- Model commit: `6be454967c0e668558418164bc5f39ae3db1f840`. Test commit: `874e16400f93798e01b222a6207f3a62a9581ad9`.
+- CI `45983042049` PASS: 24 arketip, 1172 parça, 480 geometri, 235636 üçgen, 0 dejenere üçgen; 1728 animasyon pozu / 84384 matris, 7344 diz/hock örneği, 0 hata.
+- Yeni test 48 el parçasının gerçek çizilen mesh halkası merkezini iki dönüşümlü skinning ile rig soketine karşı 1440 pozda sınadı. Maksimum sapma 0.0000123932 model birimi (eşik 0.005). Bu, silah yüzeyiyle parmak temasını veya anatomik doğruluğu ispatlamaz.
+- Gerçek WebGL smoke: https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45983008344 (model commit'i); sonuç ve ekran görüntüsü kıyaslaması ayrıca kaydedilecek.
+- Sırada diz/çizme ve at anatomisi; 24 sabit arketipin görsel kontrolü ve fiziksel GPU üzerinde 300 asker iş yükü açık. Ana dal, Unity, şehir/strateji ve oyun kuralları değiştirilmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
