@@ -77,6 +77,14 @@
 - 12E hazırlık: atın mevcut boyun loft kökü (y=1.17,z=.37), gövde ayrı 28 segmentli loft, ön/arka bacak ayrı 20 segmentli loft. Yandan gerçek referansta görülen keskin boyun ve kalça/omuz sınırları, derinlik ve kök bağlantı profili üzerinde çalışılacak; mevcut rig ve koşum koordinatları korunacak.
 - WebGL koşuları henüz tamamlanmadı; 12D görsel değerlendirme açık.
 
+## 27 Kasım 2026 — 12D gerçek WebGL sonucu ve FOC-MESH-12E at anatomisi
+
+- 12D model koşusu `45985328537` ve genişletilmiş WebGL koşusu `45985395577` PASS. 17 gerçek ekran görüntüsü, 0 tarayıcı hatası, 4 diz yakın planı ve 6 süvari görünümü. Artifact: https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45985395577/artifacts/15190983220 . Yeniçeri ve zırhlı piyade yakın planında belirgin diz yüzeyi açıklığı görünmüyor; kumaş ve çizme malzeme ayrıntısı hâlâ sade. Yürüyüş ekran görüntüsü tek an olduğundan animasyon kalitesi için video yerine geçmez.
+- 12E model commit `8c23f1e0d8ae93f02bc0740b8b98c02e8e9c3d66`: 10 sabit at stilinde göğüs ve sağrı hacmi, boyun kökü, kalça/omuz bacak köklerinin gövde içine alınması, inceltilmiş tendon ve toynak kesitleri. Mevcut koşum ve rig koordinatları korunuyor.
+- Ön/arka bacaklarda aynı 20 verteksli eklem çevresi, ortak yerel normal ve iç kapakların kaldırılması. Önceki halka sayısı ve iki rig'li skin ağırlıkları korunuyor. Bu değişiklik atın boyun ve bacak köklerini geometrik olarak tek mesh yapmaz; gövdeyle iç içe geçiş kalitesi ekranda değerlendirilecek.
+- Önceki yapısal regresyon `45989318664` PASS. At eklemlerinin tam çevresini animasyon boyunca doğrulayan test commit `918f55890402de9f042a2e55dd785cfae2bbe82b`; sonuç bekleniyor.
+- WebGL model koşusu https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45989318436 sürüyor. 12E estetik onayı açık; 12F eyer/binici, 12G gerçek donanım performansı bekliyor. Ana dal ve Unity değişmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
