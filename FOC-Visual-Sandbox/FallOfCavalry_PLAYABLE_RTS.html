@@ -18565,7 +18565,8 @@ function createSoldierPartTemplates() {
             }
 
             update(dt) {
-                if (this.gameState !== 'IN_BATTLE' || this.isPaused) return;
+                // FOC-MESH-11: keep the active unit-preview snapshot intact and pause the live battle while inspecting models.
+                if (this.gameState !== 'IN_BATTLE' || this.isPaused || this.controller?.showcaseController?.isOpen) return;
 
                 this.battleTime += dt;
                 this.stats.duration = this.battleTime;
