@@ -7550,18 +7550,22 @@ const OrganicCharacterGeometries = (() => {
             euro_light_cavalry:         [.97,.95,1.09,.96,2],
             euro_harquebusier_mounted:  [1.00,.98,1.04,1.01,2]
         });
-        function buildFOCFixedHead(style) {
-            const [width,jaw,nose,brow,beard]=style, N=56;
+        function buildFOCFixedHead(style,id='') {
+            const [width,jaw,nose,brow,beard]=style, N=80;
+            // Fixed archetype-specific sculpt; no runtime random facial changes.
+            const variation=(width-.98)*2+(nose-1)*.8;
+            const moustache= id.includes('deli')?1.22:id.includes('janissary')?.90:id.startsWith('euro')?1.06:1;
+            const goatee=beard===2?(id.includes('musketier')||id.includes('curassier')?1.18:.87):1;
             // Height relative to the existing head center; neck seats inside collar.
             const levels=[
                 [-.73,.285,.270,-.025],[-.62,.270,.265,-.020],[-.51,.265,.260,-.018],
                 [-.44,.295,.290,-.015],[-.39,.325,.323,-.004],[-.367,.332,.329,.000],
                 [-.345,.340,.339,.003],[-.33,.345,.345,.005],[-.305,.349,.350,.007],
                 [-.28,.352,.354,.008],[-.255,.359,.361,.008],[-.23,.366,.365,.008],[-.216,.372,.373,.007],
-                [-.202,.378,.382,.006],[-.188,.382,.386,.005],[-.169,.385,.389,.004],
-                [-.15,.385,.389,.004],[-.11,.397,.400,.001],[-.07,.405,.406,-.005],
+                [-.202,.378,.382,.006],[-.195,.380,.384,.006],[-.188,.382,.386,.005],[-.179,.384,.388,.004],[-.169,.385,.389,.004],
+                [-.15,.385,.389,.004],[-.13,.390,.394,.003],[-.11,.397,.400,.001],[-.09,.401,.404,-.002],[-.07,.405,.406,-.005],
                 [-.025,.410,.410,-.009],[.010,.411,.413,-.012],[.026,.412,.415,-.012],
-                [.039,.413,.417,-.012],[.053,.414,.418,-.012],[.068,.415,.419,-.012],
+                [.033,.413,.416,-.012],[.039,.413,.417,-.012],[.046,.414,.418,-.012],[.053,.414,.418,-.012],[.060,.415,.419,-.012],[.068,.415,.419,-.012],
                 [.083,.415,.419,-.012],[.104,.414,.420,-.012],[.123,.414,.420,-.012],
                 [.146,.412,.420,-.013],[.16,.411,.419,-.014],
                 [.20,.406,.414,-.016],[.25,.392,.398,-.018],[.31,.365,.374,-.020],
@@ -7571,17 +7575,22 @@ const OrganicCharacterGeometries = (() => {
             const rings=levels.map(([y,rx,rz,z])=>Array.from({length:N},(_,i)=>{
                 const a=i*Math.PI*2/N, ca=Math.cos(a),sa=Math.sin(a), f=Math.atan2(ca,sa), af=Math.abs(f), front=Math.max(0,sa);
                 const jawShape=1+(jaw-1)*g(y,-.29,.19);
-                const ear=.064*g(y,-.015,.115)*g(af,1.57,.24);
-                const cheek=.031*g(y,-.055,.11)*g(af,.66,.32);
-                const socket=.028*g(y,.055,.045)*g(af,.385,.22);
-                const nasal=nose*(.115*g(y,-.015,.105)*g(f,0,.14)+.034*g(y,-.11,.055)*g(af,.18,.12));
-                const brows=brow*.037*g(y,.135,.042)*g(af,.37,.27);
-                const chin=.042*g(y,-.32,.06)*g(f,0,.38);
-                const lips=.024*g(y,-.207,.034)*g(f,0,.34)-.012*g(y,-.195,.015)*g(f,0,.31);
-                const faceHair=(beard===1?.009*g(y,-.30,.09)*g(f,0,.62):beard===2?.008*g(y,-.32,.08)*g(f,0,.22):0);
-                return [(rx*width*jawShape+ear+cheek)*ca,y,z+rz*sa+front*(nasal+brows+chin+lips+faceHair-socket)];
+                const ear=.076*g(y,-.018,.112)*g(af,1.57,.21)-.024*g(y,-.015,.065)*g(af,1.57,.085);
+                const cheek=.045*g(y,-.047,.105)*g(af,.69,.28)-.020*g(y,-.19,.093)*g(af,.78,.25);
+                const eyeY=.053+.012*(af-.385);
+                const socket=.044*g(y,eyeY,.055)*g(af,.385,.22);
+                const globe=.034*g(y,eyeY,.022)*g(af,.385,.15);
+                const lids=.018*(g(y,eyeY+.032,.014)+.65*g(y,eyeY-.027,.014))*g(af,.385,.20);
+                const nasal=nose*(.097*g(y,.024,.122)*g(f,0,.115)+.093*g(y,-.078,.048)*g(f,0,.15)+.035*g(y,-.108,.035)*g(af,.15,.09));
+                const nostril=.016*g(y,-.119,.018)*g(af,.155,.055);
+                const brows=brow*.041*g(y,.134,.041)*g(af,.37,.25);
+                const chin=(.047+variation*.012)*g(y,-.32,.061)*g(f,0,.32);
+                const philtrum=.013*g(y,-.150,.023)*g(f,0,.065);
+                const lips=.020*g(y,-.184,.016)*g(f,0,.30)+.026*g(y,-.221,.020)*g(f,0,.30)-.018*g(y,-.202,.009)*g(f,0,.34);
+                const faceHair=(beard===1?.015*g(y,-.30,.084)*g(f,0,.55):beard===2?.016*g(y,-.33,.072)*g(f,0,.22)*goatee:0);
+                return [(rx*width*jawShape+ear+cheek)*ca,y,z+rz*sa+front*(nasal+brows+chin+lips+faceHair+globe+lids-socket-nostril-philtrum)];
             }));
-            const full=OrganicCharacterGeometries.createClosedLoft(rings), lists={skin:[],hair:[],eye:[],lip:[]};
+            const full=OrganicCharacterGeometries.createClosedLoft(rings), lists={skin:[],hair:[],eye:[],sclera:[],lip:[],crease:[]};
             // Material boundaries are on the same surface; no floating eye or hair solids.
             for(let j=0;j<levels.length-1;j++)for(let i=0;i<N;i++){
                 const y=(levels[j][0]+levels[j+1][0])/2, a=(i+.5)*Math.PI*2/N;
@@ -7590,12 +7599,17 @@ const OrganicCharacterGeometries = (() => {
                 // These masks share the same single-piece skin surface and rig.
                 const ellipse=(cy,ry,cf,rf)=>((y-cy)/ry)**2+((f-cf)/rf)**2<1;
                 let mat='skin';
-                if(ellipse(.053,.028,.385,.19))mat='eye';
-                else if(ellipse(.125,.024,.385,.235))mat='hair';
-                else if(ellipse(-.157,.027,.26,.20))mat='hair';
-                else if(beard===1&&ellipse(-.313,.095,.09,.50))mat='hair';
-                else if(beard===2&&ellipse(-.320,.085,0,.25))mat='hair';
-                else if(ellipse(-.211,.020,0,.30))mat='lip';
+                const ey=.053+.012*(f-.385);
+                // Narrow almond opening, warm sclera and iris, separate from brow.
+                if(ellipse(ey,.020,.385,.19)){
+                    mat=ellipse(ey,.026,.385,.066)?'eye':'sclera';
+                }else if(ellipse(.125+.018*(f-.385),.022,.385,.235))mat='hair';
+                else if(ellipse(-.157-.026*Math.pow(f/.48,2),.023,.23,.22*moustache))mat='hair';
+                else if(ellipse(-.118,.013,.157,.054))mat='crease';
+                else if(ellipse(-.202,.008,0,.31))mat='crease';
+                else if(beard===1&&ellipse(-.320,.083,.08,.49))mat='hair';
+                else if(beard===2&&ellipse(-.337,.073*goatee,0,.22))mat='hair';
+                else if(ellipse(-.217,.016,0,.28))mat='lip';
                 const offset=(j*N+i)*6;
                 lists[mat].push(...full.indices.slice(offset,offset+6));
             }
@@ -7612,7 +7626,7 @@ const OrganicCharacterGeometries = (() => {
         function createFOCFixedHeadGeometries(){
             const result={};
             for(const [id,style] of Object.entries(FOC_FIXED_HEAD_STYLES)){
-                const {sections}=buildFOCFixedHead(style);
+                const {sections}=buildFOCFixedHead(style,id);
                 for(const [mat,geo] of Object.entries(sections))result['focHead_'+id+'_'+mat]=geo;
             }
             return result;
@@ -7629,7 +7643,7 @@ const OrganicCharacterGeometries = (() => {
                 const oldFace=(p.mat==='eyeDark'||p.mat==='hairDark')&&p.prim!=='orgHairCurtain'&&y>hy-.10&&y<hy+.085&&z>.045;
                 return !oldNeck&&!oldFace;
             });
-            const mats={skin:'skin',hair:'hairDark',eye:'faceEye',lip:'faceLip'};
+            const mats={skin:'skin',hair:'hairDark',eye:'faceEye',sclera:'faceSclera',lip:'faceLip',crease:'faceCrease'};
             for(const [section,mat] of Object.entries(mats))result.push({prim:'focHead_'+id+'_'+section,mat,rigGroup:rig,localMat:new Float32Array(head.localMat)});
             return result;
         }
@@ -10202,7 +10216,9 @@ function createSoldierPartTemplates() {
                     faceEye: new FOC_THREE.Material({ color: 0x4a352f, metalness: 0.00 }),
                     crimsonVelvet: new FOC_THREE.Material({ color: 0x991b1b, metalness: 0.03 }),
                     darkCloth: new FOC_THREE.Material({ color: 0x282b32, metalness: 0.02 }),
-                    faceLip: new FOC_THREE.Material({color:0xb67865,metalness:0}),
+                    faceLip: new FOC_THREE.Material({color:0xb88370,metalness:0}),
+                    faceSclera: new FOC_THREE.Material({color:0xd6c6b7,metalness:0}),
+                    faceCrease: new FOC_THREE.Material({color:0x76503e,metalness:0}),
 
 
                 };
