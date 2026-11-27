@@ -299,6 +299,53 @@ try {
   }
   if (results.mountedShowcase.length !== 6) throw Error('Mounted showcase coverage incomplete');
 
+  // MESH-12 final coverage: every fixed archetype, same idle camera angles.
+  // Derive the selection from the real showcase catalog, not a duplicate model list.
+  results.allFixedShowcase = [];
+  const catalog = await page.evaluate(() => {
+    const s=window.focShowcase,reg=window.__focBattle3DPreview.renderer.soldierRegistry;
+    const expected=Object.keys(reg.geometries).filter(k=>k.startsWith('focHead_')&&k.endsWith('_skin')).map(k=>'fixed:'+k.slice(8,-5)).sort();
+    const selections=new Map();
+    for(const [culture,units] of Object.entries(s.unitCatalog)){
+      for(const unit of units)for(const variant of [1,2]){
+        const key=s.getTemplateKey(culture,unit.key,variant);
+        if(key?.startsWith('fixed:')&&!selections.has(key)){
+          const parts=reg.templates[key]||[];
+          selections.set(key,{culture,label:unit.name,variant,key,mounted:parts.some(p=>p.rigGroup==='horseBody')});
+        }
+      }
+    }
+    const actual=Array.from(selections.keys()).sort();
+    if(expected.length!==24||JSON.stringify(actual)!==JSON.stringify(expected))throw Error('Fixed showcase coverage mismatch '+JSON.stringify({expected,actual}));
+    return Array.from(selections.values());
+  });
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  try{
+    for(const sample of catalog){
+      await page.locator('#btnShowcase'+(sample.culture==='ottoman'?'Ottoman':'European')).evaluate(el=>el.click());
+      await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+      await page.locator('#btnShowcaseVariant'+sample.variant).evaluate(el=>el.click());
+      await page.locator('#btnShowcaseAnimIdle').evaluate(el=>el.click());
+      for(const [angle,yaw] of [['front',0],['quarter',.92]]){
+        const state=await page.evaluate(({sample,yaw})=>{
+          const r=window.__focBattle3DPreview.renderer,reg=r.soldierRegistry,cam=r.cameraController;
+          const rec=reg.records.get('SHOWCASE:U1'),parts=reg.templates[rec?.templateKey]||[];
+          const view={targetX:0,targetY:sample.mounted?1.22:.91,targetZ:0,distance:sample.mounted?6.1:3.8,yaw,pitch:.12};
+          Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+          return {template:rec?.templateKey,records:reg.records.size,batches:reg.batchGroup.batches.length,
+            mounted:parts.some(p=>p.rigGroup==='horseBody'),faces:parts.filter(p=>p.prim.startsWith('focHead_')).length};
+        },{sample,yaw});
+        if(state.template!==sample.key||state.records!==1||state.batches<1||state.mounted!==sample.mounted||state.faces!==6)throw Error('Incorrect fixed showcase '+JSON.stringify({sample,state}));
+        // Await an actual browser frame following the camera change.
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        const file='all-fixed-'+sample.key.slice(6)+'-'+angle+'.png';
+        await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+        results.allFixedShowcase.push({...state,angle,screenshot:file});
+      }
+    }
+  }finally{await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);}
+  if(results.allFixedShowcase.length!==48||new Set(results.allFixedShowcase.map(x=>x.template)).size!==24)throw Error('Incomplete 24-model two-angle screenshot coverage');
+
   // MESH-12G: controlled real WebGL workload after all normal screenshots.
   // Freeze normal game ticks only in this QA session; no production behavior change.
   if(process.env.FOC_QA_PERF300==='1'){
