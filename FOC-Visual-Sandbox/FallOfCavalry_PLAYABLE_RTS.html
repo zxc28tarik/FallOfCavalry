@@ -7812,8 +7812,8 @@ const OrganicCharacterGeometries = (() => {
                     const a=j*Math.PI*2/N,ca=Math.cos(a),sa=Math.sin(a),f=(st.fold||0)*Math.cos(a*5+i*.8);
                     // Palm-only contour: a slightly squared knuckle cross section, not a sphere.
                     const palm=st.mat==='hand';
-                    const cu=palm?Math.sign(ca)*Math.pow(Math.abs(ca),.82):ca;
-                    const sv=palm?Math.sign(sa)*Math.pow(Math.abs(sa),.82):sa;
+                    const cu=palm?Math.sign(ca)*Math.pow(Math.abs(ca),.73):ca;
+                    const sv=palm?Math.sign(sa)*Math.pow(Math.abs(sa),.79):sa;
                     return focVAdd(st.p,focVAdd(focVScale(u,(st.rx+f)*cu),focVScale(v,(st.rz+f)*sv)));
                 });
             });
@@ -8162,10 +8162,71 @@ const OrganicCharacterGeometries = (() => {
             return result;
         }
 
+        // MESH-12J: visual-only weapon meshes in the existing primitive-local
+        // coordinates. No hitbox, grip socket, animation or weapon stats changes.
+        function focWeaponLoft(levels,N,axis='y',power=1,detail=0){
+            const rings=levels.map(([t,rx,rz,off=0],j)=>Array.from({length:N},(_,i)=>{
+                const a=i*2*Math.PI/N,ca=Math.cos(a),sa=Math.sin(a);
+                const x=rx*Math.sign(ca)*Math.pow(Math.abs(ca),power);
+                const z=rz*Math.sign(sa)*Math.pow(Math.abs(sa),power);
+                const d=detail*Math.sin(a*6+j*.8)*Math.sin(Math.PI*j/(levels.length-1));
+                return axis==='z'?[x*(1+d),-z*(1+d)+off,t]:[x*(1+d),t,z*(1+d)+off];
+            }));
+            return OrganicCharacterGeometries.createClosedLoft(rings);
+        }
+        function createFOCWeaponVisualGeometries(){
+            const loft=focWeaponLoft;
+            return {
+                focWeapon_stock:loft([[-.5,.39,.48,-.012],[-.46,.49,.50,-.015],[-.31,.46,.48,-.03],[-.12,.37,.38,-.02],[.12,.28,.29,.015],[.31,.32,.25,.045],[.48,.38,.22,.04],[.5,.32,.19,.035]],24,'z',.60,.012),
+                focWeapon_foreZ:loft([[-.5,.43,.45],[-.43,.50,.48],[-.21,.48,.46],[.12,.43,.44],[.37,.39,.39],[.5,.32,.32]],20,'z',.66,.008),
+                focWeapon_foreY:loft([[-.5,.40,.41],[-.44,.50,.50],[-.18,.48,.48],[.12,.42,.43],[.38,.36,.37],[.5,.32,.33]],20,'y',.75,.008),
+                focWeapon_barrel:loft([[-.5,.46,.46],[-.47,.50,.50],[-.29,.47,.47],[.20,.45,.45],[.47,.45,.45],[.50,.49,.49],[.50,.32,.32],[.485,.30,.30]],24),
+                focWeapon_band:loft([[-.5,.40,.40],[-.37,.50,.50],[.37,.50,.50],[.5,.40,.40],[.5,.33,.33],[-.5,.33,.33]],24),
+                focWeapon_shaft:loft([[-.5,.44,.44],[-.46,.48,.48],[-.2,.50,.50],[.18,.48,.48],[.46,.43,.43],[.5,.40,.40]],16),
+                focWeapon_grip:loft(Array.from({length:21},(_,i)=>{const t=i/20,r=.44+.04*Math.sin(Math.PI*t)+.025*Math.cos(t*Math.PI*12);return [t-.5,r,r];}),20),
+                focWeapon_tip:loft([[-.5,.26,.24],[-.34,.30,.27],[-.17,.50,.50],[.06,.42,.42],[.30,.21,.23],[.48,.035,.04],[.5,.008,.009]],12,'y',1.8),
+                focWeapon_bladeY:loft([[-.5,.37,.49],[-.45,.50,.50],[-.18,.48,.47],[.14,.44,.44],[.35,.36,.32],[.48,.13,.15],[.5,.025,.03]],16,'y',1.8),
+                focWeapon_bladeZ:loft([[-.5,.43,.42,0],[-.42,.50,.50,0],[-.15,.49,.47,-.045],[.13,.46,.43,-.04],[.34,.36,.31,.015],[.48,.12,.12,.08],[.5,.02,.02,.10]],16,'z',1.8),
+                focWeapon_sabre:loft([[-.5,.40,.49,-.04],[-.35,.50,.50,-.04],[-.05,.48,.46,-.025],[.20,.41,.41,.015],[.38,.31,.30,.065],[.48,.11,.15,.12],[.5,.022,.03,.13]],16,'y',1.8),
+                focWeapon_axe:loft([[-.5,.32,.10,-.27],[-.36,.43,.28,-.10],[-.15,.50,.48,0],[.12,.50,.50,.03],[.33,.40,.37,-.06],[.5,.20,.13,-.23]],20,'y',1.55),
+                focWeapon_shield:loft([[-.5,.36,.36],[-.43,.48,.48],[-.30,.50,.50],[-.10,.49,.49],[.18,.46,.46],[.37,.35,.35],[.47,.18,.18],[.5,.035,.035]],48),
+                focWeapon_boss:loft([[-.5,.30,.30],[-.34,.50,.50],[0,.43,.43],[.28,.30,.30],[.46,.15,.15],[.5,.035,.035]],24),
+                focWeapon_fitting:loft([[-.5,.39,.39],[-.40,.49,.49],[.37,.49,.49],[.5,.39,.39]],20,'y',.50)
+            };
+        }
+        function upgradeFixedWeaponParts(key,parts){
+            const firearm=/musket|arquebus|carbine|pistol|harquebus/.test(key);
+            return parts.map(p=>{
+                const rig=p.rigGroup,prim=p.prim,mat=p.mat,m=p.localMat;
+                if(!['twoHandMusket','twoHandPike','leftArmWeapon','rightArmWeapon','riderRightArmWeapon','riderUpper'].includes(rig))return p;
+                if(!['box','cylinder','cone','frustum','dome','sphere'].includes(prim))return p;
+                const x=Math.hypot(m[0],m[1],m[2]),y=Math.hypot(m[4],m[5],m[6]),z=Math.hypot(m[8],m[9],m[10]);
+                const metal=/steel|bronze|gold/i.test(mat),long=Math.max(x,y,z);
+                let visual=null;
+                if((rig==='leftArmWeapon'||rig==='riderUpper')&&['cylinder','dome'].includes(prim)&&x>.38&&z>.38&&y<.15)visual='shield';
+                else if(rig==='riderUpper')return p;
+                else if(rig==='leftArmWeapon'&&prim==='dome'&&metal&&x>.09)visual='boss';
+                else if(mat==='wood'){
+                    if(prim==='cylinder'&&y>1.20&&x<.07)visual='shaft';
+                    else if(prim==='box')visual=z>.35?'foreZ':'stock';
+                    else if(prim==='frustum')visual='foreY';
+                }else if(prim==='cylinder'&&mat==='leather'&&y>.10&&x<.07)visual='grip';
+                else if(prim==='cylinder'&&metal&&y>.26&&x<.075&&z<.075&&((firearm&&rig!=='twoHandPike')||rig==='twoHandMusket'||key.includes('levend')))visual='barrel';
+                else if(prim==='cylinder'&&metal&&y<=.06&&x<.09&&z<.09)visual='band';
+                else if(prim==='cone'&&metal&&y>.10)visual='tip';
+                else if(prim==='box'&&metal&&rig==='twoHandPike'&&y>.20&&z>.12)visual='axe';
+                else if(prim==='box'&&metal&&z>.38&&x<.04)visual='bladeZ';
+                else if((prim==='box'||prim==='frustum')&&metal&&y>.30&&x<.09&&z<.09)visual=rig==='riderRightArmWeapon'&&!key.includes('euro')?'sabre':'bladeY';
+                else if(prim==='box'&&metal&&long<.15)visual='fitting';
+                if(!visual)return p;
+                return {...p,prim:'focWeapon_'+visual,visualSourcePrim:prim};
+            });
+        }
+
         // Upgrade each fixed definition once. Legacy/classic templates stay untouched.
         for(const family of [FIXED_OTTOMAN_INFANTRY,FIXED_OTTOMAN_CAVALRY,FIXED_EURO_INFANTRY,FIXED_EURO_CAVALRY]){
             for(const [key,entry] of Object.entries(family)){
-                family[key]=upgradeFixedHorseParts(key,upgradeFixedLimbParts(key,upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry))));
+                family[key]=upgradeFixedWeaponParts(key,upgradeFixedHorseParts(key,upgradeFixedLimbParts(key,upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry)))));
             }
         }
 
@@ -10204,7 +10265,8 @@ function createSoldierPartTemplates() {
                     ...createFOCFixedHatGeometries(),
                     ...createFOCFixedLimbGeometries(),
                     ...createFOCFixedHorseGeometries(),
-                    ...createFOCFixedTackGeometries()
+                    ...createFOCFixedTackGeometries(),
+                    ...createFOCWeaponVisualGeometries()
                 };
                 focPrepareSkinWeights(this.geometries,this.templates);
                 this._skinProxy={rigGroup:'static',localMat:FOC_THREE.Mat4.create()};
