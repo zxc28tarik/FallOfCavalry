@@ -1,0 +1,26 @@
+name: FOC MESH-12G 300 soldier performance
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html'
+      - 'scripts/qa-foc-mesh12g-performance.mjs'
+      - '.github/workflows/foc-mesh12g-performance.yml'
+jobs:
+  compare-instance-buffers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/qa-foc-mesh12g-performance.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: foc-mesh12g-300-soldier-cpu
+          path: output/foc-mesh12g-perf/
+          if-no-files-found: warn
