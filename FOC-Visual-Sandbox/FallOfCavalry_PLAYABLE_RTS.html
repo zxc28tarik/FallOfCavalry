@@ -4597,19 +4597,6 @@ const OrganicCharacterGeometries = (() => {
             mb.addLoft(rings, true, true);
             return mb.toBufferGeometry(false);
         },
-        // Concave thin shell rings have outer and reversed inner arcs.
-        // Close each end with quads across actual thickness, not a centroid fan
-        // that would incorrectly cover the open shoulder interior.
-        createClosedStripLoft(rings,arcCount) {
-            const mb=new MeshBuilder(),N=arcCount*2,last=(rings.length-1)*N;
-            mb.addLoft(rings,false,false);
-            for(let i=0;i<arcCount-1;i++){
-                const a=i,b=i+1,c=N-2-i,d=N-1-i;
-                mb.idx.push(a,b,c,a,c,d);
-                mb.idx.push(last+a,last+c,last+b,last+a,last+d,last+c);
-            }
-            return mb.toBufferGeometry(false);
-        },
         /**
          * 1. Athletic sculpted human torso + collarbone/trapezius slope + kaftan/doublet
          *    collar opening + 1650 peascod doublet front + folded belt ridge +
@@ -8364,75 +8351,10 @@ const OrganicCharacterGeometries = (() => {
             });
         }
 
-        // MESH-13B second pass: replace the visible legacy hemispheres with
-        // fitted open-sided, thin, stepped metal shells. These are sculpted
-        // shoulder guards, not spheres or full cylinders around the arm.
-        const FOC_PAULDRON_PROFILES=Object.freeze({
-            euro_pikeniere:{mounted:false,span:.94,depth:.91,mat:'blackenedSteel'},
-            euro_armored_infantry:{mounted:false,span:1,depth:1,mat:'blackenedSteel'},
-            euro_curassier_pistol:{mounted:true,span:.94,depth:.94,mat:'blackenedSteel'},
-            euro_curassier_sword:{mounted:true,span:.98,depth:.98,mat:'blackenedSteel'}
-        });
-        function buildFOCShoulderShell(profile,side){
-            const N=18,centerY=profile.mounted?1.85:1.32,scale=profile.mounted?.88:1;
-            const centerZ=profile.mounted?-.02:0,span=profile.span,depth=profile.depth;
-            // y, shoulder-axis centre, outer radius, front/back radius,
-            // front/back coverage, narrow beveled rim marker.
-            // The three overlapping contours are formed in one continuous mesh.
-            const levels=[
-                [-.134,.253,.047,.070,1.27,1],[-.126,.252,.051,.078,1.34,0],
-                [-.103,.247,.059,.085,1.40,0],[-.096,.245,.054,.082,1.40,1],
-                [-.087,.243,.062,.093,1.46,0],[-.062,.239,.068,.101,1.48,0],
-                [-.054,.237,.063,.097,1.50,1],[-.043,.235,.069,.107,1.52,0],
-                [-.015,.230,.072,.112,1.55,0],[.010,.218,.069,.110,1.57,0],
-                [.033,.204,.060,.096,1.65,0],[.048,.188,.042,.071,1.70,0],
-                [.056,.174,.028,.050,1.76,1]
-            ];
-            const rings=levels.map(([y,c,rx,rz,coverage])=>{
-                const outer=[],inner=[];
-                for(let i=0;i<=N;i++){
-                    const t=(i/N*2-1)*coverage,a=side>0?t:Math.PI+t;
-                    const ca=Math.cos(a),sa=Math.sin(a);
-                    const cx=side*c,thick=.0065*scale;
-                    // Front edge is slightly more extended than the rear.
-                    const zshape=1+.09*Math.max(0,sa);
-                    const x=cx+rx*scale*span*Math.sign(ca)*Math.pow(Math.abs(ca),.82),z=centerZ+rz*scale*depth*zshape*sa;
-                    const edgeDrop=.011*Math.pow(Math.abs(sa),2)*scale;
-                    outer.push([x,centerY+y*scale-edgeDrop,z]);
-                    inner.push([x-thick*ca,centerY+y*scale-edgeDrop,z-thick*sa]);
-                }
-                return outer.concat(inner.reverse());
-            });
-            const full=OrganicCharacterGeometries.createClosedStripLoft(rings,N+1);
-            const sections=focMountedMaterialSections(full,levels.slice(0,-1).map(x=>x[5]?'edge':'plate'),(N+1)*2,'plate');
-            return {full,sections};
-        }
-        function createFOCFixedPauldronGeometries(){
-            const result={};
-            for(const [id,p] of Object.entries(FOC_PAULDRON_PROFILES))for(const side of [-1,1]){
-                for(const [mat,g] of Object.entries(buildFOCShoulderShell(p,side).sections)){
-                    result['focPauldron_'+id+'_'+(side<0?'L':'R')+'_'+mat]=g;
-                }
-            }
-            return result;
-        }
-        function upgradeFixedPauldronParts(key,parts){
-            const id=key.slice(6),p=FOC_PAULDRON_PROFILES[id];if(!p)return parts;
-            const rig=p.mounted?'riderUpper':'torso',y=p.mounted?1.86:1.32;
-            const legacy=parts.filter(x=>x.prim==='dome'&&x.rigGroup===rig&&Math.abs(Math.abs(x.localMat[12])-.24)<.015&&Math.abs(x.localMat[13]-y)<.015);
-            if(legacy.length!==2)throw Error('Expected two legacy pauldrons '+key);
-            const result=parts.filter(x=>!legacy.includes(x));
-            for(const side of ['L','R']){
-                result.push(makePart('focPauldron_'+id+'_'+side+'_plate',p.mat,0,0,0,1,1,1,0,0,0,rig));
-                result.push(makePart('focPauldron_'+id+'_'+side+'_edge','darkSteel',0,0,0,1,1,1,0,0,0,rig));
-            }
-            return result;
-        }
-
         // Upgrade each fixed definition once. Legacy/classic templates stay untouched.
         for(const family of [FIXED_OTTOMAN_INFANTRY,FIXED_OTTOMAN_CAVALRY,FIXED_EURO_INFANTRY,FIXED_EURO_CAVALRY]){
             for(const [key,entry] of Object.entries(family)){
-                family[key]=upgradeFixedPauldronParts(key,upgradeFixedWeaponParts(key,upgradeFixedHorseParts(key,upgradeFixedLimbParts(key,upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry))))));
+                family[key]=upgradeFixedWeaponParts(key,upgradeFixedHorseParts(key,upgradeFixedLimbParts(key,upgradeFixedHatParts(key,upgradeFixedHeadParts(key,typeof entry==='function'?entry():entry)))));
             }
         }
 
@@ -10472,8 +10394,7 @@ function createSoldierPartTemplates() {
                     ...createFOCFixedLimbGeometries(),
                     ...createFOCFixedHorseGeometries(),
                     ...createFOCFixedTackGeometries(),
-                    ...createFOCWeaponVisualGeometries(),
-                    ...createFOCFixedPauldronGeometries()
+                    ...createFOCWeaponVisualGeometries()
                 };
                 focPrepareSkinWeights(this.geometries,this.templates);
                 this._skinProxy={rigGroup:'static',localMat:FOC_THREE.Mat4.create()};
