@@ -1,4 +1,24 @@
 import * as CONST from '../constants.js';
+import { CIVIC_DECISIONS, getCivicDecisionAvailability, getEffectiveCivicDecision } from '../systems/city-civic-decisions.js';
+import {getCityAccordLegacy,getAccordTradeBonus} from '../systems/city-accord-legacy.js';
+import {getRegionalAidLegacy} from '../systems/regional-aid-legacy.js';
+import {getRegionalCooperation} from '../systems/regional-cooperation.js';
+import { previewCouncilReactions } from '../systems/city-civic-character-reactions.js';
+import { getCharacterPetition } from '../systems/city-character-petitions.js';
+import { DISPUTE_CHOICES, getCityDispute } from '../systems/city-character-disputes.js';
+import {
+  CHARACTER_STAT_KEYS, getSettlementCharacters, getWorldCharacterAge,
+  getWorldCharacterProfile, NPC_ROLE_LABELS, NPC_TRAIT_LABELS, NPC_STAT_LABELS,
+} from '../systems/world-characters.js';
+import { getNamedCharacterState } from '../systems/named-character-state.js';
+import { getKethudaStatus, listKethudaProjects, executeKethudaProject } from '../systems/city-kethuda.js';
+import { getKethudaConstructionQuote } from '../systems/city-infrastructure-benefits.js';
+import { getCityMarketCyclePreview } from '../systems/city-market-cycle.js';
+import { getCityWorkshopOperatingReport } from '../systems/city-workshop-accounts.js';
+import { getCityWorkshopContacts } from '../systems/city-workshop-contacts.js';
+import { listCityWorkshopStewards } from '../systems/city-workshop-assignments.js';
+import { getCityWorkshopStewardAudits } from '../systems/city-workshop-supervision.js';
+import { getCharacterQuestAssignmentView } from './character-quest-assignment-view.js';
 import { getPlayerStanceToFaction, canBuyTruce } from '../systems/diplomacy.js';
 import {
   CITY_SERVICE,
@@ -41,6 +61,12 @@ export default class CityServicesUI {
     onClose,
     onHeal,
     onConstruct,
+    onCivicDecision,
+    onCharacterPetition,
+    onCityDispute,
+    getQuestManager,
+    onAssignQuest,
+    onWorkshopAssignment,
   }) {
     this.state = state;
     this.party = party;
@@ -57,6 +83,21 @@ export default class CityServicesUI {
     this.onClose = onClose;
     this.onHeal = onHeal;
     this.onConstruct = onConstruct;
+    this.onCivicDecision = onCivicDecision;
+    this.onCharacterPetition = onCharacterPetition;
+    this.onCityDispute = onCityDispute;
+    this.disputeFeedback = '';
+    this.petitionFeedback = '';
+    this.civicFeedback = '';
+    this.kethudaFeedback = '';
+    this.kethudaExpanded = false;
+    this.getQuestManager = getQuestManager;
+    this.onAssignQuest = onAssignQuest;
+    this.onWorkshopAssignment = onWorkshopAssignment;
+    this.workshopFeedback = '';
+    this.workshopExpanded = false;
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
 
     this.dom = {};
     this.bound = false;
@@ -84,6 +125,15 @@ export default class CityServicesUI {
       this.openService(btn.dataset.id);
     });
 
+    this.getPanelBodyEl()?.addEventListener('toggle', (event) => {
+      if (event.target?.matches?.('[data-kethuda-projects]')) {
+        this.kethudaExpanded = Boolean(event.target.open);
+      }
+      if (event.target?.matches?.('[data-workshop-stewards]')) {
+        this.workshopExpanded = Boolean(event.target.open);
+      }
+    }, true);
+
     this.getPanelBodyEl()?.addEventListener('click', (event) => {
       const btn = event.target?.closest?.('button[data-action]');
       if (!btn) return;
@@ -103,6 +153,34 @@ export default class CityServicesUI {
         this.onAcceptContract?.(id);
       } else if (action === 'claim-contract') {
         this.onCompleteContract?.(id);
+      } else if (action === 'resolve-city-dispute') {
+        const result=this.onCityDispute?.(id);
+        this.disputeFeedback=result?.message||'Anlaşmazlık çözülemedi.';
+      } else if (action === 'answer-character-petition' && this.currentView?.type==='npc') {
+        const result=this.onCharacterPetition?.(this.currentView.npcId,id);
+        this.petitionFeedback=result?.message||'Dilekçe yanıtlanamadı.';
+      } else if (action === 'civic-decision') {
+        const result=this.onCivicDecision?.(id);
+        this.civicFeedback=result?.message||'İşlem tamamlanamadı.';
+      } else if (action === 'kethuda-project') {
+        const result=executeKethudaProject({
+          city:this.currentSettlement,party:this.party,day:this.state?.day,buildingId:id,
+        });
+        this.kethudaFeedback=result.message;
+        this.kethudaExpanded=true;
+        if(result.ok)this.onConstruct?.(result);
+      } else if (action === 'workshop-appoint' || action === 'workshop-release') {
+        const sourceId = id;
+        const characterId = action === 'workshop-release'
+          ? btn.dataset.characterId
+          : [...this.getPanelBodyEl().querySelectorAll('select[data-workshop-chooser]')]
+            .find(element => element.dataset.sourceId === sourceId)?.value;
+        const result = this.onWorkshopAssignment?.(
+          action === 'workshop-appoint' ? 'appoint' : 'release',
+          sourceId, characterId,
+        );
+        this.workshopFeedback = result?.message || 'Görevlendirme gerçekleştirilemedi.';
+        this.workshopExpanded = true;
       } else if (action === 'diplomacy-truce') {
         const ok = this.applyDiplomacyAction('truce', id);
         this.onDiplomacyAction?.({ ok, message: ok ? `Ateskes satin alindi: ${id}` : 'Ateskes alinmadi.' });
@@ -116,6 +194,24 @@ export default class CityServicesUI {
         this.onHeal?.(id);
       } else if (action === 'show-overview') {
         this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      } else if (action === 'open-npc') {
+        this.pendingNpcQuestId = null;
+        this.questAssignmentFeedback = '';
+        const isHere = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+          .some((person) => person.id === id);
+        if (isHere) this.currentView = { type: 'npc', npcId: id };
+      } else if (action === 'stage-npc-quest' && this.currentView?.type === 'npc') {
+        this.pendingNpcQuestId = id;
+        this.questAssignmentFeedback = '';
+      } else if (action === 'confirm-npc-quest'
+        && this.currentView?.type === 'npc' && this.pendingNpcQuestId === id) {
+        const reasonInput = btn.closest?.('[data-quest-row]')?.querySelector?.('[data-quest-reason]');
+        const reason = typeof reasonInput?.value === 'string' ? reasonInput.value.trim() : '';
+        const outcome = this.onAssignQuest?.(id, this.currentView.npcId, reason);
+        this.questAssignmentFeedback = outcome
+          ? 'Görevlendirme kaydedildi; görev ve karakter geçmişi güncellendi.'
+          : 'Görevlendirme reddedildi. Aktif görev, kişi, yer ve gerekçeyi kontrol et.';
+        if (outcome) this.pendingNpcQuestId = null;
       } else if (action === 'open-service') {
         this.currentView = { type: 'service', serviceId: id, parcelId: btn.dataset.parcelId || null, buildingId: null };
       } else if (action === 'open-area') {
@@ -155,12 +251,18 @@ export default class CityServicesUI {
     this.currentMarket = market || null;
     this.currentContracts = Array.isArray(contracts) ? contracts : [];
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
+    this.kethudaExpanded = false;
+    this.kethudaFeedback = '';
     this.dom.cityRoot?.classList.remove('hidden');
     this.render();
   }
 
   hide() {
     this.dom.cityRoot?.classList.add('hidden');
+    this.pendingNpcQuestId = null;
+    this.questAssignmentFeedback = '';
     this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
   }
 
@@ -280,6 +382,11 @@ export default class CityServicesUI {
     const target = this.getPanelBodyEl();
     if (!target || !cityState) return;
 
+    if (this.currentView?.type === 'npc') {
+      this.renderNpcProfile(this.currentView.npcId);
+      return;
+    }
+
     if (this.currentView?.type === 'service' && this.currentView.serviceId) {
       if (!canUseCityService(this.currentSettlement, this.currentView.serviceId)) {
         this.renderLockedService(this.currentView.serviceId);
@@ -337,6 +444,49 @@ export default class CityServicesUI {
     const availableServices = Object.values(cityState.services || {}).filter((service) => service.available);
     const buildable = (cityState.parcels || []).filter((parcel) => !parcel.buildDisabled && listBuildOptionsForParcel(this.currentSettlement, parcel.id).length > 0).length;
     const ownership = canPlayerManageSettlement(this.currentSettlement, this.party?.factionId || CONST.FACTION.ID.PLAYER);
+    const civicGate=getCivicDecisionAvailability(this.currentSettlement,this.party,this.state?.day);
+    const kethuda=getKethudaStatus(this.currentSettlement);
+    const foodCycle=getCityMarketCyclePreview(this.currentSettlement);
+    const workshopAccounts=getCityWorkshopOperatingReport(this.currentSettlement,this.currentMarket,{
+      day:Number.isSafeInteger(this.state?.day)?this.state.day:null,
+    });
+    const workshopById=new Map(workshopAccounts.rows.map(row=>[row.buildingId,row]));
+    const workshopContacts=getCityWorkshopContacts(this.currentSettlement,this.state?.worldCharacters);
+    const knownWorkshopContacts=workshopContacts.sources.filter(source=>source.contacts.length>0);
+    const stewardRoster=listCityWorkshopStewards({
+      city:this.currentSettlement,party:this.party,
+      roster:this.state?.worldCharacters,organization:this.state?.characterOrganization,
+    });
+    const stewardBySource=new Map(stewardRoster.sources.map(row=>[row.sourceId,row]));
+    const supervision=getCityWorkshopStewardAudits({
+      city:this.currentSettlement,party:this.party,
+      roster:this.state?.worldCharacters,organization:this.state?.characterOrganization,
+      market:this.currentMarket,day:this.state?.day,
+    });
+    const auditsBySource=new Map(supervision.audits.map(report=>[report.sourceId,report]));
+    const workshopBlockLabels={
+      not_built:'Şehirde kurulmamış',
+      missing_input:'Hammadde yetersiz',
+      missing_output_stock:'Ürün stoku geçersiz',
+      storage_full:'Depo kapasitesi dolu',
+    };
+    const kethudaProjects=listKethudaProjects({
+      city:this.currentSettlement,party:this.party,day:this.state?.day,
+    });
+    const accordLegacy=getCityAccordLegacy({party:this.party,roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+    const regionalLegacy=getRegionalAidLegacy({party:this.party,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+    const dispute=getCityDispute({roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,city:this.currentSettlement,
+      day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+    const residentReactions=Object.fromEntries(Object.keys(CIVIC_DECISIONS).map(id=>[
+      id,previewCouncilReactions({roster:this.state?.worldCharacters,
+        cityId:this.currentSettlement?.id,city:this.currentSettlement,
+        legacy:accordLegacy,decisionId:id}),
+    ]));
+    const residents = getSettlementCharacters(this.state?.worldCharacters, this.currentSettlement?.id)
+      .filter((person) => person.status === 'alive');
     this.setPanelChrome(
       'Sehir Sahnesi',
       `<div class="city-panel-meta-line">Tema: ${escapeHtml(cityState.sceneTheme || '-')}</div>
@@ -355,6 +505,45 @@ export default class CityServicesUI {
           </div>
         </div>
         <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir Meclisi — Günlük Karar</div>
+          <div class="text-sm opacity-80">Güvenlik: ${Math.floor(Number(this.currentSettlement?.security??50))}/100 · ${escapeHtml(civicGate.reason||'Bugün bir karar alabilirsin.')}</div>
+          <div class="text-xs opacity-80">${escapeHtml(this.civicFeedback)}</div>
+          ${accordLegacy?`<div class="text-xs opacity-80">Uzlaşma mirası etkin: ${accordLegacy.remainingDays} gün kaldı. Mahalle nöbeti ve imaret yardımı 20 altın ucuz; olağanüstü vergi +3 güvenlik kaybına yol açar.</div>`:''}
+          ${regionalLegacy?`<div class="text-xs opacity-80">Komşu şehir yardımı etkisi: ${regionalLegacy.remainingDays} gün. ${regionalLegacy.kind==='food'?'İmarete Erzak':'Mahalle Nöbeti'} 10 altın indirimli.</div>`:''}
+          ${Object.entries(CIVIC_DECISIONS).map(([id,baseDecision])=>{
+            const decision=getEffectiveCivicDecision({city:this.currentSettlement,party:this.party,
+              roster:this.state?.worldCharacters,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),decisionId:id})||baseDecision;
+            return `
+            <div class="city-overview-row">
+              <span>
+                <strong>${escapeHtml(decision.label)}</strong> — ${escapeHtml(decision.desc)}
+                (${decision.cost>=0?'-':'+'}${Math.abs(decision.cost)} altın)
+                ${residentReactions[id].length ? `<small class="block opacity-80">Önemli kişiler: ${residentReactions[id].slice(0,3).map(row=>`${escapeHtml(row.name)} ${row.delta>0?'+':''}${row.delta} memnuniyet`).join(' · ')}${residentReactions[id].length>3?' · …':''}</small>` : ''}
+              </span>
+              <button type="button" class="action-btn text-xs" data-action="civic-decision" data-id="${id}"
+                ${!civicGate.available||(decision.cost>0&&Number(this.party?.gold??0)<decision.cost)?'disabled':''}>Karar Ver</button>
+            </div>
+          `;}).join('')}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehirli Anlaşmazlığı</div>
+          ${dispute ? `
+            <div class="text-sm"><strong>${escapeHtml(dispute.causeTitle)}</strong> — ${escapeHtml(dispute.causeDescription)}</div>
+            <div class="text-xs opacity-80">${escapeHtml(dispute.first.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.first.role]||dispute.first.role)})
+            · ${escapeHtml(dispute.second.name)} (${escapeHtml(NPC_ROLE_LABELS[dispute.second.role]||dispute.second.role)})</div>
+            <div class="text-xs opacity-80">Aralarındaki ilişki: ${dispute.relation}</div>
+            <div class="flex flex-wrap gap-2 mt-2">
+              ${Object.entries(DISPUTE_CHOICES).map(([choice,rule])=>`
+                <button type="button" class="action-btn text-xs" data-action="resolve-city-dispute" data-id="${choice}"
+                  ${dispute.resolved||(rule.cost>0&&Number(this.party?.gold??0)<rule.cost)?'disabled':''}>
+                  ${escapeHtml(rule.label)}${rule.cost?` (−${rule.cost} altın)`:''}
+                </button>`).join('')}
+            </div>
+            ${dispute.resolved?'<div class="text-xs opacity-70">Bu anlaşmazlık bugün karara bağlandı.</div>':''}
+          `:'<div class="text-xs opacity-70">Bugün karar bekleyen iki önemli kişi bulunmuyor.</div>'}
+          <div class="text-xs mt-2">${escapeHtml(this.disputeFeedback)}</div>
+        </div>
+        <div class="city-overview-section">
           <div class="city-overview-section__title">Servis Kilitleri</div>
           ${Object.values(cityState.services || []).map((service) => `
             <div class="city-overview-row">
@@ -364,16 +553,324 @@ export default class CityServicesUI {
           `).join('')}
         </div>
         <div class="city-overview-section">
-          <div class="city-overview-section__title">Sehir Kethudasi</div>
+          <div class="city-overview-section__title">Sehirdeki Kisiler (NPC)</div>
+          ${residents.length ? residents.map((person) => `
+            <button type="button" class="city-overview-row w-full text-left"
+                data-action="open-npc" data-id="${escapeHtml(person.id)}"
+                aria-label="${escapeHtml(person.name)} karakterini incele">
+              <span>${escapeHtml(person.name)}</span>
+              <strong>${escapeHtml(NPC_ROLE_LABELS[person.role] || person.role)} · ${getWorldCharacterAge(person, this.state?.day)}</strong>
+            </button>
+          `).join('') : '<div class="text-sm opacity-80">Bu sehir icin kayitli NPC yok.</div>'}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir Kethüdası — Altyapı</div>
           <div class="text-sm opacity-80">
-            ${escapeHtml(cityState.infrastructure?.managerLabel || 'Sehir Kethudasi')} altyapi ve sehir hizmetlerini yonetir. Bu grup buyuk bina olarak cizilmez.
+            Görünmez şehir hizmetleri · Nüfus: ${kethuda?.population ?? 0} ·
+            Kapasite: ${kethuda?.capacity ?? 0}/${kethuda?.need ?? 0} ·
+            Açık ihtiyaç: ${kethuda?.unmet ?? 0}.
           </div>
+          <div class="text-xs opacity-80">Su, yol ve atık altyapısı geliştirildikçe ilgili şehir meclisi kararlarının gerçek hazine maliyeti azalır. Yol iyileştirmeleri ayrıca gerçek bina inşaatında malzeme taşıma tasarrufu sağlar. Bugün en fazla bir proje yapılır.</div>
+          <div class="city-overview-grid">
+            ${Object.entries(kethuda?.serviceCoverage || {}).map(([id, group]) => `
+              <div class="city-overview-card" data-kethuda-service="${escapeHtml(id)}">
+                <div class="city-overview-card__label">${escapeHtml(group.label)}</div>
+                <div class="city-overview-card__value">${group.coveragePct}%</div>
+                <div class="city-overview-card__sub">Hizmet: ${group.capacity}/${group.need} · Açık: ${group.deficit} · İyileştirme: ${group.improvedLevels}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${this.kethudaFeedback ? `<div class="text-xs mt-2">${escapeHtml(this.kethudaFeedback)}</div>` : ''}
+          <details class="mt-2" data-kethuda-projects ${this.kethudaExpanded ? 'open' : ''}>
+            <summary class="cursor-pointer font-bold">Altyapı projeleri (${kethudaProjects.length})</summary>
+            ${kethudaProjects.map((project) => `
+              <div class="city-overview-row">
+                <span>
+                  <strong>${escapeHtml(project.name)}</strong> · ${project.installed ? `İyileştirme ${project.level}/2` : 'Henüz kurulmadı'}
+                  <small class="block opacity-80">${project.finished ? 'Tamamlandı' : `${project.cost} altın · ${project.action}`}${project.reason ? ` · ${escapeHtml(project.reason)}` : ''}</small>
+                </span>
+                <button type="button" class="action-btn text-xs" data-action="kethuda-project"
+                  data-id="${escapeHtml(project.id)}" ${project.available ? '' : 'disabled'}>
+                  ${project.finished ? 'Tamam' : escapeHtml(project.action)}
+                </button>
+              </div>
+            `).join('')}
+          </details>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Şehir İaşesi — Günlük Pazar Döngüsü</div>
+          <div class="text-sm opacity-80">Nüfusun pazardan günlük ihtiyacı: ${foodCycle.dailyFoodNeed} gıda birimi. Yalnız gerçek pazar stoku tüketilir; kıtlıkta stok eksiye düşmez, talep yükselir.</div>
+          <div class="text-xs opacity-80">Çalışabilir tesis türü: ${foodCycle.recipes.filter(recipe => recipe.buildingCount > 0).length}/${foodCycle.recipes.length} · Tarifler mevcut binaların ve gerçek mal stoklarının üzerine kuruludur.</div>
+          ${workshopAccounts.ok ? `
+            <div class="text-xs opacity-80">
+              Mevcut pazar stoklarına göre tahmini ${workshopAccounts.totalBatches} üretim partisi ·
+              Hammadde piyasa alış karşılığı ${workshopAccounts.inputValueGold} altın ·
+              Ürün pazar satış karşılığı ${workshopAccounts.outputValueGold} altın ·
+              Brüt fiyat farkı ${workshopAccounts.grossTradeSpreadGold >= 0 ? '+' : ''}${workshopAccounts.grossTradeSpreadGold} altın.
+            </div>
+            <div class="text-xs opacity-75">Bu yalnız karşılaştırma hesabıdır: gelir veya altın aktarımı değildir. İşçi maaşı ve bakım bedeli henüz hesaplanmaz; şahsi atölye sahipliği doğrulanmamıştır. Günlük piyasa değişimi gerçekleşen üretimi değiştirebilir.${workshopAccounts.processedToday ? ' Bugünkü pazar döngüsü tamamlandı; rakamlar sonraki olası çevrim içindir.' : ''}</div>
+          ` : '<div class="text-xs opacity-70">Gerçek pazar açılmadan atölye girdi maliyeti ve yapılabilir üretim doğrulanamaz.</div>'}
+          <details class="mt-2" data-city-production-recipes>
+            <summary class="cursor-pointer font-bold">Atölyeler, girdiler ve günlük üretim sınırları</summary>
+            ${[...foodCycle.recipes].sort((a, b) => Number(b.buildingCount > 0) - Number(a.buildingCount > 0)).map(recipe => `
+              <div class="city-overview-row">
+                <span><strong>${escapeHtml(recipe.name)}</strong> — ${recipe.buildingCount} bina, üst sınır ${recipe.maxBatches} parti/gün
+                  <small class="block opacity-80">Girdi: ${Object.entries(recipe.inputs).map(([id,qty]) => `${qty} ${escapeHtml(id)}`).join(' + ')} · Çıktı: ${recipe.outputQty} ${escapeHtml(recipe.outputId)} / parti</small>
+                  ${workshopById.has(recipe.buildingId) ? `<small class="block opacity-75">Mevcut stokla planlanan: ${workshopById.get(recipe.buildingId).plannedBatches}/${recipe.maxBatches} · Girdi karşılığı: ${workshopById.get(recipe.buildingId).inputValueGold}g · Ürün karşılığı: ${workshopById.get(recipe.buildingId).outputValueGold}g</small>` : ''}
+                </span>
+                <strong>${workshopById.has(recipe.buildingId)
+                  ? workshopById.get(recipe.buildingId).plannedBatches > 0
+                    ? `${workshopById.get(recipe.buildingId).plannedBatches} parti mümkün`
+                    : escapeHtml(workshopBlockLabels[workshopById.get(recipe.buildingId).blockedReason] || 'Henüz üretilemiyor')
+                  : recipe.buildingCount > 0 ? 'Pazar bekleniyor' : 'Şehirde kurulmamış'}</strong>
+              </div>
+            `).join('')}
+          </details>
+          <div class="text-xs opacity-75">İyileştirilmiş su, drenaj veya yol hizmeti yalnız ilgili atölyenin kapasitesini artırır. Hammadde yoksa üretim yapılmaz; stok ve para yaratılmaz.</div>
+          <details class="mt-2" data-city-workshop-contacts>
+            <summary class="cursor-pointer font-bold">Zanaat Kaynağından Tanınan Karakterler (${workshopContacts.contactCount})</summary>
+            <div class="text-xs opacity-75">
+              Kayıtlı ${workshopContacts.sourceCount} gerçek zanaat kaynağı kontrol edildi.
+              Buradaki bağlantı yalnız karakterin üretildiği kaynak binayı gösterir;
+              atölye sahibi, ücretli çalışan, lonca üyesi veya tayin edilmiş görevli olduğu anlamına gelmez.
+            </div>
+            ${knownWorkshopContacts.length ? knownWorkshopContacts.map(source=>`
+              <div class="city-overview-row">
+                <span>
+                  <strong>${escapeHtml(getCityBuildingDef(source.buildingId)?.name||source.buildingId)}</strong>
+                  <small class="block opacity-75">Parsel: ${escapeHtml(source.parcelId)} · Kaynağı kayıtlı kişiler: ${source.contacts.length}</small>
+                  <span class="flex flex-wrap gap-2 mt-1">
+                    ${source.contacts.map(contact=>`
+                      <button type="button" class="action-btn btn-dark text-xs"
+                        data-action="open-npc" data-id="${escapeHtml(contact.characterId)}"
+                        aria-label="${escapeHtml(contact.name)} karakterini incele">
+                        ${escapeHtml(contact.name)} · ${escapeHtml(NPC_ROLE_LABELS[contact.role]||contact.role)}
+                      </button>
+                    `).join('')}
+                  </span>
+                </span>
+              </div>
+            `).join('') : '<div class="text-xs opacity-75">Bu şehirde açık zanaat kaynağına bağlı, hâlen burada yaşayan kayıtlı önemli karakter bulunmuyor.</div>'}
+          </details>
+          <details class="mt-2" data-workshop-stewards ${this.workshopExpanded ? 'open' : ''}>
+            <summary class="cursor-pointer font-bold">Atölye Nezaretçileri — Açık Görevlendirme</summary>
+            <div class="text-xs opacity-75">Yalnız mevcut şehirde yaşayan boşta bir önemli karakter, gerçek sanayi binasına oyuncu kararıyla atanabilir. Bu ticari mülkiyet, personel ücreti, lonca üyeliği veya otomatik üretim artışı değildir.</div>
+            ${this.workshopFeedback ? `<div class="text-xs mt-2" role="status">${escapeHtml(this.workshopFeedback)}</div>` : ''}
+            ${stewardRoster.sources.length ? stewardRoster.sources.map(source=>{
+              const origin=workshopContacts.sources.find(row=>row.sourceId===source.sourceId);
+              const steward=stewardBySource.get(source.sourceId);
+              const audit=auditsBySource.get(source.sourceId);
+              return `
+                <div class="city-overview-row">
+                  <span><strong>${escapeHtml(getCityBuildingDef(origin?.buildingId)?.name||origin?.buildingId||'Zanaat atölyesi')}</strong>
+                    <small class="block opacity-75">Parsel: ${escapeHtml(origin?.parcelId||'—')} · ${steward?.steward
+                      ? `Nezaretçi: ${escapeHtml(steward.steward.name)} (gün ${steward.steward.startDay})`
+                      : steward?.occupied ? 'Bu atölye için kayıtlı görev mevcut, karakter burada değil'
+                        : 'Nezaretçi atanmamış'}</small>
+                    ${audit ? `
+                      <small class="block opacity-85 mt-1">Denetim: ${escapeHtml(audit.summary)}
+                        ${audit.plannedBatches !== null ? ` · ${audit.plannedBatches}/${audit.maxBatches} parti (şehirdeki aynı tür ${audit.buildingCount} bina toplamı)` : ''}
+                        ${audit.processedToday ? ' · Bugünkü döngü tamamlandı; sonraki çevrim tahmini' : ''}
+                      </small>
+                      ${audit.inputs.length ? `<small class="block opacity-70">Gerçek girdi stoku: ${audit.inputs.map(input=>`${escapeHtml(input.itemId)} ${input.available === null ? '?' : input.available} (parti başına ${input.perBatch})`).join(' · ')}</small>` : ''}
+                    ` : ''}
+                    ${stewardRoster.canManage && !steward?.occupied && stewardRoster.eligible.length ? `
+                      <select class="text-xs mt-1" data-workshop-chooser data-source-id="${escapeHtml(source.sourceId)}" aria-label="Atölye nezaretçisi seç">
+                        ${stewardRoster.eligible.map(person=>`
+                          <option value="${escapeHtml(person.characterId)}">${escapeHtml(person.name)}</option>
+                        `).join('')}
+                      </select>
+                    ` : ''}
+                  </span>
+                  ${stewardRoster.canManage ? steward?.steward
+                    ? `<button type="button" class="action-btn btn-dark text-xs"
+                       data-action="workshop-release" data-id="${escapeHtml(source.sourceId)}"
+                       data-character-id="${escapeHtml(steward.steward.characterId)}">Görevi bitir</button>`
+                    : !steward?.occupied && stewardRoster.eligible.length
+                      ? `<button type="button" class="action-btn btn-gold text-xs"
+                         data-action="workshop-appoint" data-id="${escapeHtml(source.sourceId)}">Görevlendir</button>`
+                      : '' : ''}
+                </div>
+              `;
+            }).join('') : '<div class="text-xs opacity-75">Bu şehirde atama yapılabilecek aktif sanayi binası yok.</div>'}
+            ${!stewardRoster.canManage ? '<div class="text-xs opacity-75">Bu şehir oyuncu yönetiminde değil; atama ve görevden alma kapalı.</div>'
+              : !stewardRoster.eligible.length ? '<div class="text-xs opacity-75">Boşta ve şehirde yaşayan önemli karakter bulunmuyor.</div>' : ''}
+          </details>
         </div>
         <div class="city-overview-section">
           <div class="city-overview-section__title">Yapman gereken</div>
           <div class="text-sm opacity-80">
             Bir alana tikla. Sag panelde o bolgenin binalari, servisleri ve gelisim secenekleri acilir.
           </div>
+        </div>
+      `,
+    );
+  }
+
+  renderNpcProfile(npcId) {
+    const profile = getWorldCharacterProfile(this.state?.worldCharacters, npcId, {
+      day: this.state?.day,
+    });
+    if (!profile || profile.person.location?.settlementId !== String(this.currentSettlement?.id)) {
+      this.currentView = { type: 'overview', serviceId: null, parcelId: null, buildingId: null };
+      this.renderOverview();
+      return;
+    }
+
+    const { person, age, relations } = profile;
+    const petition=getCharacterPetition({
+      roster:this.state?.worldCharacters,cityId:this.currentSettlement?.id,
+      characterId:npcId,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+    });
+    // GeneratedPerson keeps the existing profile; only permanent named actors
+    // gain the independent by-value mutable state projection.
+    const current = person.kind === 'named'
+      ? getNamedCharacterState(this.state?.worldCharacters, npcId) : null;
+    const visibleStats = current?.stats ?? person.stats;
+    const visibleTraits = current?.traits ?? person.traits;
+    const visibleHistory = current?.history ?? person.history;
+    const loyalty = current?.currentLoyalty ?? person.loyalty;
+    const satisfaction = current?.satisfaction ?? person.satisfaction;
+    const reputation = current?.currentReputation ?? person.reputation;
+    const standing = current?.currentStanding ?? person.standing;
+    const roleLabel = NPC_ROLE_LABELS[person.role] || person.role;
+    const statusLabel = person.status === 'alive' ? 'Hayatta' : 'Ölü';
+    const kindLabel = person.kind === 'named'
+      ? `Önemli karakter (${person.importance})` : 'Sıradan dünya karakteri';
+    const statRows = CHARACTER_STAT_KEYS.map((key) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(NPC_STAT_LABELS[key] || key)}</span>
+        <strong>${visibleStats[key]}/100</strong>
+      </div>`).join('');
+    const relationRows = relations.length ? relations.map((other) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(other.name)}</span>
+        <strong>${other.value > 0 ? '+' : ''}${other.value}</strong>
+      </div>`).join('')
+      : '<div class="text-sm opacity-70">Henüz kayıtlı kişisel ilişki yok.</div>';
+    const historyRows = visibleHistory.length ? [...visibleHistory].reverse().map((event) => {
+      const typeText = event.type === 'created' ? 'Oluşturuldu'
+        : event.type === 'promoted' ? 'Önem kazandı'
+          : event.type === 'moved' ? 'Şehir değiştirdi'
+            : event.type === 'importance' ? 'Önem sınıfı değişti'
+              : event.type === 'state-changed' ? 'Özellik değişti' : 'Olay';
+      const stateMetric = event.type === 'state-changed'
+        ? (event.metric.startsWith('stats.')
+          ? NPC_STAT_LABELS[event.metric.slice(6)] || event.metric.slice(6)
+          : ({ loyalty: 'Sadakat', satisfaction: 'Memnuniyet',
+            reputation: 'İtibar', standing: 'Konum' }[event.metric] || event.metric)) : '';
+      const target = event.type === 'moved' ? ` — ${escapeHtml(event.settlementId)}`
+        : event.type === 'importance' ? ` — ${escapeHtml(event.from)} → ${escapeHtml(event.to)}`
+          : event.type === 'state-changed'
+            ? ` — ${escapeHtml(stateMetric)} ${escapeHtml(event.from)} → ${escapeHtml(event.to)} (${escapeHtml(event.reason)})`
+            : '';
+      return `<div class="city-overview-row"><span>${escapeHtml(typeText)}${target}</span><strong>Gün ${escapeHtml(event.day)}</strong></div>`;
+    }).join('') : '<div class="text-sm opacity-70">Kayıt yok.</div>';
+
+    const questView = getCharacterQuestAssignmentView({
+      roster: this.state?.worldCharacters,
+      characterOrganization: this.state?.characterOrganization,
+      characterQuestBindings: this.state?.characterQuestBindings,
+      questManager: this.getQuestManager?.(),
+      settlements: this.state?.map?.settlements || [],
+      day: this.state?.day, characterId: npcId,
+      settlementId: this.currentSettlement?.id,
+    });
+    const questStatusLabel = {
+      not_named: 'Sıradan kişilere görev ataması yapılamaz.',
+      not_alive: 'Hayatta olmayan kişi görevlendirilemez.',
+      not_in_city: 'Karakter bu şehirde değil.',
+      no_active_duty: 'Önce var olan, aktif bir organizasyon görevi gereklidir. Bu ekran görev veya makam oluşturmaz.',
+      duty_elsewhere: 'Karakterin aktif görevi başka bir şehirde.',
+      ready: 'Gerçek ve aktif organizasyon görevi doğrulandı.',
+    }[questView.status] || 'Görev durumu doğrulanamadı.';
+    const questRows = questView.quests.length ? questView.quests.map((quest) => `
+      <div class="city-overview-section" data-quest-row>
+        <div class="city-overview-row"><span>${escapeHtml(quest.title)}</span><strong>${escapeHtml(quest.templateId)}</strong></div>
+        ${quest.eligible ? (this.pendingNpcQuestId === quest.id ? `
+          <label class="text-xs" for="npcQuestReason">Atama gerekçesi (3–120 karakter)</label>
+          <input id="npcQuestReason" data-quest-reason type="text" maxlength="120"
+            class="w-full text-sm" value="Oyuncu tarafından göreve atandı" />
+          <button type="button" class="action-btn btn-gold text-xs mt-2"
+            data-action="confirm-npc-quest" data-id="${escapeHtml(quest.id)}">Atamayı onayla</button>
+        ` : `
+          <button type="button" class="action-btn btn-dark text-xs mt-2"
+            data-action="stage-npc-quest" data-id="${escapeHtml(quest.id)}">Bu göreve ata</button>
+        `) : `<div class="text-xs opacity-70">${escapeHtml(quest.reason)}</div>`}
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Bu şehirle ilgili atanabilir aktif görev yok.</div>';
+    const questHistory = questView.history.length ? questView.history.map((record) => `
+      <div class="city-overview-row">
+        <span>${escapeHtml(record.templateId)} · ${escapeHtml(record.status)}</span>
+        <strong>Gün ${escapeHtml(record.endedDay ?? record.assignedDay)}</strong>
+      </div>
+    `).join('') : '<div class="text-xs opacity-70">Kayıtlı görev geçmişi yok.</div>';
+
+    this.setPanelChrome(
+      'Karakter: ' + person.name,
+      `<div class="city-panel-meta-line">${escapeHtml(kindLabel)} · ${escapeHtml(statusLabel)}</div>`,
+      `
+        <button type="button" class="action-btn btn-dark text-xs mb-3" data-action="show-overview">Şehre dön</button>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kimlik</div>
+          <div class="city-overview-row"><span>Adı</span><strong>${escapeHtml(person.name)}</strong></div>
+          <div class="city-overview-row"><span>Yaş</span><strong>${age}</strong></div>
+          <div class="city-overview-row"><span>Rol profili</span><strong>${escapeHtml(roleLabel)}</strong></div>
+          <div class="city-overview-row"><span>Karakter türü</span><strong>${escapeHtml(kindLabel)}</strong></div>
+          <div class="text-xs opacity-70 mt-2">Rol profili, resmî görev veya askerî rütbe değildir.</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kişilik</div>
+          <div class="text-sm">${visibleTraits.map((trait) => escapeHtml(NPC_TRAIT_LABELS[trait] || trait)).join(' · ') || 'Bilinmiyor'}</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Kişisel Dilekçe</div>
+          ${petition ? `
+            <div class="font-bold text-sm">${escapeHtml(petition.title)}</div>
+            <div class="text-xs opacity-80">${escapeHtml(petition.description)}</div>
+            <div class="text-xs opacity-80">Destek maliyeti: ${petition.cost} altın · Beklenen memnuniyet +${petition.gain}</div>
+            <div class="flex gap-2 mt-2">
+              <button class="action-btn btn-gold text-xs" data-action="answer-character-petition" data-id="support"
+                ${petition.answered||!petition.supportAvailable||Number(this.party?.gold??0)<petition.cost?'disabled':''}>Destekle</button>
+              <button class="action-btn btn-dark text-xs" data-action="answer-character-petition" data-id="decline"
+                ${petition.answered||!petition.declineAvailable?'disabled':''}>Reddet</button>
+            </div>
+            ${petition.answered?'<div class="text-xs opacity-70 mt-1">Bu kişi bugün dilekçesine yanıt aldı.</div>':''}
+          `:'<div class="text-xs opacity-70">Bu kişi için güncel dilekçe yok.</div>'}
+          <div class="text-xs mt-2">${escapeHtml(this.petitionFeedback)}</div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Yetenekler</div>
+          ${statRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Toplumsal durum</div>
+          <div class="city-overview-row"><span>Sadakat</span><strong>${loyalty}/100</strong></div>
+          <div class="city-overview-row"><span>Memnuniyet</span><strong>${satisfaction}/100</strong></div>
+          <div class="city-overview-row"><span>İtibar</span><strong>${reputation}/100</strong></div>
+          <div class="city-overview-row"><span>Konum</span><strong>${standing}/100</strong></div>
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Önemli kişi / görev ataması</div>
+          <div class="text-xs opacity-80">${escapeHtml(questStatusLabel)}</div>
+          ${questView.duty ? `<div class="city-overview-row">
+            <span>Aktif organizasyon görevi</span>
+            <strong>${escapeHtml(questView.duty.branch)} / ${escapeHtml(questView.duty.assignmentRole)}</strong>
+          </div>` : ''}
+          ${this.questAssignmentFeedback ? `<div role="status" class="text-xs mt-2">${escapeHtml(this.questAssignmentFeedback)}</div>` : ''}
+          ${questRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Görev geçmişi</div>
+          ${questHistory}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Bilinen ilişkiler</div>
+          ${relationRows}
+        </div>
+        <div class="city-overview-section">
+          <div class="city-overview-section__title">Geçmiş</div>
+          ${historyRows}
         </div>
       `,
     );
@@ -424,12 +921,13 @@ export default class CityServicesUI {
         <div class="city-overview-section">
           <div class="city-overview-section__title">Gelistirme Secenekleri</div>
           ${options.map((option) => {
-            const affordable = Number(this.party?.gold ?? 0) >= Number(option.buildCostGold || 0);
+            const quote = getKethudaConstructionQuote(this.currentSettlement, option.id);
+            const affordable = Number(this.party?.gold ?? 0) >= Number(quote?.cost ?? option.buildCostGold ?? 0);
             return `
               <div class="frame-dark p-3 mb-2 flex items-start justify-between gap-3">
                 <div>
                   <div class="font-bold text-sm">${escapeHtml(option.name)}</div>
-                  <div class="text-xs opacity-75">Maliyet: ${Number(option.buildCostGold || 0)}g</div>
+                  <div class="text-xs opacity-75">Maliyet: ${Number(quote?.cost ?? option.buildCostGold ?? 0)}g${quote?.discount ? ` · Yol tasarrufu: ${quote.discount}g (asıl ${quote.baseCost}g)` : ""}</div>
                   <div class="text-xs opacity-70">+ ${(option.bonuses || []).join(', ') || '-'}</div>
                   <div class="text-xs opacity-70">- ${(option.penalties || []).join(', ') || '-'}</div>
                 </div>
@@ -550,13 +1048,14 @@ export default class CityServicesUI {
           </div>
         `
         : options.map((option) => {
-          const affordable = Number(this.party?.gold ?? 0) >= Number(option.buildCostGold || 0);
+          const quote = getKethudaConstructionQuote(this.currentSettlement, option.id);
+          const affordable = Number(this.party?.gold ?? 0) >= Number(quote?.cost ?? option.buildCostGold ?? 0);
           return `
             <div class="frame-dark p-3 mb-2">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="font-bold text-sm">${escapeHtml(option.name)}</div>
-                  <div class="text-xs opacity-80">Maliyet: ${Number(option.buildCostGold || 0)}g · Min tier: ${Number(option.minTier || 1)}</div>
+                  <div class="text-xs opacity-80">Maliyet: ${Number(quote?.cost ?? option.buildCostGold ?? 0)}g${quote?.discount ? ` (yol indirimi ${quote.discount}g)` : ""} · Min tier: ${Number(option.minTier || 1)}</div>
                   <div class="text-xs opacity-70 mt-1">+ ${(option.bonuses || []).join(', ') || '-'}</div>
                   <div class="text-xs opacity-70">- ${(option.penalties || []).join(', ') || '-'}</div>
                 </div>
@@ -629,6 +1128,11 @@ export default class CityServicesUI {
     const day = Number(this.state?.day ?? 1);
     const settlementKey = this.currentSettlement?.id || `${this.currentSettlement?.tx},${this.currentSettlement?.ty}`;
     const activeOpportunity = this.state?.marketOpportunities?.[settlementKey];
+    const regionalTrade=getRegionalCooperation({party:this.party,
+      roster:this.state?.worldCharacters,cityId:this.currentSettlement?.id,
+      day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+    const accordTrade=getAccordTradeBonus({party:this.party,roster:this.state?.worldCharacters,
+      cityId:this.currentSettlement?.id,day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
     const opportunityDaysLeft = activeOpportunity
       ? Math.max(0, Number(activeOpportunity.expiresDay ?? day) - day)
       : 0;
@@ -642,6 +1146,8 @@ export default class CityServicesUI {
           day,
           settlementKey,
           marketOpportunities: this.state?.marketOpportunities,
+          accordTradeBonusPct: accordTrade.bonusPct,
+          regionalTradeBonusPct: regionalTrade?.sellBonusPct||0,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -662,6 +1168,8 @@ export default class CityServicesUI {
                 <div class="font-bold text-sm">${escapeHtml(item.name)}</div>
                 <div class="text-xs opacity-80">Stok: ${stock} - Envanter: ${invQty} - Al: ${buyPrice}g - Sat: ${sellPrice}g</div>
                 ${hasOpportunity ? `<div class="text-xs text-amber-300">Firsat: +%${Math.round(activeOpportunity.bonusPct)} (${opportunityDaysLeft} gun)</div>` : ''}
+                ${item.id==='wheat'&&accordTrade.bonusPct>0?`<div class="text-xs text-amber-300">Uzlaşmış esnaf ve tüccar: buğday satışında +%${accordTrade.bonusPct} (${accordTrade.legacy.remainingDays} gün)</div>`:''}
+                ${item.id==='wheat'&&regionalTrade?`<div class="text-xs text-amber-300">Şehirler arası işbirliği: buğday satışında +%3 (${regionalTrade.remainingDays} gün)</div>`:''}
               </div>
               <div class="flex items-center gap-2">
                 <input data-qty-for="${item.id}" type="number" value="1" min="1" class="select-dark text-xs w-16" />
@@ -680,11 +1188,23 @@ export default class CityServicesUI {
     const activeContracts = Array.isArray(this.party?.contracts) ? this.party.contracts : [];
     const acceptedIds = new Set(activeContracts.map((contract) => contract.id));
 
+    const sourceSecurity=Math.max(0,Math.min(100,Number(this.currentSettlement?.security??50)));
+    const condition=sourceSecurity<30?'Tehlikeli: eşkıya ve erzak sıkıntısı'
+      :sourceSecurity<60?'Tedbirli: yol güvenliği ve ikmal ihtiyaçları'
+        :'İstikrarlı: ticaret ve vilayet haberleşmesi';
+    const destinations=new Map((this.state?.map?.settlements||[])
+      .filter(s=>s?.id!=null).map(s=>[String(s.id),s]));
+
     this.setPanelChrome(
       'Hanlar ve Kervan Alani',
       '<div class="city-panel-meta-line">Servis: Han Isleri</div>',
       `
-        <div class="text-xs opacity-75 mb-2">Pano Kontratlari</div>
+        <div class="frame-dark p-3 mb-3">
+          <div class="font-bold text-sm">${escapeHtml(this.currentSettlement?.name||'Şehir')} — Şehir İhtiyaçları</div>
+          <div class="text-xs opacity-80">Güvenlik: ${Math.floor(sourceSecurity)}/100 · ${escapeHtml(condition)}</div>
+          <div class="text-xs opacity-75">Haber ve erzak görevleri mevcut şehirler arasında gerçek yolculuk gerektirir. Ödüller yalnız tamamlanan işlerden alınır.</div>
+        </div>
+        <div class="text-xs opacity-75 mb-2">Pano Kontratlari — savaş, keşif, eskort, haberci, erzak, vilayet ve karakter talepleri</div>
         ${offers.map((contract) => {
           const accepted = acceptedIds.has(contract.id);
           const label = this.describeContract(contract);
@@ -693,6 +1213,9 @@ export default class CityServicesUI {
               <div>
                 <div class="font-bold text-sm">${escapeHtml(label.title)}</div>
                 <div class="text-xs opacity-80">${escapeHtml(label.desc)}</div>
+                ${contract.targetCityId!=null&&destinations.has(String(contract.targetCityId))
+                  ? `<div class="text-[11px] opacity-75">Hedef: ${escapeHtml(destinations.get(String(contract.targetCityId)).name||String(contract.targetCityId))} · Güvenlik: ${Math.floor(Number(destinations.get(String(contract.targetCityId)).security??50))}/100</div>`
+                  : ''}
                 <div class="text-[11px] opacity-70">${this.contractTypeBadge(contract)}</div>
               </div>
               <button class="action-btn ${accepted ? 'btn-dark' : 'btn-gold'} text-xs" data-action="accept-contract" data-id="${contract.id}" ${accepted ? 'disabled' : ''}>${accepted ? 'Accepted' : 'Accept'}</button>
@@ -823,6 +1346,17 @@ export default class CityServicesUI {
       DEFEND: 'Savun',
       ESCORT: 'Eskort',
       ASSASSINATE: 'Suikast',
+      COURIER: 'Haberci',
+      RELIEF: 'Erzak Yardimi',
+      DISPATCH: 'Vilayet Yazismasi',
+      CIVIC_FOLLOWUP: 'Meclis Dilekçesi',
+      CHARACTER_COMMISSION: 'Kişisel Görev',
+      DISPUTE_REMEDY: 'Anlaşmazlık Sonrası',
+      DISPUTE_ACCORD: 'Uzlaşma Heyeti',
+      REGIONAL_AID: 'Komşu Şehir Yardımı',
+      REGIONAL_RECOVERY: 'Bölgesel İyileşme',
+      INTERCITY_TRADE: 'Şehirler Arası Ticaret',
+      PRODUCTION_CARAVAN: 'Üretim Kervanı',
     };
     const war = contract?.isWarContract ? ' (War)' : '';
     return `${icons[type] || 'Kontrat'} - ${type}${war}`;
@@ -841,7 +1375,55 @@ export default class CityServicesUI {
     if (contract?.type === 'ASSASSINATE') {
       return `Hedef: ${contract?.targetRegionId || 'bilinmeyen bolge'}`;
     }
-    const goal = contract?.type === 'DELIVER' ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
+    if(contract?.type==='PRODUCTION_CARAVAN'){
+      const stage=Number(contract.caravanStage||0);
+      const note=stage===0?`Kaynak pazarından ${contract.cargoItemId}: ${Number(contract.caravanBought||0)}/3 satın al`
+        :stage===1?'Hedef şehri ziyaret et'
+          :stage===2?`Hedef pazarında ${contract.cargoItemId}: ${Number(contract.caravanSold||0)}/3 sat`
+          :'Tamamlandı';
+      return `Üretim kervanı ${progress}/3 — ${note}`;
+    }
+    if(contract?.type==='INTERCITY_TRADE'){
+      const stage=Number(contract.tradeStage||0);
+      const note=stage===0?'Hedef şehre git':stage===1
+        ?`Hedef pazarda buğday: ${Number(contract.tradeDelivered||0)}/5`
+        :stage===2?'Kaynak şehre geri dön':'Tamamlandı';
+      return `Ticaret heyeti ${progress}/3 — ${note}`;
+    }
+    if (contract?.type === 'REGIONAL_RECOVERY') {
+      const stage=Number(contract.recoveryStage||0);
+      const task=stage===0?'Yardım eden şehre git':stage===1
+        ?contract.regionalRecoveryKind==='food'?`Buğday: ${Number(contract.recoveryDelivered||0)}/4`:'Yardım alan şehre dön'
+        :'Tamamlandı';
+      return `Bölgesel takip ${progress}/2 — ${task}`;
+    }
+    if (contract?.type === 'REGIONAL_AID') {
+      return `Komşu şehir yardımı: ${progress}/${Math.max(1,Number(contract.requiredCount||1))} · ${contract.regionalAidKind==='food'?'Erzak':'Asayiş'}`;
+    }
+    if (contract?.type === 'DISPUTE_ACCORD') {
+      const step=Number(contract.accordStage||0);
+      const note=step===0?'Başka şehirde görüşme'
+        :step===1?`Hedef pazarda buğday: ${Number(contract.accordDelivered||0)}/4`
+          :step===2?'Kaynak şehre dön':'Tamamlandı';
+      return `Uzlaşma ${progress}/3 — ${note}`;
+    }
+    if (contract?.type === 'DISPUTE_REMEDY') {
+      return `Anlaşmazlık takibi: ${progress}/${Math.max(1,Number(contract.requiredCount||1))}`;
+    }
+    if (contract?.type === 'CHARACTER_COMMISSION') {
+      const goal=Math.max(1,Number(contract.requiredCount||1));
+      return `Karakter görevi: ${progress}/${goal} · ${contract.commissionKind==='correspondence'?'Yolculuk':'İkmal'}`;
+    }
+    if (contract?.type === 'CIVIC_FOLLOWUP') {
+      const goal=Math.max(1,Number(contract.requiredCount||1));
+      return `Meclis görevi: ${progress}/${goal}`;
+    }
+    if (contract?.type === 'DISPATCH') {
+      const stops=Array.isArray(contract.dispatchStopNames)?contract.dispatchStopNames:[];
+      return `Mühür: ${progress}/3 · Siradaki: ${stops[progress]??'Tamamlandı'}`;
+    }
+    if (contract?.type === 'COURIER') return `Hedef sehir: ${contract?.targetCityId ?? '?'} (${progress}/1)`;
+    const goal = (contract?.type === 'DELIVER' || contract?.type === 'RELIEF') ? (contract?.requiredAmount ?? contract?.requiredCount ?? 1) : (contract?.requiredCount ?? 1);
     return `Ilerleme: ${progress}/${Math.floor(goal)}`;
   }
 
@@ -849,6 +1431,17 @@ export default class CityServicesUI {
     if (!contract || typeof contract !== 'object') return { title: 'Unknown', desc: '' };
     if (contract.type === 'BANDIT') return { title: 'Bandit Patrol', desc: `Haydutlara karsi ${contract.requiredCount || 1} savas kazan.` };
     if (contract.type === 'DELIVER') return { title: 'Food Caravan', desc: `${contract.requiredAmount || contract.requiredCount || 1} erzak teslim et.` };
+    if (contract.type === 'PRODUCTION_CARAVAN') return {title:contract.title||'Üretim Kervanı',desc:contract.desc||'Gerçek ticaret rotasında ürün taşı.'};
+    if (contract.type === 'INTERCITY_TRADE') return {title:contract.title||'Ticaret Heyeti',desc:contract.desc||'İki şehir arasındaki ikmali tamamla.'};
+    if (contract.type === 'REGIONAL_RECOVERY') return {title:contract.title||'Bölgesel İyileşme',desc:contract.desc||'Şehirlerin ilişkisini güçlendir.'};
+    if (contract.type === 'REGIONAL_AID') return {title:contract.title||'Komşu Şehre Yardım',desc:contract.desc||'Gerçek şehre yardım et.'};
+    if (contract.type === 'DISPUTE_ACCORD') return {title:contract.title||'Şehir Uzlaşması',desc:contract.desc||'Üç aşamalı görevi tamamla.'};
+    if (contract.type === 'DISPUTE_REMEDY') return {title:contract.title||'Anlaşmazlık Sonrası',desc:contract.desc||'Şehir sorununa çözüm getir.'};
+    if (contract.type === 'CHARACTER_COMMISSION') return {title:contract.title||'Kişisel Görev',desc:contract.desc||'Karakterin talebini yerine getir.'};
+    if (contract.type === 'CIVIC_FOLLOWUP') return {title:contract.title||'Meclis Dilekçesi',desc:contract.desc||'Önceki günkü kararı takip et.'};
+    if (contract.type === 'DISPATCH') return {title:contract.title||'Vilayet Yazışması',desc:contract.desc||'İki vilayete sırayla git, geri dön.'};
+    if (contract.type === 'COURIER') return {title:contract.title||'Mühürlü Ferman',desc:contract.desc||'Gerçek hedef şehre ulaş.'};
+    if (contract.type === 'RELIEF') return {title:contract.title||'Halka Erzak Yardımı',desc:contract.desc||'Hedef şehir pazarına buğday teslim et.'};
     if (contract.type === 'DEFEND') return { title: contract.title || 'Defend City', desc: contract.desc || `Sehri savun (${contract.requiredCount || 1} savas).` };
     if (contract.type === 'ESCORT') return { title: contract.title || 'Escort Caravan', desc: contract.desc || `Kervani ${contract.cityId || 'A'} -> ${contract.targetCityId || 'B'} koru.` };
     if (contract.type === 'ASSASSINATE') return { title: contract.title || 'Eliminate Target', desc: contract.desc || 'Bandit liderini ortadan kaldir.' };

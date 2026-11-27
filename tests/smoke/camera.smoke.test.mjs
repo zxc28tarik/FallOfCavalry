@@ -43,7 +43,19 @@ it('camera shake decays and offsets reduce', () => {
   const laterOffset = Math.hypot(cam.shakeOffsetX, cam.shakeOffsetY);
 
   assert.ok(cam.shakeTime >= 0);
-  assert.ok(laterOffset <= firstOffset || cam.shakeTime === 0);
+  // The camera intentionally jitters stochastically: two random samples of
+  // shake offset are NOT guaranteed to decrease monotonically. Verify the
+  // mathematically decreasing falloff envelope instead of lucky random draws.
+  const firstEnvelope = 10 * (1 - ((0.016 / 0.18) ** 4));
+  const laterProgress = 1 - (cam.shakeTime / cam.shakeDuration);
+  const laterEnvelope = 10 * (1 - (laterProgress ** 4));
+  assert.ok(firstOffset <= (firstEnvelope * 1.3 * Math.SQRT2) + 1e-9);
+  assert.ok(laterOffset <= (laterEnvelope * 1.3 * Math.SQRT2) + 1e-9);
+  assert.ok(laterEnvelope < firstEnvelope);
+  updateCamera(cam, 0.03, { SHAKE_FALLOFF: 4 });
+  assert.equal(cam.shakeTime, 0);
+  assert.equal(cam.shakeOffsetX, 0);
+  assert.equal(cam.shakeOffsetY, 0);
 });
 
 it('applyCameraTransform uses ctx methods without throwing', () => {

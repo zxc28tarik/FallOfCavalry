@@ -57,6 +57,21 @@ jobs:
       - name: Play browser from menu into entire world
         run: npm run test:browser:world
 
+      - name: Compare independent Chrome graphics backends on the full game world
+        run: node tools/browser-world-backend-compare.mjs --url http://127.0.0.1:4173 --seed 1337
+
+      - name: Diagnose cold-to-warm real world simulation and browser frame work
+        run: node tools/browser-world-warmup-profile.mjs --url http://127.0.0.1:4173 --seed 1337
+
+      - name: Trace authentic world-party creation and removal per map tick
+        run: node tools/browser-world-party-lifecycle-profile.mjs --url http://127.0.0.1:4173 --seed 1337
+
+      - name: Audit original world-party spawn geography against actual player and cities
+        run: node tools/browser-world-geography-profile.mjs --url http://127.0.0.1:4173 --seed 1337
+
+      - name: Test native player movement across 100+ real world tiles
+        run: node tools/browser-world-real-travel-v147.mjs --url http://127.0.0.1:4173 --seed 1337
+
       - name: Upload browser report and screenshots
         if: always()
         uses: actions/upload-artifact@v4

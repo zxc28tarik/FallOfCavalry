@@ -13,6 +13,23 @@ import {
   serializeAllSettlementCityStates,
 } from '../systems/city-state.js';
 import { ensureModeManager } from '../core/ModeManager.js';
+import { createWorldCharacterSave, restoreWorldCharacterSave } from '../systems/world-characters.js';
+import { getTrustedCharacterDefinitions } from '../systems/character-definitions.js';
+import { normalizeCharacterOrganizationState } from '../systems/character-organization.js';
+import {
+  normalizeCharacterQuestBindings, reactivateRestoredQuestBindings,
+} from '../systems/character-quest-assignments.js';
+import { captureQuestSnapshot, restoreQuestSnapshot } from '../systems/quest-snapshot.js';
+import { captureQuestEventLedger, restoreQuestEventLedger } from '../systems/quest-event-ledger.js';
+import { restoreInSessionQuestObjectives } from '../systems/quest-event-matcher.js';
+import {
+  outstandingEscortCargoForSave, resetCargoDispositionJournal,
+} from '../systems/quest-escort-cargo.js';
+import { resetMarketMovementJournal } from '../systems/market-cargo-report.js';
+import { snapshotMarketsWithPendingEscorts } from '../systems/market-stock-bridge.js';
+import {
+  restoreAuthorizedCharacterSocialState, retainPendingCharacterSocialSnapshot,
+} from '../systems/character-social-authority.js';
 
 const FORBIDDEN_MAP_SAVE_KEYS = new Set([
   'mapData',
@@ -57,6 +74,39 @@ function cloneWhitelistedSaveArray(value) {
     ? value.map((entry) => cloneWhitelistedSaveValue(entry)).filter((entry) => entry !== undefined)
     : [];
 }
+
+// V1.46: preserve parked party identity and road-leg itinerary across an
+// explicit campaign save, but do not trust unverified saved waypoint arrays.
+function storeWorldParty(party) {
+  return {
+    id: party.id,
+    factionId: party.factionId,
+    kind: party.kind,
+    x: Number.isFinite(party.x) ? party.x : 0,
+    y: Number.isFinite(party.y) ? party.y : 0,
+    targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
+    targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
+    speed: Number.isFinite(party.speed) ? party.speed : 1,
+    alive: party.alive !== false,
+    homeCityId: party.homeCityId ?? null,
+    routeId: typeof party.routeId === 'string' ? party.routeId : null,
+    currentCityId: party.currentCityId ?? null,
+    previousCityId: party.previousCityId ?? null,
+    completedRoadLegs: Math.max(0, Math.floor(Number(party.completedRoadLegs) || 0)),
+  };
+}
+function restoreWorldParty(party) {
+  // Save-supplied road paths are NOT an authority. The real road registry
+  // reconstructs the next leg at the current coordinate when resuming.
+  return {
+    ...storeWorldParty(party), path: null, pathIndex: 0,
+    // A loaded hostile patrol should not start a battle before the player
+    // regains control of the saved city, quest and market interface.
+    regionEntryGraceSeconds:
+      party?.kind==='patrol'||party?.kind==='bandit'?6:0,
+  };
+}
+const validRegionPoint=p=>Number.isFinite(p?.x)&&Number.isFinite(p?.y);
 
 export class SaveManager {
   constructor(gameState) {
@@ -283,6 +333,10 @@ Esc close`,
     }));
 
     const settlements = this.state?.map?.settlements || [];
+    const compiledDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements,
+    });
     this.game?.ensureInventoryModel?.();
     const itemCatalog = this.game?.itemCatalog || [];
     const inventory = {
@@ -304,9 +358,19 @@ Esc close`,
         offers: Array.isArray(s.recruit?.offers) ? s.recruit.offers : [],
       }));
 
-    const enemyParties = this.game?.enemyParties || [];
-    const worldAi = this.game?.worldAi;
-    const lastEncounterEndTimeByEnemyId = this.game?.lastEncounterEndTimeByEnemyId || {};
+    // WorldManager owns these collections. Main game's legacy top-level
+    // aliases may be absent; reading them loses every AI party on save.
+    const enemyParties = this.game?.worldManager?.enemyParties
+      || this.game?.enemyParties || [];
+    const worldAi = this.game?.worldManager?.worldAi || this.game?.worldAi;
+    // Escort manifests and unclaimed bandit theft evidence are process-only.
+    // Snapshot-restoring their typed units to the proven origin prevents a
+    // load from erasing escrow OR turning a JSON bandit into loot authority.
+    // Never touch the running-world settlement or market here.
+    const pendingEscortGoods = outstandingEscortCargoForSave(worldAi?.parties || []);
+    const lastEncounterEndTimeByEnemyId =
+      this.game?.worldManager?.lastEncounterEndTimeByEnemyId
+      || this.game?.lastEncounterEndTimeByEnemyId || {};
     const buildingStateFromWorld = this.game?.worldManager?.syncBuildingStateToMap?.() || null;
     const buildingStateFromMap = this.state?.map?.buildingState;
     const buildingState = normalizeBuildingState(buildingStateFromWorld || buildingStateFromMap);
@@ -340,9 +404,67 @@ Esc close`,
           renown: Number.isFinite(playerParty?.renown) ? playerParty.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0),
           starveDays: Number.isFinite(playerParty?.starveDays) ? playerParty.starveDays : 0,
           contracts: Array.isArray(playerParty?.contracts) ? playerParty.contracts : [],
+          completedProductionCaravans: Array.isArray(playerParty?.completedProductionCaravans)
+            ? playerParty.completedProductionCaravans.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-production-')).slice(-128) : [],
+          regionalCooperation: Array.isArray(playerParty?.regionalCooperation)
+            ? playerParty.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
+              &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
+              &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+              &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [],
+          completedIntercityTrade: Array.isArray(playerParty?.completedIntercityTrade)
+            ? playerParty.completedIntercityTrade.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-intercity-')).slice(-128) : [],
+          regionalAidOutcomes: Array.isArray(playerParty?.regionalAidOutcomes)
+            ? playerParty.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
+              &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
+              &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+              &&['food','security'].includes(x.kind)).slice(-64) : [],
+          completedRegionalRecovery: Array.isArray(playerParty?.completedRegionalRecovery)
+            ? playerParty.completedRegionalRecovery.filter(x=>typeof x==='string'
+              &&x.startsWith('ct-regional-recovery-')).slice(-128) : [],
+          completedRegionalAid: Array.isArray(playerParty?.completedRegionalAid)
+            ? playerParty.completedRegionalAid.filter(x=>typeof x==='string'&&x.startsWith('ct-regional-')).slice(-128) : [],
+          accordLegacies: Array.isArray(playerParty?.accordLegacies)
+            ? playerParty.accordLegacies.filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('ct-accord-')
+              &&typeof x.cityId==='string'&&Number.isSafeInteger(x.day)
+              &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [],
+          completedDisputeAccords: Array.isArray(playerParty?.completedDisputeAccords)
+            ? playerParty.completedDisputeAccords.filter(x=>typeof x==='string'&&x.startsWith('ct-accord-')).slice(-128) : [],
+          completedDisputeRemedies: Array.isArray(playerParty?.completedDisputeRemedies)
+            ? playerParty.completedDisputeRemedies.filter(x=>typeof x==='string'&&x.startsWith('ct-dispute-')).slice(-128) : [],
           factionId: playerParty?.factionId || CONST.FACTION.ID.PLAYER,
         },
         roster,
+        worldCharacters: createWorldCharacterSave(this.state?.worldCharacters, {
+          seed: this.state?.seed,
+          settlements,
+          authoredCharacters: compiledDefinitions.accepted ? compiledDefinitions.characters : [],
+        }),
+        characterOrganization: normalizeCharacterOrganizationState(this.state?.characterOrganization, {
+          roster: this.state?.worldCharacters,
+          settlements: this.state?.map?.settlements || [],
+        }),
+        characterQuestBindings: normalizeCharacterQuestBindings(this.state?.characterQuestBindings, {
+          roster: this.state?.worldCharacters,
+          settlements,
+        }),
+        questSnapshot: captureQuestSnapshot(this.game?.questManager),
+        questEventLedger: captureQuestEventLedger(this.state?.questEventLedger),
+        characterSocial: restoreAuthorizedCharacterSocialState(
+          this.state?.characterSocial, this.state?.characterSocialPending, {
+            roster: this.state?.worldCharacters,
+            settlements: this.state?.map?.settlements || [],
+            catalog: this.state?.characterSocialAuthority,
+          },
+        ),
+        characterSocialPending: retainPendingCharacterSocialSnapshot(
+          this.state?.characterSocial, this.state?.characterSocialPending, {
+            roster: this.state?.worldCharacters,
+            settlements: this.state?.map?.settlements || [],
+            catalog: this.state?.characterSocialAuthority,
+          },
+        ),
         enemies: enemyParties.map((e) => ({
           id: e.id,
           x: Number.isFinite(e.x) ? e.x : 0,
@@ -357,30 +479,58 @@ Esc close`,
         enemyCooldowns: lastEncounterEndTimeByEnemyId,
         worldAi: {
           lastRespawnDay: Number.isFinite(worldAi?.lastRespawnDay) ? worldAi.lastRespawnDay : 0,
-          parties: Array.isArray(worldAi?.parties) ? worldAi.parties.map((party) => ({
-            id: party.id,
-            factionId: party.factionId,
-            kind: party.kind,
-            x: Number.isFinite(party.x) ? party.x : 0,
-            y: Number.isFinite(party.y) ? party.y : 0,
-            targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
-            targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
-            speed: Number.isFinite(party.speed) ? party.speed : 1,
-            alive: party.alive !== false,
-            homeCityId: party.homeCityId || null,
-          })) : [],
+          lastVisibleRespawnDay: Number.isFinite(worldAi?.lastVisibleRespawnDay)
+            ? worldAi.lastVisibleRespawnDay : null,
+          // Escort proof and source-linked convoy state are PROCESS-LOCAL.
+          // Always restart escort from a real origin after a load.
+          parties: Array.isArray(worldAi?.parties) ? worldAi.parties
+            .filter(party => !party?.escortQuestId
+              && !String(party?.id || '').startsWith('quest-escort-'))
+            .map(storeWorldParty) : [],
+          // Offscreen parties are parked, not defeated. No new entitlement,
+          // quest credit, or route identity is created by saving them.
+          dormantParties: Array.isArray(worldAi?.dormantParties)
+            ? worldAi.dormantParties.filter(party => party?.alive !== false
+              && !party?.escortQuestId && !String(party?.id || '').startsWith('quest-escort-'))
+              .map(storeWorldParty) : [],
+          regionAnchor: validRegionPoint(worldAi?.regionAnchor)
+            ? { x: worldAi.regionAnchor.x, y: worldAi.regionAnchor.y } : null,
+          regionHistory: Array.isArray(worldAi?.regionHistory)
+            ? worldAi.regionHistory.filter(validRegionPoint).slice(-128)
+              .map(p=>({x:p.x,y:p.y,
+                lastDay:Math.max(1,Math.floor(Number(p.lastDay)||1))})) : [],
         },
         settlementsRecruit,
-        settlementsMarkets: settlements.filter((st) => st?.id).map((st) => ({
-          settlementId: st.id,
-          marketStock: Array.isArray(st.marketStock) ? st.marketStock : [],
-          priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
+        settlementsMarkets: settlements.filter((st) => st?.id != null).map((st) => {
+          const marketStock = Array.isArray(st.marketStock)
+            ? st.marketStock.map(row => ({ id: row.id, qty: row.qty })) : [];
+          const pending = pendingEscortGoods.get(String(st.id));
+          if (pending) for (const [id, qty] of pending) {
+            const row = marketStock.find(entry => entry.id === id);
+            if (row && Number.isSafeInteger(row.qty) && row.qty >= 0) row.qty += qty;
+            else if (!row) marketStock.push({ id, qty });
+          }
+          return {
+            settlementId: st.id,
+            marketStock,
+            priceMultiplier: st.priceMultiplier && typeof st.priceMultiplier === 'object' ? st.priceMultiplier : {},
+          };
+        }),
+        // Only persist cities with real player-caused civic changes. An 881-city
+        // full snapshot would exceed some browsers' quick-save storage limits.
+        settlementsCivic: settlements.filter(st=>st?.id!=null
+          && (st.civicDirty===true || st.civicDecision!=null)).map(st=>({
+          settlementId:st.id,
+          security:Math.max(0,Math.min(100,Math.floor(Number(st.security??50)))),
+          civicDecision:st.civicDecision&&Number.isFinite(Number(st.civicDecision.day))
+            ? {day:Math.floor(Number(st.civicDecision.day)),id:String(st.civicDecision.id||'')} : null,
         })),
         settlementsOwners: settlements.filter((st) => st?.id).map((st) => ({
           settlementId: st.id,
           ownerFactionId: st.ownerFactionId || null,
         })),
-        markets: this.state?.markets && typeof this.state.markets === 'object' ? this.state.markets : {},
+        markets: snapshotMarketsWithPendingEscorts(
+          this.state?.markets, settlements, pendingEscortGoods),
         supplies: this.state?.supplies && typeof this.state.supplies === 'object' ? this.state.supplies : { food: 30 },
         camp: this.state?.camp && typeof this.state.camp === 'object' ? this.state.camp : { active: false, watch: 'med' },
         tutorial: {
@@ -408,6 +558,11 @@ Esc close`,
     const game = payload?.game || {};
     const playerParty = this.game?.playerParty;
     if (!this.state || !playerParty) return false;
+    // The session observation journal is NOT a persisted game receipt.
+    // Never carry pre-load events into a newly restored campaign state.
+    resetMarketMovementJournal();
+    resetCargoDispositionJournal();
+    this.game?.cargoMarketReportPanel?.invalidate?.();
 
     this.state.day = Number.isFinite(game.day) ? game.day : 1;
     this.state.paused = Boolean(game.paused);
@@ -419,6 +574,43 @@ Esc close`,
       y: Number.isFinite(game?.camera?.y) ? game.camera.y : 0,
       zoom: Math.max(minZoom, Math.min(maxZoom, savedZoom)),
     };
+
+    // Preserve real generated NPCs; legacy saves intentionally have an empty NPC roster.
+    // Never fabricate or copy a player character into this collection during load.
+    const compiledDefinitions = getTrustedCharacterDefinitions({
+      manifest: this.state?.characterDefinitionAuthority,
+      settlements: this.state?.map?.settlements || [],
+    });
+    this.state.characterDefinitionDiagnostics = compiledDefinitions.diagnostics;
+    this.state.worldCharacters = restoreWorldCharacterSave(game.worldCharacters, {
+      settlements: this.state?.map?.settlements || [],
+      authoredCharacters: compiledDefinitions.accepted ? compiledDefinitions.characters : [],
+    });
+    this.state.characterOrganization = normalizeCharacterOrganizationState(game.characterOrganization, {
+      roster: this.state.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+    });
+    // Live quest bindings remain SUSPENDED until V1.14 reconstructs an exact
+    // active quest from current trusted templates and actual world targets.
+    this.state.questEventLedger = restoreQuestEventLedger(game.questEventLedger);
+    this.state.characterQuestBindings = normalizeCharacterQuestBindings(
+      game.characterQuestBindings, {
+        roster: this.state.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+        forLoad: true,
+      },
+    );
+    const socialOptions = {
+      roster: this.state.worldCharacters,
+      settlements: this.state?.map?.settlements || [],
+      catalog: this.state?.characterSocialAuthority,
+    };
+    this.state.characterSocial = restoreAuthorizedCharacterSocialState(
+      game.characterSocial, game.characterSocialPending, socialOptions,
+    );
+    this.state.characterSocialPending = retainPendingCharacterSocialSnapshot(
+      game.characterSocial, game.characterSocialPending, socialOptions,
+    );
 
     const p = game.playerParty || {};
     playerParty.x = Number.isFinite(p.x) ? p.x : playerParty.x;
@@ -435,6 +627,35 @@ Esc close`,
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : 0;
     playerParty.starveDays = Number.isFinite(p.starveDays) ? p.starveDays : 0;
     playerParty.contracts = Array.isArray(p.contracts) ? p.contracts : [];
+    playerParty.completedProductionCaravans = Array.isArray(p.completedProductionCaravans)
+      ? p.completedProductionCaravans.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-production-')).slice(-128) : [];
+    playerParty.regionalCooperation = Array.isArray(p.regionalCooperation)
+      ? p.regionalCooperation.filter(x=>x&&typeof x.sourceAidId==='string'
+        &&typeof x.sourceRecoveryId==='string'&&typeof x.sourceCityId==='string'
+        &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+        &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [];
+    playerParty.completedIntercityTrade = Array.isArray(p.completedIntercityTrade)
+      ? p.completedIntercityTrade.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-intercity-')).slice(-128) : [];
+    playerParty.regionalAidOutcomes = Array.isArray(p.regionalAidOutcomes)
+      ? p.regionalAidOutcomes.filter(x=>x&&typeof x.id==='string'
+        &&x.id.startsWith('ct-regional-')&&typeof x.sourceCityId==='string'
+        &&typeof x.targetCityId==='string'&&Number.isSafeInteger(x.day)
+        &&['food','security'].includes(x.kind)).slice(-64) : [];
+    playerParty.completedRegionalRecovery = Array.isArray(p.completedRegionalRecovery)
+      ? p.completedRegionalRecovery.filter(x=>typeof x==='string'
+        &&x.startsWith('ct-regional-recovery-')).slice(-128) : [];
+    playerParty.completedRegionalAid = Array.isArray(p.completedRegionalAid)
+      ? p.completedRegionalAid.filter(x=>typeof x==='string'&&x.startsWith('ct-regional-')).slice(-128) : [];
+    playerParty.accordLegacies = Array.isArray(p.accordLegacies)
+      ? p.accordLegacies.filter(x=>x&&typeof x.id==='string'&&x.id.startsWith('ct-accord-')
+        &&typeof x.cityId==='string'&&Number.isSafeInteger(x.day)
+        &&Array.isArray(x.characterIds)&&x.characterIds.length===2).slice(-64) : [];
+    playerParty.completedDisputeAccords = Array.isArray(p.completedDisputeAccords)
+      ? p.completedDisputeAccords.filter(x=>typeof x==='string'&&x.startsWith('ct-accord-')).slice(-128) : [];
+    playerParty.completedDisputeRemedies = Array.isArray(p.completedDisputeRemedies)
+      ? p.completedDisputeRemedies.filter(x=>typeof x==='string'&&x.startsWith('ct-dispute-')).slice(-128) : [];
     playerParty.factionId = typeof p.factionId === 'string' ? p.factionId : CONST.FACTION.ID.PLAYER;
     playerParty.renown = Number.isFinite(p.renown) ? p.renown : Number(CONST.GAME.STARTING_RENOWN ?? 0);
 
@@ -493,18 +714,23 @@ Esc close`,
     const savedWorldAi = game.worldAi && typeof game.worldAi === 'object' ? game.worldAi : {};
     this.game.worldManager.worldAi = {
       lastRespawnDay: Number.isFinite(savedWorldAi.lastRespawnDay) ? savedWorldAi.lastRespawnDay : 0,
-      parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties.map((party) => ({
-        id: party.id,
-        factionId: party.factionId,
-        kind: party.kind,
-        x: Number.isFinite(party.x) ? party.x : 0,
-        y: Number.isFinite(party.y) ? party.y : 0,
-        targetX: Number.isFinite(party.targetX) ? party.targetX : 0,
-        targetY: Number.isFinite(party.targetY) ? party.targetY : 0,
-        speed: Number.isFinite(party.speed) ? party.speed : 1,
-        alive: party.alive !== false,
-        homeCityId: party.homeCityId || null,
-      })) : [],
+      lastVisibleRespawnDay: Number.isFinite(savedWorldAi.lastVisibleRespawnDay)
+        ? savedWorldAi.lastVisibleRespawnDay : null,
+      parties: Array.isArray(savedWorldAi.parties) ? savedWorldAi.parties
+        .filter(party => !String(party?.id || '').startsWith('quest-escort-')
+          && !party?.escortQuestId)
+        .map(restoreWorldParty) : [],
+      dormantParties: Array.isArray(savedWorldAi.dormantParties)
+        ? savedWorldAi.dormantParties.filter(party=>party?.alive !== false
+          && !party?.escortQuestId
+          && !String(party?.id || '').startsWith('quest-escort-'))
+          .map(restoreWorldParty) : [],
+      regionAnchor: validRegionPoint(savedWorldAi.regionAnchor)
+        ? { x: savedWorldAi.regionAnchor.x, y: savedWorldAi.regionAnchor.y } : null,
+      regionHistory: Array.isArray(savedWorldAi.regionHistory)
+        ? savedWorldAi.regionHistory.filter(validRegionPoint).slice(-128)
+          .map(p=>({x:p.x,y:p.y,
+            lastDay:Math.max(1,Math.floor(Number(p.lastDay)||1))})) : [],
     };
     this.game.worldManager.worldEncounterPartyByEnemyId = {};
     this.state.worldAi = this.game.worldManager.worldAi;
@@ -534,6 +760,20 @@ Esc close`,
       const owner = ownerBySettlement.get(s.id);
       if (!owner) return;
       s.ownerFactionId = typeof owner.ownerFactionId === 'string' ? owner.ownerFactionId : s.ownerFactionId;
+    });
+
+    // Real city security and player civic choices survive save/load.
+    // Older saves without this ledger retain generated world defaults.
+    const civicRows=Array.isArray(game.settlementsCivic)?game.settlementsCivic:[];
+    const civicByCity=new Map(civicRows.filter(row=>row?.settlementId!=null)
+      .map(row=>[String(row.settlementId),row]));
+    settlements.forEach(city=>{
+      const row=civicByCity.get(String(city.id));
+      if(!row)return;
+      city.civicDirty=true;
+      if(Number.isFinite(row.security))city.security=Math.max(0,Math.min(100,Math.floor(row.security)));
+      if(row.civicDecision&&Number.isFinite(Number(row.civicDecision.day)))
+        city.civicDecision={day:Math.floor(Number(row.civicDecision.day)),id:String(row.civicDecision.id||'')};
     });
 
     this.state.markets = game.markets && typeof game.markets === 'object' ? game.markets : {};
@@ -581,6 +821,15 @@ Esc close`,
     this.game?.ensureFactionState?.();
     assignInitialSettlementOwners(this.state, { playerFactionId: CONST.FACTION.ID.PLAYER });
     applySavedCityStateCollection(settlements, game.cityState);
+    // V1.74: physical workshop assignments are only authoritative AFTER the
+    // saved City V2 parcels have been restored. The earlier roster-normalizer
+    // runs before cityState hydration and cannot verify newly built workshops.
+    this.state.characterOrganization = normalizeCharacterOrganizationState(
+      game.characterOrganization, {
+        roster: this.state.worldCharacters,
+        settlements: this.state?.map?.settlements || [],
+      },
+    );
     suppliesSystem.ensureSuppliesState(this.state);
     campSystem.ensureCampState(this.state);
     PoiSystem.ensurePoiState(this.state);
@@ -596,6 +845,32 @@ Esc close`,
       });
     }
 
+    // Rehydrate only quests reconstructed from canonical QUEST_DEFS and
+    // actual target registries. Saved objectives/claimed outcomes remain inert.
+    // Older saves with no snapshot retain suspended bindings safely.
+    this.state.questRestoreReport = restoreQuestSnapshot(
+      this.game?.questManager, game.questSnapshot, {
+        currentDay: Math.max(0, Math.floor(Number(this.state.day) || 0)),
+        settlements: this.state?.map?.settlements || [],
+        tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.()
+          || this.state?.tradeRoutes || [],
+        commanders: this.state?.commanders || [],
+        regionIds: Array.isArray(this.state?.regionState?.regions)
+          ? this.state.regionState.regions.map((r) => r?.id).filter(Boolean) : [],
+      },
+    );
+    this.state.questRestoreReport.pendingEventHistory = this.state.questEventLedger.pending.length;
+    this.state.questRestoreReport.creditedEvents = 0; // A saved event is NOT authority.
+    this.state.questRestoreReport.restoredBindings = reactivateRestoredQuestBindings({
+      bindings: this.state.characterQuestBindings,
+      savedBindings: game.characterQuestBindings,
+      questManager: this.game?.questManager,
+      roster: this.state.worldCharacters,
+      characterOrganization: this.state.characterOrganization,
+      settlements: this.state?.map?.settlements || [],
+      day: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+    });
+
     const loadedMode = typeof game.mode === 'string' ? game.mode : 'map';
     const safeModes = new Set(['map', 'city']);
     if (!safeModes.has(loadedMode)) {
@@ -605,12 +880,37 @@ Esc close`,
       ensureModeManager(this.state)?.switchTo(loadedMode);
     }
 
+    // Clear a stale completion popup from the campaign being replaced.
+    // If a real in-session receipt can be revalidated below, the normal
+    // QuestManager prompt will be generated again from canonical data.
+    this.game?.questCompletionOverlay?.hide?.();
+    this.game?.questEscortHud?.hide?.();
+    const overlays = this.state?.modeManager?.overlayStack;
+    if (Array.isArray(overlays)) {
+      this.state.modeManager.overlayStack = overlays
+        .filter(panel => panel?.name !== 'questCompletion');
+    }
+    // Only receipts previously witnessed in THIS running JS process may
+    // revalidate a saved claim. They are absent in a fresh browser session.
+    // Any completion UI is regenerated after the safe map/city transition.
+    const sessionVerified = restoreInSessionQuestObjectives({
+      questManager: this.game?.questManager,
+      currentDay: Math.max(0, Math.floor(Number(this.state.day) || 0)),
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+    });
+    this.state.questRestoreReport.sessionVerified = sessionVerified.length;
+    this.state.questRestoreReport.unverifiedClaims =
+      this.game?.questManager?.activeQuests?.reduce(
+        (sum, q) => sum + (q.pendingObjectiveClaims?.length || 0), 0,
+      ) || 0;
+
     this.state.encounter = null;
     this.state.battle = null;
     this.state.accounting = null;
     this.state.lastSaveMeta = { slot, at: Date.now() };
     this.game?.setupSettingsUI?.();
     this.game?.updateTransientUIState?.();
+    this.game?.questRecoveryPanel?.refresh?.({ autoOpen: true });
     return true;
   }
 }

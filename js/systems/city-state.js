@@ -11,6 +11,7 @@ import {
   listInfrastructureBuildingIds,
 } from '../data/city-building-catalog.js';
 import { getCitySceneDef, getDefaultCitySceneIdForFaction } from '../data/city-scene-defs.js';
+import { getKethudaConstructionQuote } from './city-infrastructure-benefits.js';
 
 export const CITY_PARCEL_STATE = Object.freeze({
   EMPTY: 'empty',
@@ -309,13 +310,28 @@ function cloneParcel(parcel) {
 
 function cloneInfrastructure(infrastructure) {
   const source = asObject(infrastructure) || {};
+  // V1.68: only canonical IDs may survive a save migration; unknown projects
+  // must never grant infrastructure capacity or discounts.
+  const approved = new Set(listInfrastructureBuildingIds());
+  const installed = dedupeStrings(source.installedBuildingIds || [])
+    .filter((id) => approved.has(id));
+  const improvements = asObject(source.improvementLevels) || {};
   return {
     managerLabel: String(source.managerLabel || 'Sehir Kethudasi'),
     visibleInScene: false,
     population: Math.max(0, Number(source.population ?? 0)),
     needScore: Math.max(0, Number(source.needScore ?? 0)),
-    installedBuildingIds: dedupeStrings(source.installedBuildingIds || []),
-    availableBuildingIds: dedupeStrings(source.availableBuildingIds || []),
+    installedBuildingIds: installed,
+    availableBuildingIds: [...approved],
+    // Sparse-delta: 881 real settlements must not serialize default 0 fields.
+    // The full campaign already approaches the browser's per-origin quota.
+    ...(installed.some((id) => Number.isSafeInteger(improvements[id]) && improvements[id] > 0)
+      ? { improvementLevels: Object.fromEntries(installed
+        .filter((id) => Number.isSafeInteger(improvements[id]) && improvements[id] > 0)
+        .map((id) => [id, Math.min(2, improvements[id])])) }
+      : {}),
+    ...(Number.isSafeInteger(source.lastWorkDay) && source.lastWorkDay > 0
+      ? { lastWorkDay: source.lastWorkDay } : {}),
     notes: Array.isArray(source.notes) ? source.notes.map((entry) => String(entry)) : [],
   };
 }
@@ -728,7 +744,9 @@ export function constructBuildingOnParcel(settlement, parcelId, buildingId, {
   if (!listBuildOptionsForParcel(settlement, parcelId).some((option) => option.id === def.id)) {
     return { ok: false, message: 'Bu bina bu alana kurulamiyor.' };
   }
-  if (Number(availableGold) < Number(def.buildCostGold || 0)) {
+  const price = getKethudaConstructionQuote(settlement, def.id);
+  if (!price || !Number.isFinite(Number(availableGold))
+    || Number(availableGold) < price.cost) {
     return { ok: false, message: 'Altin yetersiz.' };
   }
 
@@ -755,7 +773,9 @@ export function constructBuildingOnParcel(settlement, parcelId, buildingId, {
   return {
     ok: true,
     message: `${getCityBuildingLabel(def.id)} kuruldu.`,
-    cost: Number(def.buildCostGold || 0),
+    cost: price.cost,
+    baseCost: price.baseCost,
+    kethudaDiscount: price.discount,
     buildingId: def.id,
   };
 }

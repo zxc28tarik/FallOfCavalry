@@ -1,4 +1,7 @@
 import * as CONST from '../constants.js';
+import { mirrorMarketStockChange } from './market-stock-bridge.js';
+import { observeMarketMovement } from './market-cargo-report.js';
+import { advanceCityMarketCycle } from './city-market-cycle.js';
 import { getStance } from './factions.js';
 import { getWarTradeTariffMultiplier } from './events.js';
 
@@ -134,6 +137,17 @@ export function getPrice(settlement, market, itemId, side = 'buy', options = nul
       price = Math.round(boosted) <= baseRounded ? (baseRounded + 1) : boosted;
     }
   }
+  // V1.60 local accord premium is applied only to successful wheat SALES.
+  // The city manager resolves eligibility from actual saved NPC relationships.
+  if(side==='sell'&&normalizedId==='wheat'){
+    const bonus=Math.max(0,Math.min(11,
+      Math.max(0,Math.min(8,Number(options?.accordTradeBonusPct)||0))
+      +Math.max(0,Math.min(3,Number(options?.regionalTradeBonusPct)||0))));
+    if(bonus>0){
+      const current=Math.max(1,Math.round(price));
+      price=Math.max(current+1,Math.round(price*(1+bonus/100)));
+    }
+  }
   return Math.max(1, Math.round(price));
 }
 
@@ -166,6 +180,12 @@ export function buy(party, market, settlement, itemId, qty, options) {
 
   party.gold -= total;
   market.stocks[normalizedId] = stock - amount;
+  mirrorMarketStockChange(settlement, market, normalizedId, stock, stock - amount);
+  observeMarketMovement({
+    kind: 'modern_buy', ledger: 'market', settlement, market,
+    itemId: normalizedId, before: stock, after: stock - amount,
+    day: Math.max(1, Math.floor(Number(options?.day) || 1)),
+  });
   const item = (CONST.TRADE_ITEMS || []).find((it) => it.id === normalizedId);
   const existing = party.inventory.items.find((it) => it.id === normalizedId);
   if (existing) existing.qty = Math.max(0, Math.floor(existing.qty || 0)) + amount;
@@ -202,7 +222,14 @@ export function sell(party, market, settlement, itemId, qty, options) {
   if (entry.qty <= 0) {
     party.inventory.items = party.inventory.items.filter((it) => (CONST.normalizeTradeGoodId?.(it.id) || it.id) !== normalizedId);
   }
-  market.stocks[normalizedId] = Math.max(0, Math.floor(market?.stocks?.[normalizedId] ?? 0)) + amount;
+  const stockBefore = Math.max(0, Math.floor(market?.stocks?.[normalizedId] ?? 0));
+  market.stocks[normalizedId] = stockBefore + amount;
+  mirrorMarketStockChange(settlement, market, normalizedId, stockBefore, stockBefore + amount);
+  observeMarketMovement({
+    kind: 'modern_sell', ledger: 'market', settlement, market,
+    itemId: normalizedId, before: stockBefore, after: stockBefore + amount,
+    day: Math.max(1, Math.floor(Number(options?.day) || 1)),
+  });
   const cfg = resolveMarketCfg(options);
   const momentumDelta = Number(cfg.MOMENTUM_PER_QTY) * amount;
   market.momentum[normalizedId] = clampMomentum(Number(market?.momentum?.[normalizedId] ?? 0) - momentumDelta, cfg);
@@ -242,8 +269,16 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
     const stockMax = Number(cfg.DRIFT_STOCK_STEP_RANGE?.[1] ?? 5);
     const stockStep = Math.floor(rng() * (stockMax - stockMin + 1)) + stockMin;
     const biomeBias = Number(biomeBiasMap[itemId] ?? 0);
-    const nextStock = Math.floor(Number(market.stocks[itemId] ?? 0) + stockStep + biomeBias);
+    const previousStock = market.stocks[itemId];
+    const nextStock = Math.floor(Number(previousStock ?? 0) + stockStep + biomeBias);
     market.stocks[itemId] = clamp(nextStock, Number(cfg.STOCK_FLOOR), tierStockCeil);
+    mirrorMarketStockChange(settlement, market, itemId,
+      previousStock, market.stocks[itemId]);
+    observeMarketMovement({
+      kind: 'day_drift', ledger: 'market', settlement, market,
+      itemId, before: previousStock, after: market.stocks[itemId],
+      day: Math.max(1, Math.floor(Number(ctx?.day) || 1)),
+    });
 
     const demandMin = Number(cfg.DRIFT_DEMAND_STEP_RANGE?.[0] ?? -0.08);
     const demandMax = Number(cfg.DRIFT_DEMAND_STEP_RANGE?.[1] ?? 0.10);
@@ -255,6 +290,11 @@ export function advanceMarketOneDay(settlement, market, ctx = {}) {
     const momentum = Number(market.momentum[itemId] ?? 0) * Number(cfg.MOMENTUM_DECAY);
     market.momentum[itemId] = clampMomentum(momentum, cfg);
   }
+
+  // V1.70: operate only real placed mills and bakeries on the real market
+  // ledger, then consume the population's existing food stocks. Keep the
+  // established daily market drift and all trade pricing behavior intact.
+  advanceCityMarketCycle(settlement, market, { day: Math.floor(day) });
 }
 
 export default {

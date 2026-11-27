@@ -4,6 +4,16 @@
  */
 
 import CityServicesUI from '../ui/city-services.js';
+import { applyCivicDecision } from '../systems/city-civic-decisions.js';
+import { applyCouncilReactions } from '../systems/city-civic-character-reactions.js';
+import { answerCharacterPetition } from '../systems/city-character-petitions.js';
+import { resolveCityDispute } from '../systems/city-character-disputes.js';
+import { appointCityWorkshopSteward, releaseCityWorkshopSteward } from '../systems/city-workshop-assignments.js';
+import { appendAccordLegacy, getAccordTradeBonus, getCityAccordLegacy } from '../systems/city-accord-legacy.js';
+import { recordRegionalAidOutcome } from '../systems/regional-aid-legacy.js';
+import {recordRegionalCooperation,getRegionalCooperation} from '../systems/regional-cooperation.js';
+import { changeNamedCharacterMetric } from '../systems/named-character-state.js';
+import { setWorldCharacterRelation, getSettlementCharacters } from '../systems/world-characters.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
 import * as tradeSystem from '../systems/trade.js';
 import { acceptContract, completeContract, emitContractEvent } from '../systems/contracts.js';
@@ -49,6 +59,7 @@ export class CityManager {
     const city = this.findCityById(cityId);
     if (!city) return false;
     city.security = Math.max(0, Math.min(100, Math.floor(Number(city.security ?? 50) + Number(amount || 0))));
+    city.civicDirty=true;
     return true;
   }
 
@@ -125,6 +136,12 @@ export class CityManager {
           day: this.state?.day,
           settlementKey: g.economyManager.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          regionalTradeBonusPct: getRegionalCooperation({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))})?.sellBonusPct||0,
+          accordTradeBonusPct: getAccordTradeBonus({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))}).bonusPct,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -142,7 +159,12 @@ export class CityManager {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) - Number(result?.spentGold ?? 0);
         }
         g.gameFlowManager.setLastEventLog(result?.message || 'İşlem tamamlandı.');
-        if (result?.ok) g.saveManager.runAutosave('trade');
+        if (result?.ok) {
+          emitContractEvent({type:'TRADE_GOOD_BOUGHT',
+            cityId:settlement.id,itemId:CONST.normalizeTradeGoodId?.(itemId)||itemId,
+            qty:result.qty},g.playerParty);
+          g.saveManager.runAutosave('trade');
+        }
       },
       onSell: (itemId, qty) => {
         const settlement = this.state?.city;
@@ -152,6 +174,12 @@ export class CityManager {
           day: this.state?.day,
           settlementKey: g.economyManager.getSettlementOpportunityKey(settlement),
           marketOpportunities: this.state?.marketOpportunities,
+          regionalTradeBonusPct: getRegionalCooperation({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))})?.sellBonusPct||0,
+          accordTradeBonusPct: getAccordTradeBonus({party:g.playerParty,
+            roster:this.state?.worldCharacters,cityId:settlement.id,
+            day:Math.max(1,Math.floor(Number(this.state?.day)||1))}).bonusPct,
           tuning: this.state?.tuning,
           factions: this.state?.factions,
           playerFactionId: 'player',
@@ -169,8 +197,13 @@ export class CityManager {
           this.state.dailyLedger.tradePL = Number(this.state.dailyLedger.tradePL ?? 0) + Number(result?.earnedGold ?? 0);
         }
         g.gameFlowManager.setLastEventLog(result?.message || 'İşlem tamamlandı.');
+        if (result?.ok) {
+          emitContractEvent({type:'TRADE_GOOD_SOLD',
+            cityId:settlement.id,itemId:CONST.normalizeTradeGoodId?.(itemId)||itemId,
+            qty:result.qty},g.playerParty);
+        }
         if (result?.ok && (CONST.normalizeTradeGoodId?.(itemId) || itemId) === 'wheat') {
-          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty, cityId: settlement.id }, g.playerParty);
+          emitContractEvent({ type: 'DELIVERED', itemId: 'food', qty: result.qty, cityId: settlement.id }, g.playerParty);
         }
         if (result?.ok) g.saveManager.runAutosave('trade');
       },
@@ -186,12 +219,174 @@ export class CityManager {
             active: true,
           };
         }
-        if (accepted) g.gameFlowManager.setLastEventLog('Contract accepted.');
+        if (accepted) {
+          g.gameFlowManager.setLastEventLog('Contract accepted.');
+          g.saveManager?.runAutosave?.('contract-accepted');
+        }
       },
       onCompleteContract: (contractId) => {
         const completed = completeContract(contractId, g.playerParty, {
           warState: this.state?.warState,
           factions: this.state?.factions,
+          onProductionCaravan: (contract) => {
+            // Real roads only. The existing route service applies persistent
+            // quality/damage updates without inventing a replacement route.
+            const improved=g.economyManager?.improveTradeRoute?.(contract.routeId,1);
+            if(!improved)return;
+            const city=(this.state?.map?.settlements||[]).find(x=>
+              String(x.id)===String(contract.targetCityId));
+            if(city){
+              city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+2)));
+              city.civicDirty=true;
+            }
+          },
+          onIntercityTrade: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(x=>String(x.id)===String(contract.targetCityId));
+            if(!city)return;
+            city.security=Math.min(100,Math.max(0,Math.floor(Number(city.security??50)+3)));
+            city.civicDirty=true;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const id of contract.linkedCharacters||[]){
+              const person=this.state?.worldCharacters?.characters?.find(p=>
+                p.id===id&&p.kind==='named'&&p.status==='alive');
+              if(person)changeNamedCharacterMetric(this.state.worldCharacters,id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Şehirler arası ticaret heyeti tamamlandı',
+              });
+            }
+          },
+          onRegionalCooperation: (contract) => {
+            recordRegionalCooperation({party:g.playerParty,contract,
+              roster:this.state?.worldCharacters,map:this.state?.map,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+          },
+          onRegionalRecovery: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(row=>String(row.id)===String(contract.cityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.recoverySecurityBonus??0))));
+            city.civicDirty=true;
+            // Follow-up rewards cooperation of real local named residents.
+            const residents=getSettlementCharacters(this.state?.worldCharacters,city.id)
+              .filter(p=>p.kind==='named'&&p.status==='alive')
+              .sort((a,b)=>a.id.localeCompare(b.id,'en')).slice(0,2);
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of residents)
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Bölgesel yardım takibi tamamlandı',
+              });
+          },
+          onRegionalAidOutcome: (contract) => {
+            recordRegionalAidOutcome({party:g.playerParty,contract,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+          },
+          onRegionalAid: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(row=>String(row.id)===String(contract.targetCityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.regionalSecurityBonus??0))));
+            city.civicDirty=true;
+            // Existing local named people remember assistance; never invent a
+            // beneficiary or alter an unrelated city's social state.
+            const residents=getSettlementCharacters(this.state?.worldCharacters,city.id)
+              .filter(p=>p.kind==='named'&&p.status==='alive')
+              .sort((a,b)=>a.id.localeCompare(b.id,'en')).slice(0,3);
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of residents){
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',value:Math.min(100,Number(person.satisfaction??50)+2),
+                day,reason:'Komşu şehir yardımı tamamlandı',
+              });
+            }
+          },
+          onDisputeAccord: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(c=>String(c.id)===String(contract.cityId));
+            if(!city)return;
+            const people=Array.isArray(contract.accordCharacters)
+              ? contract.accordCharacters.map(id=>(this.state?.worldCharacters?.characters||[])
+                .find(p=>p.id===id&&p.kind==='named'&&p.status==='alive'
+                  &&p.location?.settlementId===String(contract.cityId))) : [];
+            if(people.length!==2||people.some(p=>!p))return;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            for(const person of people){
+              changeNamedCharacterMetric(this.state.worldCharacters,person.id,{
+                metric:'satisfaction',
+                value:Math.min(100,Number(person.satisfaction??50)+4),
+                day,reason:'Şehir uzlaşma heyeti görevi tamamlandı',
+              });
+            }
+            const relation=(this.state?.worldCharacters?.relations||[])
+              .find(r=>[r.firstId,r.secondId].includes(people[0].id)
+                &&[r.firstId,r.secondId].includes(people[1].id));
+            setWorldCharacterRelation(this.state.worldCharacters,people[0].id,
+              people[1].id,Math.max(-100,Math.min(100,Number(relation?.value??0)+8)));
+            city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+4)));
+            city.civicDirty=true;
+            appendAccordLegacy({party:g.playerParty,contract,
+              day:Math.max(1,Math.floor(Number(this.state?.day)||1))});
+          },
+          onDisputeRemedy: (contract) => {
+            const city=(this.state?.map?.settlements||[])
+              .find(c=>String(c.id)===String(contract.cityId));
+            if(!city)return;
+            const bonus=Number(contract.disputeSecurityBonus??0);
+            city.security=Math.max(0,Math.min(100,Math.floor(Number(city.security??50)+bonus)));
+            city.civicDirty=true;
+            if(contract.disputeCause==='trade'||contract.disputeCause==='scarcity'){
+              if(!city.priceMultiplier||typeof city.priceMultiplier!=='object')city.priceMultiplier={};
+              const wheat=Number(city.priceMultiplier.wheat??1);
+              if(Number.isFinite(wheat))
+                city.priceMultiplier.wheat=Math.max(0.8,Math.min(1.3,Math.round((wheat-0.04)*100)/100));
+            }
+          },
+          onCharacterCommission: (contract) => {
+            const character=(this.state?.worldCharacters?.characters||[])
+              .find(p=>p.id===contract.characterId && p.kind==='named'
+                && p.status==='alive' && p.role===contract.characterRole);
+            if(!character)return;
+            const day=Math.max(1,Math.floor(Number(this.state?.day)||1));
+            changeNamedCharacterMetric(this.state.worldCharacters,character.id,{
+              metric:'satisfaction',
+              value:Math.min(100,Number(character.satisfaction??50)+4),day,
+              reason:'Kişisel görev tamamlandı: şehir hizmeti',
+            });
+          },
+          onCivicFollowup: (contract) => {
+            const city=(this.state?.map?.settlements||[]).find(row=>
+              String(row.id)===String(contract.cityId));
+            if(!city)return;
+            city.security=Math.max(0,Math.min(100,Math.floor(
+              Number(city.security??50)+Number(contract.civicSecurityBonus??0),
+            )));
+            city.civicDirty=true;
+          },
+          onCivicDispatch: (contract) => {
+            const cities=this.state?.map?.settlements||[];
+            const ids=new Set((contract.dispatchStops||[]).map(String));
+            ids.add(String(contract.cityId));
+            for(const city of cities){
+              if(!ids.has(String(city.id)))continue;
+              city.civicDirty=true;
+              city.security=Math.max(0,Math.min(100,Math.floor(
+                Number(city.security??50)+Number(contract.civicSecurityBonus??1),
+              )));
+            }
+          },
+          onCivicRelief: (contract) => {
+            const beneficiary=(this.state?.map?.settlements||[]).find(city=>
+              String(city.id)===String(contract.targetCityId));
+            if (beneficiary) {
+              beneficiary.civicDirty=true;
+              beneficiary.security=Math.max(0,Math.min(100,
+              Math.floor(Number(beneficiary.security??50)
+                + Number(contract.civicSecurityBonus??3))));
+            }
+          },
           onRelationBonus: (contract) => {
             const currentCityFactionId = this.state?.city?.ownerFactionId || this.state?.city?.owner || null;
             applyContractRelationBonus({
@@ -210,6 +405,7 @@ export class CityManager {
           if (extra > 0) g.playerParty.renown = Math.floor(Number(g.playerParty.renown ?? 0) + extra);
           const bonusText = bonus > 0 ? ` (+${bonus} war bonus)` : '';
           g.gameFlowManager.setLastEventLog(`Contract completed: +${completed.rewardGold}g, +${boosted} renown${bonusText}${extra > 0 ? ' (pilgrimage bonus)' : ''}`);
+          g.saveManager?.runAutosave?.('contract-completed');
         }
       },
       onDiplomacyAction: (summary) => {
@@ -226,9 +422,84 @@ export class CityManager {
         const ok = g.economyManager.healCurrentUnit();
         if (ok) g.saveManager.runAutosave('healing');
       },
+      onCityDispute: (choice) => {
+        const result=resolveCityDispute({
+          roster:this.state?.worldCharacters,cityId:this.state?.city?.id,
+          city:this.state?.city,
+          day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+          party:g.playerParty,choice,
+        });
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        if(result.ok)g.saveManager?.runAutosave?.('city-character-dispute');
+        return result;
+      },
+      onCharacterPetition: (characterId,decision) => {
+        const result=answerCharacterPetition({
+          roster:this.state?.worldCharacters,cityId:this.state?.city?.id,
+          characterId,day:Math.max(1,Math.floor(Number(this.state?.day)||1)),
+          party:g.playerParty,decision,
+        });
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        if(result.ok)g.saveManager?.runAutosave?.('character-petition');
+        return result;
+      },
+      onCivicDecision: (decisionId) => {
+        // Preview/reaction values must use the SAME pre-vote conditions.
+        const cityBefore={
+          security:this.state?.city?.security,
+          marketStock:this.state?.city?.marketStock,
+          priceMultiplier:this.state?.city?.priceMultiplier,
+        };
+        const result=applyCivicDecision({
+          city:this.state?.city,party:g.playerParty,roster:this.state?.worldCharacters,
+          day:this.state?.day,decisionId,
+        });
+        if(result.ok){
+          const activeDay=Math.max(1,Math.floor(Number(this.state?.day)||1));
+          const reactions=applyCouncilReactions({
+            roster:this.state?.worldCharacters,city:cityBefore,
+            legacy:getCityAccordLegacy({party:g.playerParty,roster:this.state?.worldCharacters,
+              cityId:this.state?.city?.id,day:activeDay}),
+            cityId:this.state?.city?.id,decisionId,day:activeDay,
+          });
+          result.characterReactions=reactions;
+          g.saveManager?.runAutosave?.('city-civic-decision');
+        }
+        g.gameFlowManager?.setLastEventLog?.(result.message);
+        return result;
+      },
       onConstruct: (result) => {
         g.gameFlowManager.setLastEventLog(result?.message || 'Insaat tamamlandi.');
         g.saveManager.runAutosave('city-build');
+      },
+      getQuestManager: () => g.questManager,
+      onWorkshopAssignment: (action, sourceId, characterId) => {
+        const values = {
+          city: this.state?.city,
+          party: g.playerParty,
+          roster: this.state?.worldCharacters,
+          organization: this.state?.characterOrganization,
+          sourceId,
+          characterId,
+          day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+        };
+        const outcome = action === 'appoint'
+          ? appointCityWorkshopSteward(values)
+          : action === 'release' ? releaseCityWorkshopSteward(values)
+            : { ok: false, message: 'Bilinmeyen atölye işlemi.' };
+        g.gameFlowManager?.setLastEventLog?.(outcome.message);
+        if (outcome.ok) g.saveManager?.runAutosave?.('workshop-steward-assignment');
+        return outcome;
+      },
+      onAssignQuest: (questId, characterId, reason) => {
+        const ok = g.gameFlowManager.assignWorldCharacterToQuest(questId, characterId, {
+          reason,
+        });
+        g.gameFlowManager.setLastEventLog(ok
+          ? 'Önemli karakter gerçek göreve atandı.'
+          : 'Görevlendirme reddedildi; karakter görevi veya hedef uyuşmuyor.');
+        if (ok) g.saveManager.runAutosave('character-quest-assignment');
+        return ok;
       },
       getFactionContext: (settlement) => g.diplomacyManager.getCityFactionContext(settlement),
       onClose: () => g.economyManager.exitCityServices(),

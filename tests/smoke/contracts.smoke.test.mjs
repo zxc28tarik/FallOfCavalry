@@ -33,7 +33,10 @@ describe('contracts', () => {
     setContractsRuntimeContext({ party, map, worldSeed: 777 });
 
     const peaceful = generateContractsForCity({ cityId: 'city-c', day: 3, seed: 777, map, factions, warState: { wars: [] } });
-    assert.equal(peaceful.length, 3, 'must produce 3 contracts in peace');
+    assert.equal(peaceful.length, 6, 'peaceful board should offer six distinct city jobs');
+    assert.ok(peaceful.some((c) => c.type === 'COURIER'), 'peace pool should include courier');
+    assert.ok(peaceful.some((c) => c.type === 'RELIEF'), 'peace pool should include relief');
+    assert.ok(peaceful.some((c) => c.type === 'DISPATCH'), 'peace pool should include ordered dispatch');
     assert.ok(peaceful.some((c) => c.type === 'ESCORT'), 'peace pool should include escort');
 
     const warRun = generateContractsForCity({ cityId: 'city-a', day: 3, seed: 777, map, factions, warState: { wars: [{ a: 'kingdom_a', b: 'kingdom_b', active: true }] } });

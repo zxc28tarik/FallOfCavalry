@@ -176,6 +176,34 @@ export class UIManager {
       g.warnOnce('game:missing-dom-ids', `[Game] Missing DOM ids: ${missing.join(', ')}`);
     }
 
+    // V1.66: compact map HUD keeps rare controls in an explicit, keyboard-
+    // accessible drawer. The original settings and save button IDs stay intact.
+    const hudTools=document.getElementById('hudSettings');
+    const hudToggle=document.getElementById('hudOptionsToggle');
+    const hudClose=document.getElementById('hudOptionsClose');
+    const setHudToolsOpen=(open)=>{
+      const next=Boolean(open);
+      hudTools?.classList.toggle('is-open',next);
+      hudToggle?.setAttribute('aria-expanded',String(next));
+      if(next)hudClose?.focus();
+      else if(document.activeElement===hudClose)hudToggle?.focus();
+    };
+    hudToggle?.addEventListener('click',()=>setHudToolsOpen(
+      !hudTools?.classList.contains('is-open')));
+    hudClose?.addEventListener('click',()=>setHudToolsOpen(false));
+    hudTools?.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){
+        event.stopPropagation();
+        setHudToolsOpen(false);
+        hudToggle?.focus();
+      }
+    });
+    document.addEventListener('pointerdown',event=>{
+      if(!hudTools?.classList.contains('is-open'))return;
+      if(hudTools.contains(event.target)||hudToggle?.contains(event.target))return;
+      setHudToolsOpen(false);
+    });
+
     const btnSave = document.getElementById('btnSaveGame');
     const btnLoad = document.getElementById('btnLoadGame');
     const btnReset = document.getElementById('btnResetGame');

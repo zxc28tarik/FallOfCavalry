@@ -8,6 +8,11 @@ import {
   normalizeEncounterType,
 } from '../data/encounter-defs.js';
 import { DEBUG } from '../constants/ui.js';
+import { previewWitnessedBanditCargo } from '../systems/quest-escort-cargo.js';
+import {
+  emptyQuestEventLedger, recordVerifiedMessengerCaptureEvent,
+} from '../systems/quest-event-ledger.js';
+import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 
 // Lazy import — Phaser'ın browser-only global'larini Node test ortamından korur.
 let _battleBootModule = null;
@@ -183,9 +188,21 @@ export class EncounterManager {
       return true;
     }
 
-    this.applyEncounterOutcome(selected, type);
+    const resolution = this.applyEncounterOutcome(selected, type);
+    this.state.questEventLedger ||= emptyQuestEventLedger();
+    const resolvedAt = Date.now();
+    const creditedSource = recordVerifiedMessengerCaptureEvent(this.state.questEventLedger, {
+      encounter, enemyParty: enemy, choice: selected, resolution,
+      currentDay: Math.max(1, Math.floor(Number(this.state.day) || 1)), resolvedAt,
+    });
     this.onEncounterOutcome(type, this.mapQuestOutcome(type, selected), this.buildQuestContext(encounter));
     this.finishEncounterToMap(enemy, encounter.enemyId);
+    // Award credit only to already-active, source-matched quests after the
+    // map transition, never to a newly generated unaccepted quest.
+    if (creditedSource) creditQuestObjectivesForVerifiedEvent({
+      ledger: this.state.questEventLedger, questManager: g.questManager,
+      eventId: `encounter:${encounter.enemyId}:${resolvedAt}`,
+    });
     return true;
   }
 
@@ -267,12 +284,18 @@ export class EncounterManager {
       party.roster.push({ id: `${type}-recruit-${Date.now()}`, name: 'Local Recruits', class: 'infantry', count: 3, hp: 82, maxHp: 82, atk: 9, def: 4, speed: 68, morale: 50 });
       result.push('+3 recruits');
     } else if (option.outcome === 'resource') {
+      // Messenger seizure is a capture attempt, not a generic loot action:
+      // only a successful seize can establish messenger_caught evidence.
+      if (type === ENCOUNTER_TYPE.MESSENGER && option.id === 'seize') {
+        result.push(success ? 'Messenger detained, message seized' : 'Messenger escaped with message');
+      } else {
       const goldDelta = option.id === 'bribe' ? 0 : (success ? 12 : 0);
       if (goldDelta !== 0) applyEffect({ type: 'change_player_gold', amount: goldDelta });
       if (goldDelta > 0) result.push(`+${goldDelta} gold`);
       if (option.id === 'surrender') {
         applyEffect({ type: 'decrease_army_morale', amount: 12 });
         result.push('morale dropped');
+      }
       }
     } else if (option.outcome === 'reputation') {
       applyEffect({ type: 'change_player_reputation', amount: success ? 3 : 1 });
@@ -285,6 +308,10 @@ export class EncounterManager {
       encounter.lastResult = result.join(', ') || `${option.label} resolved`;
       encounter.resultLog = [...(encounter.resultLog || []), encounter.lastResult];
     }
+    return {
+      optionId: option.id, success,
+      captured: type === ENCOUNTER_TYPE.MESSENGER && option.id === 'seize' && success,
+    };
   }
 
   enterRoster(enemyId, battleContext = {}) {
@@ -578,6 +605,14 @@ export class EncounterManager {
 
     const outcomeText = String(a.result || '').toLowerCase() === 'victory' ? 'Victory' : 'Defeat';
     const lootLines = (a.loot || []).map((l) => `- ${g.economyManager.getItemName(l.id)} x${Math.max(1, Math.floor(l.qty ?? 1))}`).join('\n') || '- None';
+    // Purely informational. The actual player transfer remains guarded by
+    // the live battle receipt and happens only after Continue is chosen.
+    const sourcedGoods = previewWitnessedBanditCargo(this.state?.battle);
+    const sourcedSection = sourcedGoods.length
+      ? `\n\nRecovered caravan goods (collect on Continue)\n${sourcedGoods
+        .map(item => `- ${g.economyManager.getItemName(item.id)} x${item.qty}`)
+        .join('\n')}`
+      : '';
 
     return {
       title: 'Battle Result',
@@ -589,7 +624,7 @@ Casualties
 
 Loot
 - Gold gained: +${Math.max(0, Math.floor(a.goldDelta ?? 0))}
-${lootLines}
+${lootLines}${sourcedSection}
 
 Renown
 - +${Math.max(0, Math.floor(a.renownDelta ?? 0))} renown

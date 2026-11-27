@@ -12,7 +12,13 @@ import { canUnitFireRanged, applySuppressionOnHit, tickSuppression, shouldUseMel
 import { createBattleRng, computeEnemyPower, generateBattleLoot as generateRewardLoot, computeRenownDelta } from '../systems/battle-rewards.js';
 import { applyBattleOutcomes } from '../systems/casualties.js';
 import { removeWorldParty } from '../systems/world-ai.js';
+import {
+  witnessBanditCargoBattleVictory, recoverWitnessedBanditCargo,
+  disposeLiveBanditCargo,
+} from '../systems/quest-escort-cargo.js';
 import { emitContractEvent } from '../systems/contracts.js';
+import { emptyQuestEventLedger, recordVerifiedBattleQuestEvent } from '../systems/quest-event-ledger.js';
+import { creditQuestObjectivesForVerifiedEvent } from '../systems/quest-event-matcher.js';
 import { applyTradeCaravanAttackPenalty } from '../systems/diplomacy.js';
 import { applyBattleOutcomeToRelations } from '../systems/factions.js';
 import { onBattleResolved, captureCity } from '../systems/faction-wars.js';
@@ -749,6 +755,28 @@ export class BattleManager {
       timestamp: Date.now(),
     };
     battle.battleResult = this.battleResult;
+    // V1.30: only the actual engine-resolved victory can witness typed goods
+    // previously stolen by this same live road bandit. No saved ID is proof.
+    if (result === 'victory') {
+      const world = this.game?.worldManager;
+      const linkedWorldPartyId = world?.worldEncounterPartyByEnemyId?.[enemyId];
+      const bandit = world?.worldAi?.parties?.find(p =>
+        p?.id === linkedWorldPartyId);
+      witnessBanditCargoBattleVictory({
+        battle, bandit, worldAi: world?.worldAi, enemyId,
+        linkedWorldPartyId, worldState: this.state?.map,
+        tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+      });
+    }
+    // Record the actual battle outcome once; never infer a quest target or
+    // grant objective credit simply because a battle ended.
+    this.state.questEventLedger ||= emptyQuestEventLedger();
+    recordVerifiedBattleQuestEvent(this.state.questEventLedger, {
+      battle, currentDay: Math.max(1, Math.floor(Number(this.state.day) || 1)),
+      enemyParty: this.game?.worldManager?.enemyParties?.find((p) => p?.id === enemyId),
+      tradeRoutes: this.game?.economyManager?.ensureTradeRoutes?.() || [],
+      commanders: this.state.commanders || [],
+    });
     this.state.uiPanel = this.game?.buildBattleResultPanelData?.();
     this.battleCommandsUI?.hide?.();
     this.battleDeployUI?.hide?.();
@@ -844,14 +872,49 @@ export class BattleManager {
     const enemy = g.worldManager.enemyParties.find((party) => party?.id === enemyId) || null;
     const linkedWorldPartyId = g.worldManager.worldEncounterPartyByEnemyId?.[enemyId] || null;
 
+    // Guard outcomes only apply to the actual source-linked enemy and
+    // live convoy. The winner/loser is already finalized by BattleManager.
+    const guard = g.worldManager?.simManager?.worldPartyManager?.recordEscortGuardBattle?.({
+      battle, enemyId, linkedWorldPartyId,
+    }) || { relevant: false, retainBandit: false };
+    let recoveredCargo = [];
+    if (takeLoot && result === 'victory' && battleResult === this.battleResult) {
+      g.economyManager?.ensureInventoryModel?.();
+      const bandit = g.worldManager?.worldAi?.parties?.find(p =>
+        p?.id === linkedWorldPartyId);
+      recoveredCargo = recoverWitnessedBanditCargo({
+        battle, bandit, worldAi: g.worldManager?.worldAi,
+        enemyId, linkedWorldPartyId, playerParty: g.playerParty,
+        catalog: g.economyManager?.itemCatalog || CONST.TRADE_ITEMS,
+      });
+    }
     if (takeLoot) {
-      g.gameFlowManager.setLastEventLog(`Battle result: +${battleResult.goldDelta ?? 0}g, +${battleResult.renownDelta ?? 0} renown`);
+      const cargoText = recoveredCargo.length
+        ? ` — recovered caravan goods: ${recoveredCargo.map(x =>
+          `${g.economyManager?.getItemName?.(x.id) || x.id} x${x.qty}`).join(', ')}`
+        : '';
+      g.gameFlowManager.setLastEventLog(
+        `Battle result: +${battleResult.goldDelta ?? 0}g, +${battleResult.renownDelta ?? 0} renown${cargoText}`,
+      );
     } else {
       g.gameFlowManager.setLastEventLog('Battle result continued');
     }
-
     if (linkedWorldPartyId) {
-      removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
+      // Defeat must not magically eliminate the bandits that just won.
+      if (!guard.retainBandit) {
+        const removedBandit = g.worldManager?.worldAi?.parties?.find(p =>
+          p?.id === linkedWorldPartyId);
+        if (result === 'victory' && removedBandit) {
+          // The real source has been resolved in this result screen. Never
+          // create another reward when the player skips taking the cargo.
+          disposeLiveBanditCargo({
+            bandit: removedBandit, battle,
+            reason: recoveredCargo.length
+              ? 'player_victory_claimed' : 'player_victory_forfeited',
+          });
+        }
+        removeWorldParty(g.worldManager.worldAi, linkedWorldPartyId);
+      }
       delete g.worldManager.worldEncounterPartyByEnemyId[enemyId];
     }
 
@@ -898,6 +961,12 @@ export class BattleManager {
     this.battleResult = null;
     this.battlePhase = null;
     ensureModeManager(this.state)?.switchTo(ensureModeManager(this.state)?.getReturnTarget?.() || 'map');
+    if (result === 'victory' && Number.isSafeInteger(battle.resolvedAt)) {
+      creditQuestObjectivesForVerifiedEvent({
+        ledger: this.state.questEventLedger, questManager: g.questManager,
+        eventId: `battle:${enemyId}:${battle.resolvedAt}`,
+      });
+    }
     g.saveManager.runAutosave('battle-result-close');
     return true;
   }

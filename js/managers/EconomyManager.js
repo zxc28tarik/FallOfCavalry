@@ -1,4 +1,10 @@
 import * as CONST from '../constants.js';
+import { canonicalRoadLinks } from '../systems/world-trade-road-topology.js';
+import { auditCampaignMarketStocks } from '../systems/market-stock-audit.js';
+import { observeMarketMovement, buildMarketCargoReport } from '../systems/market-cargo-report.js';
+import {
+  establishMarketStockBridge, mirrorCityStockChange,
+} from '../systems/market-stock-bridge.js';
 import * as capacitySystem from '../systems/capacity.js';
 import * as tradeSystem from '../systems/trade.js';
 import * as recruitmentSystem from '../systems/recruitment.js';
@@ -49,6 +55,26 @@ export class EconomyManager {
     campSystem.ensureCampState(this.state);
   }
 
+  // Read-only V1.29 audit. Do not initialize missing markets or change city stock.
+  auditMarketStocks() {
+    return auditCampaignMarketStocks({
+      settlements: this.state?.map?.settlements || [],
+      markets: this.state?.markets || {},
+      catalog: this.itemCatalog,
+    });
+  }
+
+  /** Current-game report: no market creation, no reconciliation mutation. */
+  buildCargoMarketReport(settlementId = null, limit = 25, section = 'all') {
+    return buildMarketCargoReport({
+      settlements: this.state?.map?.settlements || [],
+      markets: this.state?.markets || {},
+      catalog: this.itemCatalog,
+      worldAi: this.game?.worldManager?.worldAi,
+      settlementId, limit, section,
+    });
+  }
+
   // -- Phase 5A: Pure economy utilities & inventory -----
 
   getSettlementTier(settlement) {
@@ -60,7 +86,7 @@ export class EconomyManager {
 
   getSettlementOpportunityKey(settlement) {
     if (!settlement || typeof settlement !== 'object') return null;
-    if (settlement.id) return String(settlement.id);
+    if (settlement.id != null) return String(settlement.id);
     if (Number.isFinite(settlement.tx) && Number.isFinite(settlement.ty)) return `${settlement.tx},${settlement.ty}`;
     if (Number.isFinite(settlement.x) && Number.isFinite(settlement.y)) {
       const tx = Math.floor(settlement.x / CONST.WORLD.TILE_SIZE);
@@ -71,19 +97,43 @@ export class EconomyManager {
   }
 
   ensureTradeRoutes() {
-    if (!Array.isArray(this.state.tradeRoutes)) {
-      const settlements = (this.state?.map?.settlements || []).filter((settlement) => settlement?.id);
-      this.state.tradeRoutes = [];
-      for (let i = 0; i < settlements.length - 1; i += 1) {
-        this.state.tradeRoutes.push({
-          id: `route:${settlements[i].id}:${settlements[i + 1].id}`,
-          fromCityId: settlements[i].id,
-          toCityId: settlements[i + 1].id,
-          quality: 1,
-          damage: 0,
-        });
-      }
-    }
+    const world = this.state?.map || {};
+    const settlementsRef = world.settlements;
+    const roadsRef = world.roads;
+    // Lists are immutable in a generated world; only regenerate on a new
+    // map or on the pre-boot empty map -> loaded roads transition.
+    if (Array.isArray(this.state.tradeRoutes)
+      && this._tradeRoutesSettlementsRef === settlementsRef
+      && this._tradeRoutesRoadsRef === roadsRef) return this.state.tradeRoutes;
+    const settlements = (settlementsRef || []).filter((s) => s?.id != null);
+    const sameMap = this._tradeRoutesSettlementsRef === settlementsRef;
+    const previous = sameMap && Array.isArray(this.state.tradeRoutes)
+      ? this.state.tradeRoutes : [];
+
+    // Keep legacy IDs available for historic saves. They are *not* new
+    // authoritative roads unless a generated road really matches.
+    const legacy = previous.length ? previous : settlements.slice(0, -1).map((s, i) => ({
+      id: `route:${s.id}:${settlements[i + 1].id}`,
+      fromCityId: s.id, toCityId: settlements[i + 1].id,
+      quality: 1, damage: 0,
+    }));
+    const byId = new Map(legacy.map((r) => [r.id, r]));
+    const links = canonicalRoadLinks(world);
+    const roadRows = links.map((link) => ({
+      ...(byId.get(link.id) || {}),
+      id: link.id,
+      fromCityId: link.fromCityId,
+      toCityId: link.toCityId,
+      quality: byId.get(link.id)?.quality ?? 1,
+      damage: byId.get(link.id)?.damage ?? 0,
+      roadBacked: true,
+    }));
+    const roadIds = new Set(roadRows.map((r) => r.id));
+    const compatibility = legacy.filter((r) => !roadIds.has(r.id))
+      .map((r) => ({ ...r, roadBacked: false }));
+    this.state.tradeRoutes = [...roadRows, ...compatibility];
+    this._tradeRoutesSettlementsRef = settlementsRef;
+    this._tradeRoutesRoadsRef = roadsRef;
     return this.state.tradeRoutes;
   }
 
@@ -105,10 +155,16 @@ export class EconomyManager {
   }
 
   pickQuestTargetRoute(rule, context = {}) {
-    const routes = this.ensureTradeRoutes();
+    const registered = this.ensureTradeRoutes();
+    // On maps with a real road graph, never issue a new task against a
+    // legacy row merely adjacent in the settlement array.
+    const routes = registered.some((r) => r.roadBacked)
+      ? registered.filter((r) => r.roadBacked) : registered;
     if (!routes.length) return null;
-    if (rule === 'route_connected_to_target_city' && context.targetCityId) {
-      const route = routes.find((entry) => entry?.fromCityId === context.targetCityId || entry?.toCityId === context.targetCityId);
+    if (rule === 'route_connected_to_target_city' && context.targetCityId != null) {
+      const route = routes.find((entry) =>
+        String(entry?.fromCityId) === String(context.targetCityId)
+        || String(entry?.toCityId) === String(context.targetCityId));
       return route?.id || null;
     }
     if (rule === 'route_with_recent_loss') {
@@ -256,14 +312,16 @@ export class EconomyManager {
 
   getOrCreateMarketForSettlement(settlement) {
     if (!this.state.markets || typeof this.state.markets !== 'object') this.state.markets = {};
-    if (!settlement?.id) return tradeSystem.initMarket(settlement, this.state?.seed);
-    if (!this.state.markets[settlement.id]) {
-      this.state.markets[settlement.id] = tradeSystem.initMarket(settlement, this.state?.seed);
-    }
-    if (!this.state.markets[settlement.id].momentum || typeof this.state.markets[settlement.id].momentum !== 'object') {
-      this.state.markets[settlement.id].momentum = {};
-    }
-    return this.state.markets[settlement.id];
+    if (settlement?.id == null) return tradeSystem.initMarket(settlement, this.state?.seed);
+    const key = String(settlement.id);
+    const isNew = !this.state.markets[key];
+    if (isNew) this.state.markets[key] = tradeSystem.initMarket(settlement, this.state?.seed);
+    const market = this.state.markets[key];
+    if (!market.momentum || typeof market.momentum !== 'object') market.momentum = {};
+    // Link only complete/equal ledgers. Existing conflicting saves are
+    // preserved and never silently migrated to a guessed quantity.
+    establishMarketStockBridge(settlement, market, this.itemCatalog, { marketIsNew: isNew });
+    return market;
   }
 
   generateRecruitOffersForSettlement(settlement) {
@@ -331,11 +389,24 @@ export class EconomyManager {
     if (!settlement || typeof settlement !== 'object') return;
     const tier = this.getSettlementTier(settlement);
     const itemCatalog = this.itemCatalog;
-    if (!Array.isArray(settlement.marketStock)) {
-      settlement.marketStock = itemCatalog.map((item, idx) => ({
-        id: item.id,
-        qty: Math.max(1, 4 + tier + idx % 3),
-      }));
+    const existing = settlement.id != null
+      ? this.state?.markets?.[String(settlement.id)] : null;
+    // Historical saves stored [] even for an UNOPENED city whose real stock
+    // had never been initialized. A genuine trade never removes stock rows;
+    // sold-out items stay in the catalog with qty=0. An empty [] with NO
+    // competing saved market therefore means uninitialized, not "sold out".
+    // Preserve [] if a separate market already exists: that legacy conflict
+    // needs explicit reconciliation, not silent inventory creation.
+    const uninitialized = !Array.isArray(settlement.marketStock)
+      || (settlement.marketStock.length === 0 && !existing);
+    if (uninitialized) {
+      if (existing) establishMarketStockBridge(settlement, existing, itemCatalog);
+      if (!Array.isArray(settlement.marketStock) || settlement.marketStock.length === 0) {
+        settlement.marketStock = itemCatalog.map((item, idx) => ({
+          id: item.id,
+          qty: Math.max(1, 4 + tier + idx % 3),
+        }));
+      }
     }
     if (typeof settlement.priceMultiplier !== 'object' || !settlement.priceMultiplier) {
       settlement.priceMultiplier = {};
@@ -369,6 +440,10 @@ export class EconomyManager {
     const activeSettlement = this.state.city;
     if (!activeSettlement || typeof activeSettlement !== 'object') return false;
     ensureSettlementCityState(activeSettlement);
+    // V1.29: first entry to the real city service must initialize its
+    // legacy stock before creating/linking the richer trade market.
+    // Existing legacy conflicting ledgers still stay untouched.
+    this.ensureSettlementMarketState(activeSettlement);
     activeSettlement.tier = this.getSettlementTier(activeSettlement);
     const recruitPool = recruitmentSystem.getRecruitPool(activeSettlement, this.state?.seed);
     activeSettlement.recruitPool = recruitPool;
@@ -397,6 +472,8 @@ export class EconomyManager {
       this.state.escortState.active = false;
       this.game?.setLastEventLog?.(escortSuccess ? 'Escort route completed successfully.' : 'Escort failed: too many bandit encounters.');
     }
+    // Actual city entry completes courier work only at its real destination.
+    emitContractEvent({type:'CITY_VISITED',cityId:activeSettlement.id},this.game?.playerParty);
     this.game?.gameFlowManager?.enterCity?.(activeSettlement.id);
     const cityUI = this.game?.cityUI || this.game?.cityManager?.cityUI;
     cityUI?.show?.(activeSettlement, { recruitPool, market, contracts });
@@ -581,7 +658,16 @@ Up/Down select, Enter heal, Esc back`,
         return false;
       }
       playerParty.gold -= cost;
-      if (stockEntry) stockEntry.qty = Math.max(0, available - buyQty);
+      if (stockEntry) {
+        stockEntry.qty = Math.max(0, available - buyQty);
+        const market = this.state?.markets?.[String(city?.id)];
+        mirrorCityStockChange(city, market, entry.id, available, stockEntry.qty);
+        observeMarketMovement({
+          kind: 'legacy_buy', ledger: 'city', settlement: city, market,
+          itemId: entry.id, before: available, after: stockEntry.qty,
+          day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+        });
+      }
       this.addItem(entry.id, entry.name, buyQty, entry.unitValue ?? entry.baseBuy);
       this.game?.setLastEventLog?.(`Bought ${entry.name} x${buyQty}`);
       return true;
@@ -593,7 +679,17 @@ Up/Down select, Enter heal, Esc back`,
       return false;
     }
     this.removeItem(entry.id, sellQty);
-    if (stockEntry) stockEntry.qty = Math.max(0, Math.floor(stockEntry.qty ?? 0)) + sellQty;
+    if (stockEntry) {
+      const before = Math.max(0, Math.floor(stockEntry.qty ?? 0));
+      stockEntry.qty = before + sellQty;
+      const market = this.state?.markets?.[String(city?.id)];
+      mirrorCityStockChange(city, market, entry.id, before, stockEntry.qty);
+      observeMarketMovement({
+        kind: 'legacy_sell', ledger: 'city', settlement: city, market,
+        itemId: entry.id, before, after: stockEntry.qty,
+        day: Math.max(1, Math.floor(Number(this.state?.day) || 1)),
+      });
+    }
     playerParty.gold = (playerParty.gold ?? 0) + (sellPrice * sellQty);
     this.game?.setLastEventLog?.(`Sold ${entry.name} x${sellQty}`);
     return true;
@@ -715,7 +811,8 @@ Up/Down select, Enter heal, Esc back`,
 
     if (this.state.markets && typeof this.state.markets === 'object') {
       const settlements = this.state?.map?.settlements || [];
-      const settlementMap = new Map(settlements.filter((s) => s?.id).map((s) => [s.id, s]));
+      const settlementMap = new Map(settlements.filter((s) => s?.id != null)
+        .map((s) => [String(s.id), s]));
       Object.entries(this.state.markets).forEach(([settlementKey, market]) => {
         const settlement = settlementMap.get(settlementKey);
         if (!settlement) return;
