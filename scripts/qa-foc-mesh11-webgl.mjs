@@ -77,6 +77,23 @@ try {
   await page.locator('#btnOpenArmory').evaluate(el => el.click());
   await page.locator('#rtsShowcaseOverlay').waitFor({ state: 'visible', timeout: 20000 });
   await page.waitForTimeout(1700);
+  // The battle simulation must not overwrite the showcase's isolated registry.
+  results.showcaseRegistry = await page.evaluate(() => {
+    const ctrl = window.__focBattle3DPreview;
+    const s = window.focShowcase;
+    return {
+      isOpen: Boolean(s?.isOpen),
+      keys: Array.from(ctrl?.renderer?.soldierRegistry?.records?.keys() || []),
+      batchCount: ctrl?.renderer?.soldierRegistry?.batchGroup?.batches?.length || 0,
+      camera: ctrl?.renderer?.cameraController?.current || null
+    };
+  });
+  if (!results.showcaseRegistry.isOpen ||
+      !results.showcaseRegistry.keys.some(k => k.startsWith('SHOWCASE:')) ||
+      !results.showcaseRegistry.batchCount) {
+    throw Error('Showcase soldier missing or replaced by battle simulation: ' +
+      JSON.stringify(results.showcaseRegistry));
+  }
   await page.screenshot({ path: resolve(reportDir, 'showcase-ottoman-idle.png'), fullPage: true, timeout: 30000 });
   results.showcase = ['showcase-ottoman-idle.png'];
 
