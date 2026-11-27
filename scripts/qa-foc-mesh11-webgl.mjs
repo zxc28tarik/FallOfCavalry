@@ -351,6 +351,38 @@ try {
   if(![1,2,3,4,5].every(c=>surfaceClasses.includes(c)))throw Error('Missing MESH-13A surface class '+surfaceClasses);
   results.surfaceCoverage=surfaceClasses;
 
+  // MESH-13B: close shoulder/upper arm views in the same idle and attack poses.
+  results.shoulderShowcase=[];
+  await card.evaluate(el=>{el.style.visibility='hidden';});
+  try{
+    for(const sample of [
+      {culture:'Ottoman',label:'Yeniçeri',template:'fixed:ottoman_janissary_musket',tag:'janissary',mounted:false},
+      {culture:'European',label:'Zırhlı piyade',template:'fixed:euro_armored_infantry',tag:'armored',mounted:false},
+      {culture:'Ottoman',label:'Sipahi',template:'fixed:ottoman_sipahi_lance',tag:'sipahi',mounted:true},
+      {culture:'European',label:'Kürassier',template:'fixed:euro_curassier_sword',tag:'cuirassier',mounted:true}
+    ]){
+      await page.locator('#btnShowcase'+sample.culture).evaluate(el=>el.click());
+      await page.locator('#showcaseUnitList .showcase-unit-item').filter({has:page.getByText(sample.label,{exact:true})}).first().evaluate(el=>el.click());
+      await page.locator('#btnShowcaseVariant1').evaluate(el=>el.click());
+      for(const anim of ['Idle','Attack']){
+        await page.locator('#btnShowcaseAnim'+anim).evaluate(el=>el.click());
+        const state=await page.evaluate(sample=>{
+          const r=window.__focBattle3DPreview.renderer,reg=r.soldierRegistry,cam=r.cameraController;
+          const rec=reg.records.get('SHOWCASE:U1'),parts=reg.templates[rec?.templateKey]||[];
+          const view={targetX:0,targetY:sample.mounted?1.78:1.24,targetZ:.10,distance:2.25,yaw:.71,pitch:.08};
+          Object.assign(cam.desired,view);Object.assign(cam.current,view);cam.syncTransform(1);
+          return {template:rec?.templateKey,sleeves:parts.filter(p=>p.prim.startsWith('focArm_')&&p.prim.endsWith('_sleeve')).length};
+        },sample);
+        if(state.template!==sample.template||state.sleeves!==2)throw Error('Wrong shoulder showcase '+JSON.stringify(state));
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        const file='showcase-shoulder-'+sample.tag+'-'+anim.toLowerCase()+'.png';
+        await page.screenshot({path:resolve(reportDir,file),fullPage:true,timeout:30000});
+        results.shoulderShowcase.push({...state,anim,screenshot:file});
+      }
+    }
+  }finally{await card.evaluate((el,v)=>{el.style.visibility=v;},previousVisibility);}
+  if(results.shoulderShowcase.length!==8)throw Error('Incomplete shoulder screenshot coverage');
+
   // MESH-12G: controlled real WebGL workload after all normal screenshots.
   // Freeze normal game ticks only in this QA session; no production behavior change.
   if(process.env.FOC_QA_PERF300==='1'){
