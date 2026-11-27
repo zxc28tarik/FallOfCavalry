@@ -4581,6 +4581,19 @@ const OrganicCharacterGeometries = (() => {
             mb.addLoft(rings, true, true);
             return mb.toBufferGeometry(false);
         },
+        // Concave thin shell rings have outer and reversed inner arcs.
+        // Close each end with quads across actual thickness, not a centroid fan
+        // that would incorrectly cover the open shoulder interior.
+        createClosedStripLoft(rings,arcCount) {
+            const mb=new MeshBuilder(),N=arcCount*2,last=(rings.length-1)*N;
+            mb.addLoft(rings,false,false);
+            for(let i=0;i<arcCount-1;i++){
+                const a=i,b=i+1,c=N-2-i,d=N-1-i;
+                mb.idx.push(a,b,c,a,c,d);
+                mb.idx.push(last+a,last+c,last+b,last+a,last+d,last+c);
+            }
+            return mb.toBufferGeometry(false);
+        },
         /**
          * 1. Athletic sculpted human torso + collarbone/trapezius slope + kaftan/doublet
          *    collar opening + 1650 peascod doublet front + folded belt ridge +
@@ -8373,7 +8386,7 @@ const OrganicCharacterGeometries = (() => {
                 }
                 return outer.concat(inner.reverse());
             });
-            const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            const full=OrganicCharacterGeometries.createClosedStripLoft(rings,N+1);
             const sections=focMountedMaterialSections(full,levels.slice(0,-1).map(x=>x[5]?'edge':'plate'),(N+1)*2,'plate');
             return {full,sections};
         }
