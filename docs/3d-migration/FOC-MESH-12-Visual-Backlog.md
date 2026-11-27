@@ -196,6 +196,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 13B ikinci tasarım: SHA `eaacb3dcc3423ace5b6d69a697222c101df15ff8` dört Avrupa zırhlı arketipinin sekiz eski yarım küre omuzluğunu, ince açık yanlı kademeli çelik kabuk ve koyu kenar materyaliyle değiştirdi. SHA `94319714164714afd56413ebb0581cb8eab7e3f0` iç açıklığı kapatan olası konkav fan triangülasyon sorununu, kalınlık boyunca eşlenik dörtgenlerle önledi. Rig ve silah transformları korundu; animasyonlu omuzluk hareketi eklenmedi.
 - Yeni QA `7f28b9753a3035d10bc1e5fc297dc9ce62c414df`, run `46010673281` PASS: sekiz kabukta tutarlı yönlü kapalı manifold kenarlar, materyal kapsamı, 4–9 mm kalınlık sınırı ve legacy parça kaldırımı. Yapısal `46010645488` ve CPU regresyon `46010645378` PASS. WebGL `46010645420` henüz sonuçlanmadı; yeni kabuğun estetik onayı açık. Gerçek fiziksel GPU maliyeti ölçülmedi. Ana dal ve Unity değişmedi. Sonraki kalite önceliği: paletin doygunluğu/metal tonu ve kumaş hacmi, at köklerinin gerçekten bütünleşmesi; 13E ertelendi.
 
+## 27 Kasım 2026 — 13B ikinci tasarım görsel A/B ve 13A palet revizyonu
+
+- `46010645420` PASS; artifact `15204322055` indirildi, report.json ok=true/errors=[]; 13D referans arşivi `15203026592` ile dört Avrupa arketipinin eş açılı görüntüleri karşılaştırıldı. Yeni kademeli omuzluklar görünür ve eski dome silueti kaldırılmış. Ancak plakalar bombeli/kalın görünmeye devam ediyor; açık çelik, sarı kabzalar, turuncu deri ve kırmızı/mavi at örtüleri fazla doygun. Görsel kabul verilmedi.
+- SHA `64ee1b8ad176f7e644774863112dd4c81ebfe14e`: 32 sabit model malzeme rengi için ayrı palet; nötr çelik, daha doğal pirinç, deri, kumaş ve at tonları. Eski material tablosu, ortam ışığı, oyun davranışı ve instance stride korunur. 8 omuz kabuğunun kademeleri daha ince ve kenarları eğimli; mevcut kapalı kabuk topolojisi korunur. Bu bir renk/biçim denemesidir, gerçekçilik garantisi değildir.
+- QA SHA `0184ceb71af92f397f7056221449de792e7ca564`: sabit paletin eski materyallerden ayrı nesneler olduğunu, RGB değerlerini ve metalness/opacity/transparent korunmasını sınar. Yeni WebGL sonucu ve karşılaştırma açık; ana dal/Unity değişmedi, 13E ertelendi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
