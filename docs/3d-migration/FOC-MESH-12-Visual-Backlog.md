@@ -162,6 +162,12 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - QA commit `26a8258a4fd6d157d48599edf28d7387471be792`: gerçek vitrin kataloğundan 24 sabit arketipi türetir, her birini mevcut kültür/birim/varyant kontrolleriyle seçer, doğru tekil kayıt, aktif batch, altı yüz materyal parçası ve atlı/yaya durumunu sınar. Sabit idle kamera ön ve çapraz açılarıyla 48 ek PNG hedefler. Mevcut WebGL çekimleri korunur. Oyun HTML'si ve kuralları değiştirilmedi.
 - Yeni toplu WebGL koşusu ve ekran görüntüsü incelemesi açık. Fiziksel GPU testi ve 300 asker GPU kıyası ertelenmiş. Ana dala birleştirme yok.
 
+## 27 Kasım 2026 — Toplu görsel sonuç / kalite kararı
+
+- `46006928009` PASS; artifact `15200548923` indirildi ve report.json okundu: ok=true, errors=[], 48 toplu vitrin çekimi, 24 farklı sabit arketip. Ön ve çapraz çekimlerin tümü dört temas sayfasında görsel olarak incelendi. https://github.com/zxc28tarik/FallOfCavalry/actions/runs/46006928009/artifacts/15200548923
+- **Teknik: PASS. Estetik: NOT READY.** Yaya ve atlı birimler okunur, kültürel başlık/ekipman farkları görülüyor; ancak kıyafet ve zırh yüzeyleri hâlâ fazla düz/parlak ve oyuncak hissi veriyor. Omuzlar ve kol geçişleri bazı modellerde yuvarlak kütle; yüzler benzer ve sert ifadeli. Atlarda önden boyun-göğüs birleşiminde koyu oval sınır, çaprazda omuz/kalça ek yerleri belirgin; yüzey sürekliliği ve oranlar iyileştirilmeli. Tutuşlar gerçek parmak temasına göre doğrulanmış değil. Uzun kargılar bazı çekimlerde kadraj dışında; tam silah geometrisi için ayrı geniş kadraj gerekli. Bunlar görsel gözlemdir, penetrasyon veya fizik hatası kanıtı değildir.
+- Yeni öncelik önerisi: MESH-13 yüzey/malzeme, omuz/kol ve at gövde-boyun geçişleri; ardından aynı kamera ile A/B karşılaştırma. Kullanıcının GPU/LOD erteleme kararı korunur. Aynı arketip içi varyasyon, gerçek GPU ve HUD tutarsızlığı açık. Ana dala merge edilmedi; bu tur model kodu değiştirilmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
