@@ -6115,22 +6115,22 @@ const OrganicCharacterGeometries = (() => {
         // Each ring is welded to its neighbours. Material ranges share the exact
         // same boundary vertices and normals; no stacked coat / armour / sash shells.
         const FOC_INFANTRY_GARMENT_STYLES = Object.freeze({
-            azapPike:       { hem: 0.255, chest: 0.245, waist: 0.164, depth: 0.132, fold: 0.011, phase: 0.2, armored: false },
-            azapShield:     { hem: 0.266, chest: 0.250, waist: 0.170, depth: 0.139, fold: 0.014, phase: 0.8, armored: false },
-            azapMusket:     { hem: 0.240, chest: 0.245, waist: 0.162, depth: 0.133, fold: 0.009, phase: 1.4, armored: false },
-            janissaryMusket:{ hem: 0.274, chest: 0.257, waist: 0.177, depth: 0.147, fold: 0.012, phase: 0.5, armored: true },
-            janissarySword: { hem: 0.286, chest: 0.265, waist: 0.181, depth: 0.150, fold: 0.014, phase: 1.1, armored: true },
+            azapPike:       { hem: 0.246, chest: 0.240, waist: 0.160, depth: 0.132, fold: 0.011, phase: 0.2, armored: false, pleats: 6 },
+            azapShield:     { hem: 0.273, chest: 0.254, waist: 0.174, depth: 0.139, fold: 0.014, phase: 0.8, armored: false, pleats: 8 },
+            azapMusket:     { hem: 0.230, chest: 0.241, waist: 0.158, depth: 0.133, fold: 0.009, phase: 1.4, armored: false, pleats: 5 },
+            janissaryMusket:{ hem: 0.267, chest: 0.255, waist: 0.174, depth: 0.147, fold: 0.012, phase: 0.5, armored: true, pleats: 7 },
+            janissarySword: { hem: 0.293, chest: 0.269, waist: 0.184, depth: 0.150, fold: 0.014, phase: 1.1, armored: true, pleats: 9 },
             // FOC-MESH-02: guard, siege specialist and irregular infantry silhouettes.
             bostanciAxe:    { hem: 0.282, chest: 0.276, waist: 0.187, depth: 0.160, fold: 0.010, phase: 0.4, armored: true, hemDepth: 0.168, armorRidge: 0.019, armorFlare: 0.012, pleats: 6 },
             bostanciPike:   { hem: 0.290, chest: 0.281, waist: 0.189, depth: 0.155, fold: 0.010, phase: 1.2, armored: true, hemDepth: 0.162, armorRidge: 0.025, armorFlare: 0.015, pleats: 8 },
             humbaraci:     { hem: 0.273, chest: 0.258, waist: 0.182, depth: 0.149, fold: 0.012, phase: 0.9, armored: false, hemDepth: 0.162, belt: true, pleats: 6, apron: 0.012 },
-            levend:        { hem: 0.235, chest: 0.251, waist: 0.168, depth: 0.136, fold: 0.016, phase: 2.1, armored: false, hemDepth: 0.145, hemLift: 0.045, pleats: 5, asymmetry: 0.009 },
+            levend:        { hem: 0.225, chest: 0.248, waist: 0.166, depth: 0.136, fold: 0.016, phase: 2.1, armored: false, hemDepth: 0.145, hemLift: 0.045, pleats: 5, asymmetry: 0.009 },
             // FOC-MESH-03: European doublets, jerkin and articulated cuirass silhouettes.
-            euroMusketier: { hem: 0.239, chest: 0.247, waist: 0.156, depth: 0.131, fold: 0.009, phase: 0.3, armored: false, hemDepth: 0.135, hemLift: 0.012, pleats: 8, euro: true },
+            euroMusketier: { hem: 0.233, chest: 0.243, waist: 0.154, depth: 0.131, fold: 0.009, phase: 0.3, armored: false, hemDepth: 0.135, hemLift: 0.012, pleats: 8, euro: true },
             euroArquebus:  { hem: 0.224, chest: 0.248, waist: 0.162, depth: 0.138, fold: 0.006, phase: 1.4, armored: false, hemDepth: 0.139, hemLift: 0.027, pleats: 6, euro: true, jerkin: true },
             euroPikeniere: { hem: 0.246, chest: 0.265, waist: 0.171, depth: 0.151, fold: 0.004, phase: 0.6, armored: true, hemDepth: 0.150, armorRidge: 0.026, armorFlare: 0.012, pleats: 4, euro: true, fauld: true, gorget: true },
             euroHalberd:   { hem: 0.251, chest: 0.262, waist: 0.168, depth: 0.149, fold: 0.007, phase: 1.6, armored: true, hemDepth: 0.151, armorRidge: 0.020, armorFlare: 0.010, pleats: 6, euro: true, gorget: true },
-            euroArmored:   { hem: 0.269, chest: 0.279, waist: 0.182, depth: 0.160, fold: 0.003, phase: 0.2, armored: true, hemDepth: 0.166, armorRidge: 0.030, armorFlare: 0.016, pleats: 4, euro: true, fauld: true, gorget: true }
+            euroArmored:   { hem: 0.277, chest: 0.283, waist: 0.185, depth: 0.160, fold: 0.003, phase: 0.2, armored: true, hemDepth: 0.166, armorRidge: 0.030, armorFlare: 0.016, pleats: 4, euro: true, fauld: true, gorget: true }
         });
         function buildFOCInfantryGarment(style) {
             const N = 48;
@@ -7590,6 +7590,12 @@ const OrganicCharacterGeometries = (() => {
             const [width,jaw,nose,brow,beard]=style, N=80;
             // Fixed archetype-specific sculpt; no runtime random facial changes.
             const variation=(width-.98)*2+(nose-1)*.8;
+            // MESH-12L: explicit artistic sculpt variation from existing profile dimensions.
+            // Keep eye/lip masks and neck/hat contact area unchanged; no gameplay traits.
+            const cheekShape=1+(jaw-1)*2.0-(width-1)*.7;
+            const chinShape=1+(jaw-1)*2.8-(nose-1)*.55;
+            const templeShape=(width-1)*.24+(brow-1)*.15;
+            const noseBridge=1+(nose-1)*2.2+(brow-1)*.4;
             const moustache= id.includes('deli')?1.22:id.includes('janissary')?.90:id.startsWith('euro')?1.06:1;
             const goatee=beard===2?(id.includes('musketier')||id.includes('curassier')?1.18:.87):1;
             // Height relative to the existing head center; neck seats inside collar.
@@ -7612,19 +7618,20 @@ const OrganicCharacterGeometries = (() => {
                 const a=i*Math.PI*2/N, ca=Math.cos(a),sa=Math.sin(a), f=Math.atan2(ca,sa), af=Math.abs(f), front=Math.max(0,sa);
                 const jawShape=1+(jaw-1)*g(y,-.29,.19);
                 const ear=.076*g(y,-.018,.112)*g(af,1.57,.21)-.024*g(y,-.015,.065)*g(af,1.57,.085);
-                const cheek=.045*g(y,-.047,.105)*g(af,.69,.28)-.020*g(y,-.19,.093)*g(af,.78,.25);
+                const cheek=.045*cheekShape*g(y,-.047,.105)*g(af,.69,.28)-.020*(2-cheekShape)*g(y,-.19,.093)*g(af,.78,.25);
                 const eyeY=.053+.012*(af-.385);
                 const socket=.044*g(y,eyeY,.055)*g(af,.385,.22);
                 const globe=.034*g(y,eyeY,.022)*g(af,.385,.15);
                 const lids=.018*(g(y,eyeY+.032,.014)+.65*g(y,eyeY-.027,.014))*g(af,.385,.20);
-                const nasal=nose*(.097*g(y,.024,.122)*g(f,0,.115)+.093*g(y,-.078,.048)*g(f,0,.15)+.035*g(y,-.108,.035)*g(af,.15,.09));
+                const nasal=nose*(.097*noseBridge*g(y,.024,.122)*g(f,0,.115)+.093*g(y,-.078,.048)*g(f,0,.15)+.035*g(y,-.108,.035)*g(af,.15,.09));
                 const nostril=.016*g(y,-.119,.018)*g(af,.155,.055);
                 const brows=brow*.041*g(y,.134,.041)*g(af,.37,.25);
-                const chin=(.047+variation*.012)*g(y,-.32,.061)*g(f,0,.32);
+                const chin=(.047+variation*.012)*chinShape*g(y,-.32,.061)*g(f,0,.32);
                 const philtrum=.013*g(y,-.150,.023)*g(f,0,.065);
                 const lips=.020*g(y,-.184,.016)*g(f,0,.30)+.026*g(y,-.221,.020)*g(f,0,.30)-.018*g(y,-.202,.009)*g(f,0,.34);
                 const faceHair=(beard===1?.015*g(y,-.30,.084)*g(f,0,.55):beard===2?.016*g(y,-.33,.072)*g(f,0,.22)*goatee:0);
-                return [(rx*width*jawShape+ear+cheek)*ca,y,z+rz*sa+front*(nasal+brows+chin+lips+faceHair+globe+lids-socket-nostril-philtrum)];
+                const temple=templeShape*g(y,.16,.13)*g(af,1.17,.38);
+                return [(rx*width*jawShape+ear+cheek+temple)*ca,y,z+rz*sa+front*(nasal+brows+chin+lips+faceHair+globe+lids-socket-nostril-philtrum)];
             }));
             const full=OrganicCharacterGeometries.createClosedLoft(rings), lists={skin:[],hair:[],eye:[],sclera:[],lip:[],crease:[]};
             // Material boundaries are on the same surface; no floating eye or hair solids.
