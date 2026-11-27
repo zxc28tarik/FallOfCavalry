@@ -8191,7 +8191,9 @@ const OrganicCharacterGeometries = (() => {
                 focWeapon_axe:loft([[-.5,.32,.10,-.27],[-.36,.43,.28,-.10],[-.15,.50,.48,0],[.12,.50,.50,.03],[.33,.40,.37,-.06],[.5,.20,.13,-.23]],20,'y',1.55),
                 focWeapon_shield:loft([[-.5,.36,.36],[-.43,.48,.48],[-.30,.50,.50],[-.10,.49,.49],[.18,.46,.46],[.37,.35,.35],[.47,.18,.18],[.5,.035,.035]],48),
                 focWeapon_boss:loft([[-.5,.30,.30],[-.34,.50,.50],[0,.43,.43],[.28,.30,.30],[.46,.15,.15],[.5,.035,.035]],24),
-                focWeapon_fitting:loft([[-.5,.39,.39],[-.40,.49,.49],[.37,.49,.49],[.5,.39,.39]],20,'y',.50)
+                focWeapon_fitting:loft([[-.5,.39,.39],[-.40,.49,.49],[.37,.49,.49],[.5,.39,.39]],20,'y',.50),
+                focWeapon_mace:loft([[-.5,.20,.20],[-.37,.36,.36],[-.17,.48,.48],[.17,.48,.48],[.37,.36,.36],[.5,.20,.20]],36,'y',1,.14),
+                focWeapon_humbara:loft([[-.5,.035,.035],[-.46,.19,.19],[-.33,.37,.37],[-.16,.47,.47],[0,.50,.50],[.16,.47,.47],[.33,.37,.37],[.46,.19,.19],[.5,.035,.035]],32,'y',1,.015)
             };
         }
         function upgradeFixedWeaponParts(key,parts){
@@ -8206,8 +8208,11 @@ const OrganicCharacterGeometries = (() => {
                 if((rig==='leftArmWeapon'||rig==='riderUpper')&&['cylinder','dome'].includes(prim)&&x>.38&&z>.38&&y<.15)visual='shield';
                 else if(rig==='riderUpper')return p;
                 else if(rig==='leftArmWeapon'&&prim==='dome'&&metal&&x>.09)visual='boss';
+                else if(key.includes('humbaraci')&&rig==='rightArmWeapon'&&prim==='sphere'&&mat==='darkSteel')visual='humbara';
+                else if(key.includes('kapikulu')&&rig==='riderRightArmWeapon'&&metal&&prim==='sphere'&&y>.12)visual='mace';
+                else if(key.includes('kapikulu')&&rig==='riderRightArmWeapon'&&metal&&prim==='box'&&long<.20)visual='fitting';
                 else if(mat==='wood'){
-                    if(prim==='cylinder'&&y>1.20&&x<.07)visual='shaft';
+                    if(prim==='cylinder'&&y>.20&&x<.07)visual='shaft';
                     else if(prim==='box')visual=z>.35?'foreZ':'stock';
                     else if(prim==='frustum')visual='foreY';
                 }else if(prim==='cylinder'&&mat==='leather'&&y>.10&&x<.07)visual='grip';
