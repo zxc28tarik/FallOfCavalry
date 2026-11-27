@@ -7547,8 +7547,9 @@ const OrganicCharacterGeometries = (() => {
             // Height relative to the existing head center; neck seats inside collar.
             const levels=[
                 [-.73,.285,.270,-.025],[-.62,.270,.265,-.020],[-.51,.265,.260,-.018],
-                [-.44,.295,.290,-.015],[-.39,.325,.323,-.004],[-.33,.345,.345,.005],
-                [-.28,.352,.354,.008],[-.23,.366,.365,.008],[-.216,.372,.373,.007],
+                [-.44,.295,.290,-.015],[-.39,.325,.323,-.004],[-.367,.332,.329,.000],
+                [-.345,.340,.339,.003],[-.33,.345,.345,.005],[-.305,.349,.350,.007],
+                [-.28,.352,.354,.008],[-.255,.359,.361,.008],[-.23,.366,.365,.008],[-.216,.372,.373,.007],
                 [-.202,.378,.382,.006],[-.188,.382,.386,.005],[-.169,.385,.389,.004],
                 [-.15,.385,.389,.004],[-.11,.397,.400,.001],[-.07,.405,.406,-.005],
                 [-.025,.410,.410,-.009],[.010,.411,.413,-.012],[.026,.412,.415,-.012],
@@ -7584,8 +7585,8 @@ const OrganicCharacterGeometries = (() => {
                 if(ellipse(.053,.028,.385,.19))mat='eye';
                 else if(ellipse(.125,.024,.385,.235))mat='hair';
                 else if(ellipse(-.157,.027,.26,.20))mat='hair';
-                else if(beard===1&&y>=-.39&&y<-.23&&f<.54)mat='hair';
-                else if(beard===2&&y>=-.39&&y<-.25&&f<.22)mat='hair';
+                else if(beard===1&&ellipse(-.313,.095,.09,.50))mat='hair';
+                else if(beard===2&&ellipse(-.320,.085,0,.25))mat='hair';
                 else if(ellipse(-.211,.020,0,.30))mat='lip';
                 const offset=(j*N+i)*6;
                 lists[mat].push(...full.indices.slice(offset,offset+6));
@@ -7620,7 +7621,7 @@ const OrganicCharacterGeometries = (() => {
                 const oldFace=(p.mat==='eyeDark'||p.mat==='hairDark')&&p.prim!=='orgHairCurtain'&&y>hy-.10&&y<hy+.085&&z>.045;
                 return !oldNeck&&!oldFace;
             });
-            const mats={skin:'skin',hair:'hairDark',eye:'eyeDark',lip:'faceLip'};
+            const mats={skin:'skin',hair:'hairDark',eye:'faceEye',lip:'faceLip'};
             for(const [section,mat] of Object.entries(mats))result.push({prim:'focHead_'+id+'_'+section,mat,rigGroup:rig,localMat:new Float32Array(head.localMat)});
             return result;
         }
@@ -7773,10 +7774,10 @@ const OrganicCharacterGeometries = (() => {
             const bend=Math.min(Math.hypot(...focVSub(el,sh)),Math.hypot(...focVSub(wr,el)))*.42;
             const ein=focVSub(el,focVScale(d1,bend)),eout=focVAdd(el,focVScale(d2,bend));
             const st=[],add=(p,rx,rz,mat,fold=0)=>st.push({p,rx:rx*factor,rz:rz*factor,mat,fold});
-            add(focVSub(sh,focVScale(d1,.065)),.049*r,.053*r,'sleeve');
-            add(focVSub(sh,focVScale(d1,.026)),.080*r,.076*r,'sleeve',.002);
-            add(sh,.088*r,.079*r,'sleeve',.003);
-            add(focVLerp(sh,ein,.5),.073*r,.070*r,'sleeve',.003);
+            add(focVSub(sh,focVScale(d1,.065)),.047*r,.050*r,'sleeve');
+            add(focVSub(sh,focVScale(d1,.026)),.069*r,.070*r,'sleeve',.002);
+            add(sh,.076*r,.071*r,'sleeve',.003);
+            add(focVLerp(sh,ein,.5),.070*r,.068*r,'sleeve',.003);
             add(ein,.065*r,.062*r,'sleeve',.002);
             for(const t of [.25,.5,.75,1])add(focVLerp(focVLerp(ein,el,t),focVLerp(el,eout,t),t),(.063-.008*t)*r,(.065-.009*t)*r,'sleeve',style==='plate'?.001:.003);
             add(focVLerp(eout,wr,.45),.058*r,.052*r,'sleeve',.002);
@@ -7785,9 +7786,9 @@ const OrganicCharacterGeometries = (() => {
             add(focVSub(wr,focVScale(d2,.052*factor)),.046*r,.044*r,'sleeve');
             add(focVSub(wr,focVScale(d2,.038*factor)),.049,.045,'cuff');
             add(focVSub(wr,focVScale(d2,.025*factor)),.033,.030,'hand');
-            add(focVSub(wr,focVScale(d2,.009*factor)),.043,.039,'hand');
-            add(wr,.045,.042,'hand',.002);
-            add(focVAdd(wr,focVScale(d2,.019*factor)),.041,.038,'hand',.002);
+            add(focVSub(wr,focVScale(d2,.009*factor)),.035,.032,'hand');
+            add(wr,.038,.035,'hand',.002);
+            add(focVAdd(wr,focVScale(d2,.019*factor)),.037,.033,'hand',.002);
             add(focVAdd(wr,focVScale(d2,.037*factor)),.028,.027,'hand');
             add(focVAdd(wr,focVScale(d2,.043*factor)),.012,.013,'hand');
             return focLimbSweep(st,20);
@@ -10078,6 +10079,7 @@ function createSoldierPartTemplates() {
                     feltBlack: new FOC_THREE.Material({ color: 0x1c1917, metalness: 0.02 }),
                     hairDark: new FOC_THREE.Material({ color: 0x3b2314, metalness: 0.03 }),
                     eyeDark: new FOC_THREE.Material({ color: 0x181412, metalness: 0.15 }),
+                    faceEye: new FOC_THREE.Material({ color: 0x4a352f, metalness: 0.00 }),
                     crimsonVelvet: new FOC_THREE.Material({ color: 0x991b1b, metalness: 0.03 }),
                     darkCloth: new FOC_THREE.Material({ color: 0x282b32, metalness: 0.02 }),
                     faceLip: new FOC_THREE.Material({color:0xb67865,metalness:0}),
