@@ -1,6 +1,10 @@
 # Fall of Cavalry — KISS savaş yönetimi ve HUD planı
 27 Kasım 2026. Kullanıcı asker modellerini şimdilik yeterli kabul etti; model geliştirmeleri durdurulacak. Yeni öncelik savaş emirleri, stratejiler, dizilişler ve anlaşılır HUD. FOC-KEEP-IT-SUPER-SIMPLE.md ortak ilke. Bu belge tasarım ve uygulama planıdır; henüz oyun kodu değiştirilmedi. Önerilen yeni stratejiler ve davranışlar uygulama öncesi tasarım kararlarıdır.
 
+## Kullanıcı kararı — daha katı KISS, kalıcı sayaç ve birlik simgesi yok
+
+Kullanıcı dost/düşman asker sayılarının ve birlik simgelerinin gereksiz olduğunu belirtti. Sürekli dost/düşman asker sayaçları ve birlik üstü simgeler tasarımdan çıkarılır; önceki öneriler bu konuda geçersizdir. Seçim zeminde belirginleşir; sağ tık Emirler/Dizilişler menüsünü açar, emir verilince kapanır. Gerekli hedef/yön işaretleri geçicidir. Diğer kalıcı HUD öğeleri otomatik kabul edilmez; gerekliliği ayrı değerlendirilir. Bu kayıt tasarım kararıdır, oyun koduna uygulanmış değişiklik değildir.
+
 ## Kullanıcı kararı — tüm savaş deneyimi ve görsel dil
 
 Kullanıcı üçüncü konsepti (koyu, ince çerçeveli iki sütunlu bağlamsal menü; krem metin; sade diziliş simgeleri; küçük üst sayaç, mini harita ve seçili grup durum şeridi) diğerlerinden daha iyi buldu. Bu bir görsel yön referansıdır, birebir piksel veya sahne onayı değildir. Sağ tık menüsünde yalnız Emirler ve Dizilişler ana kategorileri; ateş seçenekleri ilgili birimlerin emirleri altında; strateji ayrı tutulur. Kullanıcı kapsamın yalnızca menü değil savaş haritası içindeki bütün savaş deneyimi olduğunu açıkladı.
