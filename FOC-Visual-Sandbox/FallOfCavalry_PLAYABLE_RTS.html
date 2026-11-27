@@ -2415,6 +2415,19 @@
             }
         }
 
+        // MESH-13A: per-surface finish for fixed models; no new vertex attributes.
+        const FOC_FIXED_SURFACE_CLASSES=Object.freeze({
+            playerCloth:1,playerBreeches:1,enemyCloth:1,enemyBreeches:1,linen:1,
+            ottomanCrimson:1,ottomanEmerald:1,ottomanSaffron:1,ottomanNavy:1,ottomanWhite:1,
+            roughWool:1,feltBlack:1,crimsonVelvet:1,darkCloth:1,fineSilk:2,
+            leather:2,buffLeather:2,horseHoof:2,wood:4,
+            steel:3,darkSteel:3,blackenedSteel:3,damascusSteel:3,bronze:3,burnishedBronze:3,gold:3,
+            skin:5,horseBay:5,horseDark:5,horseChestnut:5,horseDun:5,leopardPelt:5,hairDark:5
+        });
+        function focFixedSurfaceClass(templateKey,material){
+            return templateKey?.startsWith('fixed:')?(FOC_FIXED_SURFACE_CLASSES[material]||0):0;
+        }
+
         const INSTANCE_STRIDE_FLOATS = 21; // 16 matrix + 4 rgba + 1 metalness = 84 bytes
 
         class InstancedBatchGroup extends SceneNode {
@@ -2684,7 +2697,9 @@
                     varying vec4 vInstColor;
                     varying float vInstMetalness;
                     varying vec3 vViewDir;
+                    varying vec3 vBindPos;
                     void main() {
+                        vBindPos = aPosition;
                         mat4 instanceMat = mat4(aInstCol0, aInstCol1, aInstCol2, aInstCol3);
                         vec4 worldPos = instanceMat * vec4(aPosition, 1.0);
                         vec4 viewPos = uViewMatrix * worldPos;
@@ -2726,6 +2741,8 @@
                     varying vec4 vInstColor;
                     varying float vInstMetalness;
                     varying vec3 vViewDir;
+                    varying vec3 vBindPos;
+                    uniform float uSurfaceClass;
                     uniform vec3 uHemiSky;
                     uniform vec3 uHemiGround;
                     uniform vec3 uSunColor;
@@ -2755,6 +2772,41 @@
                         float rimFactor = pow(rimDot, 3.0) * 0.28;
                         vec3 rimLight = mix(uHemiSky, vec3(1.0), 0.45) * (rimFactor * (0.45 + 0.55 * vInstMetalness));
 
+                        // Stable bind-space grain follows the animated surface.
+                        // Fade fine pattern at distance; preserve the original scene lights.
+                        if(uSurfaceClass > 0.5){
+                            float fade = 1.0 - smoothstep(3.0, 10.0, vFogDepth);
+                            vec3 p = vBindPos;
+                            float broad = sin(p.x*19.0+p.y*23.0+p.z*17.0)*sin(p.y*13.0-p.z*21.0);
+                            float grain = sin(p.x*93.0+p.z*29.0)*sin(p.y*89.0+p.z*37.0);
+                            float variation = 0.0;
+                            float rimScale = 0.45;
+                            float gloss = 0.0;
+                            if(uSurfaceClass < 1.5){
+                                variation = .045*broad + .024*grain;
+                                gloss = .012*pow(specDot,12.0);
+                                rimScale = .28;
+                            }else if(uSurfaceClass < 2.5){
+                                variation = .055*broad + .018*grain;
+                                gloss = .07*pow(specDot,27.0);
+                                rimScale = .44;
+                            }else if(uSurfaceClass < 3.5){
+                                variation = .045*broad + .025*sin(p.y*108.0+p.x*7.0);
+                                gloss = (.18+.39*vInstMetalness)*pow(specDot,38.0+26.0*vInstMetalness)+.035*pow(specDot,9.0);
+                                rimScale = .65;
+                            }else if(uSurfaceClass < 4.5){
+                                variation = .09*sin(p.x*29.0+p.z*31.0+1.8*sin(p.y*8.0))+.03*broad;
+                                gloss = .035*pow(specDot,22.0);
+                                rimScale = .32;
+                            }else{
+                                variation = .025*broad+.014*grain;
+                                gloss = .035*pow(specDot,19.0);
+                                rimScale = .32;
+                            }
+                            albedo *= 1.0 + variation*fade;
+                            specular = uSunColor * gloss * (0.3+0.7*sunDot);
+                            rimLight *= rimScale;
+                        }
                         vec3 lit = albedo * (ambient + diffuse) + specular + rimLight;
                         float fogFactor = 1.0 - exp(-(uFogDensity * vFogDepth) * (uFogDensity * vFogDepth));
                         fogFactor = clamp(fogFactor, 0.0, 1.0);
@@ -3015,10 +3067,12 @@
                     const aInstMetal = gl.getAttribLocation(this.instancedProg, 'aInstMetalness');
                     const aSkin=gl.getAttribLocation(this.instancedProg,'aSkinWeight');
                     const parentLocs=[0,1,2].map(i=>gl.getAttribLocation(this.instancedProg,'aParentRow'+i));
+                    const uSurfaceClass=gl.getUniformLocation(this.instancedProg,'uSurfaceClass');
 
                     for (let i = 0; i < batchGroup.batches.length; i++) {
                         const batch = batchGroup.batches[i];
                         if (!batch) continue;
+                        gl.uniform1f(uSurfaceClass,batch.surfaceClass||0);
 
                         const buffers = this._ensureGeometryBuffers(batch.geometry);
 
@@ -10957,12 +11011,14 @@ function createSoldierPartTemplates() {
                         const part = parts[p];
                         const matObj = this.materials[part.mat] || this.materials.steel;
                         const passKey = matObj.transparent ? 'transparent' : 'opaque';
-                        const bucketKey = `${part.prim}:${passKey}`;
+                        const surfaceClass=focFixedSurfaceClass(rec.templateKey,part.mat);
+                        const bucketKey = `${part.prim}:${passKey}:${surfaceClass}`;
 
                         let bucket = buckets.get(bucketKey);
                         if (!bucket) {
                             bucket = {
                                 prim: part.prim,
+                                surfaceClass,
                                 transparent: matObj.transparent,
                                 entries: []
                             };
@@ -11049,6 +11105,7 @@ function createSoldierPartTemplates() {
                         geometry,
                         stride,
                         transparent: bucket.transparent,
+                        surfaceClass: bucket.surfaceClass,
                         instanceData,
                         count,
                         _gl: null,
