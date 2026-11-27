@@ -1,0 +1,40 @@
+name: FOC MESH-11 real WebGL visual smoke
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html'
+      - 'scripts/qa-foc-mesh11-webgl.mjs'
+      - '.github/workflows/foc-mesh11-webgl-smoke.yml'
+  pull_request:
+    paths:
+      - 'FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html'
+      - 'scripts/qa-foc-mesh11-webgl.mjs'
+      - '.github/workflows/foc-mesh11-webgl-smoke.yml'
+
+jobs:
+  webgl-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Xvfb and Playwright
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.55.1
+      - name: Run actual Chrome WebGL sector screenshots
+        run: |
+          command -v google-chrome
+          xvfb-run -a -s '-screen 0 1400x900x24' node scripts/qa-foc-mesh11-webgl.mjs
+      - name: Preserve WebGL report and screenshots even when test fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foc-mesh11-webgl-visual-proof
+          path: output/foc-mesh11-webgl/
+          retention-days: 14
+          if-no-files-found: warn
