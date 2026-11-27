@@ -137,6 +137,13 @@ Kullanıcı kararı: parçalı sistem tamamlanmadan GPU/LOD/poligon optimizasyon
 - 12G tarihsel CPU kıyası sabit commitler ile `46000398474` PASS. GPU testleri kullanıcı kararıyla ertelendi; ana dal/Unity değişmedi.
 - Sırada 12J silah geometrisi/elde tutuş, 12K at/binici, 12L siluet çeşitliliği.
 
+## 27 Kasım 2026 — 12I WebGL sonucu ve 12J silah revizyonu
+
+- 12I teknik malzeme bölümü `46002476012` PASS, WebGL `46002504803` PASS; 27 PNG + JSON, artifact https://github.com/zxc28tarik/FallOfCavalry/actions/runs/46002504803/artifacts/15199416028 . Yeniçeri çapraz yakın planında kuşak katları ve etek kenarı okunuyor, ancak yüzeyler stilize, tüfek önceki haliyle kutu görünümünde. Görsel kabul açık.
+- 12J `2927f3218028eaa62a5979a20b39fa14e91bff9d` ve ek ekipman revizyonu `919e5abb75540c70508c59d5b468087ba81dec0e`: 17 görsel loft şekli (dipçik, iki kundak, namlu görünümü, bant, sap, kabza, uç, üç kılıç kesiti, balta, kalkan, göbek, bağlantı, topuz ve humbara). Mevcut sabit parçalarda yalnız prim ve visualSourcePrim değiştirilir, localMat/rig/subGroup/mat korunur. Avuç kesiti .82→.73/.79, tutuş merkez halkası ve skin weights değişmedi. Fonksiyonel silah mekanizması, hasar, menzil, animasyon veya fizik değişikliği yok. Humbaracı ve Kapıkulu da kapsama alındı.
+- İlk genişletilmiş teknik koşu `46002961660` PASS (23 arketipte silah şekli; humbaracı istisnası sonraki commit ile kaldırıldı). Son geometri `46003076545` PASS. 24'ünde silah şekli ve özel mace/humbara gerektiren test `a67d13ea2196e5eefac4e56bb5dd9f01ceba1e3a`, koşu `46003095600`. Yeni silah/elde tutuş yakın planları `64d49e9956832879da28ce59c77a8368b55715a8`, WebGL `46003117953`. Görsel inceleme bekliyor; gerçek parmak temasını kanıtlayan test yok.
+- GPU/LOD optimizasyonu ertelenmiş durumda, ana dal ve Unity değişmedi. 12K at/binici ikinci tur ve 12L karakter çeşitliliği sırada.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
