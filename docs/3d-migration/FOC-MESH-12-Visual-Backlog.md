@@ -90,6 +90,13 @@
 - `45989346109` PASS. 24 arketip, 1172 parça, 480 geometri, 233796 üçgen (12D'den 1600 az), 0 dejenere üçgen. 40 at eklemi / 86400 skinlenmiş verteks çifti, maksimum konum ve yerel normal farkı 0; 28 piyade dizinde önceki 60480 örnek de 0 farkla geçti. Hock birleşimi teknik olarak doğrulandı; boyun/gövde ve bacak/gövde estetik geçişleri ayrı WebGL değerlendirmesi gerektirir.
 - Eyer, koşum ve binici pozisyonu değişmedi; fiziksel GPU ölçümü yapılmadı.
 
+## 27 Kasım 2026 — 12E WebGL sonucu ve 12F eyer/binici revizyonu
+
+- 12E gerçek Chrome/WebGL `45989318436` PASS, 17 ekran görüntüsü ve 0 tarayıcı hatası. Artifact https://github.com/zxc28tarik/FallOfCavalry/actions/runs/45989318436/artifacts/15192722955 . Sipahi yandan görünümünde bacak kökleri gövdeye daha içerden bağlanıyor; boyun ve gövde renk/normal geçişi hâlâ sert, nihai estetik onay yok.
+- 12F model `121bef5cb3a13bf794f67f79173856cbca6c9f21`: 10 at stili için ayrı eyer ve örtü kapalı ince loft yüzeyleri. Mevcut kumaş/metal materyalleri korunarak eski kutu üzengiler gerçek açık metal kemerle değiştirildi. Kayışlar ayağın hizasına taşındı, binici kalça/uyluk formu inceltildi. Yeni eyer ve örtü riderSaddle ile taşınır; iki dizginin baş ucu horseNeckHead, el ucu riderUpper dönüşümlerine bağlıdır (8 segment, 7 halka, ağırlık geçişi). Dizgin fizik/gerilim simülasyonu değildir.
+- İlk yapısal koşu `45991972391` PASS. Dizgin uçları ve binici/üzengi rig uyumu için genişletilmiş test `7717ac32fa7e46d2b0a711619a8bc2d786d4cf15`, koşu `45992020516`. Sonucu ayrıca kaydet.
+- WebGL model koşusu `45991972404`; iki yeni koşum yakın planını ve doğru geometrileri denetleyen test commit `afdbb85a8fcd93d0f19928abb938d6a58d59d10f`. Görsel inceleme açık. Ana dal ve Unity değişmedi; donanım FPS ölçülmedi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
