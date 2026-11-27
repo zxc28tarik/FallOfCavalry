@@ -2710,7 +2710,7 @@
                 if(supportsSkin){
                     instancedVS=instancedVS.replace('attribute float aInstMetalness;', 'attribute float aInstMetalness; attribute float aSkinWeight; attribute vec4 aParentRow0; attribute vec4 aParentRow1; attribute vec4 aParentRow2;');
                     instancedVS=instancedVS.replace('vec4 viewPos = uViewMatrix * worldPos;', 'vec4 bindPos=vec4(aPosition,1.0); vec3 parentPos=vec3(dot(aParentRow0,bindPos),dot(aParentRow1,bindPos),dot(aParentRow2,bindPos)); worldPos.xyz=mix(worldPos.xyz,parentPos,aSkinWeight); vec4 viewPos = uViewMatrix * worldPos;');
-                    instancedVS=instancedVS.replace('vFogDepth = length(viewPos.xyz);','vec3 parentN=vec3(dot(aParentRow0.xyz,aNormal),dot(aParentRow1.xyz,aNormal),dot(aParentRow2.xyz,aNormal)); vec3 childN=normalize(vNormal); parentN=normalize(parentN); vec3 skinN=mix(childN,parentN,clamp(aSkinWeight,0.0,1.0)); vNormal=normalize(skinN+childN*0.00001); vFogDepth = length(viewPos.xyz);');
+                    instancedVS=instancedVS.replace('vFogDepth = length(viewPos.xyz);','vec3 childN=normalize(vNormal); if(aSkinWeight>0.00001){ vec3 parentN=vec3(dot(aParentRow0.xyz,aNormal),dot(aParentRow1.xyz,aNormal),dot(aParentRow2.xyz,aNormal)); float parentLen=length(parentN); if(parentLen>0.00001){ vec3 skinN=mix(childN,parentN/parentLen,clamp(aSkinWeight,0.0,1.0)); vNormal=normalize(skinN+childN*0.00001); } } vFogDepth = length(viewPos.xyz);');
                 }
                 const instancedFS = `
                     precision mediump float;
