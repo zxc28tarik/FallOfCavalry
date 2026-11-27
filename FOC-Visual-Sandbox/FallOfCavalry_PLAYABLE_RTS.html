@@ -7807,25 +7807,49 @@ const OrganicCharacterGeometries = (() => {
         }
         function buildFOCStandingLeg(side,style,upper){
             const N=20,x=side*.14,ottoman=style==='salvar',heavy=style==='plate';
+            // Shared anatomical knee ring at the existing .46 hinge. Keep the
+            // original station counts because the skinning table addresses rings.
+            const kx=ottoman?.085:.078,kz=ottoman?.087:.081;
             const levels=upper?[
-                [.410,.063,.070,0,'cloth'],[.438,.078,.083,0,'cloth'],[.460,.087,.087,.004,'cloth'],[.495,.091,.091,.004,'cloth'],
-                [.550,ottoman?.108:.096,.099,.0,'cloth'],[.630,ottoman?.115:.103,.103,-.003,'cloth'],
+                [.460,kx,kz,0,'cloth'],[.490,kx+.004,kz+.005,-.002,'cloth'],
+                [.520,ottoman?.100:.086,.093,-.004,'cloth'],[.560,ottoman?.108:.094,.098,-.005,'cloth'],
+                [.600,ottoman?.114:.100,.102,-.004,'cloth'],[.660,ottoman?.116:.103,.104,-.004,'cloth'],
                 [.730,.110,.102,-.004,'cloth'],[.810,.104,.098,-.005,'cloth'],[.865,.080,.084,-.004,'cloth']
             ]:[
-                [.005,.064,.114,.037,'boot'],[.020,.071,.122,.039,'boot'],[.055,.070,.113,.036,'boot'],
-                [.088,.060,.088,.024,'boot'],[.126,.054,.059,.009,'boot'],[.175,.062,.064,.002,ottoman?'cloth':'boot'],
-                [.235,.071,.075,0,ottoman?'cloth':'boot'],[.310,.076,.080,0,ottoman?'cloth':'boot'],
-                [.380,.079,.083,0,ottoman?'cloth':'boot'],[.427,.082,.086,.003,ottoman?'cloth':'boot'],
-                [.460,.086,.089,.003,ottoman?'cloth':'boot'],[.492,.070,.076,0,ottoman?'cloth':'boot']
+                [.005,.060,.114,.037,'boot'],[.020,.066,.124,.039,'boot'],[.045,.065,.119,.038,'boot'],
+                [.079,.056,.088,.021,'boot'],[.118,.049,.057,.006,'boot'],[.166,.057,.062,-.001,ottoman?'cloth':'boot'],
+                [.222,ottoman?.067:.061,.073,-.006,ottoman?'cloth':'boot'],
+                [.290,ottoman?.079:.072,.083,-.009,ottoman?'cloth':'boot'],
+                [.350,ottoman?.081:.074,.082,-.008,ottoman?'cloth':'boot'],
+                [.395,ottoman?.079:.072,.075,-.004,ottoman?'cloth':'boot'],
+                [.432,kx-.004,kz-.006,-.001,ottoman?'cloth':'boot'],
+                [.460,kx,kz,0,ottoman?'cloth':'boot']
             ];
+            const seam=upper?0:levels.length-1;
             const rings=levels.map(([y,rx,rz,z,mat],ri)=>Array.from({length:N},(_,i)=>{
                 const a=i*2*Math.PI/N,c=Math.cos(a),v=Math.sin(a);
-                const f=mat==='cloth'?(ottoman?.006:.003)*Math.cos(a*6+ri*.85):heavy?.002*Math.cos(a*4):.0015*Math.cos(a*5);
-                return [x+(rx+f)*c,y,z+(rz+f)*v];
+                if(ri===seam)return [x+kx*c,y,kz*v];
+                const envelope=Math.min(1,Math.abs(y-.46)/.075);
+                const f=mat==='cloth'?(ottoman?.006:.003)*envelope*(.65*Math.cos(a*6+y*16)+.35*Math.cos(a*3-y*9)):heavy?.0015*Math.cos(a*4)*envelope:.001*Math.cos(a*5)*envelope;
+                const sole=!upper&&y<.080;
+                const cs=sole?Math.sign(c)*Math.pow(Math.abs(c),.76):c;
+                const vs=sole?Math.sign(v)*Math.pow(Math.abs(v),.83):v;
+                const toe=sole?1-.14*Math.max(0,v):1;
+                // Patella/quadriceps rise, recessed back of knee and calf volume.
+                const knee=!upper?.008*Math.exp(-Math.pow((y-.425)/.035,2))*Math.pow(Math.max(0,v),4):.009*Math.exp(-Math.pow((y-.50)/.04,2))*Math.pow(Math.max(0,v),4);
+                return [x+(rx+f)*cs*toe,y,z+(rz+f)*vs+knee*envelope];
             }));
             const full=OrganicCharacterGeometries.createClosedLoft(rings);
+            // Discard the two internal caps, but retain unused centre vertices to
+            // keep the established skin weight layout. Share exact seam normals.
+            const capStart=(levels.length-1)*N*6+(upper?0:N*3);
+            const filtered=new Uint16Array(full.indices.length-N*3);
+            filtered.set(full.indices.subarray(0,capStart));filtered.set(full.indices.subarray(capStart+N*3),capStart);full.indices=filtered;
+            for(let k=0;k<N;k++){
+                const a=k*2*Math.PI/N,nx=Math.cos(a)/kx,nz=Math.sin(a)/kz,len=Math.hypot(nx,nz),p=(seam*N+k)*3;
+                full.normals[p]=nx/len;full.normals[p+1]=0;full.normals[p+2]=nz/len;
+            }
             const sections=focMountedMaterialSections(full,levels.slice(0,-1).map(st=>st[4]),N,levels[0][4]);
-            if(!upper&&ottoman){const boot=sections.boot,cloth=sections.cloth,cap=boot.indices.slice(-N*3);boot.indices=boot.indices.slice(0,-N*3);const a=new Uint16Array(cloth.indices.length+cap.length);a.set(cloth.indices);a.set(cap,cloth.indices.length);cloth.indices=a;}
             return {full,sections};
         }
         function buildFOCSeatedLeg(side){
