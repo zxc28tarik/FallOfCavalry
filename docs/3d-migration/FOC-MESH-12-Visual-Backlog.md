@@ -19,6 +19,18 @@
 - **Sıradaki:** Yeniçeri idle/walk/attack ve Avrupa arkebüzcü attack yakın planlarını önceki FOC-MESH-11 görüntüleriyle karşılaştır. Ardından omuz-gövde, el-dipçik ve diz/çizme iyileştirmelerine ayrı küçük paketler halinde geç.
 - **Değişmeyenler:** RTS savaşı, 24 arketip, rig/ekipman, kök web oyun, Unity deposu, strateji/şehir/ekonomi/diplomasi sistemleri.
 
+## 27 Kasım 2026 — FOC-MESH-12B yüz/omuz/tutuş iyileştirme
+
+**Durum: IN PROGRESS — görüntü karşılaştırması bekleniyor.**
+
+- Gerçek görüntü kıyasında ilk yüz geçişinin göz/kaş mozaiklerini küçülttüğü, ancak geniş koyu sakal bandı ve yuvarlak omuzların sürdüğü tespit edildi.
+- `buildFOCFixedHead`: sakal bandı kavisli kontura dönüştürüldü, çene üzerinde ara halkalar eklendi; başın karanlık göz alanı için daha yumuşak `faceEye` materyali kullanıldı.
+- `buildFOCArmAndGrip`: omuz başlangıcı ve avuç hacmi daraltıldı. Mevcut `FOC_ARM_ANCHORS` ve silah soketi konumları değişmedi.
+- Mevcut animasyon/geometri kontrolünün üzerine 8 kol tipinin el yüzeyinin silah soketi merkezine oturduğu sınaması eklendi.
+- **CI:** geometri/animasyon iş akışı `45981999491` başarılı (13e/013e model revizyonu); yeni soket testi `45982031534` başarılı (commit `a61bc21f48c94eea9f0d76655b6cdeff0ec52c9f`).
+- **WebGL test:** `45981999567` (commit `013e35e70b4efa14f24201b99bbfc112fa64f18c`) başlatıldı; ekran görüntüsü incelenmeden estetik onay verilmez.
+- **Açık:** at anatomisi, diz/çizme görünümü, gerçek GPU FPS, 300 asker performansı, 24 profilin her birinin yakın plan görsel incelemesi.
+
 ## Birinci öncelik: insan anatomisi
 
 1. **Yüz anatomisi:** Yakın plan yeniçeri ve arkebüzcü başlarında göz ve ağız koyu/kare mozaik görünümünde; gerçekçi göz kapakları, dudak kıvrımları, burun-yanak geçişleri gerekli. Var olan tek parça `focHead_*` mesh topolojisi üzerinden çöz; düşük çözünürlüklü koyu bloklarla kapatma.
