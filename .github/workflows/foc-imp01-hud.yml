@@ -1,0 +1,31 @@
+name: FOC IMP-01 HUD foundation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'FOC-Visual-Sandbox/FallOfCavalry_PLAYABLE_RTS.html'
+      - 'scripts/qa-foc-imp01-hud.mjs'
+      - '.github/workflows/foc-imp01-hud.yml'
+jobs:
+  hud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xauth
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.55.1
+      - name: Verify live HUD behavior
+        run: xvfb-run -a -s '-screen 0 1400x900x24' node scripts/qa-foc-imp01-hud.mjs
+      - name: Preserve HUD proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foc-imp01-hud-report
+          path: output/foc-imp01-hud/
+          if-no-files-found: warn
