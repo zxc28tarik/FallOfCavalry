@@ -7,6 +7,20 @@
 ## İlerleme — 2.2
 [2.2 Genel savaş görünümü ve grup seçimi](FOC-BATTLE-STAGE2-02-BATTLEFIELD-SELECTION.md) kaydedildi: W 15/15 kayıt, toplam ayrıntılandırılan 45/247. Normal/tek/çoklu seçim, bağlamsal menü, hedefleme, kamera, kontrol grupları, yetki ve yaşam doğrulaması, olay çakışması ve iptal senaryoları. Kısayollar ve kalıcı HUD konumları kesinleşmedi. Sırada 2.3. Kod ve KISS elemesi yok.
 
+## Aşama 2 — tamamlanan tasarım taslakları
+28 Kasım 2026. Kullanıcı ikinci aşamanın tamamını bitirmeyi istedi. Altı belge yeniden okunup ana eşlemedeki 247 ID ile karşılaştırıldı: 247/247, eksik/tekrar/fazladan kayıt yok.
+
+| Bölüm | Kayıt | Belge |
+|---|---:|---|
+| 2.1 | 30 | [01-DEPLOYMENT](FOC-BATTLE-STAGE2-01-DEPLOYMENT.md) |
+| 2.2 | 15 | [02-BATTLEFIELD-SELECTION](FOC-BATTLE-STAGE2-02-BATTLEFIELD-SELECTION.md) |
+| 2.3 | 76 | [03-ORDERS-FORMATIONS](FOC-BATTLE-STAGE2-03-ORDERS-FORMATIONS.md) |
+| 2.4 | 67 | [04-INFORMATION-MAP](FOC-BATTLE-STAGE2-04-INFORMATION-MAP.md) |
+| 2.5 | 16 | [05-SECTORS-STRATEGY](FOC-BATTLE-STAGE2-05-SECTORS-STRATEGY.md) |
+| 2.6 | 43 | [06-CONTROLS-RESULTS](FOC-BATTLE-STAGE2-06-CONTROLS-RESULTS.md) |
+
+Durum: işlev-konum-etkileşim taslağı tamamlandı. Şemalar aday yerleşimdir, nihai grafik/tuş onayı değildir. A–J notları ayrı; kod değişikliği, gerçek oynanış testi veya KISS elemesi yok. Üçüncü aşama: birleştirilecek, bağlamsal tutulacak, sürekli gösterilecek ve elenecek adayları gerekçesiyle incele; açık mekanik kararları çözmeden işlevi hazır varsayma. Kullanıcı retleri ve asker modellerinin dondurulması geçerli.
+
 ## Değiştirilemeyecek kullanıcı kararları
 - Asker modelleri şimdilik tamam; yeni model işi yok.
 - Asker grubuna sol tık seçim. Sağ tık seçili grup için yalnız Emirler ve Dizilişler ana menüsü. Ateş emirleri ilgili grupta Emirler altında. Genel strateji, grup menüsünden ayrı.
