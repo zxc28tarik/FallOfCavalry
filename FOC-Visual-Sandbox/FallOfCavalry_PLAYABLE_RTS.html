@@ -1193,33 +1193,40 @@
             display: none !important;
         }
 
+        /* FOC IMP-01: live battle layout only; preview/test surfaces remain available. */
+        #rtsBattleHUD {
+            left: auto;
+            right: 12px;
+            top: 10px;
+            height: auto;
+            padding: 5px;
+            border: 1px solid #8c8067;
+            border-radius: 6px;
+            background: rgba(35, 38, 31, .94);
+        }
+        #rtsBattleHUD .hud-right-actions { flex-wrap: wrap; justify-content: flex-end; }
+        #rtsBattleHUD .rts-btn { color: #ece2ce; background: #34382e; border-color: #746b56; }
+        body.foc-live-battle:not(.foc-legacy-controls-open) #rtsBottomConsole { display: none; }
+        body.foc-live-battle #rtsBottomConsole {
+            bottom: 12px;
+            width: min(100% - 24px, 1120px);
+            flex-wrap: wrap;
+            background: rgba(35, 38, 31, .96);
+            border-color: #8c8067;
+        }
+        body.foc-live-battle #rtsUnitBadge { display: none; }
+        body.foc-live-battle #rtsBottomConsole button:disabled { opacity: .45; cursor: default; }
+        body.foc-live-battle #rtsBottomConsole .rts-btn.active { background: #807557; border-color: #b6a887; }
     </style>
 </head>
 <body oncontextmenu="return false;">
-    <!-- TOP PLAYABLE RTS BATTLE HUD -->
+    <!-- FOC IMP-01: compact live HUD; legacy controls are opt-in until IMP-05. -->
     <div id="rtsBattleHUD" style="display:none;">
-        <div class="hud-army-badge hud-army-player">
-            <span style="font-size:18px;">🇹🇷</span>
-            <span>OSMANLI ORDUSU:</span>
-            <span id="hudPlayerCount" style="color:#ffffff; font-size:15px; font-weight:800;">150</span>
-            <span style="font-size:11px; opacity:0.7;">Asker</span>
-        </div>
-
-        <div class="hud-center-timer">
-            <div id="hudTimer" class="hud-timer-digits">00:00</div>
-            <div id="hudBattleStatus" class="hud-battle-status-text">⚔️ Çatışma Sürüyor</div>
-        </div>
-
         <div class="hud-right-actions">
-            <div class="hud-army-badge hud-army-enemy" style="margin-right:16px;">
-                <span>DÜŞMAN KUTSAL ROMA:</span>
-                <span id="hudEnemyCount" style="color:#ffffff; font-size:15px; font-weight:800;">150</span>
-                <span style="font-size:11px; opacity:0.7;">Asker</span>
-                <span style="font-size:18px;">⚔️</span>
-            </div>
-            <button id="btnPauseBattle" type="button" class="rts-btn" style="padding:4px 10px; font-size:11px;">⏸️ Duraklat</button>
-            <button id="btnOpenArmory" type="button" class="rts-btn" style="padding:4px 10px; font-size:11px;">🏛️ Vitrin</button>
-            <button id="btnOpenDevModal" type="button" class="rts-btn" style="padding:4px 10px; font-size:11px; border-color:#eab308; color:#fde047;">⚙️ Geliştirici (88 Test)</button>
+            <button id="btnPauseBattle" type="button" class="rts-btn">Duraklat</button>
+            <button id="btnToggleLegacyControls" type="button" class="rts-btn" aria-controls="rtsBottomConsole" aria-expanded="false">Emir kontrolleri</button>
+            <button id="btnOpenArmory" type="button" class="rts-btn">Vitrin</button>
+            <button id="btnOpenDevModal" type="button" class="rts-btn">Geliştirici</button>
         </div>
     </div>
 
@@ -1544,13 +1551,13 @@
         <div class="rts-unit-card" id="rtsUnitCard">
             <div class="rts-unit-badge" id="rtsUnitBadge">⚔️</div>
             <div class="rts-unit-details">
-                <div class="rts-unit-title" id="rtsUnitTitle">Tüm Ordu (150 Dost / 150 Düşman)</div>
+                <div class="rts-unit-title" id="rtsUnitTitle">Birlik seçilmedi</div>
                 <div class="rts-unit-sub">
-                    <span id="rtsUnitCount">300 Asker Hazır</span>
+                    <span id="rtsUnitCount">—</span>
                     <span>•</span>
-                    <span id="rtsUnitOrder" class="status-highlight">Emir: Serbest</span>
+                    <span id="rtsUnitOrder" class="status-highlight">Emir: —</span>
                     <span>•</span>
-                    <span id="rtsUnitFormation">Formasyon: Hat</span>
+                    <span id="rtsUnitFormation">Diziliş: —</span>
                 </div>
             </div>
         </div>
@@ -1559,7 +1566,7 @@
 
         <!-- 8 Taktik Emir Butonları (Ajan 05) -->
         <div class="rts-button-group" id="rtsCommandBar">
-            <button id="btnCmdMove" type="button" class="rts-btn active" title="Hedefe İlerle (M)"><kbd>M</kbd> Hareket</button>
+            <button id="btnCmdMove" type="button" class="rts-btn" title="Hedefe İlerle (M)"><kbd>M</kbd> Hareket</button>
             <button id="btnCmdHold" type="button" class="rts-btn" title="Mevcut Konumu Koru ve Savun (H)"><kbd>H</kbd> Konum Tut</button>
             <button id="btnCmdAttack" type="button" class="rts-btn" title="Hedefe Hücum Et (A)"><kbd>A</kbd> Saldır</button>
             <button id="btnCmdAttackMove" type="button" class="rts-btn" title="Saldırarak İlerle (T)"><kbd>T</kbd> Saldır-İlerle</button>
@@ -1573,7 +1580,7 @@
 
         <!-- 6 Taktik Formasyon Butonları (Ajan 03) -->
         <div class="rts-button-group" id="rtsFormationBar">
-            <button id="btnFormLine" type="button" class="rts-btn active" title="Geniş Ateş Hattı (F1)">Hat</button>
+            <button id="btnFormLine" type="button" class="rts-btn" title="Geniş Ateş Hattı (F1)">Hat</button>
             <button id="btnFormColumn" type="button" class="rts-btn" title="İntikal Kolu (F2)">Kol</button>
             <button id="btnFormWedge" type="button" class="rts-btn" title="Yarma Kaması (F3)">Kama</button>
             <button id="btnFormLoose" type="button" class="rts-btn" title="Gevşek Düzen (Top Atışına Karşı) (F4)">Gevşek</button>
@@ -18217,6 +18224,67 @@ function createSoldierPartTemplates() {
         /* ============================================================================
          * RTS BATTLE ENGINE (Dinamik Çok Ajanlı Oynanabilir Muharebe Sistemi)
          * ============================================================================ */
+        // IMP-01: read-only view of the live engine, not a second command/selection engine.
+        class FOCBattleHUD {
+            constructor(engine) {
+                this.engine = engine;
+                this.legacyOpen = false;
+                this.orderButtons = {move:'btnCmdMove',hold:'btnCmdHold',attack:'btnCmdAttack',attack_move:'btnCmdAttackMove',retreat:'btnCmdRetreat',fire_at_will:'btnCmdFireAtWill',hold_fire:'btnCmdHoldFire',regroup:'btnCmdRegroup'};
+                this.formationButtons = {line:'btnFormLine',column:'btnFormColumn',wedge:'btnFormWedge',loose:'btnFormLoose',skirmish:'btnFormSkirmish',circle:'btnFormCircle'};
+                this.orderNames = {move:'İlerle',hold:'Konumu koru',attack:'Saldır',attack_move:'Saldırarak ilerle',retreat:'Geri çekil',fire_at_will:'Serbest ateş',hold_fire:'Ateşi kes',regroup:'Toplan'};
+                this.formationNames = {line:'Hat',column:'Kol',wedge:'Kama',loose:'Seyrek',skirmish:'Avcı',circle:'Çember'};
+            }
+            setText(id, value) {
+                const el = document.getElementById(id);
+                if (el && el.textContent !== value) el.textContent = value;
+            }
+            snapshot() {
+                const engine = this.engine;
+                let ids = engine.selectedSoldierIds || [];
+                if (!ids.length) ids = (engine.controller?.renderer?.selectionManager?.getSelectedList() || []).map(u => u.viewId || u.id);
+                const cleanIds = new Set(ids.map(id => typeof id === 'string' && id.includes(':') ? id.split(':')[1] : id));
+                const selected = engine.playerSoldiers.filter(s => cleanIds.has(s.id) && s.alive && s.side !== 'enemy');
+                const shared = key => {
+                    const values = [...new Set(selected.map(s => s[key] || null))];
+                    return values.length === 1 ? values[0] : values.length > 1 ? 'mixed' : null;
+                };
+                return {count:selected.length, archetype:shared('archetype'), order:shared('currentOrder'), formation:shared('formation'), paused:engine.isPaused, phase:engine.gameState};
+            }
+            setLegacyOpen(open) {
+                this.legacyOpen = Boolean(open) && this.engine.gameState === 'IN_BATTLE';
+                document.body.classList.toggle('foc-legacy-controls-open', this.legacyOpen);
+                const toggle = document.getElementById('btnToggleLegacyControls');
+                if (toggle) toggle.setAttribute('aria-expanded', String(this.legacyOpen));
+                if (this.legacyOpen) this.render();
+            }
+            setLive(live) {
+                document.body.classList.toggle('foc-live-battle', Boolean(live));
+                this.setLegacyOpen(false);
+                const hud = document.getElementById('rtsBattleHUD');
+                if (hud) hud.style.display = live ? 'flex' : 'none';
+                if (live) this.render();
+            }
+            render() {
+                if (this.engine.gameState !== 'IN_BATTLE') return;
+                this.setText('btnPauseBattle', this.engine.isPaused ? 'Devam et' : 'Duraklat');
+                if (!this.legacyOpen) return;
+                const v = this.snapshot();
+                const name = (value, names) => value === 'mixed' ? 'Karışık' : names[value] || '—';
+                this.setText('rtsUnitTitle', v.count ? (v.archetype === 'mixed' ? 'Karışık seçim' : 'Seçili askerler') : 'Birlik seçilmedi');
+                this.setText('rtsUnitCount', v.count ? v.count + ' asker seçili' : '—');
+                this.setText('rtsUnitOrder', 'Emir: ' + name(v.order,this.orderNames));
+                this.setText('rtsUnitFormation', 'Diziliş: ' + name(v.formation,this.formationNames));
+                for (const [value,id] of [...Object.entries(this.orderButtons),...Object.entries(this.formationButtons)]) {
+                    const el = document.getElementById(id);
+                    if (!el) continue;
+                    const active = v.count > 0 && (id.startsWith('btnCmd') ? v.order === value : v.formation === value);
+                    if (el.disabled !== !v.count) el.disabled = !v.count;
+                    el.classList.toggle('active', active);
+                    if (el.getAttribute('aria-pressed') !== String(active)) el.setAttribute('aria-pressed', String(active));
+                }
+            }
+        }
+
         class RTSBattleEngine {
             constructor(previewController) {
                 this.controller = previewController;
@@ -18230,6 +18298,7 @@ function createSoldierPartTemplates() {
                 this.lastGroupRecall = null;
                 this.lastGroupRecallTime = 0;
                 this._uiInitialized = false;
+                this.hud = new FOCBattleHUD(this);
 
                 // AJAN 03: Mermi İzi (Tracer) Havuzu
                 this.activeTracers = [];
@@ -18357,9 +18426,6 @@ function createSoldierPartTemplates() {
             }
 
             applyFormationToSelected(formKey, formName) {
-                const elForm = document.getElementById('rtsUnitFormation');
-                if (elForm) elForm.textContent = `Formasyon: ${formName}`;
-
                 let ids = this.selectedSoldierIds;
                 if (!ids || ids.length === 0) {
                     const selList = this.controller?.renderer?.selectionManager?.getSelectedList() || [];
@@ -18401,9 +18467,6 @@ function createSoldierPartTemplates() {
             }
 
             applyOrderToSelected(cmdKey, cmdName) {
-                const elOrder = document.getElementById('rtsUnitOrder');
-                if (elOrder) elOrder.textContent = `Emir: ${cmdName}`;
-
                 let ids = this.selectedSoldierIds;
                 if (!ids || ids.length === 0) {
                     const selList = this.controller?.renderer?.selectionManager?.getSelectedList() || [];
@@ -18546,23 +18609,7 @@ function createSoldierPartTemplates() {
             }
 
             updateUnitCard() {
-                const elTitle = document.getElementById('rtsUnitTitle');
-                const elBadge = document.getElementById('rtsUnitBadge');
-                const elCount = document.getElementById('rtsUnitCount');
-
-                const selected = this.playerSoldiers.filter(s => this.selectedSoldierIds.includes(s.id) && s.alive);
-                if (selected.length === 0) {
-                    if (elTitle) elTitle.textContent = 'Tüm Ordu (150 Dost / 150 Düşman)';
-                    if (elBadge) elBadge.textContent = '⚔️';
-                    if (elCount) elCount.textContent = `${this.stats.playerAlive} Asker Hazır`;
-                } else {
-                    const first = selected[0];
-                    const isCav = first.mountType !== 'foot';
-                    if (elBadge) elBadge.textContent = isCav ? '🐎' : '🇹🇷';
-                    if (elTitle) elTitle.textContent = `${selected.length}x ${first.archetype || 'Asker'}`;
-                    const avgHp = Math.round(selected.reduce((acc, s) => acc + (s.hp || 100), 0) / selected.length);
-                    if (elCount) elCount.textContent = `%${avgHp} Ortalama Can • Hazır`;
-                }
+                this.hud.render();
             }
 
             issueMoveOrder(targetX, targetZ, soldierIds = null) {
@@ -18637,9 +18684,12 @@ function createSoldierPartTemplates() {
                 if (btnPause) {
                     btnPause.addEventListener('click', () => {
                         this.isPaused = !this.isPaused;
-                        btnPause.textContent = this.isPaused ? '▶️ Devam Et' : '⏸️ Duraklat';
+                        this.hud.render();
                     });
                 }
+
+                const legacyToggle = document.getElementById('btnToggleLegacyControls');
+                if (legacyToggle) legacyToggle.addEventListener('click', () => this.hud.setLegacyOpen(!this.hud.legacyOpen));
 
                 // 6 Formasyon Düğmesi Dinamik Bağlantısı (Ajan 02)
                 const formButtons = [
@@ -18654,9 +18704,9 @@ function createSoldierPartTemplates() {
                     const btn = document.getElementById(fb.id);
                     if (btn) {
                         btn.addEventListener('click', () => {
-                            formButtons.forEach(o => document.getElementById(o.id)?.classList.remove('active'));
-                            btn.classList.add('active');
+                            if (this.gameState !== 'IN_BATTLE') return;
                             this.applyFormationToSelected(fb.form, fb.name);
+                            this.hud.render();
                         });
                     }
                 });
@@ -18676,9 +18726,9 @@ function createSoldierPartTemplates() {
                     const btn = document.getElementById(cb.id);
                     if (btn) {
                         btn.addEventListener('click', () => {
-                            cmdButtons.forEach(o => document.getElementById(o.id)?.classList.remove('active'));
-                            btn.classList.add('active');
+                            if (this.gameState !== 'IN_BATTLE') return;
                             this.applyOrderToSelected(cb.cmd, cb.name);
+                            this.hud.render();
                         });
                     }
                 });
@@ -18775,8 +18825,7 @@ function createSoldierPartTemplates() {
                 if (preOverlay) preOverlay.style.display = 'flex';
                 const postOverlay = document.getElementById('rtsPostBattleOverlay');
                 if (postOverlay) postOverlay.style.display = 'none';
-                const hud = document.getElementById('rtsBattleHUD');
-                if (hud) hud.style.display = 'none';
+                this.hud.setLive(false);
             }
 
             startBattle() {
@@ -18804,13 +18853,13 @@ function createSoldierPartTemplates() {
                 if (preOverlay) preOverlay.style.display = 'none';
                 const postOverlay = document.getElementById('rtsPostBattleOverlay');
                 if (postOverlay) postOverlay.style.display = 'none';
-                const hud = document.getElementById('rtsBattleHUD');
-                if (hud) hud.style.display = 'flex';
+                this.hud.setLive(true);
 
                 if (this.controller) {
                     this.controller._buildSectorManager('test');
                     this.initSoldierInstances();
                     this.syncLivingSoldiersToRenderer();
+                    this.hud.render();
 
                     const cam = this.controller.renderer?.cameraController;
                     if (cam) {
@@ -19317,20 +19366,7 @@ function createSoldierPartTemplates() {
             }
 
             updateHUD() {
-                const elPlayer = document.getElementById('hudPlayerCount');
-                const elEnemy = document.getElementById('hudEnemyCount');
-                const elTimer = document.getElementById('hudTimer');
-
-                if (elPlayer) elPlayer.textContent = this.stats.playerAlive;
-                if (elEnemy) elEnemy.textContent = this.stats.enemyAlive;
-
-                if (elTimer) {
-                    const m = Math.floor(this.battleTime / 60);
-                    const s = Math.floor(this.battleTime % 60);
-                    elTimer.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                }
-
-                this.updateUnitCard();
+                this.hud.render();
             }
 
             checkBattleOutcome() {
@@ -19356,6 +19392,7 @@ function createSoldierPartTemplates() {
                 const eLoss = document.getElementById('postBattleEnemyLosses');
 
                 if (!modal) return;
+                this.hud.setLive(false);
                 modal.style.display = 'flex';
 
                 if (title) {
@@ -20640,6 +20677,7 @@ function createSoldierPartTemplates() {
                     const btn = document.getElementById(btnId);
                     if (btn) {
                         btn.addEventListener('click', () => {
+                            if (this.battleEngine?.gameState === 'IN_BATTLE') return;
                             if (renderer.commandManager) {
                                 renderer.commandManager.executeCommand(cmd);
                                 document.querySelectorAll('#rtsCommandBar .rts-btn').forEach(b => b.classList.remove('active'));
@@ -20662,6 +20700,7 @@ function createSoldierPartTemplates() {
                     const btn = document.getElementById(btnId);
                     if (btn) {
                         btn.addEventListener('click', () => {
+                            if (this.battleEngine?.gameState === 'IN_BATTLE') return;
                             if (renderer.formationManager) {
                                 renderer.formationManager.setFormation(form);
                                 document.querySelectorAll('#rtsFormationBar .rts-btn').forEach(b => b.classList.remove('active'));
@@ -20673,6 +20712,10 @@ function createSoldierPartTemplates() {
             }
 
             _updateRTSHUD() {
+                if (this.battleEngine?.gameState === 'IN_BATTLE') {
+                    this.battleEngine.hud.render();
+                    return;
+                }
                 const renderer = this.renderer;
                 if (!renderer || !renderer.selectionManager) return;
 
@@ -20684,9 +20727,9 @@ function createSoldierPartTemplates() {
                 const cardBadge = document.getElementById('rtsUnitBadge');
 
                 if (selList.length === 0) {
-                    if (cardTitle) cardTitle.textContent = 'Tüm Ordu (150 Dost / 150 Düşman)';
-                    if (cardCount) cardCount.textContent = '300 Asker Hazır';
-                    if (cardOrder) cardOrder.textContent = 'Emir: Serbest';
+                    if (cardTitle) cardTitle.textContent = 'Birlik seçilmedi';
+                    if (cardCount) cardCount.textContent = '—';
+                    if (cardOrder) cardOrder.textContent = 'Emir: —';
                     if (cardForm && renderer.formationManager) {
                         const fNames = { line: 'Hat', column: 'Kol', wedge: 'Kama', loose: 'Gevşek', skirmish: 'Dağınık', circle: 'Çember' };
                         cardForm.textContent = `Formasyon: ${fNames[renderer.formationManager.currentFormation] || 'Hat'}`;
