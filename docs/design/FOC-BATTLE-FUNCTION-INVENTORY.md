@@ -199,3 +199,111 @@ Her satır bağımsız işlev adayıdır. Her işlevin amacı, oyuncu eylemi ve 
 
 ## Bir sonraki aşamanın teslimi (henüz yapılmayacak)
 Her envanter satırı: tetikleyici, bağlam, kullanıcı eylemi, giriş verisi, gerçek durum, sonuç, hata/iptal ve aday etkileşim yüzeyi ile eşleştirilir. Savaş öncesi, savaş sırasında, sektör değişiminde ve savaş sonrasında kullanım senaryoları oluşturulur. Daha sonra konum/etkileşim tasarımı ve görsel örnekler. Son aşamada KISS: tekrarları birleştir, kalıcı görünürlüğü en aza indir, gerekçesi olmayan işlevi çıkar; kullanıcının önceki açık retlerini koru. Bu aşamada hiçbir satır sırf HUD'da yer kaplar diye silinmez. Yeni mekanik veya kod uygulanmadı; tüm Ö/A maddeleri inceleme adaylarıdır.
+
+## 28 Kasım 2026 — Diğer RTS oyunlarından ek adaylar
+
+Her madde Ö/A: yeni öneri veya mevcut maddenin ayrıntısı. Kaynak oyun davranışı ile FOC uyarlaması ayrıdır. Tuşlar referans örneğidir, FOC için atanmış değildir. Önce işlev, sonra yerleşim, en son KISS. Sağ tık menüsü, kalıcı sayaç/simge retleri ve asker modellerini koruma kararları geçerlidir.
+
+### 13 — Seçim ve kamera
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 13.01 | Tüm orduyu seç | Rome II Ctrl+A | Aktif sektörde yönetilebilir grupları birlikte seç; diğer sektörleri yanlışlıkla dahil etme. |
+| 13.02 | Önceki/sonraki grup | Shogun 2 virgül/nokta | Yaşayan dost grupları sırayla bul. |
+| 13.03 | Karma seçimde türler arası geçiş | AoE IV Tab | Seçimi kaybetmeden ilgili türün emirlerini kullan. |
+| 13.04 | Görünür aynı tür grupları seç | AoE IV | Kamera alanındaki aynı türleri seç; tüm ordu seçimiyle karışmasın. |
+| 13.05 | Emirsiz birlikleri bul | AoE IV | Görevsiz grupları bul; kasıtlı savunma boşta sayılmaz. |
+| 13.06 | Hızlı kamera kaydırma | Rome II Shift+WASD | Uzak bölgeye hızlı git. |
+| 13.07 | Kamera yönünü sıfırla | Shogun 2 | Alışılmış bakışa dön. |
+| 13.08 | Taktik genel görünüm | Rome II | Aktif alanı üstten incele; yalnız izinli bilgi. |
+| 13.09 | Kamera noktası kaydet | FOC önerisi | Sık denetlenen mevzilere dön. |
+| 13.10 | Son olaya odaklan | FOC önerisi | Bildirim kaynağına git; pasif sektör rapor zamanı korunur. |
+
+### 14 — Emir ve davranış
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 14.01 | Yürü/koş | Shogun 2 R, Manor Lords | Hız ve yorgunluk tercihi; at için uygun tempo. |
+| 14.02 | Düzenli yaklaş / doğrudan hücum | Bannerlord | Düzeni koruyarak yaklaşma ile hızlı teması ayır. |
+| 14.03 | Takibi kes | Shogun 2 guard | Kaçan düşmanı kovalamayıp mevziyi koru. |
+| 14.04 | Sınırlı karşılık | Stronghold | Yakın tehdide kısa mesafede karşılık ver ve dön. |
+| 14.05 | Agresif takip | Stronghold | Uygun düşmanı daha geniş alanda takip et. |
+| 14.06 | Kontrollü geri adım | Manor Lords | Cepheyi düşmana dönük tutup çatışırken geri hareket et. |
+| 14.07 | İleri baskı | Manor Lords | Temastaki hattı ileri taşımayı dene. |
+| 14.08 | Menzilli tehdide karşı korun | Manor Lords | Uygun donanımla korunma; tüfek mermisine karşı hayali kalkan garantisi yok. |
+| 14.09 | Dengeli davranış | Manor Lords | Özel saldırı/savunma duruşundan normal davranışa dön. |
+| 14.10 | Devriye | Stronghold | İki nokta arasında iptal edilebilir görev. |
+| 14.11 | Alanı koru | Stronghold uyarlaması | Belirlenen bölgeyi savun; dost takipten farklı. |
+| 14.12 | Bölgeye ateş | FOC önerisi | Yalnız uygun silah ve gerçek alan atış mekanizması varsa. |
+| 14.13 | Birliği savaştan çıkar | Shogun 2 withdraw | Taktik geri çekilmeden ayrı, kalıcı çıkış ve kampanya sonucu. |
+| 14.14 | At in/bin | Ultimate General | Yalnız uygun arketip ve gerçek at yönetimi varsa. |
+
+### 15 — Diziliş ve organizasyon
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 15.01 | Çoklu grup dizilişini kilitle | Rome II/Shogun 2 Ctrl+G | Grupların birbirine göre yerlerini koru; kendi iç dizilişlerinden ayrı. |
+| 15.02 | Geçici komuta grubu oluştur/çöz | Shogun 2 G | Ortak emir ver; kalıcı asker kimliği değişmez. |
+| 15.03 | Fareyle cephe çiz | Rome II | Hedefleme sırasında yön ve genişliği sürükleyerek belirle; sağ tık menüsü kararı korunur. |
+| 15.04 | Saf sayısını ayarla | Shogun 2 | Geniş/sığ veya dar/derin düzen; güvenli aralık sınırı. |
+| 15.05 | Kısa ileri/geri adım | Shogun 2 | Mevzide küçük düzeltme. |
+| 15.06 | Küçük açılı dönüş | Shogun 2 | Yüz çevirmenin hassas çeşidi. |
+| 15.07 | Kare diziliş | FOC dönem uyarlaması | Çemberden farklı dört yüzlü savunma; uygunluk ve tarihsel bağlam incelenir. |
+| 15.08 | Kalkan duvarı | Bannerlord | Uygun kalkanlı birlik sıklaşır; tüm türlere sunulmaz. |
+| 15.09 | Avcı alt grubu ayır/geri birleştir | Ultimate General | Keşif veya taciz için geçici grup; kimlik ve donanım korunur. |
+| 15.10 | Eksilen safları tamamla | Cossacks 3 | Uygun yedeklerle gerçek takviye; görsel kapasiteden ayrı. |
+| 15.11 | Üst komuta grubu oluştur | Ultimate General | Birden fazla grubu tek görev altında yönet; kalıcı askerleri karıştırma. |
+| 15.12 | Savunma hattı çiz | Ultimate General | Birden çok gruba ortak hat tanımla; gerçek arazi ve yerleşim kontrolü. |
+
+### 16 — Bilgi ve öngörü
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 16.01 | Mevcut emirleri geçici göster | Rome II Space/WARNO Shift | Hedef ve rotaları ihtiyaçta gör; sürekli çizgi yok. |
+| 16.02 | Görüş hattını konumdan ölç | WARNO C | İşaretlenen mevzinin görülebilir alanı; gerçek görüş hesabı gerekli. |
+| 16.03 | Etkili ateş alanı | Napoleon uyarlaması | Silaha ve yönüne göre menzil yayı; isabet garantisi yok. |
+| 16.04 | Emir kuyruğunu incele/tek adımı sil | CoH3 uyarlaması | Yalnız yanlış sıradaki emri düzelt. |
+| 16.05 | Yorgunluk nedeni ve dinlenme | Manor Lords | Koşu, donanım, savaş ve dinlenmenin gerçek etkileri. |
+| 16.06 | Etkinlik değişimi nedenleri | Manor Lords | Arazi, çevrelenme ve yorgunluğun gerçek etkisini açıkla. |
+| 16.07 | Ateş edememe nedeni | WARNO/FOC uyarlaması | Menzil, görüş, dost engeli, doldurma ve emir durumunu ayır. |
+| 16.08 | Kanat/arka tehdit uyarısı | Manor Lords/Ultimate General uyarlaması | Gerçek çevrelenme hesabı varsa. |
+| 16.09 | Birlik karşılaştırması | FOC önerisi | Rol, silah, koruma ve zayıflık; gizli düşman bilgisi yok. |
+| 16.10 | Son bilinen düşman konumu | Ultimate General keşif uyarlaması | Eski raporu gerçek anlık konumdan ayır. |
+| 16.11 | Saha engeli ve korunma bilgisi | Ultimate General | Duvar, hendek, orman gibi gerçek arazi etkisi. |
+| 16.12 | Tahmini varış | FOC önerisi | Rota, hız ve gecikmeye bağlı belirsiz tahmin. |
+
+### 17 — Komuta, ikmal ve hazırlık
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 17.01 | Yetkiye göre komuta devral | Bannerlord | Yalnız atanmış birlikleri yönet. |
+| 17.02 | Birlik komutanına görev devret | Ultimate General/Bannerlord | Hedef ver ve ayrıntıyı komutana bırak; manuel emir öncelikli. |
+| 17.03 | Keşif görevi | Ultimate General | Belirli alanı araştır ve raporla. |
+| 17.04 | Saha ikmalini koru/yenile | Ultimate General | Yalnız gerçek ikmal sistemiyle; kaynak, erişim ve tüketim. |
+| 17.05 | Komuta taşıyıcısının durumu | Cossacks 3/Bannerlord | Lider, sancak, davulcu varsa gerçek kayıp ve etkisi; model işi başlatılmaz. |
+| 17.06 | Birlikleri rol bazında dağıt | Bannerlord Order of Battle | Tür/donanım ve komuta sınırına göre hazırlıkta dağıt. |
+| 17.07 | Konuşlanmayı sıfırla | Bannerlord | Savaş öncesi ilk geçerli düzene dön. |
+| 17.08 | Hazır grup yerleşimi şablonu | Total War/FOC uyarlaması | Geçerlilik kontrolüyle yeniden kullanılabilir yerleşim. |
+
+### 18 — Kullanım ve hata önleme
+| ID | Aday | Referans | FOC amacı ve kullanım mantığı |
+|---|---|---|---|
+| 18.01 | Taktik duraklatmada emir hazırla | CoH3 | Tek oyuncuda zamanı durdurup emir planla; sektör/haberci zamanını tutarlı tut. |
+| 18.02 | Tuşları yeniden ata | AoE IV/Shogun 2 | Çakışma uyarısı ve varsayılana dönme. |
+| 18.03 | Arayüzü geçici gizle | Shogun 2 K | Savaşı incele; geri açma yolu korunur. |
+| 18.04 | Mini haritayı aç/kapat ve ölçekle | Shogun 2 O/J | Gerektiğinde kullan; kalıcı görünüm kararı verilmedi. |
+| 18.05 | Klavye ile menü gezinme | FOC önerisi | Yön, Enter ve Esc; fare zorunlu değil. |
+| 18.06 | Geçersiz komut nedeni/alternatif | FOC önerisi | Gerçek sebep ve varsa çözüm; sessiz başarısızlık yok. |
+| 18.07 | Bağlamsal yardım | Shogun 2/FOC uyarlaması | İşlev, etki ve koşulu ihtiyaçta öğren. |
+| 18.08 | Kamera giriş ayarları | FOC önerisi | Hassasiyet, ters yön ve kenar kaydırma; hedeflemeyle çakışmasın. |
+
+## Araştırma kaynakları
+- https://www.feralinteractive.com/en/manuals/shogun2tw/latest/steam/
+- https://shogun2-encyclopedia.com/how_to_play/049_enc_manual_battle_conflict_controls.html
+- https://academy.totalwar.com/rome2/
+- https://manualzz.com/doc/26597478/sega-total-war-napoleon-video-game-user-manual
+- https://www.taleworlds.com/en/News/536 ; https://www.taleworlds.com/en/News/547 ; https://www.taleworlds.com/en/News/493 ; https://www.taleworlds.com/en/News/611 (resmi arama özetleri; bazı sayfalar doğrudan açılmadı)
+- https://wiki.hoodedhorse.com/Manor_Lords/Warfare
+- https://store.steampowered.com/app/502520/Ultimate_General_Civil_War/
+- https://www.ageofempires.com/news/aoeiv-shortcuts-revealed/ ; https://news.xbox.com/en-us/2021/10/22/age-of-empires-iv-hotkeys-revealed/
+- https://manuals.plus/m/3f470b999397003a440768966b8b85ebf17ef25b9a4c4a0caa2dd2e39dbd80cf (Stronghold kılavuz kopyası)
+- https://cossacks3.fandom.com/wiki/Formations ; https://steamcommunity.com/app/333420/discussions/0/350542145705166969/ (topluluk kaynakları, sayısal bonus alınmadı)
+- https://news.xbox.com/en-us/2022/12/21/company-of-heroes-3-xbox-launch-console-version/
+- https://store.steampowered.com/news/posts/?enddate=1676014771&feed=steam_community_announcements ; https://defkey.com/warno-shortcuts (ikincil tuş referansı)
+
+Ek aday 64, toplam 175 kayıt (alt işlevler dahil, benzersiz mekanik sayısı değil). Dokümantasyon incelemesi; oyunlar bizzat oynanmadı. Modern savaş teknolojisi ve üs inşası kopyalanmadı. Kod, yerleşim ve tuş ataması değiştirilmedi.
