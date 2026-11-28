@@ -4,6 +4,9 @@
 ## İlerleme — 2.1
 [2.1 Karşılaşma ve konuşlanma taslağı](FOC-BATTLE-STAGE2-01-DEPLOYMENT.md) kaydedildi: P+D 30/30 kayıt, iki aday ekran, sektör/komutan/yerleştirme/yedek/başlatma akışları, hata ve iptal senaryoları. Yerleşim öneridir, kesin kullanıcı onayı veya uygulama değildir. Sektör ve komuta mekaniklerinin açık kuralları korunur. Sırada 2.2. Ana envanter 247, KISS elemesi yok.
 
+## İlerleme — 2.2
+[2.2 Genel savaş görünümü ve grup seçimi](FOC-BATTLE-STAGE2-02-BATTLEFIELD-SELECTION.md) kaydedildi: W 15/15 kayıt, toplam ayrıntılandırılan 45/247. Normal/tek/çoklu seçim, bağlamsal menü, hedefleme, kamera, kontrol grupları, yetki ve yaşam doğrulaması, olay çakışması ve iptal senaryoları. Kısayollar ve kalıcı HUD konumları kesinleşmedi. Sırada 2.3. Kod ve KISS elemesi yok.
+
 ## Değiştirilemeyecek kullanıcı kararları
 - Asker modelleri şimdilik tamam; yeni model işi yok.
 - Asker grubuna sol tık seçim. Sağ tık seçili grup için yalnız Emirler ve Dizilişler ana menüsü. Ateş emirleri ilgili grupta Emirler altında. Genel strateji, grup menüsünden ayrı.
