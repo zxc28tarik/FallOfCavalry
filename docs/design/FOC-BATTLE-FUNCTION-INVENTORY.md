@@ -307,3 +307,116 @@ Her madde Ö/A: yeni öneri veya mevcut maddenin ayrıntısı. Kaynak oyun davra
 - https://store.steampowered.com/news/posts/?enddate=1676014771&feed=steam_community_announcements ; https://defkey.com/warno-shortcuts (ikincil tuş referansı)
 
 Ek aday 64, toplam 175 kayıt (alt işlevler dahil, benzersiz mekanik sayısı değil). Dokümantasyon incelemesi; oyunlar bizzat oynanmadı. Modern savaş teknolojisi ve üs inşası kopyalanmadı. Kod, yerleşim ve tuş ataması değiştirilmedi.
+
+## 28 Kasım 2026 — HUD, bilgi ekranları ve görsel geri bildirim araştırması
+
+Kullanıcı yalnız emir değil HUD, ekran, bilgi ve seçenek araştırmasını da istedi. Önceki 175 kayıt korunur. Aşağıdaki kayıtlar Ö/A, bazıları mevcut mekaniklerin sunum/erişim alt işlevleridir; ayrı panel veya tuş gerektirmez. Önce oluşturma, sonra yerleşim, en son KISS. Kalıcı dost/düşman toplam sayaçları ve birlik üstü simgeler açıkça reddedildi; referans oyunlarda bulunması onları geri getirmez. Güç dengesi çubuğu da kabul edilmiş değildir; kaynaklarda incelendi fakat kalıcı sayaç benzeri alternatif olarak ayrı onay gerektirir. Asker modelleri değişmez.
+
+### 19 — Birlik bilgi ekranları
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 19.01 | Birlik ayrıntı incelemesi | Napoleon / WARNO | Seçilen grup hakkında temel bilgi ile ayrıntılı özellikleri ayrı inceleyebilme. |
+| 19.02 | Komutan adı, rütbesi ve portresi | Ultimate General | Grubun kimin komutasında olduğunu ve komuta zincirini öğrenme. |
+| 19.03 | Birliğin üst organizasyonu | Ultimate General | Grubun hangi sektör ve üst komuta altında bulunduğunu öğrenme. |
+| 19.04 | Birlik deneyimi ve kıdemi | CoH2 | Kalıcı deneyim sistemi varsa birliğin tecrübesini ve etkisini anlama. |
+| 19.05 | Verilen ve alınan kayıplar | Ultimate General | Seçili grubun savaş performansını isteğe bağlı inceleme; gizli kesin düşman bilgisi yok. |
+| 19.06 | Moral değişiminin yönü | Ultimate General / FOC uyarlaması | Moral iyileşiyor mu kötüleşiyor mu, gerçek state geçmişinden öğrenme. |
+| 19.07 | Doldurma ilerlemesi ve hazır silahlar | Ultimate General | Birliğin bir sonraki atışa hazırlığını anlama; gerçek doldurma hesabı şart. |
+| 19.08 | Mevcut arazi koruması | Ultimate General | Birliğin bulunduğu mevzide korunma etkisini inceleme. |
+| 19.09 | Saldırı ve savunma özellikleri | Manor Lords | Saldırı, zırh, kalkan, zırh karşıtı etki, hücum gibi gerçek özellikleri ayrı açıklama. |
+| 19.10 | Temel özellik ve anlık etkinlik ayrımı | Manor Lords | Kalıcı özellik ile yorgunluk, moral, arazi kaynaklı geçici değişimi ayırma. |
+| 19.11 | Birlik kartı/listesi alternatif erişimi | Rome II / Ultimate General | Savaş alanında bulunması zor grubu isteğe bağlı listeden seçme; kalıcı kart şeridi kabul edilmiş değil. |
+| 19.12 | Birliklerin kategori ve sektör filtreleri | Ultimate General / FOC uyarlaması | İsteğe bağlı listede birlik türü, komutan ve sektör bazında bulma. |
+| 19.13 | Birlik durum metni | Napoleon / FOC uyarlaması | Bekliyor, ilerliyor, yakın savaşta, ateş ediyor, kaçıyor gibi gerçek durumları açıklama. |
+| 19.14 | Çoklu seçimin ortak ve farklı özellikleri | FOC önerisi | Birden çok grupta farklı emir, donanım veya durum varsa yanlış ortalama yerine farkı gösterme. |
+
+### 20 — Savaş alanı görsel geri bildirimi
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 20.01 | Seçili grubun zemin sınırı | Total War / kullanıcı kararı | Yalnız seçimde grubun alanını göster; sürekli birlik üstü simge yok. |
+| 20.02 | Hedefin geçici zemin sınırı | FOC uyarlaması | Saldırı hedefini yanlış gruptan ayır; yalnız hedefleme bağlamında. |
+| 20.03 | Varışta oluşacak dizilişin hayalet önizlemesi | Rome II / Shogun 2 | Hedef konum, cephe yönü ve slotları emirden önce göster. |
+| 20.04 | Hareket yolu ile doğrudan hedef çizgisi ayrımı | Total War / FOC uyarlaması | Gerçek rota varsa rota; yoksa yalnız hedef doğrultusu, geçilebilir rota iddiası yok. |
+| 20.05 | Yön ve cephe oku | Total War / FOC uyarlaması | Varışta hangi tarafa bakacağını belirt. |
+| 20.06 | Ateş yayı ve menzil katmanı | Shogun 2 | İhtiyaç halinde menzil/yön göstergesi; gerçek silah hesabına bağlı. |
+| 20.07 | Komutan etki alanı | Shogun 2 | Komuta veya moral etkisi gerçekten mevcutsa alanı isteğe bağlı inceleme. |
+| 20.08 | Engel arkasında seçili birliği görme | Shogun 2 occlusion outlines | Geçici siluet yardımı; görüş kurallarını ihlal etmez. |
+| 20.09 | Bitki örtüsünü geçici gizleme | Shogun 2 | Kamera görüşünü açma; oyun içi keşif ve gizlilik hesabını değiştirmez. |
+| 20.10 | Sinematik görünüm | Shogun 2 | HUD'u isteğe bağlı gizle, normal kullanıma dönüş kolay. |
+| 20.11 | Geçici katman seçenekleri | Shogun 2 | Hareket, seçim, ateş yayı ve benzeri katmanları ayrı aç/kapat; reddedilen simgeleri geri getirmez. |
+| 20.12 | Hedefleme sırasında fare işaretçisi değişimi | WARNO / FOC uyarlaması | Hareket, saldırı, uygun olmayan hedef ve iptali ayırt et. |
+| 20.13 | Akıllı hedef bilgisi | WARNO | Hedefin uygunluğu, menzil, engel ve silah uyumu; kesin kazanma garantisi veya gizli istatistik yok. |
+| 20.14 | Kritik durumun görsel vurgusu | Napoleon routing / FOC uyarlaması | Kaçış ve komuta kaybı gibi olayı geçici vurgula; sürekli sancak UI yok. |
+
+### 21 — Harita, arazi ve hedef bilgisi
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 21.01 | Kamera görüş alanı ve yönü | RTS radar haritaları / FOC uyarlaması | Mini harita veya taktik görünümde kameranın nerede ve hangi yöne baktığını anlama. |
+| 21.02 | Harita ölçeği ve yakınlaştırma | Napoleon | Farklı büyüklükte sahalarda konumları inceleme. |
+| 21.03 | Taktik haritaya geçiş ve geri dönüş | Rome II | Üstten görünüm ile normal kamera arasında konumu kaybetmeden geçiş. |
+| 21.04 | Haritada arazi türlerini ayırt etme | Ultimate General / FOC uyarlaması | Yol, orman, geçit, su ve yükseklik gibi gerçek harita verisini gösterme. |
+| 21.05 | Hedef noktası durumları | Ultimate General | Savaş hedefi varsa elde tutuluyor, kaybedildi veya ele geçiriliyor durumunu görme. |
+| 21.06 | Zafer/beraberlik koşullarını inceleme | Ultimate General | Mevcut senaryo hangi koşulda biter; yapay hedef veya zaman sınırı icat etme. |
+| 21.07 | Hedefin kalan süresi | Ultimate General | Yalnız zaman sınırlı görev varsa kalan süre ve şartı. |
+| 21.08 | Hedef konumuna odaklanma | FOC önerisi | Görev veya raporun yerini haritada bulma. |
+| 21.09 | Takviye giriş alanı ve geliş durumu | FOC önerisi | Onaylı takviye sistemi varsa giriş bölgesi ve tahmini geliş; gizli rakip bilgisi yok. |
+| 21.10 | Sektör haritası ve rapor güncelliği | FOC çok sektör uyarlaması | Aktif/pasif sektörleri ve son rapor zamanını ayırt etme. |
+| 21.11 | Mevzi hakkında bağlamsal açıklama | Ultimate General / FOC uyarlaması | Fareyle alanı inceleyince gerçek hareket, koruma ve görüş etkisini öğrenme. |
+| 21.12 | Görüş dışı ve bilinmeyen alan ayrımı | Rome II true line of sight / FOC uyarlaması | Keşif kuralları destekliyorsa bilinmeyen bilgiyi kesin bilgi gibi sunmama. |
+
+### 22 — Bildirim, durum ve yardım
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 22.01 | Savaş olayları geçmişi | Napoleon / CoH3 | Kaçırılan önemli olayları daha sonra inceleme. |
+| 22.02 | Olayın kaynağına gitme | FOC önerisi | İlgili birlik, hedef veya sektöre odaklanma. |
+| 22.03 | Bildirim türü ve önem derecesi | FOC önerisi | Kritik komuta kaybı ile sıradan hareket tamamlanmasını ayırma. |
+| 22.04 | Tekrarlanan olayları birleştirme | FOC önerisi | Aynı olayın onlarca bildirim üretmesini önleme. |
+| 22.05 | Bildirim ayarları | FOC önerisi | Ses, metin, önem ve tekrar tercihleri; kritik bilgiye erişim korunur. |
+| 22.06 | Emir kabulü ve başarısızlık sesi | FOC uyarlaması | Sesin gerçek komut kabulüne bağlı olması, metin/görsel alternatif. |
+| 22.07 | İşlev açıklaması ve kısayol | Shogun 2 | Buton veya seçeneğin işlevini ve atanmış tuşunu ihtiyaçta öğrenme. |
+| 22.08 | Danışman ve yardım seçenekleri | Napoleon / Rome II | İlk kullanımda kısa yardım; isteğe bağlı kapatma. |
+| 22.09 | Bilgi kaynağı ve güven düzeyi | FOC önerisi | Doğrudan gözlem ile gecikmiş haberci raporunu ayırma. |
+| 22.10 | İzin verilmeyen eylemin koşulları | Manor Lords / WARNO | Moral, donanım, menzil veya yetki nedeniyle kullanılamayan seçenek için açıklama. |
+| 22.11 | Duraklatılmış durum ve bekleyen emirler | CoH3 | Zamanın durduğunu ve hangi emirlerin devamda başlayacağını ayırt etme. |
+| 22.12 | Zaman kontrolü durumunun anlaşılması | Napoleon | Duraklama/hız değişikliğinin gerçek simülasyonla tutarlılığı. |
+
+### 23 — Hazırlık, sonuç ve özel ekranlar
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 23.01 | Konuşlanma alanı sınırı | Total War / FOC uyarlaması | Başlangıçta yerleştirilebilen alanı açıkça tanıma. |
+| 23.02 | Atanmamış birlik ve rol kontrolü | Bannerlord / FOC uyarlaması | Hazırlıkta unutulan grupları ve geçersiz atamaları bulma. |
+| 23.03 | Donanıma göre birlik dağıtım filtresi | Bannerlord | Kalkan, mızrak, menzilli ve ağır donanım gibi gerçek sınıfları kullanma. |
+| 23.04 | Dağıtım oranı ve mevcut kapasite | Bannerlord | Birliklerin nereye ne kadar ayrıldığını görme; savaş içi kalıcı toplam sayaç yok. |
+| 23.05 | Komutan atamasının uygunluk gerekçesi | Bannerlord / FOC uyarlaması | Yetki ve komutan özellikleriyle atamanın neden geçerli olduğunu açıklama. |
+| 23.06 | Hazırlık ekipmanı yerleştirme | Napoleon deployable defences | Yalnız desteklenen savunma ekipmanı varsa yer ve kullanım. |
+| 23.07 | Sonuç özeti ve ayrıntı ayrımı | Ultimate General Gettysburg | İlk sonuçtan sonra isteğe bağlı ayrıntılı rapor. |
+| 23.08 | Birlik bazında savaş raporu | Ultimate General Gettysburg | Her grubun kaybı, katkısı ve sağ kalanları; gerçek kalıcı kimliklerle. |
+| 23.09 | Savaş hedeflerinin sonuç dökümü | Ultimate General Gettysburg | Hangi gerçek hedefler elde tutuldu veya kaybedildi. |
+| 23.10 | Savaş başlangıç ve bitiş kaydı | Ultimate General Gettysburg | Sonuçta savaş süresini öğrenme; kalıcı sayaç şart değil. |
+| 23.11 | Kampanyaya geçiş öncesi sonuç doğrulama | FOC önerisi | Ganimet, yaralı, esir ve komuta sonuçları kesinleşmeden iki kez uygulanmaz. |
+| 23.12 | Özel savaş türüne özel bilgi yüzeyi | Napoleon kara/deniz ayrımı / FOC uyarlaması | Kuşatma gibi onaylı farklı savaş türlerinde yalnız ilgili mekanikler; yeni savaş türü kabulü değil. |
+
+### 24 — Arayüz tercihleri ve bütünlük
+| ID | Aday | Referans | Amaç ve kullanım |
+|---|---|---|---|
+| 24.01 | Arayüz ölçeği ve metin okunabilirliği | WARNO / FOC uyarlaması | Farklı ekran çözünürlüğü ve erişilebilirlik ihtiyacına uyum. |
+| 24.02 | Bağlamsal bilgiyi açma/kapatma | Rome II arayüz seçenekleri / FOC uyarlaması | Gerektiğinde ayrıntı; kalıcı asker sayacı veya birlik simgesi geri gelmez. |
+| 24.03 | Seçim ve menü odağı | FOC önerisi | Açık menüdeki tık savaş alanına yanlış emir olarak gitmez. |
+| 24.04 | Menünün ekran dışında kalmaması | FOC önerisi | Köşede açılan sağ tık menüsü her çözünürlükte erişilebilir. |
+| 24.05 | Fare üzerinde bekleme ve açık açıklama alternatifi | FOC önerisi | İşlevi yalnız hover ile erişilebilir kılma; klavye desteği. |
+| 24.06 | Renk dışı durum işareti | FOC önerisi | Seçim, hedef ve geçersiz komutun yalnız renk ile aktarılmaması. |
+| 24.07 | Kısayol çakışması ve değişiklik bildirimi | FOC önerisi | Gerçek tuş ataması ve açıklama tutarlı; eski tuş gösterilmez. |
+| 24.08 | Geri dönüş ve menü kapatma davranışı | FOC önerisi | Esc/boş alan/menü kapatma kuralları tutarlı; hedefleme iptali ayrılır. |
+
+### Kaynaklar ve araştırma sınırı
+- https://academy.totalwar.com/rome2/ ; https://wiki.totalwar.com/w/Total_War_ROME_II%3A_Patch_5 ; https://www.gamepressure.com/totalwarromeii/interface/zb5796
+- https://manualzz.com/doc/26597478/sega-total-war-napoleon-video-game-user-manual (kılavuz kopyası)
+- https://community.creative-assembly.com/total-war/total-war/blogs/115 (Shogun 2 modern görsel katman seçenekleri)
+- https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/502520/manuals/UGCW_Guide_v1.25.pdf?t=1714903654 (s.43–52) ; https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/306660/manuals/Field_Manual.pdf?t=1732883317 (Gettysburg sonuç kılavuzu)
+- https://wiki.hoodedhorse.com/Manor_Lords/Warfare/en
+- https://store.steampowered.com/news/posts/?appids=261550&enddate=1647265377&feed=steam_community_announcements ; https://devtrackers.gg/mount-and-blade/p/86e7a628-beta-patch-notes-e1-7-0
+- https://steamcommunity.com/games/1611600/announcements/detail/5918290951278876984?l=romanian ; https://gameplay.tips/guides/warno-ultimate-controls-guide-selecting-units-controlling-the-camera-and-giving-orders.html
+- https://help.relic.com/hc/en-us/articles/39307744455571-Company-of-Heroes-3-Patch-Notes-Archive ; https://smwarwick.com/coh3.html
+- Kılavuz metinleri, geliştirici açıklamaları ve kamuya açık oyun görüntüleri incelendi; iki PDF ekran görüntüsü isteği cache miss döndürdü. Oyunlar bizzat oynanmadı. Kaynak oyunlara ait özellikler ve FOC uyarlamaları ayrıdır; kesin UI yerleşimi veya kısayol ataması yapılmadı.
+
+Ek kayıt: 72. Toplam: 247 kayıt, alt işlevler dahil. Oyun kodu değiştirilmedi.
