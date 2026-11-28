@@ -1,6 +1,9 @@
 # Fall of Cavalry — Aşama 2: kullanım ve yerleşim tasarımı
 28 Kasım 2026. Kullanıcı toplama aşamasını şimdilik yeterli kabul etti. Ana envanter 247 kayıt; A–J araştırma başlıkları FOC-BATTLE-FUTURE-MECHANICS-NOTES.md dosyasında ayrı tutulur. Bu taslak 247 kaydın tamamını kullanım alanlarına bağlar. Henüz KISS elemesi, son görsel tasarım, tuş ataması veya oyun kodu yok. Her alan aday bir etkileşim yüzeyidir; 14 ayrı kalıcı HUD paneli anlamına gelmez. Açık mekanik kararları uygulama kapısı olarak korunur.
 
+## İlerleme — 2.1
+[2.1 Karşılaşma ve konuşlanma taslağı](FOC-BATTLE-STAGE2-01-DEPLOYMENT.md) kaydedildi: P+D 30/30 kayıt, iki aday ekran, sektör/komutan/yerleştirme/yedek/başlatma akışları, hata ve iptal senaryoları. Yerleşim öneridir, kesin kullanıcı onayı veya uygulama değildir. Sektör ve komuta mekaniklerinin açık kuralları korunur. Sırada 2.2. Ana envanter 247, KISS elemesi yok.
+
 ## Değiştirilemeyecek kullanıcı kararları
 - Asker modelleri şimdilik tamam; yeni model işi yok.
 - Asker grubuna sol tık seçim. Sağ tık seçili grup için yalnız Emirler ve Dizilişler ana menüsü. Ateş emirleri ilgili grupta Emirler altında. Genel strateji, grup menüsünden ayrı.
